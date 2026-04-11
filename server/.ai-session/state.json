@@ -1,0 +1,51 @@
+{
+  "last_updated": "2026-04-11T10:34:00.000Z",
+  "completed": [
+    "Auth system — all 5 endpoints fully implemented and wired",
+    "Department API — GET, POST, GET/:id, PATCH/:id (admin/hod scoped, cached)",
+    "Subject API — GET, POST, GET/:id, PATCH/:id, DELETE/:id (soft delete, cached)",
+    "Class API — all 10 endpoints (CRUD, subject assignments, clone-subjects, class-teacher)",
+    "Faculty API — all 6 endpoints (CRUD + GET/:id/classes, temp password generation)",
+    "Student API — all 9 endpoints (CRUD, mentor, electives add/update/remove)",
+    "All route files: auth, department, subject, class, faculty, student",
+    "app.js — all 6 route groups mounted at correct base paths",
+    "Models updated: Faculty (employeeId, phone, indexes), Department (no enum, indexes), Admin (12-round), Student (indexes), Subject (isActive, indexes), Class (proper subdoc, indexes)"
+  ],
+  "in_progress": [],
+  "pending": [
+    "Batch API — GET, POST /initiate, GET /:batchId, GET /:batchId/students/:studentId, PATCH /:batchId/close, POST /:batchId/students, DELETE /:batchId/faculty/:facultyId",
+    "Approvals API — GET /pending, GET /history, POST /approve, POST /mark-due, PATCH /:approvalId",
+    "HoD API — GET /overview, GET /dues, POST /override",
+    "Student Portal API — GET /student/status, GET /student/history",
+    "Import API — preview/commit for students, faculty, electives, mentors + template download",
+    "SSE API — GET /sse/connect"
+  ],
+  "decisions": [
+    {
+      "context": "Auth cookie setup",
+      "decision": "nds_token httpOnly cookie (not Authorization header) as per API guide §2",
+      "trade_offs": "Requires credentials:true on CORS; cannot be read by frontend JS (by design)"
+    },
+    {
+      "context": "MongoDB M0 free tier",
+      "decision": "All queries use compound indexes; node-cache for hot paths; no unbounded .find() calls",
+      "trade_offs": "node-cache is per-instance (not shared across replicas) — acceptable for M0"
+    },
+    {
+      "context": "Password hashing",
+      "decision": "bcrypt with 12 rounds (raised from 10) for stronger security",
+      "trade_offs": "~300ms per hash; no visible UX impact at this scale"
+    },
+    {
+      "context": "Department model hardcoded enum removed",
+      "decision": "Any dept name can be created via API; UI must enforce consistent casing",
+      "trade_offs": "Requires admin discipline on naming"
+    },
+    {
+      "context": "Faculty class-count query",
+      "decision": "Two separate lean queries (classTeacher + subjectAssignments) instead of aggregation pipeline to stay M0-safe",
+      "trade_offs": "Two DB round-trips vs one aggregation; acceptable for list size"
+    }
+  ],
+  "blockers": []
+}

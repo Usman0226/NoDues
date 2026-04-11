@@ -1,0 +1,29 @@
+import { Router } from 'express';
+import {
+  getFaculty,
+  createFaculty,
+  getFacultyById,
+  updateFaculty,
+  deleteFaculty,
+  getFacultyClasses,
+} from '../Controllers/facultyController.js';
+import { protect } from '../middlewares/auth.js';
+import { RoleGuard } from '../middlewares/RoleGuard.js';
+
+const router = Router();
+
+router.use(protect);
+router.use(RoleGuard(['admin', 'hod']));
+
+router.route('/')
+  .get(getFaculty)
+  .post(createFaculty);
+
+router.route('/:id')
+  .get(getFacultyById)
+  .patch(updateFaculty)
+  .delete(deleteFaculty);
+
+router.get('/:id/classes', getFacultyClasses);
+
+export default router;
