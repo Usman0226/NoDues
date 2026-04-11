@@ -35,14 +35,14 @@ const Table = ({ columns, data, loading = false, searchable = false, searchPlace
   return (
     <div className="bg-white rounded-xl border border-muted shadow-sm overflow-hidden">
       {searchable && (
-        <div className="p-5 border-b border-muted bg-white">
-          <div className="relative max-w-sm">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+        <div className="p-3 sm:p-5 border-b border-muted bg-white">
+          <div className="relative w-full sm:max-w-sm">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
             <input 
               value={filter} 
               onChange={(e) => setFilter(e.target.value)} 
               placeholder={searchPlaceholder}
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-muted bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 focus:border-navy/20 transition-all font-medium" 
+              className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm rounded-xl border border-muted bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 focus:border-navy/20 transition-all font-medium" 
             />
           </div>
         </div>
@@ -53,7 +53,7 @@ const Table = ({ columns, data, loading = false, searchable = false, searchPlace
             <tr className="bg-offwhite/40 sticky top-0 z-10 border-b border-muted/50">
               {columns.map((col) => (
                 <th key={col.key} onClick={() => col.sortable !== false && handleSort(col.key)}
-                  className={`text-left px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/80
+                  className={`text-left px-4 sm:px-6 py-3 sm:py-4 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/80
                     ${col.sortable !== false ? 'cursor-pointer hover:text-navy select-none' : ''}`}>
                   <span className="inline-flex items-center gap-1">
                     {col.label}
@@ -83,7 +83,7 @@ const Table = ({ columns, data, loading = false, searchable = false, searchPlace
                   `}
                 >
                   {columns.map((col) => (
-                    <td key={col.key} className="px-6 py-4 text-foreground/80 font-medium">
+                    <td key={col.key} className="px-4 sm:px-6 py-3 sm:py-4 text-[11px] sm:text-sm text-foreground/80 font-medium">
                       {col.render ? col.render(row[col.key], row) : row[col.key]}
                     </td>
                   ))}

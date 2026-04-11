@@ -18,14 +18,14 @@ export const previewImport = (type, formData) => {
 /**
  * Generic commit wrapper
  */
-export const commitImport = (type, importId) => {
+export const commitImport = (type, data) => {
   const endpoints = {
     students: '/import/students/commit',
     faculty: '/import/faculty/commit',
     electives: '/import/electives/commit',
     mentors: '/import/mentors/commit'
   };
-  return api.post(endpoints[type] || endpoints.students, { importId });
+  return api.post(endpoints[type] || endpoints.students, data);
 };
 
 // Student Import

@@ -8,39 +8,42 @@ const axiosInstance = axios.create({
   },
 });
 
-// Request interceptor: Attach token if it exists in localStorage
-// (Keeping dual support for Header-based JWT and Cookie-based JWT)
+// Request interceptor: Minimal - rely on httpOnly cookies (nds_token)
 axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
+  (config) => config,
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: Global error handling & unwrapping
+// Response interceptor: Envelope preservation & global error handling
 axiosInstance.interceptors.response.use(
-  (response) => response.data, // Consistently return data envelope
+  (response) => {
+    // Return the full envelope (success, data, pagination) 
+    // to keep components informed about API states.
+    return response.data;
+  },
   (error) => {
     const status = error.response?.status;
-    const errorData = error.response?.data;
+    const errorData = error.response?.data?.error || {};
 
-    // Handle session expiry
+    // 1. Force Redirect to Change Password (PRD §2, Guide §2)
+    if (status === 403 && errorData.code === 'AUTH_PASSWORD_CHANGE_REQUIRED') {
+      if (window.location.pathname !== '/change-password') {
+        window.location.href = '/change-password';
+      }
+    }
+
+    // 2. Clear session on Unauthorized
     if (status === 401) {
-      localStorage.removeItem('token');
-      // Only redirect if not already on login
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
 
-    // Pass through detailed PRD error objects if they exist
-    return Promise.reject(errorData || { 
-      message: error.message || 'An unexpected error occurred',
-      status: status || 500
+    // Standardize error delivery to components
+    return Promise.reject({
+      code: errorData.code || 'UNKNOWN_ERROR',
+      message: errorData.message || error.message || 'An unexpected error occurred',
+      statusCode: status || 500
     });
   }
 );

@@ -64,32 +64,32 @@ const HodDashboard = () => {
     <PageWrapper title="Department Control" subtitle={`Oversight for ${overview?.departmentName || 'Your Department'}`}>
       {/* Alert Banner - Blocks Visibility */}
       {overview?.duesCount > 0 && (
-        <div className="mb-10 p-5 rounded-xl bg-red-50/40 border border-red-100 flex items-center justify-between shadow-sm shadow-red-100/20">
-          <div className="flex items-center gap-4">
-            <div className="h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center text-red-600">
+        <div className="mb-8 sm:mb-10 p-5 rounded-xl bg-red-50/40 border border-red-100 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm shadow-red-100/20">
+          <div className="flex items-center gap-4 w-full sm:w-auto">
+            <div className="h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center text-red-600 shrink-0">
                <AlertCircle size={22} />
             </div>
             <div>
-              <h2 className="text-red-950 font-black text-sm uppercase tracking-tight">Blocked Candidates Identified</h2>
-              <p className="text-red-700 text-xs font-medium">{overview.duesCount} students have dues flagged in your department.</p>
+              <h2 className="text-red-950 font-black text-xs sm:text-sm uppercase tracking-tight">Blocked Candidates Identified</h2>
+              <p className="text-red-700 text-[10px] sm:text-xs font-medium">{overview.duesCount} students have dues flagged.</p>
             </div>
           </div>
-          <button onClick={() => navigate('/hod/dues')} className="px-5 py-2 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-colors shadow-sm shadow-red-600/20">
+          <button onClick={() => navigate('/hod/dues')} className="w-full sm:w-auto px-5 py-2 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-colors shadow-sm shadow-red-600/20">
             Review Dues
           </button>
         </div>
       )}
 
       {/* Section: Academic Cycles */}
-      <div className="mb-6 px-1 flex items-center justify-between">
+      <div className="mb-6 px-1 flex flex-col sm:flex-row items-center justify-between gap-4">
         <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/40">Active Cycles</h2>
-        <div className="flex gap-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-          <span className="flex items-center gap-1.5"><TrendingUp size={12} strokeWidth={3} className="text-emerald-500" /> {avgCompletion}% Avg. Completion</span>
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+          <span className="flex items-center gap-1.5"><TrendingUp size={12} strokeWidth={3} className="text-emerald-500" /> {avgCompletion}% Completion</span>
           <span className="flex items-center gap-1.5"><Clock size={12} strokeWidth={3} className="text-amber-500" /> Live Data</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
         {(overview?.batches || []).map((batch) => {
           const progress = batch.totalStudents > 0 ? Math.round((batch.clearedCount / batch.totalStudents) * 100) : 0;
           return (
@@ -128,7 +128,6 @@ const HodDashboard = () => {
           );
         })}
 
-        {/* Global Batch Creation for HOD not in PRD, restricted to Admin in §6.4 */}
         <div className="bg-offwhite/50 rounded-xl border border-dashed border-muted/80 flex flex-col items-center justify-center p-8 text-center hover:bg-white hover:border-navy/20 transition-all cursor-pointer group" onClick={() => navigate('/hod/dues')}>
            <div className="h-12 w-12 rounded-full bg-white shadow-sm flex items-center justify-center text-navy/40 group-hover:text-gold transition-colors mb-4">
               <AlertCircle size={24} />

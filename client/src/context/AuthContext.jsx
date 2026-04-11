@@ -16,25 +16,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const fetchUser = async () => {
-    const token = localStorage.getItem('token');
-    
-    // Bypass for Demo Session Persistence
-    if (token?.startsWith('demo-token-')) {
-      const emailOrRoll = token.replace('demo-token-', '');
-      const demoUser = DEMO_USERS[emailOrRoll];
-      if (demoUser) {
-        setUser(demoUser);
-        setLoading(false);
-        return;
-      }
-    }
-
     try {
-      const userData = await authService.getMe();
-      setUser(userData);
+      // Guide §4.5: GET /api/auth/me returns success:true, data: {...user}
+      const response = await authService.getMe();
+      if (response?.success) {
+        setUser(response.data);
+      }
     } catch (error) {
       console.error('Session restore failed:', error);
-      localStorage.removeItem('token');
       setUser(null);
     } finally {
       setLoading(false);
@@ -42,33 +31,29 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetchUser();
-    } else {
-      setLoading(false);
-    }
+    // Rely on /api/auth/me for all session checks.
+    // Cookies are automatically sent by the browser.
+    fetchUser();
   }, []);
 
   const login = async (credentials) => {
     const { email, password } = credentials;
     
-    // Bypass for Demo Staff
+    // Bypass for Demo Staff (Guide Alignment)
     if (DEMO_USERS[email] && (password === 'admin123' || password === 'hod123' || password === 'faculty123')) {
       const demoUser = DEMO_USERS[email];
-      localStorage.setItem('token', `demo-token-${email}`);
       setUser(demoUser);
       toast.success(`Demo Access: Authorized as ${demoUser.role}`);
-      return { user: demoUser, token: `demo-token-${email}` };
+      return { success: true, data: demoUser };
     }
 
     try {
       const response = await authService.login(credentials);
-      if (response.token) {
-        localStorage.setItem('token', response.token);
+      // Guide: Response success envelope contains user info in 'data'
+      if (response.success) {
+        setUser(response.data);
+        toast.success(`Welcome back, ${response.data.name}`);
       }
-      setUser(response.user || response);
-      toast.success('Welcome back!');
       return response;
     } catch (error) {
       toast.error(error.message || 'Login failed');
@@ -80,19 +65,17 @@ export const AuthProvider = ({ children }) => {
     // Bypass for Demo Student
     if (rollNo === '21CSE001') {
       const demoUser = DEMO_USERS[rollNo];
-      localStorage.setItem('token', `demo-token-${rollNo}`);
       setUser(demoUser);
       toast.success(`Demo Access: Authorized Student`);
-      return { user: demoUser, token: `demo-token-${rollNo}` };
+      return { success: true, data: demoUser };
     }
 
     try {
       const response = await authService.studentLogin(rollNo);
-      if (response.token) {
-        localStorage.setItem('token', response.token);
+      if (response.success) {
+        setUser(response.data);
+        toast.success(`Logged in as Roll No: ${rollNo}`);
       }
-      setUser(response.user || response);
-      toast.success(`Logged in as Roll No: ${rollNo}`);
       return response;
     } catch (error) {
       toast.error(error.message || 'Student login failed');
@@ -101,22 +84,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    const token = localStorage.getItem('token');
-    
-    if (token?.startsWith('demo-token-')) {
-      setUser(null);
-      localStorage.removeItem('token');
-      toast.success('Demo logout successful');
-      return;
-    }
-
     try {
       await authService.logout();
     } catch (error) {
       console.warn('Logout request failed, clearing local state anyway');
     } finally {
       setUser(null);
-      localStorage.removeItem('token');
       toast.success('Logged out successfully');
     }
   };
