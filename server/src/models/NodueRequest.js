@@ -54,4 +54,13 @@ const nodueRequestSchema = new mongoose.Schema({
   }
 });
 
+// Admin batch overview: count by status
+nodueRequestSchema.index({ batchId: 1, status: 1 });
+
+// Student history and status page
+nodueRequestSchema.index({ studentId: 1 });
+
+// Combined lookup: find one request for a student in a batch
+nodueRequestSchema.index({ batchId: 1, studentId: 1 });
+
 export default mongoose.model('NodueRequest', nodueRequestSchema);

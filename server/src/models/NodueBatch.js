@@ -39,4 +39,9 @@ const nodueBatchSchema = new mongoose.Schema({
   }
 });
 
+// Optimization indexes
+nodueBatchSchema.index({ classId: 1, status: 1 });
+nodueBatchSchema.index({ departmentId: 1, status: 1 });
+nodueBatchSchema.index({ status: 1 });
+
 export default mongoose.model('NodueBatch', nodueBatchSchema);

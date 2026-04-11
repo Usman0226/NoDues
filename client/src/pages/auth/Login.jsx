@@ -55,8 +55,8 @@ const Login = () => {
       }
 
       await flashThenNavigate(getRoleRedirect(userData.role));
-    } catch {
-      setError('Invalid credentials');
+    } catch (err) {
+      setError(err.message || 'Invalid credentials');
     } finally {
       setLoading(false);
       setSuccessFlash(false);
@@ -76,8 +76,8 @@ const Login = () => {
     try {
       await studentLogin(rollNo);
       await flashThenNavigate('/student');
-    } catch {
-      setError('Roll number not found');
+    } catch (err) {
+      setError(err.message || 'Roll number not found');
     } finally {
       setLoading(false);
       setSuccessFlash(false);
@@ -222,7 +222,7 @@ const Login = () => {
                       type="text"
                       value={rollNo}
                       onChange={(e) => setRollNo(e.target.value.toUpperCase())}
-                      placeholder="21CSE001"
+                      placeholder="24691A32XX"
                       className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-sm font-mono tracking-wider font-black focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
                     />
                   </div>

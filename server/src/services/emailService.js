@@ -1,27 +1,21 @@
 import nodemailer from 'nodemailer';
 import logger from '../utils/logger.js';
 
-/**
- * Production-grade Email Service using SMTP (Brevo)
- */
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-  port: process.env.SMTP_PORT || 587,
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS
   }
 });
 
-/**
- * Send credential email to new users
- */
 export const sendCredentialEmail = async (to, name, identifier, password, role) => {
   try {
     const loginUrl = process.env.CLIENT_URL || 'http://localhost:5173';
     
     const mailOptions = {
-      from: `No-Due Portal <${process.env.SMTP_FROM || 'noreply@mits.ac.in'}>`,
+      from: process.env.SMTP_FROM || 'No-Due Portal <noreply@mits.ac.in>',
       to,
       subject: `Your Credentials for ${role === 'student' ? 'Student Portal' : 'Faculty Portal'} - NDS`,
       html: `

@@ -11,15 +11,9 @@ const Navbar = ({ onMenuToggle }) => {
         <button onClick={onMenuToggle} className="lg:hidden p-2 -ml-1 text-navy hover:bg-zinc-100 rounded-full transition-colors">
           <Menu size={22} />
         </button>
-        <div className="hidden sm:flex items-center gap-3">
-       
-          <div>
-          </div>
-        </div>
-        <span className="sm:hidden text-navy font-brand text-xl">ND</span>
       </div>
 
-      <div className="flex items-center gap-3 lg:gap-6">
+      <div className="flex items-center gap-3 lg:gap-6 pointer-events-auto">
         <button className="p-2.5 rounded-full border border-zinc-200 text-muted-foreground hover:text-navy hover:border-indigo-200 transition-colors relative bg-white">
           <Bell size={18} />
           <span className="absolute top-2 right-2 w-2 h-2 bg-status-due rounded-full border-2 border-white"></span>

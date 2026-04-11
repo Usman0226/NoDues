@@ -1,0 +1,1 @@
+import dotenv from 'dotenv'; dotenv.config(); import { sendCredentialEmail } from './src/services/emailService.js'; sendCredentialEmail('projects.clg.mits@gmail.com', 'Test User', 'projects.clg.mits@gmail.com', 'TestPass123', 'faculty').then(res => console.log('Result:', res)).catch(err => console.log('Error:', err));

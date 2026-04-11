@@ -34,7 +34,6 @@ import FacultyHistory from './pages/faculty/History';
 
 import StudentStatus from './pages/student/Status';
 
-/* Layout WITH sidebar (Admin, HoD, Faculty) */
 const AppLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
@@ -53,7 +52,6 @@ const AppLayout = () => {
   );
 };
 
-/* Layout WITHOUT sidebar (Student — PRD §6.3) */
 const StudentLayout = () => (
   <div className="h-screen overflow-hidden bg-offwhite flex flex-col">
     <nav className="h-14 lg:h-16 bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-900 border-b border-white/10 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
@@ -83,7 +81,7 @@ const StudentNavRight = () => {
 
 const RoleRedirect = () => {
   const { user, loading } = useAuth();
-  if (loading) return null; // Avoid flicker during session restore
+  if (loading) return null; 
   if (!user) return <Navigate to="/login" replace />;
   return <Navigate to={getRoleRedirect(user.role)} replace />;
 };
@@ -144,15 +142,22 @@ const App = () => {
               <Route path="/change-password" element={<ChangePassword />} />
 
               <Route path="/hod" element={<HodDashboard />} />
+              <Route path="/hod/classes" element={<DepartmentClasses />} />
+              <Route path="/hod/class/:classId" element={<ClassDetail />} />
+              <Route path="/hod/students" element={<StudentList />} />
+              <Route path="/hod/faculty" element={<FacultyList />} />
+              <Route path="/hod/subjects" element={<Subjects />} />
+              <Route path="/hod/batches" element={<Batches />} />
               <Route path="/hod/dues" element={<Dues />} />
               <Route path="/hod/overrides" element={<Overrides />} />
+              <Route path="/hod/batch/:batchId" element={<BatchView />} />
+              <Route path="/hod/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
 
               <Route path="/faculty" element={<FacultyDashboard />} />
               <Route path="/faculty/pending" element={<Pending />} />
               <Route path="/faculty/history" element={<FacultyHistory />} />
             </Route>
 
-            {/* Student Layout (NO sidebar — PRD §6.3) */}
             <Route element={<ProtectedRoute allowedRoles={[ROLES.STUDENT]}><StudentLayout /></ProtectedRoute>}>
               <Route path="/student" element={<StudentStatus />} />
             </Route>

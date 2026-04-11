@@ -72,8 +72,11 @@ const facultySchema = new mongoose.Schema(
   }
 );
 
-// ── M0-safe indexes (email & employeeId unique:true create their indexes automatically) ──
+// M0-safe indexes (email & employeeId unique:true create their indexes automatically)
 facultySchema.index({ departmentId: 1, isActive: 1 });
+
+// HoD scoped faculty list by role
+facultySchema.index({ departmentId: 1, roleTags: 1 });
 
 // ── Pre-save: process user data ──────────────────────────────────────────────
 facultySchema.pre('save', async function () {

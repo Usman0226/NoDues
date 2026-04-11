@@ -1,46 +1,24 @@
 {
-  "last_updated": "2026-04-11T16:40:00Z",
+  "last_updated": "2026-04-12T02:26:00Z",
   "completed": [
-    "Bulk Import System (Students, Faculty, Electives, Mentors)",
-    "Brevo SMTP Email Service Integration",
-    "SSE Event Broadcasting Integration (Real-time updates)",
-    "API Documentation (docs/api.md)",
-    "Refactored axiosInstance to rely on httpOnly cookies and production response envelopes.",
-    "Aligned AuthContext with /api/auth/me and demo bypass logic.",
-    "Standardized student API service and resolved component import paths.",
-    "Implemented mobile-first responsive UI in PageWrapper and Table components.",
-    "Optimized Login, Student Status, and Faculty/HOD dashboards for mobile viewports.",
-    "Department Metrics Integration (Student, Faculty, Class, Batch counts)",
-    "Implemented reusable UI components (ActionMenu, ConfirmModal) for standard table actions.",
-    "Added Edit (Update), Delete (Deactivate), and View Classes functionalities to the Faculty Admin Tab using the new reusable components."
+    "Fix duplicate password hashing in faculty credential regeneration",
+    "Add Employee ID support to login controller",
+    "Verify password hashing logic via diagnostic scripts"
   ],
   "in_progress": [],
   "pending": [
-    "Frontend connectivity for import UI",
-    "End-to-end load testing for bulk imports",
-    "Backend API alignment (if required as a follow-up)",
-    "Admin portal responsiveness refactor (explicitly excluded from current scope)"
+    "Cleanup scratch files (optional, left for user audit)"
   ],
   "decisions": [
     {
-      "context": "Email sending during bulk import",
-      "decision": "Emails are triggered asynchronously without awaiting the full SMTP response per row to prevent HTTP request timeouts during large imports.",
-      "trade_offs": "Failed email deliveries must be monitored via the logger as the HTTP response only confirms the database update."
+      "context": "Faculty unable to login after credential resend",
+      "decision": "Remove manual bcrypt.hash in controller; rely on Faculty model's pre-save hook",
+      "trade_offs": "Ensures no double-hashing, maintains consistency with import flow"
     },
     {
-      "context": "SSE Architecture",
-      "decision": "Switched from a poll-based model to SSE for lower latency and better student UX during the clearance process.",
-      "trade_offs": "Increased open connection count on the server; mitigated by using lightweight SSE over WebSockets."
-    },
-    {
-      "context": "API Response Structure",
-      "decision": "Preserved the full API envelope {success, data, pagination} in the Axios interceptor.",
-      "trade_offs": "Requires components to access '.data' property, but enables consistent metadata/pagination access across the app."
-    },
-    {
-      "context": "Authentication",
-      "decision": "Removed localStorage token persistence in favor of browser-managed cookies.",
-      "trade_offs": "Improved security (XSS mitigation) at the cost of requiring 'withCredentials: true' on all cross-origin requests."
+      "context": "User confusion over 'Institutional Email' vs 'Employee ID'",
+      "decision": "Allow login with either email or employeeId in the email field",
+      "trade_offs": "Increases login flexibility and reduces support requests"
     }
   ],
   "blockers": []

@@ -8,7 +8,6 @@ import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
 
-// ─── Cookie options ───────────────────────────────────────────────────────────
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
@@ -52,16 +51,22 @@ export const login = async (req, res, next) => {
       );
     }
 
-    // Check admin first (faster — small collection)
-    let user = await Admin.findOne({ email }).select('+password');
+    const sanitizedEmail = email.trim().toLowerCase();
+
+    // Check admin first
+    let user = await Admin.findOne({ email: sanitizedEmail }).select('+password');
     let userType = 'admin';
 
     if (!user) {
-      user = await Faculty.findOne({ email, isActive: true }).select('+password');
+      user = await Faculty.findOne({ 
+        $or: [{ email: sanitizedEmail }, { employeeId: email.trim() }], 
+        isActive: true 
+      }).select('+password');
       userType = 'faculty';
     }
 
     if (!user) {
+      logger.warn('Login failure: User not found', { email: sanitizedEmail });
       return next(
         new ErrorResponse('Invalid email or password', 401, 'AUTH_INVALID_CREDENTIALS')
       );
@@ -69,7 +74,9 @@ export const login = async (req, res, next) => {
 
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
+
     if (!isMatch) {
+      logger.warn('Login failure: Password mismatch', { email: sanitizedEmail });
       return next(
         new ErrorResponse('Invalid email or password', 401, 'AUTH_INVALID_CREDENTIALS')
       );

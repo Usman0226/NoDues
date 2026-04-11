@@ -1,20 +1,100 @@
-import React, { useState } from 'react';
+import React, { useState} from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
-import { Upload, UserPlus, RefreshCw, AlertCircle, Search, X } from 'lucide-react';
-import { useApi } from '../../hooks/useApi';
-import { getStudents, createStudent } from '../../api/students';
-import ImportStepper from '../../components/import/ImportStepper';
+import ActionMenu from '../../components/ui/ActionMenu';
 import Modal from '../../components/ui/Modal';
+import ConfirmModal from '../../components/ui/ConfirmModal';
+import { Upload, UserPlus, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { useApi } from '../../hooks/useApi';
+import { getStudents, createStudent, updateStudent, deleteStudent } from '../../api/students';
+import { getClasses } from '../../api/classes';
+import ImportStepper from '../../components/import/ImportStepper';
 import { toast } from 'react-hot-toast';
 
 const StudentList = () => {
   const [showImport, setShowImport] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  
   const { data: response, loading, error, request: fetchStudents } = useApi(getStudents, { immediate: true });
   const students = response?.data || [];
+
+  const { data: classResponse, request: fetchClasses } = useApi(getClasses, { immediate: true });
+  const classes = classResponse?.data || [];
+
+  const [formData, setFormData] = useState({
+    rollNo: '',
+    name: '',
+    email: '',
+    classId: '',
+    yearOfStudy: ''
+  });
+
+  const handleEditClick = (student) => {
+    setSelectedStudent(student);
+    setFormData({
+      rollNo: student.rollNo || '',
+      name: student.name || '',
+      email: student.email || '',
+      classId: student.classId || '',
+      yearOfStudy: student.yearOfStudy || ''
+    });
+    setShowEdit(true);
+  };
+
+  const handleDeleteClick = (student) => {
+    setSelectedStudent(student);
+    setShowDelete(true);
+  };
+
+  const handleCreateSubmit = async () => {
+    if (!formData.rollNo || !formData.name || !formData.classId) return toast.error('Required fields missing');
+    setSubmitting(true);
+    try {
+      await createStudent(formData);
+      toast.success('Student added successfully');
+      setShowAdd(false);
+      fetchStudents();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to add student');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditSubmit = async () => {
+    if (!formData.rollNo || !formData.name || !formData.classId) return toast.error('Required fields missing');
+    setSubmitting(true);
+    try {
+      await updateStudent(selectedStudent._id, formData);
+      toast.success('Student updated successfully');
+      setShowEdit(false);
+      fetchStudents();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update student');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await deleteStudent(selectedStudent._id);
+      toast.success('Student deactivated');
+      setShowDelete(false);
+      fetchStudents();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to deactivate student');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const columns = [
     { 
@@ -31,12 +111,27 @@ const StudentList = () => {
       label: 'Onboarding', 
       render: (v) => <Badge status={v || 'pending'} className="scale-90 origin-left" /> 
     },
+    {
+      key: 'actions',
+      label: '',
+      render: (_, row) => (
+        <ActionMenu 
+          actions={[
+            { label: 'Edit', icon: Edit, onClick: () => handleEditClick(row) },
+            { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(row), variant: 'danger' }
+          ]} 
+        />
+      )
+    }
   ];
 
   return (
     <PageWrapper title="Students" subtitle="Global roster of all registered academic candidates">
       <div className="flex flex-wrap gap-3 mb-8">
-        <Button variant="primary" size="sm" onClick={() => setShowAdd(true)}><UserPlus size={14} /> Add Student</Button>
+        <Button variant="primary" size="sm" onClick={() => {
+           setFormData({ rollNo: '', name: '', email: '', classId: '', yearOfStudy: '' });
+           setShowAdd(true);
+        }}><UserPlus size={14} /> Add Student</Button>
         <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
           <Upload size={14} /> Import list
         </Button>
@@ -70,13 +165,77 @@ const StudentList = () => {
          />
       </Modal>
 
-      {/* Add Student Placeholder Modal */}
-      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Nominate New Candidate">
-         <div className="p-4 text-center">
-            <p className="text-sm text-muted-foreground mb-6">Manual candidate nomination is currently via Academic Registry. Please use the Import tool for bulk processing.</p>
-            <Button variant="primary" className="w-full" onClick={() => setShowAdd(false)}>Understand</Button>
-         </div>
+      {/* Modals */}
+      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Register Student">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Roll Number</label>
+              <input type="text" value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" placeholder="e.g. 24691A32XX"/>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Full Name</label>
+              <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Email</label>
+            <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" placeholder="student@example.com" />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Academic Group</label>
+            <select value={formData.classId} onChange={e => setFormData({...formData, classId: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all">
+              <option value="">Select a class...</option>
+              {classes.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-muted/30">
+            <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleCreateSubmit} loading={submitting}>Add Student</Button>
+          </div>
+        </div>
       </Modal>
+
+      <Modal isOpen={showEdit} onClose={() => setShowEdit(false)} title="Update Student Record">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+               <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Roll Number</label>
+               <input type="text" value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all"/>
+            </div>
+            <div>
+               <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Full Name</label>
+               <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Email</label>
+            <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Academic Group</label>
+            <select value={formData.classId} onChange={e => setFormData({...formData, classId: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all">
+              <option value="">Select a class...</option>
+              {classes.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-muted/30">
+            <Button variant="ghost" onClick={() => setShowEdit(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleEditSubmit} loading={submitting}>Save Changes</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Deactivate Student"
+        description={`Are you sure you want to drop ${selectedStudent?.name} (${selectedStudent?.rollNo})? Activating this will disable their access and exclude them from new clearance batches.`}
+        confirmText="Deactivate"
+        isDestructive={true}
+        loading={submitting}
+      />
     </PageWrapper>
   );
 };

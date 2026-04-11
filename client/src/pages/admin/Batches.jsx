@@ -4,12 +4,15 @@ import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../context/AuthContext';
 import { getBatches } from '../../api/batch';
 import { Eye, RefreshCw, AlertCircle } from 'lucide-react';
 import Button from '../../components/ui/Button';
 
 const Batches = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const basePath = user?.role === 'hod' ? '/hod' : '/admin';
   const [statusFilter, setStatusFilter] = useState('all');
   const { data: response, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
   const batches = response?.data || [];
@@ -53,7 +56,7 @@ const Batches = () => {
     { key: 'status', label: 'State', render: (v) => <Badge status={v} /> },
     {
       key: '_id', label: 'Oversight', sortable: false, render: (v) => (
-        <button onClick={() => navigate(`/admin/batch/${v}`)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] bg-navy text-white hover:bg-navy/90 font-black uppercase tracking-widest transition-all shadow-sm shadow-navy/10">
+        <button onClick={() => navigate(`${basePath}/batch/${v}`)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] bg-navy text-white hover:bg-navy/90 font-black uppercase tracking-widest transition-all shadow-sm shadow-navy/10">
           <Eye size={12} strokeWidth={3} /> Analyze
         </button>
       )
@@ -79,7 +82,7 @@ const Batches = () => {
 
       <div className="flex items-center justify-between mb-8 px-1">
         <div className="flex items-center gap-4">
-           <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-muted shadow-sm">
+           <div className="flex items-center gap-3 bg-white p-1 rounded-3xl border border-muted shadow-sm">
              {['all', 'active', 'closed'].map((f) => (
                <button key={f} onClick={() => setStatusFilter(f)}
                  className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all

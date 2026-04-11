@@ -5,7 +5,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { Plus, Upload, Mail, UserPlus, RefreshCw, AlertCircle, Edit, Trash2, Eye } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
-import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getFacultyClasses } from '../../api/faculty';
+import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getFacultyClasses, resendCredentials } from '../../api/faculty';
 import { getDepartments } from '../../api/departments';
 import ImportStepper from '../../components/import/ImportStepper';
 import ActionMenu from '../../components/ui/ActionMenu';
@@ -38,13 +38,13 @@ const FacultyList = () => {
     name: '',
     employeeId: '',
     email: '',
-    department: '',
-    roles: ['faculty']
+    departmentId: '',
+    roleTags: ['faculty']
   });
 
 
   const handleCreate = async () => {
-    if (!formData.name || !formData.employeeId || !formData.email || !formData.department) {
+    if (!formData.name || !formData.employeeId || !formData.email || !formData.departmentId) {
       return toast.error('Please fill all required fields');
     }
     setSubmitting(true);
@@ -66,14 +66,14 @@ const FacultyList = () => {
       name: faculty.name,
       employeeId: faculty.employeeId,
       email: faculty.email,
-      department: faculty.department?._id || faculty.departmentId || '',
-      roles: faculty.roles || faculty.roleTags || ['faculty']
+      departmentId: faculty.departmentId || faculty.department?._id || '',
+      roleTags: faculty.roleTags || faculty.roles || ['faculty']
     });
     setShowEdit(true);
   };
 
   const handleEditSubmit = async () => {
-    if (!formData.name || !formData.employeeId || !formData.email || !formData.department) {
+    if (!formData.name || !formData.employeeId || !formData.email || !formData.departmentId) {
       return toast.error('Please fill all required fields');
     }
     setSubmitting(true);
@@ -125,9 +125,9 @@ const FacultyList = () => {
   const toggleRole = (role) => {
     setFormData(prev => ({
       ...prev,
-      roles: prev.roles.includes(role) 
-        ? prev.roles.filter(r => r !== role || r === 'faculty') 
-        : [...prev.roles, role]
+      roleTags: prev.roleTags.includes(role)
+        ? prev.roleTags.filter(r => r !== role || r === 'faculty')
+        : [...prev.roleTags, role]
     }));
   };
 
@@ -154,6 +154,7 @@ const FacultyList = () => {
             actions={[
               { label: 'View Classes', icon: Eye, onClick: () => handleViewClasses(row) },
               { label: 'Edit Account', icon: Edit, onClick: () => handleEditClick(row) },
+              { label: 'Resend Creds', icon: Mail, onClick: () => handleResendCreds(row) },
               { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(row), variant: 'danger' },
             ]}
           />
@@ -161,6 +162,16 @@ const FacultyList = () => {
       )
     }
   ];
+
+  const handleResendCreds = async (faculty) => {
+    const toastId = toast.loading('Regenerating credentials...');
+    try {
+      await resendCredentials(faculty._id);
+      toast.success('Credentials regenerated & email dispatched!', { id: toastId });
+    } catch (err) {
+      toast.error(err?.message || 'Failed to resend credentials', { id: toastId });
+    }
+  };
 
   return (
     <PageWrapper title="Faculty" subtitle="Manage academic staff and coordination roles">
@@ -233,8 +244,8 @@ const FacultyList = () => {
               <div>
                 <label className="block text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 mb-2">Primary Department</label>
                 <select 
-                  value={formData.department}
-                  onChange={e => setFormData({...formData, department: e.target.value})}
+                  value={formData.departmentId}
+                  onChange={e => setFormData({...formData, departmentId: e.target.value})}
                   className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
                 >
                   <option value="">Select Dept</option>
@@ -250,7 +261,7 @@ const FacultyList = () => {
                   <label key={role} className="group flex items-center gap-2 text-xs cursor-pointer select-none">
                     <input 
                       type="checkbox" 
-                      checked={formData.roles.includes(role)}
+                      checked={formData.roleTags.includes(role)}
                       onChange={() => toggleRole(role)}
                       className="w-4 h-4 rounded-lg border-muted text-navy focus:ring-navy/20 cursor-pointer" 
                     />
@@ -310,8 +321,8 @@ const FacultyList = () => {
               <div>
                 <label className="block text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 mb-2">Primary Department</label>
                 <select 
-                  value={formData.department}
-                  onChange={e => setFormData({...formData, department: e.target.value})}
+                  value={formData.departmentId}
+                  onChange={e => setFormData({...formData, departmentId: e.target.value})}
                   className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
                 >
                   <option value="">Select Dept</option>
@@ -327,7 +338,7 @@ const FacultyList = () => {
                   <label key={role} className="group flex items-center gap-2 text-xs cursor-pointer select-none">
                     <input 
                       type="checkbox" 
-                      checked={formData.roles.includes(role)}
+                      checked={formData.roleTags.includes(role)}
                       onChange={() => toggleRole(role)}
                       className="w-4 h-4 rounded-lg border-muted text-navy focus:ring-navy/20 cursor-pointer" 
                     />

@@ -6,8 +6,9 @@ import Department from '../models/Department.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
+import { invalidateClassCache } from './classController.js';
 
-const invalidateStudentCache = (id) => cache.del(`student:${id}`);
+export const invalidateStudentCache = (id) => cache.del(`student:${id}`);
 
 // ── GET /api/students ─────────────────────────────────────────────────────────
 export const getStudents = async (req, res, next) => {
@@ -93,6 +94,9 @@ export const createStudent = async (req, res, next) => {
 
     // Add student to class.studentIds
     await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student._id } });
+    
+    // Invalidate class list cache for this department only
+    invalidateClassCache(classId, student.departmentId);
 
     logger.info('student_created', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -169,7 +173,7 @@ export const getStudentById = async (req, res, next) => {
 export const updateStudent = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { email, yearOfStudy } = req.body;
+    const { email, yearOfStudy, name, rollNo, classId } = req.body;
 
     const student = await Student.findOne({ _id: id, isActive: true });
     if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
@@ -180,13 +184,36 @@ export const updateStudent = async (req, res, next) => {
 
     if (email       !== undefined) student.email       = email;
     if (yearOfStudy !== undefined) student.yearOfStudy = yearOfStudy;
+    if (name        !== undefined) student.name        = name;
+    if (rollNo      !== undefined) student.rollNo      = rollNo;
+    
+    // Store old classId to invalidate it later
+    const oldClassId = student.classId;
+
+    if (classId !== undefined && classId !== student.classId?.toString()) {
+      const cls = await Class.findOne({ _id: classId, isActive: true }).lean();
+      if (!cls) return next(new ErrorResponse('New Class not found', 404, 'NOT_FOUND'));
+      if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+        return next(new ErrorResponse('Access denied for new class department', 403, 'AUTH_DEPARTMENT_SCOPE'));
+      }
+      student.classId = classId;
+      student.departmentId = cls.departmentId;
+      student.semester = cls.semester;
+      student.academicYear = cls.academicYear;
+      
+      // Update class arrays
+      await Class.findByIdAndUpdate(oldClassId, { $pull: { studentIds: student._id } });
+      await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student._id } });
+    }
 
     await student.save();
     invalidateStudentCache(id);
+    if (oldClassId) invalidateClassCache(oldClassId, student.departmentId);
+    if (student.classId && student.classId !== oldClassId) invalidateClassCache(student.classId, student.departmentId);
 
     return res.status(200).json({
       success: true,
-      data: { _id: student._id, email: student.email, yearOfStudy: student.yearOfStudy },
+      data: { _id: student._id, name: student.name, rollNo: student.rollNo, email: student.email, classId: student.classId },
     });
   } catch (err) {
     next(err);
@@ -207,6 +234,7 @@ export const deleteStudent = async (req, res, next) => {
     student.isActive = false;
     await student.save();
     invalidateStudentCache(id);
+    if (student.classId) invalidateClassCache(student.classId, student.departmentId);
 
     logger.info('student_deactivated', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -237,6 +265,7 @@ export const assignMentor = async (req, res, next) => {
     student.mentorId = mentor._id;
     await student.save();
     invalidateStudentCache(id);
+    if (student.classId) invalidateClassCache(student.classId, student.departmentId);
 
     return res.status(200).json({
       success: true,

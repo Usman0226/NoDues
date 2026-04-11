@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { errorHandler } from './middlewares/errorHandler.js';
+import { responseTimeLogger } from './middlewares/responseTime.js';
 import logger from './utils/logger.js';
 
 // ── Route imports ─────────────────────────────────────────────────────────────
@@ -22,10 +24,9 @@ import importRoutes        from './Routes/import.routes.js';
 
 const app = express();
 
-// ── Security headers ──────────────────────────────────────────────────────────
-app.use(helmet());
+app.use(responseTimeLogger);
 
-// ── CORS — credentials required for nds_token cookie ─────────────────────────
+app.use(helmet());
 app.use(
   cors({
     origin:      process.env.CLIENT_URL || 'http://localhost:5173',
@@ -33,29 +34,27 @@ app.use(
   })
 );
 
-// ── Body parsers ──────────────────────────────────────────────────────────────
+app.use(compression({ level: 6, threshold: 1024 }));
+
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use(cookieParser());
 
-// ── HTTP request logging (dev only) ──────────────────────────────────────────
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// ── Health check (unauthenticated) ───────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.status(200).json({
     success: true,
     data: {
       status:    'healthy',
-      timestamp: new Date().toISOString(),
+      timestamp: Date.now(),   // Date.now() is faster than new Date().toISOString()
       env:       process.env.NODE_ENV || 'development',
     },
   });
 });
 
-// ── API Routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth',        authRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/subjects',    subjectRoutes);

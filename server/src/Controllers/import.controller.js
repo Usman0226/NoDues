@@ -8,6 +8,10 @@ import asyncHandler from '../utils/asyncHandler.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import crypto from 'crypto';
+import { invalidateClassCache } from './classController.js';
+import { invalidateStudentCache } from './studentController.js';
+import { invalidateFacultyCache } from './facultyController.js';
+import { invalidateDeptCache } from './departmentController.js';
 
 /**
  * Helper: Parse Excel/CSV from Buffer
@@ -110,6 +114,9 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
 
   await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: { $each: createdStudents } } });
 
+  // Invalidate class list cache for this department only
+  invalidateClassCache(classId, targetClass.departmentId);
+
   logger.info(`Imported ${createdStudents.length} students into class ${classId}`, {
     actor: req.user.userId,
     action: 'IMPORT_STUDENTS',
@@ -172,6 +179,7 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
   }
 
   let createdCount = 0;
+  const createdFaculty = [];
   const Department = (await import('../models/Department.js')).default;
 
   for (const fac of faculty) {
@@ -196,7 +204,14 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
     });
 
     sendCredentialEmail(facultyMember.email, facultyMember.name, facultyMember.email, tempPassword, 'faculty');
+    createdFaculty.push(facultyMember);
     createdCount++;
+  }
+
+  invalidateFacultyCache();
+  if (createdFaculty.length > 0) {
+    const depts = [...new Set(createdFaculty.map(f => f.departmentId.toString()))];
+    depts.forEach(d => invalidateDeptCache(d));
   }
 
   logger.info(`Imported ${createdCount} faculty members`, {
@@ -260,16 +275,18 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
   let updated = 0;
   for (const item of electives) {
     const student = await Student.findById(item.studentId);
-    if (!student) continue;
-    const exists = student.electiveSubjects.some(e => e.subjectId.toString() === item.subjectId);
-    if (exists) {
-      await Student.updateOne(
-        { _id: item.studentId, 'electiveSubjects.subjectId': item.subjectId },
-        { $set: { 'electiveSubjects.$.facultyId': item.facultyId } }
-      );
-    } else {
-      student.electiveSubjects.push({ subjectId: item.subjectId, facultyId: item.facultyId });
+    if (student) {
+      const ele = {
+        subjectId: item.subjectId,
+        subjectName: item.subjectName,
+        subjectCode: item.subjectCode,
+        facultyId: item.facultyId,
+        facultyName: item.facultyName
+      };
+      student.electiveSubjects.push(ele);
       await student.save();
+      invalidateStudentCache(student._id);
+      if (student.classId) invalidateClassCache(student.classId, student.departmentId);
     }
     updated++;
   }
@@ -310,7 +327,13 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
   const { mentors } = req.body;
   let updated = 0;
   for (const item of mentors) {
-    await Student.findByIdAndUpdate(item.studentId, { mentorId: item.mentorId });
+    const student = await Student.findById(item.studentId);
+    if (student) {
+      student.mentorId = item.mentorId;
+      await student.save();
+      invalidateStudentCache(student._id);
+      if (student.classId) invalidateClassCache(student.classId, student.departmentId);
+    }
     updated++;
   }
   res.status(200).json({ success: true, data: { message: `Updated ${updated} mentor assignments` } });

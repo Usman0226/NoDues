@@ -89,8 +89,16 @@ const studentSchema = new mongoose.Schema(
   }
 );
 
+// Student login — hits on every student session start
+studentSchema.index({ rollNo: 1 }, { unique: true });
+
+// Class student list — admin class page
 studentSchema.index({ classId: 1, isActive: 1 });
+
+// Department student list
 studentSchema.index({ departmentId: 1, isActive: 1 });
+
+// Mentor's student list
 studentSchema.index({ mentorId: 1 });
 
 export default mongoose.model('Student', studentSchema);

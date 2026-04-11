@@ -5,11 +5,15 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import ActionMenu from '../../components/ui/ActionMenu';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 import ImportStepper from '../../components/import/ImportStepper';
 import { useApi } from '../../hooks/useApi';
-import { getClass, initiateBatch, addSubjectToClass } from '../../api/classes';
+import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, updateClassSubject, removeClassSubject } from '../../api/classes';
+import { updateStudent, deleteStudent, addElective, removeElective } from '../../api/students';
 import { getFaculty } from '../../api/faculty';
-import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle } from 'lucide-react';
+import { getSubjects } from '../../api/subjects';
+import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const TABS = [
@@ -24,7 +28,26 @@ const ClassDetail = () => {
   const [tab, setTab] = useState('students');
   const [showImport, setShowImport] = useState(null);
   const [showInitiate, setShowInitiate] = useState(false);
+  
   const [showAddSubject, setShowAddSubject] = useState(false);
+  const [showEditSubject, setShowEditSubject] = useState(false);
+  const [showDeleteSubject, setShowDeleteSubject] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [subjectFormData, setSubjectFormData] = useState({ subjectId: '', facultyId: '', subjectCode: '' });
+
+  const [showClone, setShowClone] = useState(false);
+  
+  const [showEditStudent, setShowEditStudent] = useState(false);
+  const [showDeleteStudent, setShowDeleteStudent] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [studentFormData, setStudentFormData] = useState({ name: '', rollNo: '', email: '' });
+  
+  const [showMapElective, setShowMapElective] = useState(false);
+  const [selectedElective, setSelectedElective] = useState(null);
+  const [electiveSelections, setElectiveSelections] = useState({});
+  
+  const [cloneSourceId, setCloneSourceId] = useState('');
+  
   const [submitting, setSubmitting] = useState(false);
 
   const { data: response, loading, error, request: fetchClass } = useApi(() => getClass(classId), { immediate: true });
@@ -32,15 +55,28 @@ const ClassDetail = () => {
 
   const classData = response?.data || {};
   const students = classData?.students || [];
-  const subjects = classData?.subjects || [];
+  const subjects = classData?.subjects || classData?.subjectAssignments || [];
   const pastBatches = classData?.batchHistory || [];
   const activeBatch = classData?.activeBatch;
+  const facultyList = facultyResponse?.data || [];
+  
+  const departmentId = classData?.departmentId || classData?.department;
+
+  const { data: deptClassesRes } = useApi(() => getClasses({ departmentId }), { immediate: !!departmentId });
+  const otherClasses = (deptClassesRes?.data || []).filter(c => c._id !== classId);
+
+  const { data: deptSubjectsRes } = useApi(() => getSubjects({ limit: 100 }), { immediate: true });
+  const globalSubjects = deptSubjectsRes?.data || [];
+
+  useEffect(() => {
+    if (showAddSubject) setSubjectFormData({ subjectId: '', facultyId: '', subjectCode: '' });
+  }, [showAddSubject]);
 
   const preflight = useMemo(() => [
     { label: 'Roster Loaded', ok: students.length > 0, detail: `${students.length} students enrolled` },
     { label: 'Subject Load', ok: subjects.length > 0, detail: `${subjects.length} assignments` },
     { label: 'Class Teacher', ok: !!classData?.classTeacher, detail: classData?.classTeacherName || 'Not Assigned' },
-    { label: 'Mentor Mapping', ok: students.every(s => s.mentorId), detail: `${students.filter(s => s.mentorId).length}/${students.length} mapped` },
+    { label: 'Mentor Mapping', ok: students.every(s => s.mentorName !== 'Not Assigned'), detail: `${students.filter(s => s.mentorName !== 'Not Assigned').length}/${students.length} mapped` },
   ], [students, subjects, classData]);
 
   const canInitiate = preflight.every(p => p.ok);
@@ -48,12 +84,179 @@ const ClassDetail = () => {
   const onInitiateSubmit = async () => {
     setSubmitting(true);
     try {
-      await initiateBatch({ classId });
+      await initiateBatch(classId);
       toast.success('No-Due Batch initiated for this class');
       setShowInitiate(false);
       fetchClass();
     } catch (err) {
       toast.error(err?.message || 'Initiation failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditStudentClick = (student) => {
+    setSelectedStudent(student);
+    setStudentFormData({ name: student.name, rollNo: student.rollNo, email: student.email || '' });
+    setShowEditStudent(true);
+  };
+
+  const handleEditStudentSubmit = async () => {
+    if (!studentFormData.name || !studentFormData.rollNo) return toast.error('Required fields missing');
+    setSubmitting(true);
+    try {
+      await updateStudent(selectedStudent._id, studentFormData);
+      toast.success('Student record updated');
+      setShowEditStudent(false);
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update student');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteStudentClick = (student) => {
+    setSelectedStudent(student);
+    setShowDeleteStudent(true);
+  };
+
+  const handleDeleteStudentConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await deleteStudent(selectedStudent._id);
+      toast.success('Student record archived');
+      setShowDeleteStudent(false);
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to delete student');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCloneSubjects = async () => {
+    if (!cloneSourceId) return toast.error('Select a source group');
+    setSubmitting(true);
+    try {
+      await cloneSubjects(classId, cloneSourceId);
+      toast.success('Subject mapping inherited seamlessly');
+      setShowClone(false);
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to inherit plan');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAddSubjectSubmit = async () => {
+    if (!subjectFormData.subjectId) return toast.error('Please select a subject');
+    setSubmitting(true);
+    try {
+      await addSubjectToClass(classId, subjectFormData);
+      toast.success('Component mapped successfully');
+      setShowAddSubject(false);
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to map component');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditSubjectClick = (assignment) => {
+    setSelectedSubject(assignment);
+    const faculty = assignment.faculty || {};
+    setSubjectFormData({ 
+      subjectId: assignment.subjectId, 
+      facultyId: faculty._id || '', 
+      subjectCode: assignment.subjectCode || '' 
+    });
+    setShowEditSubject(true);
+  };
+
+  const handleEditSubjectSubmit = async () => {
+    setSubmitting(true);
+    try {
+      // NOTE: backend updateClassSubject needs classId, assignmentId (_id from mapping)
+      const assignmentId = selectedSubject._id || selectedSubject.assignmentId;
+      await updateClassSubject(classId, assignmentId, {
+        facultyId: subjectFormData.facultyId || null,
+        subjectCode: subjectFormData.subjectCode
+      });
+      toast.success('Mapping updated');
+      setShowEditSubject(false);
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update mapping');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteSubjectClick = (assignment) => {
+    setSelectedSubject(assignment);
+    setShowDeleteSubject(true);
+  };
+
+  const handleDeleteSubjectConfirm = async () => {
+    setSubmitting(true);
+    try {
+      const assignmentId = selectedSubject._id || selectedSubject.assignmentId;
+      await removeClassSubject(classId, assignmentId);
+      toast.success('Mapping removed');
+      setShowDeleteSubject(false);
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to remove mapping');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleMapElectiveClick = (assignment) => {
+    if (!assignment.faculty) {
+      toast.error('Assign a handling faculty to this elective first.');
+      return;
+    }
+    setSelectedElective(assignment);
+    const initialSelections = {};
+    students.forEach(s => {
+      const isAssigned = s.electiveSubjects?.some(e => e.subjectId === assignment.subjectId);
+      initialSelections[s._id] = !!isAssigned;
+    });
+    setElectiveSelections(initialSelections);
+    setShowMapElective(true);
+  };
+
+  const handleMapElectiveSubmit = async () => {
+    setSubmitting(true);
+    let successCount = 0;
+    try {
+      const promises = students.map(async (s) => {
+        const isCurrentlyAssigned = s.electiveSubjects?.some(e => e.subjectId === selectedElective.subjectId);
+        const shouldBeAssigned = electiveSelections[s._id];
+        
+        if (shouldBeAssigned && !isCurrentlyAssigned) {
+          await addElective(s._id, {
+            subjectId: selectedElective.subjectId,
+            facultyId: selectedElective.faculty._id
+          });
+          successCount++;
+        } else if (!shouldBeAssigned && isCurrentlyAssigned) {
+          const assignmentToDel = s.electiveSubjects.find(e => e.subjectId === selectedElective.subjectId);
+          await removeElective(s._id, assignmentToDel._id);
+          successCount++;
+        }
+      });
+      await Promise.all(promises);
+      toast.success('Elective batch mapped successfully');
+      setShowMapElective(false);
+      fetchClass();
+    } catch (err) {
+      console.warn(err)
+      toast.error('Failed to update some mappings. Partial completion may have occurred.');
     } finally {
       setSubmitting(false);
     }
@@ -65,18 +268,39 @@ const ClassDetail = () => {
     { key: 'email', label: 'Email', render: (v) => <span className="text-muted-foreground/60">{v}</span> },
     { key: 'mentorName', label: 'Mentor' },
     { key: 'status', label: 'Last Cycle', render: (v) => <Badge status={v || 'pending'} /> },
+    { key: 'actions', label: '', sortable: false, render: (_, row) => (
+       <div className="flex justify-end">
+         <ActionMenu
+           actions={[
+             { label: 'Edit Student', icon: Edit, onClick: () => handleEditStudentClick(row) },
+             { label: 'Unenroll Student', icon: Trash2, onClick: () => handleDeleteStudentClick(row), variant: 'danger' },
+           ]}
+         />
+       </div>
+    )}
   ];
 
   const SUBJECT_COLS = [
     { key: 'subjectCode', label: 'Code', render: (v) => <span className="font-mono text-[10px] bg-offwhite px-1.5 py-0.5 rounded border border-muted/50">{v}</span> },
     { key: 'subjectName', label: 'Component Name', render: (v) => <span className="font-bold text-navy">{v}</span> },
-    { key: 'facultyName', label: 'Handling Faculty' },
-    { key: 'type', label: 'Category', render: (v) => (
-      <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${v === 'Core' ? 'bg-navy/5 text-navy/70' : 'bg-amber-50 text-amber-700'}`}>{v || 'Core'}</span>
+    { key: 'faculty', label: 'Handling Faculty', render: (v) => v ? v.name : <span className="text-muted-foreground italic text-xs">Unassigned</span> },
+    { key: 'isElective', label: 'Category', render: (v) => (
+      <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${!v ? 'bg-navy/5 text-navy/70' : 'bg-amber-50 text-amber-700'}`}>{!v ? 'Core' : 'Elective'}</span>
     )},
+    { key: 'actions', label: '', sortable: false, render: (_, row) => (
+      <div className="flex justify-end">
+        <ActionMenu
+          actions={[
+            { label: 'Edit Mapping', icon: Edit, onClick: () => handleEditSubjectClick(row) },
+            ...(row.isElective ? [{ label: 'Map Students', icon: Users, onClick: () => handleMapElectiveClick(row) }] : []),
+            { label: 'Remove Component', icon: Trash2, onClick: () => handleDeleteSubjectClick(row), variant: 'danger' },
+          ]}
+        />
+      </div>
+   )}
   ];
 
-  if (loading && !classData) {
+  if (loading && !classData.name) {
     return (
       <PageWrapper title="Loading Class..." subtitle="Syncing academic records">
         <div className="animate-pulse space-y-4">
@@ -109,10 +333,8 @@ const ClassDetail = () => {
         </Link>
       }
     >
-      {/* Controls Container: Tabs (Left) and Action Buttons (Right) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        {/* Tab Switcher */}
-        <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-xl p-1 w-fit">
+        <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-3xl p-1 w-fit">
           {TABS.map((t) => {
             const Icon = t.icon;
             return (
@@ -125,7 +347,6 @@ const ClassDetail = () => {
           })}
         </div>
 
-        {/* Tab-Specific Actions */}
         {tab === 'students' && (
           <div className="flex items-center gap-2 animate-in fade-in">
             <Button variant="primary" size="sm" onClick={() => setShowImport('students')}><Upload size={14} /> Import roster</Button>
@@ -138,30 +359,22 @@ const ClassDetail = () => {
         {tab === 'subjects' && (
           <div className="flex items-center gap-2 animate-in fade-in">
             <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}><Plus size={14} /> New assignment</Button>
-            <Button variant="ghost" size="sm" type="button" className="text-navy border border-muted hover:bg-offwhite">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setShowClone(true)} className="text-navy border border-muted hover:bg-offwhite">
               <Copy size={14} /> Inherit plan
             </Button>
           </div>
         )}
       </div>
 
-      {/* TAB 1: Students */}
-      {tab === 'students' && (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className={tab === 'students' ? 'block animate-in fade-in slide-in-from-bottom-2 duration-300' : 'hidden'}>
           <Table columns={STUDENT_COLS} data={students} searchable searchPlaceholder="Search by roll no or name..." />
-        </div>
-      )}
+      </div>
 
-      {/* TAB 2: Subjects */}
-      {tab === 'subjects' && (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className={tab === 'subjects' ? 'block animate-in fade-in slide-in-from-bottom-2 duration-300' : 'hidden'}>
           <Table columns={SUBJECT_COLS} data={subjects} />
-        </div>
-      )}
+      </div>
 
-      {/* TAB 3: Batch History */}
-      {tab === 'batch' && (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className={tab === 'batch' ? 'block animate-in fade-in slide-in-from-bottom-2 duration-300' : 'hidden'}>
           {activeBatch ? (
             <div className="bg-white rounded-xl border border-navy/10 p-8 mb-10 shadow-sm shadow-navy/5 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-1 bg-navy text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl">LIVE SESSION</div>
@@ -187,7 +400,6 @@ const ClassDetail = () => {
             </div>
           )}
 
-          {/* Past Cycles */}
           {pastBatches.length > 0 && (
             <div>
               <h3 className="text-[10px] uppercase font-black tracking-[0.2em] text-navy/40 mb-4 px-1">Historical Analytics</h3>
@@ -206,10 +418,8 @@ const ClassDetail = () => {
               </div>
             </div>
           )}
-        </div>
-      )}
+      </div>
 
-      {/* Initiation Modal */}
       {showInitiate && (
         <Modal isOpen={showInitiate} title="Initiate Clearance Cycle" onClose={() => setShowInitiate(false)}>
           <div className="space-y-6">
@@ -252,22 +462,269 @@ const ClassDetail = () => {
         </Modal>
       )}
 
-      {/* Import Modal */}
       {showImport && (
         <Modal isOpen={!!showImport} title={`Bulk ${showImport} Import`} onClose={() => setShowImport(null)}>
-          <ImportStepper type={showImport} contextLabel={`Context: ${classData?.name}`} onComplete={() => { setShowImport(null); fetchClass(); }} />
+          <ImportStepper 
+            type={showImport} 
+            classId={classId}
+            contextLabel={`Context: ${classData?.name}`} 
+            onComplete={() => { setShowImport(null); fetchClass(); }} 
+          />
         </Modal>
       )}
 
-      {/* Add Subject Modal Placeholder */}
-      {showAddSubject && (
-        <Modal isOpen={showAddSubject} title="Create Component Mapping" onClose={() => setShowAddSubject(false)}>
-          <div className="p-4 text-center">
-            <p className="text-sm text-muted-foreground mb-6 uppercase font-black text-[10px] tracking-widest italic opacity-50">Component management coming soon to UI. Use API for mapping.</p>
-            <Button variant="primary" className="w-full" onClick={() => setShowAddSubject(false)}>Close</Button>
-          </div>
+      {showClone && (
+        <Modal isOpen={showClone} title="Inherit Subject Plan" onClose={() => setShowClone(false)}>
+           <div className="space-y-6">
+             <div className="p-4 rounded-xl bg-offwhite border border-muted/50 mb-4">
+                <p className="text-xs font-bold text-navy/80 mb-1 flex items-center gap-2"><Copy size={14} className="text-navy/40"/> Batch Component Inheritance</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest leading-relaxed">Clone subject mappings from another academic group directly. Previous component mappings on this class will be cleared.</p>
+             </div>
+             <div>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Select Source Group</label>
+                <select 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
+                  value={cloneSourceId}
+                  onChange={(e) => setCloneSourceId(e.target.value)}
+                >
+                  <option value="">-- Choose Academic Group --</option>
+                  {otherClasses.map(c => (
+                     <option key={c._id} value={c._id}>{c.name} (Semester {c.semester})</option>
+                  ))}
+                </select>
+             </div>
+             
+             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowClone(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleCloneSubjects} loading={submitting} className="gap-2">
+                Inherit Structure
+              </Button>
+            </div>
+           </div>
         </Modal>
       )}
+
+      {showEditStudent && (
+        <Modal isOpen={showEditStudent} title="Edit Candidate Record" onClose={() => setShowEditStudent(false)}>
+           <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Roll Number</label>
+                  <input 
+                    className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm font-mono border-dashed opacity-70 cursor-not-allowed"
+                    value={studentFormData.rollNo}
+                    disabled
+                  />
+                  <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-black mt-1.5 opacity-60">Immutable Identity</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Candidate Name</label>
+                  <input 
+                    className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:ring-2 focus:ring-navy/5 font-bold"
+                    value={studentFormData.name}
+                    onChange={(e) => setStudentFormData({...studentFormData, name: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div>
+                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Email Identity</label>
+                 <input 
+                    type="email"
+                    className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:ring-2 focus:ring-navy/5 font-bold"
+                    value={studentFormData.email}
+                    onChange={(e) => setStudentFormData({...studentFormData, email: e.target.value})}
+                  />
+              </div>
+
+             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowEditStudent(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleEditStudentSubmit} loading={submitting}>
+                Save Identity
+              </Button>
+            </div>
+           </div>
+        </Modal>
+      )}
+
+      <ConfirmModal
+        isOpen={showDeleteStudent}
+        onClose={() => setShowDeleteStudent(false)}
+        onConfirm={handleDeleteStudentConfirm}
+        title="Unenroll Candidate"
+        description={`Are you sure you want to completely unenroll ${selectedStudent?.name} (${selectedStudent?.rollNo}) from this academic group? This will purge active records.`}
+        confirmText="Confirm Unenrollment"
+        isDestructive={true}
+        loading={submitting}
+      />
+
+      {showAddSubject && (
+        <Modal isOpen={showAddSubject} title="Create Component Mapping" onClose={() => setShowAddSubject(false)}>
+          <div className="space-y-6">
+             <div className="p-4 rounded-xl bg-offwhite border border-muted/50 mb-4 text-xs text-muted-foreground">
+                Map a new core or elective component to this academic group and explicitly assign the handling faculty member.
+             </div>
+             
+             <div>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Global Component</label>
+                <select 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
+                  value={subjectFormData.subjectId}
+                  onChange={(e) => {
+                    const subj = globalSubjects.find(s => s._id === e.target.value);
+                    setSubjectFormData({...subjectFormData, subjectId: e.target.value, subjectCode: subj ? subj.code : ''});
+                  }}
+                >
+                  <option value="">-- Catalog Lookup --</option>
+                  {globalSubjects.map(s => (
+                     <option key={s._id} value={s._id}>{s.name} ({s.code}) - {s.isElective ? 'Elective' : 'Core'}</option>
+                  ))}
+                </select>
+             </div>
+
+             <div>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Handling Faculty (Optional)</label>
+                <select 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
+                  value={subjectFormData.facultyId}
+                  onChange={(e) => setSubjectFormData({...subjectFormData, facultyId: e.target.value})}
+                >
+                  <option value="">-- Assign Later --</option>
+                  {facultyList.map(f => (
+                     <option key={f._id} value={f._id}>{f.name}</option>
+                  ))}
+                </select>
+             </div>
+
+             <div>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Alias Subject Code (Optional)</label>
+                <input 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:ring-2 focus:ring-navy/5 font-mono"
+                  placeholder="Leave empty for catalog default"
+                  value={subjectFormData.subjectCode}
+                  onChange={(e) => setSubjectFormData({...subjectFormData, subjectCode: e.target.value})}
+                />
+             </div>
+             
+             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowAddSubject(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleAddSubjectSubmit} loading={submitting}>
+                Establish Mapping
+              </Button>
+            </div>
+           </div>
+        </Modal>
+      )}
+
+      {showEditSubject && (
+        <Modal isOpen={showEditSubject} title="Edit Component Mapping" onClose={() => setShowEditSubject(false)}>
+          <div className="space-y-6">
+             <div className="p-4 rounded-xl bg-offwhite border border-muted/50 mb-4 text-xs font-bold text-navy">
+                {selectedSubject?.subjectName} ({selectedSubject?.subjectCode})
+             </div>
+
+             <div>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Handling Faculty</label>
+                <select 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
+                  value={subjectFormData.facultyId}
+                  onChange={(e) => setSubjectFormData({...subjectFormData, facultyId: e.target.value})}
+                >
+                  <option value="">-- Unassigned --</option>
+                  {facultyList.map(f => (
+                     <option key={f._id} value={f._id}>{f.name}</option>
+                  ))}
+                </select>
+             </div>
+
+             <div>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Alias Subject Code</label>
+                <input 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:ring-2 focus:ring-navy/5 font-mono"
+                  placeholder="Set context-specific code"
+                  value={subjectFormData.subjectCode}
+                  onChange={(e) => setSubjectFormData({...subjectFormData, subjectCode: e.target.value})}
+                />
+             </div>
+             
+             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowEditSubject(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleEditSubjectSubmit} loading={submitting}>
+                Save Changes
+              </Button>
+            </div>
+           </div>
+        </Modal>
+      )}
+
+      <ConfirmModal
+        isOpen={showDeleteSubject}
+        onClose={() => setShowDeleteSubject(false)}
+        onConfirm={handleDeleteSubjectConfirm}
+        title="Remove Component Mapping"
+        description={`Are you sure you want to remove ${selectedSubject?.subjectName} from this class? This will also remove any related pending no-due records for this component if a batch is active.`}
+        confirmText="Remove Mapping"
+        isDestructive={true}
+        loading={submitting}
+      />
+
+      {showMapElective && (
+        <Modal isOpen={showMapElective} title="Elective Batch Assignment" onClose={() => setShowMapElective(false)}>
+           <div className="space-y-6">
+             <div className="p-4 rounded-xl bg-offwhite border border-muted/50 mb-4">
+                <p className="text-xs font-bold text-navy/80 mb-1 flex items-center gap-2"><Users size={14} className="text-navy/40"/> Batch Enroll</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest leading-relaxed">
+                  {selectedElective?.subjectName} ({selectedElective?.subjectCode}) handled by {selectedElective?.faculty?.name}
+                </p>
+             </div>
+             
+             <div>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-4">Student Selection Roster</label>
+                <div className="max-h-[300px] overflow-y-auto border border-muted/30 rounded-xl divide-y divide-muted/20">
+                  {students.map(s => (
+                    <label key={s._id} className="flex items-center gap-3 p-3 hover:bg-offwhite/50 cursor-pointer transition-colors">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 rounded border-muted text-navy focus:ring-navy"
+                        checked={electiveSelections[s._id] || false}
+                        onChange={(e) => setElectiveSelections({ ...electiveSelections, [s._id]: e.target.checked })}
+                      />
+                      <div>
+                        <p className="text-xs font-bold text-navy">{s.name}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">{s.rollNo}</p>
+                      </div>
+                    </label>
+                  ))}
+                  {students.length === 0 && (
+                    <div className="p-4 text-center text-xs text-muted-foreground italic">No students available.</div>
+                  )}
+                </div>
+                <div className="flex justify-between items-center mt-3">
+                  <p className="text-[9px] uppercase tracking-widest font-black text-muted-foreground">
+                    Selected: {Object.values(electiveSelections).filter(Boolean).length} / {students.length}
+                  </p>
+                  <div className="flex gap-2">
+                    <button type="button" className="text-[10px] uppercase tracking-widest font-black text-navy hover:underline"
+                       onClick={() => { const all = {}; students.forEach(s => all[s._id] = true); setElectiveSelections(all); }}>
+                       Select All
+                    </button>
+                    <button type="button" className="text-[10px] uppercase tracking-widest font-black text-navy hover:underline"
+                       onClick={() => setElectiveSelections({})}>
+                       Clear
+                    </button>
+                  </div>
+                </div>
+             </div>
+             
+             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowMapElective(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleMapElectiveSubmit} loading={submitting}>
+                Save Batch Mappings
+              </Button>
+            </div>
+           </div>
+        </Modal>
+      )}
+
     </PageWrapper>
   );
 };

@@ -5,19 +5,22 @@ import { ROLES } from '../../utils/constants';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardCheck,
   Shield, History, ChevronLeft, ChevronRight,
-  Building2, AlertTriangle, Layers, X
+  Building2, AlertTriangle, Layers, X, GraduationCap
 } from 'lucide-react';
 
 const NAV_CONFIG = {
   [ROLES.ADMIN]: [
     { label: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { label: 'Departments', path: '/admin/departments', icon: Building2 },
+    { label: 'Students', path: '/admin/students', icon: Users },
     { label: 'Faculty', path: '/admin/faculty', icon: Users },
     { label: 'Subjects', path: '/admin/subjects', icon: BookOpen },
     { label: 'Batches', path: '/admin/batches', icon: Layers },
   ],
   [ROLES.HOD]: [
     { label: 'Dashboard', path: '/hod', icon: LayoutDashboard },
+    { label: 'Classes', path: '/hod/classes', icon: GraduationCap },
+    { label: 'Students', path: '/hod/students', icon: Users },
     { label: 'Faculty', path: '/hod/faculty', icon: Users },
     { label: 'Subjects', path: '/hod/subjects', icon: BookOpen },
     { label: 'Batches', path: '/hod/batches', icon: Layers },

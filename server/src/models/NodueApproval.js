@@ -50,10 +50,25 @@ const nodueApprovalSchema = new mongoose.Schema({
   }
 });
 
-// Primary compound index for high volume queries
+// Primary compound index — prevent duplicates, cover requestId lookups
 nodueApprovalSchema.index(
   { requestId: 1, facultyId: 1, subjectId: 1, roleTag: 1 },
   { unique: true }
 );
+
+// Faculty pending list: "all pending approvals for Dr. X in batch Y"
+nodueApprovalSchema.index({ batchId: 1, facultyId: 1, action: 1 });
+
+// Admin batch grid: count by action across a batch
+nodueApprovalSchema.index({ batchId: 1, action: 1 });
+
+// Student status page — most-hit endpoint at peak load
+nodueApprovalSchema.index({ studentId: 1, batchId: 1 });
+
+// Faculty dashboard: total pending count across all batches
+nodueApprovalSchema.index({ facultyId: 1, action: 1 });
+
+// requestId lookup (recalcRequestStatus) — kept minimal for write speed
+nodueApprovalSchema.index({ requestId: 1, action: 1 });
 
 export default mongoose.model('NodueApproval', nodueApprovalSchema);

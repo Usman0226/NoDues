@@ -6,6 +6,7 @@ import {
   updateFaculty,
   deleteFaculty,
   getFacultyClasses,
+  resendCredentials,
 } from '../Controllers/facultyController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -25,5 +26,6 @@ router.route('/:id')
   .delete(deleteFaculty);
 
 router.get('/:id/classes', getFacultyClasses);
+router.post('/:id/resend-creds', resendCredentials);
 
 export default router;

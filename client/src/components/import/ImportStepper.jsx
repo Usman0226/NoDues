@@ -24,7 +24,7 @@ const STEPS = [
   { label: 'Confirm', icon: Check },
 ];
 
-const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
+const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [file, setFile] = useState(null);
   const [previewData, setPreviewData] = useState(null);
@@ -41,8 +41,9 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
     formData.append('file', uploadedFile);
 
     try {
-      const response = await previewImport(type, formData);
-      setPreviewData(response);
+      const params = type === 'students' ? { classId } : {};
+      const response = await previewImport(type, formData, params);
+      setPreviewData(response.data);
       setCurrentStep(1);
     } catch (err) {
       setError(err?.message || 'Failed to parse file. Please check the template.');
@@ -53,11 +54,13 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
   }, [type]);
 
   const handleCommit = useCallback(async () => {
-    if (!previewData?.importId) return;
-    
     setLoading(true);
     try {
-      await commitImport(type, previewData.importId);
+      const payload = type === 'students' 
+        ? { students: previewData.valid, classId }
+        : { [type]: previewData.valid };
+
+      await commitImport(type, payload);
       toast.success('Records committed successfully');
       onComplete?.();
     } catch (err) {
@@ -81,12 +84,16 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       toast.error('Failed to download template.');
+      console.warn(err)
     } finally {
       setDownloading(false);
     }
   }, [type]);
 
-  const dataRows = previewData?.previewRows || [];
+  const dataRows = [
+    ...(previewData?.valid?.map(item => ({ ...item, isValid: true })) || []),
+    ...(previewData?.errors?.map(err => ({ ...err.data, isValid: false, errors: [err.reason] })) || [])
+  ];
   const validCount = previewData?.summary?.valid || 0;
   const errorCount = previewData?.summary?.errors || 0;
 

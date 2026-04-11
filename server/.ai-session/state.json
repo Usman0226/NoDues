@@ -1,54 +1,38 @@
 {
-  "last_updated": "2026-04-11T10:34:00.000Z",
+  "last_updated": "2026-04-12T01:05:00+05:30",
   "completed": [
-    "Auth system — all 5 endpoints fully implemented and wired",
-    "Department API — GET, POST, GET/:id, PATCH/:id (admin/hod scoped, cached)",
-    "Subject API — GET, POST, GET/:id, PATCH/:id, DELETE/:id (soft delete, cached)",
-    "Class API — all 10 endpoints (CRUD, subject assignments, clone-subjects, class-teacher)",
-    "Faculty API — all 6 endpoints (CRUD + GET/:id/classes, temp password generation)",
-    "Student API — all 9 endpoints (CRUD, mentor, electives add/update/remove)",
-    "All route files: auth, department, subject, class, faculty, student",
-    "app.js — all 6 route groups mounted at correct base paths",
-    "Models updated: Faculty (employeeId, phone, indexes), Department (no enum, indexes), Admin (12-round), Student (indexes), Subject (isActive, indexes), Class (proper subdoc, indexes)",
-    "Admin seed script implemented and executed (email: admin@nodues.com)",
-    "Fixed Mongoose async/await middleware pattern in Admin.js and Faculty.js to prevent 'next is not a function' errors",
-    "Removed demo credentials and bypass logic from AuthContext.jsx",
-    "Cleaned up Login.jsx UI (removed demo section) and fixed studentLogin bug"
+    "Add all critical MongoDB indexes (NodueApproval ×6, NodueRequest ×3, Student rollNo unique + compound, Faculty departmentId+roleTags)",
+    "Upgrade cache config: useClones:false, stdTTL 60s",
+    "Upgrade DB config: minPoolSize:2, serverSelectionTimeoutMS, socketTimeoutMS",
+    "Create utils/withCache.js (cache-aside helper + invalidateKeys)",
+    "Create middlewares/responseTime.js (flags > 100ms / > 200ms SLOW)",
+    "Install compression middleware; wire into app.js",
+    "Rewrite studentPortalController.js: withCache(30s), Promise.all, .lean(), .select()",
+    "Rewrite approvalController.js: surgical cache invalidation after every action, .select() on all queries",
+    "Rewrite batchController.js: bulkWrite for initiation (~30x faster), getBatchStatus cached 60s, cache primed after initiation, addStudentToBatch/closeBatch invalidate correctly",
+    "Rewrite hodController.js: getOverview cached 60s, overrideDues invalidates 3 keys",
+    "Fix server.js: await connectDB() before app.listen()"
   ],
   "in_progress": [],
   "pending": [
-    "Batch API — GET, POST /initiate, GET /:batchId, GET /:batchId/students/:studentId, PATCH /:batchId/close, POST /:batchId/students, DELETE /:batchId/faculty/:facultyId",
-    "Approvals API — GET /pending, GET /history, POST /approve, POST /mark-due, PATCH /:approvalId",
-    "HoD API — GET /overview, GET /dues, POST /override",
-    "Student Portal API — GET /student/status, GET /student/history",
-    "Import API — preview/commit for students, faculty, electives, mentors + template download",
-    "SSE API — GET /sse/connect"
+    "Add Cache-Control: private, max-age=300 header to subject list endpoint",
+    "Consider prewarmService for deadline-day cache priming"
   ],
   "decisions": [
     {
-      "context": "Auth cookie setup",
-      "decision": "nds_token httpOnly cookie (not Authorization header) as per API guide §2",
-      "trade_offs": "Requires credentials:true on CORS; cannot be read by frontend JS (by design)"
+      "context": "batchController initiateBatch used per-student session loop",
+      "decision": "Replace with two parallel bulkWrite calls (requests + approvals collection)",
+      "trade_offs": "Loses per-document Mongoose middleware (no pre/post save hooks), but those weren't used here anyway. Gains ~30x speed."
     },
     {
-      "context": "MongoDB M0 free tier",
-      "decision": "All queries use compound indexes; node-cache for hot paths; no unbounded .find() calls",
-      "trade_offs": "node-cache is per-instance (not shared across replicas) — acceptable for M0"
+      "context": "Cache invalidation strategy",
+      "decision": "Surgical key-by-key invalidation, never flushAll()",
+      "trade_offs": "Slightly more code per mutation, but prevents thundering-herd cache miss storms at peak load."
     },
     {
-      "context": "Password hashing",
-      "decision": "bcrypt with 12 rounds (raised from 10) for stronger security",
-      "trade_offs": "~300ms per hash; no visible UX impact at this scale"
-    },
-    {
-      "context": "Department model hardcoded enum removed",
-      "decision": "Any dept name can be created via API; UI must enforce consistent casing",
-      "trade_offs": "Requires admin discipline on naming"
-    },
-    {
-      "context": "Faculty class-count query",
-      "decision": "Two separate lean queries (classTeacher + subjectAssignments) instead of aggregation pipeline to stay M0-safe",
-      "trade_offs": "Two DB round-trips vs one aggregation; acceptable for list size"
+      "context": "studentPortalController: populate('facultyId') on approvals",
+      "decision": "Removed populate — use denormalized facultyName field stored on NodueApproval at creation time",
+      "trade_offs": "No extra Faculty collection query on the hot path. Name must be kept in sync on faculty rename (rare)."
     }
   ],
   "blockers": []

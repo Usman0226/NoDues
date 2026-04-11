@@ -6,9 +6,10 @@ import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { sendCredentialEmail } from '../services/emailService.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const invalidateFacultyCache = (id) => {
+export const invalidateFacultyCache = (id) => {
   cache.del(`faculty:${id}`);
   cache.del('faculty:all');
 };
@@ -168,8 +169,10 @@ export const createFaculty = async (req, res, next) => {
       resource_id: faculty._id.toString(),
     });
 
-    // TODO: send credential email via resend when email service is configured
-    // await sendCredentialEmail({ to: email, name, tempPassword });
+    // Send credential email asynchronously (fire and forget)
+    sendCredentialEmail(email, name, email, tempPassword, 'faculty').catch(err => {
+      logger.error('Background email dispatch failed for new faculty:', err);
+    });
 
     invalidateFacultyCache(faculty._id.toString());
 
@@ -378,6 +381,42 @@ export const getFacultyClasses = async (req, res, next) => {
     });
 
     return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resendCredentials = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const faculty = await Faculty.findById(id);
+    if (!faculty) {
+      return next(new ErrorResponse('Faculty not found', 404));
+    }
+
+    // Generate new temp password
+    const tempPassword = crypto.randomBytes(4).toString('hex');
+    faculty.password = tempPassword;
+    faculty.mustChangePassword = true;
+    
+    await faculty.save();
+
+    logger.info(`Credentials regenerated for faculty ${faculty.email}`, {
+      timestamp: new Date().toISOString(),
+      actor: req.user?.userId || 'SYSTEM',
+      action: 'RESEND_CREDS',
+      resource_id: faculty._id.toString(),
+    });
+
+    sendCredentialEmail(faculty.email, faculty.name, faculty.email, tempPassword, 'faculty').catch(err => {
+      logger.error('Background email dispatch failed for resending faculty creds:', err);
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Credentials regenerated and email dispatched',
+    });
   } catch (err) {
     next(err);
   }

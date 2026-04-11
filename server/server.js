@@ -8,38 +8,43 @@ process.on('uncaughtException', (err) => {
   logger.error('UNCAUGHT EXCEPTION! Shutting down...', {
     name: err.name,
     message: err.message,
-    stack: err.stack
+    stack: err.stack,
   });
   process.exit(1);
 });
 
-connectDB();
+// Connect to MongoDB BEFORE accepting requests.
+// With minPoolSize: 2, two warm connections are ready before the first request.
+const start = async () => {
+  await connectDB();
 
-const PORT = process.env.PORT || 5000;
-
-const server = app.listen(PORT, () => {
-  logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-});
-
-process.on('unhandledRejection', (err) => {
-  logger.error('UNHANDLED REJECTION! Shutting down...', {
-    name: err.name,
-    message: err.message,
-    stack: err.stack
+  const PORT   = process.env.PORT || 5000;
+  const server = app.listen(PORT, () => {
+    logger.info(
+      `Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`
+    );
   });
-  server.close(() => {
-    process.exit(1);
-  });
-});
 
-const gracefulShutdown = (signal) => {
-  logger.info(`${signal} received. Shutting down gracefully...`);
-  server.close(async () => {
-    await mongoose.connection.close();
-    logger.info('Processes closed.');
-    process.exit(0);
+  process.on('unhandledRejection', (err) => {
+    logger.error('UNHANDLED REJECTION! Shutting down...', {
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+    });
+    server.close(() => process.exit(1));
   });
+
+  const gracefulShutdown = (signal) => {
+    logger.info(`${signal} received. Shutting down gracefully...`);
+    server.close(async () => {
+      await mongoose.connection.close();
+      logger.info('Processes closed.');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 };
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+start();

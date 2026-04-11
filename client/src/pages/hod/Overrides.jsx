@@ -9,53 +9,28 @@ import {
   Filter, 
   Clock, 
   CheckCircle,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react';
-
-const MOCK_OVERRIDES = [
-  { 
-    id: 1, 
-    rollNo: '21CSE005', 
-    name: 'Sneha R.', 
-    class: 'CSE-A Sem 5', 
-    facultyWhoFlagged: 'Dr. Rao', 
-    subject: 'Machine Learning', 
-    dueType: 'library', 
-    remarks: 'Book not returned', 
-    overriddenAt: '2026-05-12T10:00:00Z',
-    overrideRemark: 'Verified — book was actually returned day of deadline'
-  },
-  { 
-    id: 2, 
-    rollNo: '21CSE018', 
-    name: 'Arjun Das', 
-    class: 'CSE-B Sem 5', 
-    facultyWhoFlagged: 'Dr. Verma', 
-    subject: 'DBMS', 
-    dueType: 'fees', 
-    remarks: 'Lab fee pending', 
-    overriddenAt: '2026-05-11T14:30:00Z',
-    overrideRemark: 'Special permission from Principal'
-  },
-];
+import { useApi } from '../../hooks/useApi';
+import { getHodDues } from '../../api/hod';
 
 const COLUMNS = [
-  { key: 'rollNo', label: 'Roll No', render: (v) => <span className="font-mono text-xs font-semibold">{v}</span> },
-  { key: 'name', label: 'Student Name' },
-  { key: 'class', label: 'Class' },
-  { key: 'subject', label: 'Subject' },
+  { key: 'rollNo', label: 'Roll No', render: (v) => <span className="font-mono text-[10px] font-black text-navy">{v}</span> },
+  { key: 'name', label: 'Student Name', render: (v) => <span className="font-bold text-xs">{v}</span> },
+  { key: 'className', label: 'Class', render: (v) => <span className="text-xs">{v}</span> },
   { 
-    key: 'dueType', 
-    label: 'Original Due', 
-    render: (v) => <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-bold uppercase">{v}</span> 
+    key: 'dueCount', 
+    label: 'Cleared Dues',
+    render: (v) => <span className="text-xs font-bold text-muted-foreground">{v} dues cleared</span> 
   },
   {
     key: 'overrideRemark',
     label: 'Override Log',
     render: (v, row) => (
       <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-blue-600 italic truncate max-w-[200px]">"{v}"</span>
-        <span className="text-[9px] text-muted-foreground flex items-center gap-1">
+        <span className="text-xs text-blue-600 font-medium italic truncate max-w-[200px]">"{v}"</span>
+        <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground flex items-center gap-1">
           <Clock size={8} /> {new Date(row.overriddenAt).toLocaleDateString()}
         </span>
       </div>
@@ -71,6 +46,31 @@ const COLUMNS = [
 const Overrides = () => {
   const [search, setSearch] = useState('');
 
+  const { data: response, loading, error, request: fetchOverrides } = useApi(getHodDues, { immediate: true, params: { status: 'hod_override' } });
+
+  const overrides = React.useMemo(() => {
+    if (!response?.data) return [];
+    return response.data.map(req => ({
+      id: req.requestId,
+      rollNo: req.rollNo,
+      name: req.name,
+      className: req.className,
+      dueCount: req.dues?.length || 1, // Number of dues that were cleared
+      overrideRemark: req.overrideRemark,
+      overriddenAt: req.overriddenAt,
+      status: 'hod_override'
+    }));
+  }, [response]);
+
+  const filteredData = React.useMemo(() => {
+    if (!search) return overrides;
+    const lower = search.toLowerCase();
+    return overrides.filter(o => 
+      o.name.toLowerCase().includes(lower) || 
+      o.rollNo.toLowerCase().includes(lower)
+    );
+  }, [overrides, search]);
+
   return (
     <PageWrapper title="Override History" subtitle="Audit log of all department-level manual clearances">
       {/* Header Info */}
@@ -80,9 +80,16 @@ const Overrides = () => {
         </div>
         <div>
           <h2 className="text-blue-900 font-bold mb-0.5">Management Summary</h2>
-          <p className="text-blue-700 text-xs">Total of <span className="font-bold underline">{MOCK_OVERRIDES.length}</span> manual overrides applied this semester.</p>
+          <p className="text-blue-700 text-xs">Total of <span className="font-bold underline">{overrides.length}</span> manual overrides applied this semester.</p>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 rounded-xl bg-red-50/50 border border-red-100 flex items-center justify-between">
+          <p className="text-sm text-red-600 font-medium">{error}</p>
+          <Button variant="outline" size="sm" onClick={() => fetchOverrides()}><RefreshCw size={14} className="mr-2"/> Retry</Button>
+        </div>
+      )}
 
       {/* Actions / Filter Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
@@ -107,11 +114,12 @@ const Overrides = () => {
       {/* Main Table — Roll No FIRST (PRD §6.9) */}
       <Table 
         columns={COLUMNS} 
-        data={MOCK_OVERRIDES}
+        data={filteredData}
+        loading={loading}
         searchable={false} // Managed externally for custom styling
       />
 
-      {MOCK_OVERRIDES.length === 0 && (
+      {!loading && filteredData.length === 0 && (
         <div className="text-center py-20 bg-white rounded-xl border border-dashed border-muted">
            <CheckCircle size={40} className="text-muted-foreground mx-auto mb-3 opacity-20" />
            <p className="text-muted-foreground text-sm font-medium">No overrides found in the system log.</p>

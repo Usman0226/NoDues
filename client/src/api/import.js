@@ -3,7 +3,7 @@ import api from './axiosInstance';
 /**
  * Generic preview wrapper
  */
-export const previewImport = (type, formData) => {
+export const previewImport = (type, formData, params = {}) => {
   const endpoints = {
     students: '/import/students/preview',
     faculty: '/import/faculty/preview',
@@ -11,7 +11,8 @@ export const previewImport = (type, formData) => {
     mentors: '/import/mentors/preview'
   };
   return api.post(endpoints[type] || endpoints.students, formData, { 
-    headers: { 'Content-Type': 'multipart/form-data' } 
+    headers: { 'Content-Type': 'multipart/form-data' },
+    params
   });
 };
 

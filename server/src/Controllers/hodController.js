@@ -6,59 +6,64 @@ import Student from '../models/Student.js';
 import Faculty from '../models/Faculty.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
+import { withCache, invalidateKeys } from '../utils/withCache.js';
 import { pushEvent } from './sseController.js';
 
 // Convenience: extract HoD's departmentId from token
 const hodDept = (req) => req.user.departmentId;
 
 // ── GET /api/hod/overview ─────────────────────────────────────────────────────
+// Cached 60s — HoD overview hits this on every dashboard load.
 export const getOverview = async (req, res, next) => {
   try {
-    const deptId = hodDept(req);
+    const deptId   = hodDept(req);
+    const cacheKey = `hod_overview:${deptId}`;
 
-    const activeBatches = await NodueBatch.find({
-      departmentId: deptId,
-      status: 'active',
-    }).lean();
+    const data = await withCache(cacheKey, 60, async () => {
+      const activeBatches = await NodueBatch.find({
+        departmentId: deptId,
+        status: 'active',
+      })
+        .select('_id className semester academicYear status initiatedAt')
+        .lean();
 
-    if (!activeBatches.length) {
-      return res.status(200).json({ success: true, data: [] });
-    }
+      if (!activeBatches.length) return [];
 
-    const batchIds = activeBatches.map((b) => b._id);
+      const batchIds = activeBatches.map((b) => b._id);
 
-    // Aggregate request status counts per batch
-    const statusCounts = await NodueRequest.aggregate([
-      { $match: { batchId: { $in: batchIds } } },
-      {
-        $group: {
-          _id:      '$batchId',
-          total:    { $sum: 1 },
-          cleared:  { $sum: { $cond: [{ $eq: ['$status', 'cleared'] }, 1, 0] } },
-          hasDues:  { $sum: { $cond: [{ $eq: ['$status', 'has_dues'] }, 1, 0] } },
-          pending:  { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
-          overridden: { $sum: { $cond: [{ $eq: ['$status', 'hod_override'] }, 1, 0] } },
+      // Single aggregation — counts cleared/hasDues/pending/overridden per batch
+      const statusCounts = await NodueRequest.aggregate([
+        { $match: { batchId: { $in: batchIds } } },
+        {
+          $group: {
+            _id:       '$batchId',
+            total:     { $sum: 1 },
+            cleared:   { $sum: { $cond: [{ $eq: ['$status', 'cleared'] },      1, 0] } },
+            hasDues:   { $sum: { $cond: [{ $eq: ['$status', 'has_dues'] },     1, 0] } },
+            pending:   { $sum: { $cond: [{ $eq: ['$status', 'pending'] },      1, 0] } },
+            overridden:{ $sum: { $cond: [{ $eq: ['$status', 'hod_override'] }, 1, 0] } },
+          },
         },
-      },
-    ]);
+      ]);
 
-    const countMap = Object.fromEntries(statusCounts.map((s) => [s._id.toString(), s]));
+      const countMap = Object.fromEntries(statusCounts.map((s) => [s._id.toString(), s]));
 
-    const data = activeBatches.map((b) => {
-      const counts = countMap[b._id.toString()] ?? { total: 0, cleared: 0, hasDues: 0, pending: 0, overridden: 0 };
-      return {
-        batchId:     b._id,
-        className:   b.className,
-        semester:    b.semester,
-        academicYear: b.academicYear,
-        status:      b.status,
-        total:       counts.total,
-        cleared:     counts.cleared,
-        hasDues:     counts.hasDues,
-        pending:     counts.pending,
-        overridden:  counts.overridden,
-        initiatedAt: b.initiatedAt,
-      };
+      return activeBatches.map((b) => {
+        const counts = countMap[b._id.toString()] ?? { total: 0, cleared: 0, hasDues: 0, pending: 0, overridden: 0 };
+        return {
+          batchId:      b._id,
+          className:    b.className,
+          semester:     b.semester,
+          academicYear: b.academicYear,
+          status:       b.status,
+          total:        counts.total,
+          cleared:      counts.cleared,
+          hasDues:      counts.hasDues,
+          pending:      counts.pending,
+          overridden:   counts.overridden,
+          initiatedAt:  b.initiatedAt,
+        };
+      });
     });
 
     return res.status(200).json({ success: true, data });
@@ -71,22 +76,24 @@ export const getOverview = async (req, res, next) => {
 export const getDues = async (req, res, next) => {
   try {
     const deptId = hodDept(req);
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20, status = 'has_dues' } = req.query;
 
-    // Active batches in this department
-    const activeBatchIds = await NodueBatch.find(
-      { departmentId: deptId, status: 'active' }, '_id'
-    ).lean();
+    const batchFilter = { departmentId: deptId };
+    if (status !== 'hod_override') batchFilter.status = 'active';
 
-    const batchIdSet = activeBatchIds.map((b) => b._id);
+    // Get dept batch IDs — small result, indexed on departmentId
+    const deptBatches  = await NodueBatch.find(batchFilter, '_id').lean();
+    const batchIdSet   = deptBatches.map((b) => b._id);
 
     const skip = (Number(page) - 1) * Number(limit);
     const [requests, total] = await Promise.all([
-      NodueRequest.find({ batchId: { $in: batchIdSet }, status: 'has_dues' })
+      NodueRequest.find({ batchId: { $in: batchIdSet }, status })
+        .select('_id studentId studentSnapshot batchId overriddenAt overrideRemark')
         .skip(skip)
         .limit(Number(limit))
+        .populate('batchId', 'className semester academicYear')
         .lean(),
-      NodueRequest.countDocuments({ batchId: { $in: batchIdSet }, status: 'has_dues' }),
+      NodueRequest.countDocuments({ batchId: { $in: batchIdSet }, status }),
     ]);
 
     if (!requests.length) {
@@ -96,12 +103,13 @@ export const getDues = async (req, res, next) => {
       });
     }
 
-    // Get the due details per request
+    // Get due approvals for the fetched requests — single query, not N+1
     const requestIds = requests.map((r) => r._id);
     const dueApprovals = await NodueApproval.find({
       requestId: { $in: requestIds },
-      action: 'due_marked',
+      action:    'due_marked',
     })
+      .select('requestId subjectName dueType remarks actionedAt facultyName')
       .populate('facultyId', 'name employeeId')
       .lean();
 
@@ -111,22 +119,25 @@ export const getDues = async (req, res, next) => {
       const key = d.requestId?.toString();
       if (!dueMap[key]) dueMap[key] = [];
       dueMap[key].push({
-        facultyName:  d.facultyId?.name,
-        employeeId:   d.facultyId?.employeeId,
-        subjectName:  d.subjectName,
-        dueType:      d.dueType,
-        remarks:      d.remarks,
-        actionedAt:   d.actionedAt,
+        facultyName: d.facultyId?.name    ?? d.facultyName,
+        employeeId:  d.facultyId?.employeeId ?? null,
+        subjectName: d.subjectName,
+        dueType:     d.dueType,
+        remarks:     d.remarks,
+        actionedAt:  d.actionedAt,
       });
     }
 
     const data = requests.map((r) => ({
-      requestId:   r._id,
-      studentId:   r.studentId,
-      rollNo:      r.studentSnapshot?.rollNo,
-      name:        r.studentSnapshot?.name,
-      batchId:     r.batchId,
-      dues:        dueMap[r._id.toString()] ?? [],
+      requestId:      r._id,
+      studentId:      r.studentId,
+      rollNo:         r.studentSnapshot?.rollNo,
+      name:           r.studentSnapshot?.name,
+      batchId:        r.batchId?._id ?? r.batchId,
+      className:      r.batchId?.className ?? null,
+      overriddenAt:   r.overriddenAt,
+      overrideRemark: r.overrideRemark,
+      dues:           dueMap[r._id.toString()] ?? [],
     }));
 
     return res.status(200).json({
@@ -157,7 +168,9 @@ export const overrideDues = async (req, res, next) => {
     }
 
     // Verify this request belongs to an active batch in HoD's department
-    const batch = await NodueBatch.findById(request.batchId).lean();
+    const batch = await NodueBatch.findById(request.batchId)
+      .select('status departmentId')
+      .lean();
     if (!batch || batch.status !== 'active') {
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
@@ -171,25 +184,31 @@ export const overrideDues = async (req, res, next) => {
     request.overriddenAt   = new Date();
     await request.save();
 
+    // Surgical cache invalidation — student sees updated status, HoD overview refreshes
+    invalidateKeys([
+      `student_status:${request.studentId}`,
+      `batch_status:${request.batchId}`,
+      `hod_overview:${hodDept(req)}`,
+    ]);
+
     logger.info('hod_override', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
       action: 'HOD_OVERRIDE', resource_id: requestId,
       remark: overrideRemark.trim(),
     });
 
-    // Notify student via SSE
     pushEvent([request.studentId.toString()], 'HOD_OVERRIDE', {
-      studentId: request.studentId,
+      studentId:      request.studentId,
       requestId,
-      status: 'hod_override',
-      overrideRemark: request.overrideRemark
+      status:         'hod_override',
+      overrideRemark: request.overrideRemark,
     });
 
     return res.status(200).json({
       success: true,
       data: {
-        requestId: request._id,
-        status:    'hod_override',
+        requestId:      request._id,
+        status:         'hod_override',
         overriddenBy:   req.user.userId,
         overrideRemark: request.overrideRemark,
         overriddenAt:   request.overriddenAt,

@@ -8,8 +8,14 @@ import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
 
-const invalidateClassCache = (id) => {
-  cache.del(`class:${id}`);
+export const invalidateClassCache = (classId, departmentId) => {
+  if (classId) cache.del(`class:${classId}`);
+  
+  // Invalidate list caches
+  const keys = cache.keys();
+  const listPrefix = departmentId ? `classes:list:dept_${departmentId}` : 'classes:list:';
+  const listKeys = keys.filter(k => k.startsWith(listPrefix));
+  if (listKeys.length > 0) cache.del(listKeys);
 };
 
 // ── Scope helper — HoD auto-filters to own department ─────────────────────────
@@ -19,10 +25,13 @@ const deptScope = (req) =>
 // ── GET /api/classes ──────────────────────────────────────────────────────────
 export const getClasses = async (req, res, next) => {
   try {
-    const { departmentId, semester, academicYear, status, page = 1, limit = 20 } = req.query;
+    const { departmentId, semester, academicYear, page = 1, limit = 20 } = req.query;
+
+    const cacheKey = `classes:list:dept_${departmentId || 'all'}:${semester || 'all'}:${academicYear || 'all'}:${page}:${limit}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) return res.status(200).json({ success: true, ...cachedData });
 
     const query = { isActive: true };
-
     const scopedDept = deptScope(req);
     if (scopedDept)    query.departmentId = scopedDept;
     else if (departmentId) query.departmentId = departmentId;
@@ -52,8 +61,7 @@ export const getClasses = async (req, res, next) => {
       activeBatches.map((b) => [b.classId.toString(), b._id.toString()])
     );
 
-    return res.status(200).json({
-      success: true,
+    const responseData = {
       data: classes.map((c) => ({
         _id:            c._id,
         name:           c.name,
@@ -73,7 +81,10 @@ export const getClasses = async (req, res, next) => {
         page: Number(page), limit: Number(limit), total,
         pages: Math.ceil(total / Number(limit)),
       },
-    });
+    };
+
+    cache.set(cacheKey, responseData, 300); // 5 min cache
+    return res.status(200).json({ success: true, ...responseData });
   } catch (err) {
     next(err);
   }
@@ -125,6 +136,12 @@ export const getClassById = async (req, res, next) => {
     const cls = await Class.findOne({ _id: id, isActive: true })
       .populate('departmentId', 'name')
       .populate('classTeacherId', 'name email employeeId')
+      .populate({
+        path: 'studentIds',
+        match: { isActive: true },
+        select: 'rollNo name email mentorId electiveSubjects isActive',
+        populate: { path: 'mentorId', select: 'name' }
+      })
       .lean();
 
     if (!cls) return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
@@ -156,6 +173,15 @@ export const getClassById = async (req, res, next) => {
         faculty:     a.facultyId
           ? { _id: a.facultyId, name: a.facultyName }
           : null,
+      })),
+      students: (cls.studentIds || []).map(s => ({
+        _id: s._id,
+        rollNo: s.rollNo,
+        name: s.name,
+        email: s.email,
+        mentorName: s.mentorId?.name || 'Not Assigned',
+        electiveSubjects: s.electiveSubjects || [],
+        status: s.isActive ? 'active' : 'inactive'
       })),
       studentCount:    cls.studentIds?.length ?? 0,
       hasActiveBatch:  !!activeBatch,

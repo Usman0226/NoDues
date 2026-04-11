@@ -6,3 +6,4 @@ export const getFacultyDetail = (id) => api.get(`/faculty/${id}`);
 export const updateFaculty = (id, data) => api.patch(`/faculty/${id}`, data);
 export const deleteFaculty = (id) => api.delete(`/faculty/${id}`);
 export const getFacultyClasses = (id) => api.get(`/faculty/${id}/classes`);
+export const resendCredentials = (id) => api.post(`/faculty/${id}/resend-creds`);

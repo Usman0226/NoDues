@@ -8,8 +8,9 @@ import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const invalidateDeptCache = (id) => {
+export const invalidateDeptCache = (id) => {
   cache.del(`dept:${id}`);
+  cache.del(`dept:detail:${id}`);
   cache.del('departments:all');
 };
 

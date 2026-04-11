@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useId, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -7,10 +7,10 @@ const FOCUSABLE_SELECTOR =
 
 const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
   const sizes = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
-  const panelRef = useRef(null);
-  const titleId = useId();
+  const panelRef = React.useRef(null);
+  const titleId = React.useId();
   const titleDomId = title ? `modal-title-${titleId}` : undefined;
-  const previousActiveRef = useRef(null);
+  const previousActiveRef = React.useRef(null);
 
   const getFocusable = useCallback(() => {
     const root = panelRef.current;
@@ -20,11 +20,35 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
     );
   }, []);
 
+  // Effect 1: Handle overflow, previous focus save/restore, and initial form focus
   useEffect(() => {
     if (!isOpen) return;
     const prevOverflow = document.documentElement.style.overflow;
     document.documentElement.style.overflow = 'hidden';
     previousActiveRef.current = document.activeElement;
+
+    const t = requestAnimationFrame(() => {
+      const list = getFocusable();
+      if (list.length) list[0].focus();
+    });
+
+    return () => {
+      cancelAnimationFrame(t);
+      document.documentElement.style.overflow = prevOverflow;
+      const prev = previousActiveRef.current;
+      if (prev && typeof prev.focus === 'function') {
+        try {
+          prev.focus();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }, [isOpen, getFocusable]);
+
+  // Effect 2: Handle keydown interactions
+  useEffect(() => {
+    if (!isOpen) return;
 
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -60,23 +84,8 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
 
     document.addEventListener('keydown', onKeyDown);
 
-    const t = requestAnimationFrame(() => {
-      const list = getFocusable();
-      if (list.length) list[0].focus();
-    });
-
     return () => {
-      cancelAnimationFrame(t);
-      document.documentElement.style.overflow = prevOverflow;
       document.removeEventListener('keydown', onKeyDown);
-      const prev = previousActiveRef.current;
-      if (prev && typeof prev.focus === 'function') {
-        try {
-          prev.focus();
-        } catch {
-          /* ignore */
-        }
-      }
     };
   }, [isOpen, onClose, getFocusable]);
 
@@ -86,6 +95,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div
+        ref={panelRef}
         className={`relative w-full ${sizes[size]} overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_24px_80px_rgba(30,41,59,0.22)] fade-up`}
         role="dialog"
         aria-modal="true"
@@ -114,3 +124,4 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
 };
 
 export default Modal;
+
