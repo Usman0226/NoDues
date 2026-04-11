@@ -2,7 +2,7 @@ import 'dotenv/config';
 import mongoose from 'mongoose';
 import app from './src/app.js';
 import connectDB from './src/config/db.js';
-import { logger } from './src/middlewares/logger.js';
+import logger from './src/utils/logger.js';
 
 process.on('uncaughtException', (err) => {
   logger.error('UNCAUGHT EXCEPTION! Shutting down...', {

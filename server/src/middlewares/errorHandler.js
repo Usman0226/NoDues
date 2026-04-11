@@ -1,4 +1,4 @@
-import { logger } from './logger.js';
+import logger from '../utils/logger.js';
 
 export const errorHandler = (err, req, res, next) => {
   let statusCode = err.statusCode || 500;

@@ -4,7 +4,7 @@ import Class from '../models/Class.js';
 import NodueBatch from '../models/NodueBatch.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
-import { logger } from '../middlewares/logger.js';
+import logger from '../utils/logger.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const invalidateDeptCache = (id) => {

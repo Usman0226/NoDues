@@ -3,7 +3,7 @@ import Department from '../models/Department.js';
 import Class from '../models/Class.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
-import { logger } from '../middlewares/logger.js';
+import logger from '../utils/logger.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 

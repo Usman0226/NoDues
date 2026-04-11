@@ -1,12 +1,7 @@
 import jwt from 'jsonwebtoken';
-import { logger } from './logger.js';
+import logger from '../utils/logger.js';
 import ErrorResponse from '../utils/errorResponse.js';
 
-/**
- * Verifies the nds_token httpOnly cookie and attaches decoded payload to req.user.
- * Decoded shape mirrors the JWT payload defined in the API design guide:
- *   { userId, role, roleTags?, departmentId?, rollNo?, mustChangePassword }
- */
 export const protect = async (req, res, next) => {
   const token = req.cookies?.nds_token;
 

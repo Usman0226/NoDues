@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { logger } from '../middlewares/logger.js';
+import logger from '../utils/logger.js';
 
 let resend;
 
