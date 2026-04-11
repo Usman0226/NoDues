@@ -1,153 +1,273 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Eye, EyeOff, Mail, UserIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getRoleRedirect } from '../../utils/roleRedirect';
 import Button from '../../components/ui/Button';
-import { Mail, UserIcon } from 'lucide-react';
+
+const FORM_SWAP = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -10 },
+  transition: { duration: 0.25, ease: 'easeOut' },
+};
+
+const MotionDiv = motion.div;
+const MotionForm = motion.form;
 
 const Login = () => {
   const [activeTab, setActiveTab] = useState('staff');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [rollNo, setRollNo] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const [successFlash, setSuccessFlash] = useState(false);
+
+  const { login, studentLogin } = useAuth();
   const navigate = useNavigate();
+
+  const flashThenNavigate = async (path) => {
+    setSuccessFlash(true);
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    navigate(path, { replace: true });
+  };
 
   const handleStaffLogin = async (e) => {
     e.preventDefault();
     setError('');
-    if (!email || !password) { setError('All fields are required'); return; }
-    setLoading(true);
 
+    if (!email || !password) {
+      setError('All fields are required');
+      return;
+    }
+
+    setLoading(true);
     try {
       const response = await login({ email, password });
       const userData = response.data;
+
       if (userData.mustChangePassword) {
-        navigate('/change-password', { replace: true });
-      } else {
-        navigate(getRoleRedirect(userData.role), { replace: true });
+        await flashThenNavigate('/change-password');
+        return;
       }
-    } catch (err) {
+
+      await flashThenNavigate(getRoleRedirect(userData.role));
+    } catch {
       setError('Invalid credentials');
     } finally {
       setLoading(false);
+      setSuccessFlash(false);
     }
   };
 
   const handleStudentLogin = async (e) => {
     e.preventDefault();
     setError('');
-    if (!rollNo) { setError('Roll number is required'); return; }
+
+    if (!rollNo) {
+      setError('Roll number is required');
+      return;
+    }
+
     setLoading(true);
     try {
       await studentLogin(rollNo);
-      navigate('/student', { replace: true });
-    } catch (err) {
+      await flashThenNavigate('/student');
+    } catch {
       setError('Roll number not found');
     } finally {
       setLoading(false);
+      setSuccessFlash(false);
     }
   };
+
   const fillDemo = (type) => {
     setActiveTab(type === 'student' ? 'student' : 'staff');
-    if (type === 'admin') { setEmail('admin@mits.ac.in'); setPassword('admin123'); }
-    if (type === 'hod') { setEmail('hod_cse@mits.ac.in'); setPassword('hod123'); }
-    if (type === 'faculty') { setEmail('faculty@mits.ac.in'); setPassword('faculty123'); }
-    if (type === 'student') { setRollNo('21CSE001'); }
+
+    if (type === 'admin') {
+      setEmail('admin@mits.ac.in');
+      setPassword('admin123');
+    }
+    if (type === 'hod') {
+      setEmail('hod_cse@mits.ac.in');
+      setPassword('hod123');
+    }
+    if (type === 'faculty') {
+      setEmail('faculty@mits.ac.in');
+      setPassword('faculty123');
+    }
+    if (type === 'student') {
+      setRollNo('21CSE001');
+    }
+
     setError('');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-offwhite p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-md">
-        {/* Branding */}
-        <div className="text-center mb-6 sm:mb-10">
-          <h1 className="text-4xl sm:text-5xl font-brand text-navy mb-2">No<span className="text-gold">Dues</span></h1>
-          <p className="tagline text-muted-foreground uppercase tracking-[0.2em] font-bold text-[9px] sm:text-[10px]">MITS Academic Clearance Platform</p>
+    <div className="relative min-h-[100svh] bg-offwhite overflow-hidden flex items-start sm:items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
+      <div className="absolute inset-0 pointer-events-none grid-overlay opacity-30" />
+      <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-indigo-500/18 blur-3xl" />
+      <div className="absolute -bottom-32 -left-24 h-72 w-72 rounded-full bg-amber-400/22 blur-3xl" />
+
+      <MotionDiv
+        layout
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: 'easeOut' }}
+        className={`relative z-10 w-full max-w-md min-h-[560px] sm:min-h-[590px] max-h-[calc(100svh-1.5rem)] overflow-y-auto bg-white rounded-2xl shadow-md border border-zinc-200 p-6 sm:p-8 transition-all duration-300 ${successFlash ? 'ring-4 ring-emerald-200 border-emerald-300 bg-emerald-50/30' : ''}`}
+      >
+        <div className="text-center mb-6 min-h-[98px]">
+          <h1 className="text-4xl sm:text-5xl font-brand text-navy leading-none tracking-tight">
+            No<span className="text-gold">Dues</span>
+          </h1>
+          <p className="text-[9px] uppercase tracking-[0.28em] font-black text-zinc-500 mt-4">Access Control</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-muted overflow-hidden transition-all duration-300">
-          {/* Tab Switcher */}
-          <div className="flex border-b border-muted">
-            <button
-              onClick={() => { setActiveTab('staff'); setError(''); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 sm:py-4 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] transition-all
-                ${activeTab === 'staff'
-                  ? 'text-navy border-b-2 border-navy bg-white'
-                  : 'text-muted-foreground hover:text-navy bg-offwhite/50'}`}
-            >
-              <Mail size={14} /> Staff
-            </button>
-            <button
-              onClick={() => { setActiveTab('student'); setError(''); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 sm:py-4 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] transition-all
-                ${activeTab === 'student'
-                  ? 'text-navy border-b-2 border-navy bg-white'
-                  : 'text-muted-foreground hover:text-navy bg-offwhite/50'}`}
-            >
-              <UserIcon size={14} /> Student
-            </button>
-          </div>
-
-          <div className="p-6 sm:p-8">
-            {error && (
-              <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest border border-red-100 animate-in slide-in-from-top-2 duration-300">{error}</div>
-            )}
-
-            {/* Staff Login Form */}
+        <div className="relative grid grid-cols-2 bg-zinc-100 p-1 rounded-full mb-5 h-12">
+          <button
+            onClick={() => {
+              setActiveTab('staff');
+              setError('');
+            }}
+            className="relative z-10 flex items-center justify-center gap-2 rounded-full py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-200 text-zinc-500 hover:text-navy"
+            type="button"
+            disabled={loading}
+          >
             {activeTab === 'staff' && (
-              <form onSubmit={handleStaffLogin} className="space-y-4">
-                <div>
-                  <label className="block text-[9px] uppercase tracking-[0.2em] font-black text-muted-foreground mb-2">Institutional Email</label>
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite focus:outline-none focus:ring-2 focus:ring-navy/5 focus:border-navy/20 text-sm font-medium transition-all"
-                    placeholder="you@mits.ac.in" />
-                </div>
-                <div>
-                  <label className="block text-[9px] uppercase tracking-[0.2em] font-black text-muted-foreground mb-2">Authentication Key</label>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite focus:outline-none focus:ring-2 focus:ring-navy/5 focus:border-navy/20 text-sm font-medium transition-all"
-                    placeholder="••••••••" />
-                </div>
-                <div className="pt-2">
-                  <Button type="submit" className="w-full h-11 sm:h-12 text-[10px] font-black uppercase tracking-[0.2em]" loading={loading}>Authorize Access</Button>
-                </div>
-              </form>
+              <motion.span
+                layoutId="role-pill"
+                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                className="absolute inset-0 rounded-full bg-white border border-zinc-200 shadow-sm"
+              />
             )}
-
-            {/* Student Login Form */}
+            <span className={`relative z-10 inline-flex items-center gap-2 ${activeTab === 'staff' ? 'text-navy' : ''}`}>
+            <Mail size={13} /> Staff
+            </span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('student');
+              setError('');
+            }}
+            className="relative z-10 flex items-center justify-center gap-2 rounded-full py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-200 text-zinc-500 hover:text-navy"
+            type="button"
+            disabled={loading}
+          >
             {activeTab === 'student' && (
-              <form onSubmit={handleStudentLogin} className="space-y-5">
-                <div>
-                  <label className="block text-[9px] uppercase tracking-[0.2em] font-black text-muted-foreground mb-2">Academic Roll Number</label>
-                  <input type="text" value={rollNo} onChange={(e) => setRollNo(e.target.value.toUpperCase())}
-                    className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite focus:outline-none focus:ring-2 focus:ring-navy/5 focus:border-navy/20 text-sm transition-all font-mono tracking-wider font-bold"
-                    placeholder="21CSE001" />
-                </div>
-                <p className="text-[10px] text-muted-foreground font-medium leading-relaxed italic opacity-80">
-                  Secure access via roll number validation. No password required for student status views.
-                </p>
-                <div className="pt-2">
-                  <Button type="submit" className="w-full h-11 sm:h-12 text-[10px] font-black uppercase tracking-[0.2em]" loading={loading}>Retrieve Status</Button>
-                </div>
-              </form>
+              <motion.span
+                layoutId="role-pill"
+                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                className="absolute inset-0 rounded-full bg-white border border-zinc-200 shadow-sm"
+              />
             )}
+            <span className={`relative z-10 inline-flex items-center gap-2 ${activeTab === 'student' ? 'text-navy' : ''}`}>
+            <UserIcon size={13} /> Student
+            </span>
+          </button>
+        </div>
 
-            {/* Quick Demo Fill - Institutional Access */}
-            <div className="mt-8 sm:mt-10 pt-6 sm:pt-8 border-t border-muted/50">
-              <label className="block text-[8px] uppercase tracking-[0.3em] font-black text-muted-foreground/40 mb-4 text-center">Fast-Track Demo Access</label>
-              <div className="flex flex-wrap justify-center gap-2">
-                <button onClick={() => fillDemo('admin')} className="px-3 py-1.5 rounded-lg bg-navy/5 text-navy text-[9px] font-black uppercase tracking-widest hover:bg-navy hover:text-white transition-all border border-navy/10 active:scale-95">Admin</button>
-                <button onClick={() => fillDemo('hod')} className="px-3 py-1.5 rounded-lg bg-navy/5 text-navy text-[9px] font-black uppercase tracking-widest hover:bg-navy hover:text-white transition-all border border-navy/10 active:scale-95">HOD</button>
-                <button onClick={() => fillDemo('faculty')} className="px-3 py-1.5 rounded-lg bg-navy/5 text-navy text-[9px] font-black uppercase tracking-widest hover:bg-navy hover:text-white transition-all border border-navy/10 active:scale-95">Faculty</button>
-                <button onClick={() => fillDemo('student')} className="px-3 py-1.5 rounded-lg bg-navy/5 text-navy text-[9px] font-black uppercase tracking-widest hover:bg-navy hover:text-white transition-all border border-navy/10 active:scale-95">Student</button>
-              </div>
-            </div>
+        <div className="mb-4 min-h-[42px]">
+          <div className={`rounded-xl px-3 py-2.5 text-[10px] font-black uppercase tracking-[0.16em] transition-all duration-200 ${
+            error ? 'border border-red-100 bg-red-50 text-red-700 opacity-100' : 'border border-transparent opacity-0'
+          }`}>
+            {error || 'placeholder'}
           </div>
         </div>
-      </div>
+
+        <div className="relative h-[220px] overflow-hidden mb-4">
+          <AnimatePresence mode="wait" initial={false}>
+            {activeTab === 'staff' ? (
+              <MotionForm
+                key="staff-form"
+                onSubmit={handleStaffLogin}
+                initial={FORM_SWAP.initial}
+                animate={FORM_SWAP.animate}
+                exit={FORM_SWAP.exit}
+                transition={FORM_SWAP.transition}
+                className="absolute inset-0"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[9px] uppercase tracking-[0.24em] font-black text-zinc-500 mb-2">Institutional Email</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@mits.ac.in"
+                      className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] uppercase tracking-[0.24em] font-black text-zinc-500 mb-2">Authentication Key</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="********"
+                        className="w-full rounded-2xl border border-zinc-200 bg-white pl-4 pr-12 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-8 w-8 p-0 rounded-lg text-zinc-500 hover:text-navy hover:bg-indigo-50 leading-none transition-colors"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full rounded-full py-3" loading={loading}>
+                    Authorize Access
+                  </Button>
+                </div>
+              </MotionForm>
+            ) : (
+              <MotionForm
+                key="student-form"
+                onSubmit={handleStudentLogin}
+                initial={FORM_SWAP.initial}
+                animate={FORM_SWAP.animate}
+                exit={FORM_SWAP.exit}
+                transition={FORM_SWAP.transition}
+                className="absolute inset-0"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[9px] uppercase tracking-[0.24em] font-black text-zinc-500 mb-2">Academic Roll Number</label>
+                    <input
+                      type="text"
+                      value={rollNo}
+                      onChange={(e) => setRollNo(e.target.value.toUpperCase())}
+                      placeholder="21CSE001"
+                      className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-mono tracking-wider font-black focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
+                    />
+                  </div>
+                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs font-semibold text-zinc-500">
+                    No password required. Use your roll number.
+                  </div>
+                  <Button type="submit" className="w-full rounded-full py-3" loading={loading}>
+                    Retrieve Status
+                  </Button>
+                </div>
+              </MotionForm>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="pt-5 border-t border-zinc-200">
+          <p className="mb-3 text-center text-[8px] uppercase tracking-[0.3em] font-black text-zinc-500/85">Quick Demo Access</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <button type="button" onClick={() => fillDemo('admin')} className="rounded-xl bg-indigo-50 px-3 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-indigo-700 hover:bg-indigo-100 transition-colors">Admin</button>
+            <button type="button" onClick={() => fillDemo('hod')} className="rounded-xl bg-indigo-50 px-3 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-indigo-700 hover:bg-indigo-100 transition-colors">HOD</button>
+            <button type="button" onClick={() => fillDemo('faculty')} className="rounded-xl bg-indigo-50 px-3 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-indigo-700 hover:bg-indigo-100 transition-colors">Faculty</button>
+            <button type="button" onClick={() => fillDemo('student')} className="rounded-xl bg-amber-50 px-3 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-amber-700 hover:bg-amber-100 transition-colors">Student</button>
+          </div>
+        </div>
+      </MotionDiv>
     </div>
   );
 };

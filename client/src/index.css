@@ -2,50 +2,74 @@
 
 @layer base {
   :root {
-    --background: #F5F7FA;
-    --foreground: #1A1A1A;
-    
-    --primary: #1E3A5F;
-    --primary-foreground: #FFFFFF;
-    
-    --accent: #D4AF37;
-    --accent-foreground: #1A1A1A;
+    --background: #fcfcfd;
+    --foreground: #0a0a0a;
+    --surface: #ffffff;
 
-    --muted: #E2E8F0;
-    --muted-foreground: #718096;
+    --primary: #6366f1;
+    --primary-foreground: #ffffff;
 
-    /* PRD Aligned Status Colors - Refined for Modern Look */
-    --status-approved: #059669;    /* Clean Emerald */
-    --status-pending: #D97706;     /* Muted Amber */
-    --status-due-marked: #DC2626;  /* Clean Red */
-    --status-has-dues: #DC2626;    
-    --status-cleared: #059669;     
-    --status-hod-override: #2563EB; /* Clean Blue */
+    --accent: #f59e0b;
+    --accent-foreground: #101828;
+
+    --muted: #e4e4e7;
+    --muted-foreground: #71717a;
+    --ring: #818cf8;
+
+    --status-approved: #10b981;
+    --status-pending: #f59e0b;
+    --status-due-marked: #ef4444;
+    --status-has-dues: #ef4444;
+    --status-cleared: #10b981;
+    --status-hod-override: #6366f1;
+  }
+
+  *,
+  *::before,
+  *::after {
+    border-color: var(--muted);
   }
 
   body {
+    min-height: 100vh;
     background-color: var(--background);
+    background-image:
+      radial-gradient(circle at 12% 18%, rgba(99, 102, 241, 0.16) 0, transparent 34%),
+      radial-gradient(circle at 92% 2%, rgba(245, 158, 11, 0.13) 0, transparent 36%),
+      linear-gradient(to bottom right, rgba(24, 24, 27, 0.01), rgba(24, 24, 27, 0.03));
     color: var(--foreground);
-    font-family: 'Inter', sans-serif;
+    font-family: 'Geist', 'Outfit', sans-serif;
     -webkit-font-smoothing: antialiased;
-    letter-spacing: -0.01em;
+    text-rendering: optimizeLegibility;
   }
 
-  /* All headings use Inter for the clean academic look */
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Inter', sans-serif;
-    font-weight: 700;
+    font-family: 'Outfit', 'Geist', sans-serif;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+    color: #111827;
   }
 
-  /* Specific Brand Class for limited Serif usage */
+  p {
+    color: #3f3f46;
+  }
+
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+
   .font-brand {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Outfit', 'Geist', sans-serif;
+    font-weight: 900;
+    letter-spacing: -0.04em;
   }
 
   .nav-text {
     text-transform: uppercase;
-    letter-spacing: 0.15em;
-    font-weight: 600;
+    letter-spacing: 0.22em;
+    font-weight: 800;
   }
 
   .transition-academic {
@@ -53,20 +77,75 @@
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 200ms;
   }
+
+  .surface-panel {
+    background-color: color-mix(in oklab, var(--surface) 96%, #eef2ff 4%);
+    border: 1px solid color-mix(in oklab, var(--muted) 65%, #a5b4fc 35%);
+    box-shadow:
+      0 10px 30px rgba(15, 23, 42, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    border-radius: 1.35rem;
+  }
+
+  .label-tech {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    font-weight: 800;
+    color: #71717a;
+  }
+}
+
+@layer utilities {
+  .grid-overlay {
+    background-image:
+      linear-gradient(to right, rgba(24, 24, 27, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(24, 24, 27, 0.04) 1px, transparent 1px);
+    background-size: 26px 26px;
+  }
+
+  .fade-up {
+    animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .hover-lift {
+    transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 240ms ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @theme {
-  --color-navy: #1E3A5F;
-  --color-gold: #D4AF37;
-  --color-offwhite: #F5F7FA;
-  
-  --color-status-approved: #059669;
-  --color-status-pending: #D97706;
-  --color-status-due-marked: #DC2626;
-  --color-status-has-dues: #DC2626;
-  --color-status-cleared: #059669;
-  --color-status-hod-override: #2563EB;
+  --color-navy: #3730a3;
+  --color-gold: #f59e0b;
+  --color-offwhite: #fcfcfd;
+  --color-panel: #ffffff;
 
-  --font-serif: "Playfair Display", serif;
-  --font-sans: "Inter", sans-serif;
+  --color-status-approved: #10b981;
+  --color-status-pending: #f59e0b;
+  --color-status-due-marked: #ef4444;
+  --color-status-has-dues: #ef4444;
+  --color-status-cleared: #10b981;
+  --color-status-hod-override: #6366f1;
+  --color-status-due: #ef4444;
+  --color-status-rejected: #ef4444;
+  --color-status-warning: #f59e0b;
+
+  --font-serif: "Outfit", "Geist", sans-serif;
+  --font-sans: "Geist", "Outfit", sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", monospace;
 }

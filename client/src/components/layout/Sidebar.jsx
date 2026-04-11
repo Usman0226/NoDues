@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../utils/constants';
 import {
-  LayoutDashboard, Users, BookOpen, GraduationCap, ClipboardCheck,
+  LayoutDashboard, Users, BookOpen, ClipboardCheck,
   Shield, History, ChevronLeft, ChevronRight,
   Building2, AlertTriangle, Layers, X
 } from 'lucide-react';
@@ -39,17 +39,20 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
 
   useEffect(() => {
     onMobileClose?.();
-  }, [location.pathname]);
+  }, [location.pathname, onMobileClose]);
 
   if (user?.role === ROLES.STUDENT) return null;
 
   const sidebarContent = (
     <>
-      <div className="h-16 lg:h-20 flex items-center px-6 lg:px-8 border-b border-white/5 shrink-0">
+      <div className="h-20 flex items-center px-6 border-b border-white/10 shrink-0 bg-white/[0.02]">
         {!collapsed && (
-          <h2 className="text-white font-brand text-2xl tracking-tight">
-            No<span className="text-gold">Dues</span>
-          </h2>
+          <div>
+            <h2 className="text-white font-brand text-2xl tracking-tight leading-none">
+              No<span className="text-gold">Dues</span>
+            </h2>
+            <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-200/50 mt-1">Ops Console</p>
+          </div>
         )}
         {collapsed && <span className="text-gold font-brand text-2xl mx-auto">N</span>}
         <button onClick={onMobileClose} className="lg:hidden ml-auto p-1 text-white/40 hover:text-white">
@@ -57,7 +60,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
         </button>
       </div>
 
-      <nav className="flex-1 py-8 px-4 space-y-2 overflow-y-auto">
+      <nav className="flex-1 py-7 px-4 space-y-2 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path ||
             (item.path !== '/' && !['/admin', '/hod', '/faculty'].includes(item.path) && location.pathname.startsWith(item.path + '/')) ||
@@ -70,13 +73,13 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
             <NavLink
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
+              className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group border
                 ${isActive
-                  ? 'bg-white/10 text-white shadow-sm'
-                  : 'text-white/50 hover:bg-white/5 hover:text-white'
+                  ? 'bg-white/12 border-white/20 text-white shadow-xl shadow-black/20'
+                  : 'border-transparent text-indigo-100/55 hover:bg-white/7 hover:text-white hover:border-white/10'
                 }`}
             >
-              <Icon size={18} className={isActive ? 'text-white' : 'text-white/40 group-hover:text-white/70'} />
+              <Icon size={18} className={isActive ? 'text-white' : 'text-indigo-100/55 group-hover:text-white'} />
               {!collapsed && (
                 <span className="nav-text text-[10px] truncate">
                   {item.label}
@@ -94,11 +97,11 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
         {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
-      <div className="p-6 border-t border-white/5 shrink-0">
+      <div className="p-6 border-t border-white/10 shrink-0">
         {!collapsed && (
-          <div className="bg-white/5 rounded-xl px-4 py-3 border border-white/5">
-            <span className="block text-[9px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1">Session Role</span>
-            <span className="text-[10px] text-gold uppercase tracking-[0.1em] font-black">
+          <div className="rounded-2xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
+            <span className="block text-[8px] text-indigo-100/45 uppercase tracking-[0.3em] font-black mb-1">Access Layer</span>
+            <span className="text-[10px] text-gold uppercase tracking-[0.2em] font-black">
               {user?.role}
             </span>
           </div>
@@ -109,13 +112,13 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
 
   return (
     <>
-      <aside className={`hidden lg:flex ${collapsed ? 'w-20' : 'w-72'} min-h-screen bg-navy flex-col transition-all duration-300 ease-in-out relative shrink-0 shadow-2xl shadow-navy/20`}>
+      <aside className={`hidden lg:flex ${collapsed ? 'w-20' : 'w-72'} min-h-screen bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex-col transition-all duration-300 ease-in-out relative shrink-0 shadow-2xl shadow-indigo-900/30`}>
         {sidebarContent}
       </aside>
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-navy/60 backdrop-blur-sm" onClick={onMobileClose} />
-          <aside className="relative w-72 max-w-[80vw] bg-navy flex flex-col animate-in slide-in-from-left duration-300 shadow-2xl">
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={onMobileClose} />
+          <aside className="relative w-72 max-w-[82vw] bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex flex-col animate-in slide-in-from-left duration-300 shadow-2xl">
             {sidebarContent}
           </aside>
         </div>

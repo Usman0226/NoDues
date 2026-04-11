@@ -40,9 +40,10 @@ const AppLayout = () => {
   return (
     <div className="flex min-h-screen bg-offwhite">
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        <div className="absolute inset-0 pointer-events-none grid-overlay opacity-[0.32]" />
         <Navbar onMenuToggle={() => setMobileOpen(true)} />
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 relative z-10">
           <Outlet />
         </div>
       </div>
@@ -53,7 +54,7 @@ const AppLayout = () => {
 /* Layout WITHOUT sidebar (Student — PRD §6.3) */
 const StudentLayout = () => (
   <div className="min-h-screen bg-offwhite flex flex-col">
-    <nav className="h-14 lg:h-16 bg-navy flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
+    <nav className="h-14 lg:h-16 bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-900 border-b border-white/10 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
       <h2 className="text-white font-brand text-lg">No<span className="text-gold">Dues</span></h2>
       <StudentNavRight />
     </nav>
@@ -68,10 +69,10 @@ const StudentNavRight = () => {
   return (
     <div className="flex items-center gap-3">
       <div className="text-right hidden sm:block">
-        <p className="text-sm font-semibold text-white leading-none">{user?.rollNo}</p>
-        <p className="text-[10px] text-white/60 uppercase tracking-widest mt-0.5">{user?.name}</p>
+        <p className="text-sm font-black text-white leading-none tracking-tight">{user?.rollNo}</p>
+        <p className="text-[9px] text-indigo-100/70 uppercase tracking-[0.24em] mt-1">{user?.name}</p>
       </div>
-      <button onClick={logout} className="px-3 py-1.5 rounded-full bg-white/10 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-white/20 transition-colors">
+      <button onClick={logout} className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-white/20 transition-colors">
         Logout
       </button>
     </div>
@@ -96,14 +97,16 @@ const App = () => {
             duration: 4000,
             style: {
               background: '#FFFFFF',
-              color: '#1E3A5F',
+              color: '#312e81',
               borderRadius: '16px',
-              border: '1px solid #E2E8F0',
+              border: '1px solid #e4e4e7',
               fontWeight: '700',
-              fontSize: '13px',
-              padding: '16px 24px',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-              fontFamily: 'Inter, sans-serif',
+              fontSize: '12px',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              padding: '14px 20px',
+              boxShadow: '0 14px 30px rgba(15, 23, 42, 0.14)',
+              fontFamily: 'Geist, Outfit, sans-serif',
             },
             success: {
               iconTheme: {
