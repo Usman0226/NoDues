@@ -19,7 +19,7 @@ const DepartmentClasses = () => {
     name: '',
     semester: 1,
     academicYear: '2025-26',
-    department: deptId
+    departmentId: deptId
   });
 
 
