@@ -6,7 +6,7 @@ import Student from '../models/Student.js';
 import Department from '../models/Department.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
-import { logger } from '../middlewares/logger.js';
+import logger from '../utils/logger.js';
 
 // ─── Cookie options ───────────────────────────────────────────────────────────
 const COOKIE_OPTIONS = {

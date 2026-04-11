@@ -6,7 +6,7 @@ import Class from '../models/Class.js';
 import { sendCredentialEmail } from '../services/emailService.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import ErrorResponse from '../utils/errorResponse.js';
-import { logger } from '../middlewares/logger.js';
+import logger from '../utils/logger.js';
 import crypto from 'crypto';
 
 /**
@@ -19,11 +19,6 @@ const parseBuffer = (buffer) => {
   return xlsx.utils.sheet_to_json(sheet);
 };
 
-/**
- * @desc    Preview student import
- * @route   POST /api/import/students/preview
- * @access  Admin, HoD
- */
 export const previewStudents = asyncHandler(async (req, res, next) => {
   if (!req.file) {
     return next(new ErrorResponse('Please upload a file', 400));

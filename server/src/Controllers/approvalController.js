@@ -2,7 +2,7 @@ import NodueApproval from '../models/NodueApproval.js';
 import NodueRequest from '../models/NodueRequest.js';
 import NodueBatch from '../models/NodueBatch.js';
 import ErrorResponse from '../utils/errorResponse.js';
-import { logger } from '../middlewares/logger.js';
+import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
 
 // ── GET /api/approvals/pending ────────────────────────────────────────────────

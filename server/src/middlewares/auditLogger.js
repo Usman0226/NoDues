@@ -1,4 +1,4 @@
-import { logger } from './logger.js';
+import logger from '../utils/logger.js';
 
 /**
  * Dedicated auditor for critical operations as per USER_GLOBAL rules.

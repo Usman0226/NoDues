@@ -1,4 +1,4 @@
-import { logger } from '../middlewares/logger.js';
+import logger from '../utils/logger.js';
 
 // Active SSE clients: Map<userId, Set<res>>
 const clients = new Map();

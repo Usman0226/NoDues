@@ -7,7 +7,7 @@ import Student from '../models/Student.js';
 import Faculty from '../models/Faculty.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
-import { logger } from '../middlewares/logger.js';
+import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
 
 // ── GET /api/batch ────────────────────────────────────────────────────────────

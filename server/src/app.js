@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import { errorHandler } from './middlewares/errorHandler.js';
-import { logger } from './middlewares/logger.js';
+import logger from './utils/logger.js';
 
 // ── Route imports ─────────────────────────────────────────────────────────────
 import authRoutes          from './Routes/auth.routes.js';
