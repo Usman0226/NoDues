@@ -60,17 +60,6 @@ const Batches = () => {
     },
   ];
 
-  if (loading && !batches) {
-    return (
-      <PageWrapper title="Batches" subtitle="Syncing historical data...">
-        <div className="animate-pulse space-y-4">
-           <div className="h-12 w-64 bg-muted/10 rounded-xl mb-6"></div>
-           <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
-        </div>
-      </PageWrapper>
-    );
-  }
-
   return (
     <PageWrapper title="Batches" subtitle="All academic clearance batches across departments">
       <div className="flex flex-wrap items-center gap-3 mb-6 text-[10px] font-black uppercase tracking-widest text-navy">
@@ -111,7 +100,13 @@ const Batches = () => {
            <p className="text-muted-foreground font-medium">{error}</p>
         </div>
       ) : (
-        <Table columns={columns} data={filtered} searchable searchPlaceholder="Search by class name..." />
+        <Table
+          columns={columns}
+          data={filtered}
+          loading={loading && !response}
+          searchable
+          searchPlaceholder="Search by class name..."
+        />
       )}
     </PageWrapper>
   );

@@ -55,7 +55,12 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
           </div>
         )}
         {collapsed && <span className="text-gold font-brand text-2xl mx-auto">N</span>}
-        <button onClick={onMobileClose} className="lg:hidden ml-auto p-1 text-white/40 hover:text-white">
+        <button
+          type="button"
+          onClick={onMobileClose}
+          className="lg:hidden ml-auto min-h-11 min-w-11 inline-flex items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10"
+          aria-label="Close menu"
+        >
           <X size={20} />
         </button>
       </div>

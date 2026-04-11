@@ -79,25 +79,17 @@ const AdminDashboard = () => {
       label: '',
       sortable: false,
       render: (_, row) => (
-        <button onClick={() => navigate(`/admin/batch/${row._id}`)} className="p-2 hover:bg-muted/30 rounded-full transition-colors">
+        <button
+          type="button"
+          onClick={() => navigate(`/admin/batch/${row._id}`)}
+          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 inline-flex items-center justify-center rounded-full hover:bg-muted/30 transition-colors touch-manipulation"
+          aria-label="Open batch"
+        >
           <ArrowRight size={14} className="text-muted-foreground/40" />
         </button>
       )
     }
   ];
-
-  if (loading && !batches) {
-    return (
-      <PageWrapper title="Institutional Control" subtitle="Loading metrics...">
-        <div className="animate-pulse">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
-            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-32 bg-muted/5 rounded-xl border border-muted"></div>)}
-          </div>
-          <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
-        </div>
-      </PageWrapper>
-    );
-  }
 
   if (error) {
     return (
@@ -117,14 +109,14 @@ const AdminDashboard = () => {
   return (
     <PageWrapper title="Institutional Control" subtitle="System-wide clearance health and batch metrics">
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+      <div className={`grid grid-cols-2 lg:grid-cols-5 gap-6 mb-12 ${loading && !response ? 'animate-pulse' : ''}`}>
         {stats.map((stat, i) => (
           <div key={i} className="bg-white rounded-xl p-6 border border-muted shadow-sm hover:shadow-md transition-academic group">
-            <div className={`h-10 w-10 rounded-lg ${stat.bg} flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>
+            <div className={`h-10 w-10 rounded-xl ${stat.bg} flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>
               <stat.icon size={20} className={stat.color} />
             </div>
             <p className="text-2xl font-black text-navy tracking-tight">{stat.value}</p>
-            <p className="text-[9px] uppercase tracking-widest font-black text-muted-foreground/60">{stat.label}</p>
+            <p className="text-[10px] font-semibold text-muted-foreground tracking-tight">{stat.label}</p>
           </div>
         ))}
       </div>
@@ -132,19 +124,25 @@ const AdminDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Activity Table */}
         <div className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-4 px-1">
-            <h2 className="text-sm font-black uppercase tracking-widest text-navy/40">Ongoing Batches</h2>
-            <button className="text-[10px] font-black text-gold uppercase tracking-widest hover:underline" onClick={() => navigate('/admin/batches')}>View All Data</button>
+          <div className="flex items-center justify-between mb-4 px-1 gap-4">
+            <h2 className="text-sm font-semibold text-zinc-600">Recent batches</h2>
+            <button
+              type="button"
+              className="text-xs font-semibold text-navy hover:text-gold shrink-0 min-h-11 px-2 sm:min-h-0 rounded-lg sm:rounded-none"
+              onClick={() => navigate('/admin/batches')}
+            >
+              View all batches
+            </button>
           </div>
-          <Table columns={columns} data={batches || []} />
+          <Table columns={columns} data={batches || []} loading={loading && !response} skeletonRows={6} />
         </div>
 
         {/* Informational Feed */}
         <div>
           <div className="flex items-center justify-between mb-4 px-1">
-             <h2 className="text-sm font-black uppercase tracking-widest text-navy/40">Status Insight</h2>
-             <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Now
+             <h2 className="text-sm font-semibold text-zinc-600">Status</h2>
+             <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden /> Live
              </span>
           </div>
           <div className="bg-white rounded-xl border border-muted shadow-sm p-6 space-y-6">

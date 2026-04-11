@@ -93,10 +93,10 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
   }
 
   const createdStudents = [];
-  
+
   for (const stud of students) {
     const tempPassword = crypto.randomBytes(4).toString('hex');
-    
+
     const student = await Student.create({
       ...stud,
       classId: targetClass._id,
@@ -108,7 +108,7 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
 
     // Send email (async, don't wait to finish entire loop)
     sendCredentialEmail(student.email, student.name, student.rollNo, tempPassword, 'student');
-    
+
     createdStudents.push(student._id);
   }
 
@@ -190,7 +190,7 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
     if (!departmentId) continue;
 
     const tempPassword = crypto.randomBytes(4).toString('hex');
-    
+
     const facultyMember = await Faculty.create({
       employeeId: fac.employeeId,
       name: fac.name,
@@ -234,7 +234,7 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
     const empId = row['Faculty Employee ID'] || row['employeeId'];
 
     if (!rollNo || !subjectCode || !empId) {
-      results.errors.push({ row: i+1, data: row, reason: 'Missing required columns' });
+      results.errors.push({ row: i + 1, data: row, reason: 'Missing required columns' });
       results.summary.errors++;
       continue;
     }
@@ -245,11 +245,11 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
     const faculty = await Faculty.findOne({ employeeId: empId });
 
     if (!student) {
-      results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} not found` });
+      results.errors.push({ row: i + 1, data: row, reason: `Student ${rollNo} not found` });
     } else if (!subject) {
-      results.errors.push({ row: i+1, data: row, reason: `Subject ${subjectCode} not found` });
+      results.errors.push({ row: i + 1, data: row, reason: `Subject ${subjectCode} not found` });
     } else if (!faculty) {
-      results.errors.push({ row: i+1, data: row, reason: `Faculty ${empId} not found` });
+      results.errors.push({ row: i + 1, data: row, reason: `Faculty ${empId} not found` });
     } else {
       results.valid.push({ studentId: student._id, rollNo, subjectId: subject._id, subjectCode, facultyId: faculty._id, employeeId: empId });
       results.summary.valid++;
@@ -312,7 +312,7 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
     const faculty = await Faculty.findOne({ employeeId: empId });
 
     if (!student || !faculty) {
-      results.errors.push({ row: i+1, data: row, reason: `Invalid rollNo or employeeId` });
+      results.errors.push({ row: i + 1, data: row, reason: `Invalid rollNo or employeeId` });
       results.summary.errors++;
     } else {
       results.valid.push({ studentId: student._id, rollNo, mentorId: faculty._id, employeeId: empId });

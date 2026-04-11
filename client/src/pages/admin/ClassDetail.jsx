@@ -128,15 +128,19 @@ const ClassDetail = () => {
         {/* Tab-Specific Actions */}
         {tab === 'students' && (
           <div className="flex items-center gap-2 animate-in fade-in">
-            <Button variant="primary" size="sm" onClick={() => setShowImport('students')}><Upload size={14} /> Import Roster</Button>
-            <Button variant="secondary" size="sm" onClick={() => setShowImport('mentors')}><Users size={14} /> Map Mentors</Button>
+            <Button variant="primary" size="sm" onClick={() => setShowImport('students')}><Upload size={14} /> Import roster</Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowImport('mentors')} className="text-navy border border-muted hover:bg-offwhite">
+              <Users size={14} /> Map mentors
+            </Button>
           </div>
         )}
 
         {tab === 'subjects' && (
           <div className="flex items-center gap-2 animate-in fade-in">
-            <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}><Plus size={14} /> New Assignment</Button>
-            <Button variant="secondary" size="sm"><Copy size={14} /> Inherit Plan</Button>
+            <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}><Plus size={14} /> New assignment</Button>
+            <Button variant="ghost" size="sm" type="button" className="text-navy border border-muted hover:bg-offwhite">
+              <Copy size={14} /> Inherit plan
+            </Button>
           </div>
         )}
       </div>

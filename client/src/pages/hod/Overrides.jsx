@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
 import { 
   Shield, 
   Search, 

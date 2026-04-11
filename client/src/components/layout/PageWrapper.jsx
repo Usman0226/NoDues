@@ -10,13 +10,13 @@ const PageWrapper = ({ children, title, subtitle, backLink }) => {
           </div>
         )}
         <header className="mb-6 sm:mb-7 lg:mb-8">
-          <p className="label-tech mb-2">Institutional Command Center</p>
+          <p className="page-kicker mb-2">NoDues overview</p>
           <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 sm:gap-4">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-navy tracking-tight shrink-0">
               {title}
             </h1>
             {subtitle && (
-              <div className="text-xs sm:text-sm text-zinc-500 font-semibold uppercase tracking-[0.12em] text-left sm:text-right">
+              <div className="text-xs sm:text-sm text-zinc-500 font-medium text-left sm:text-right leading-snug max-w-xl">
                 {subtitle}
               </div>
             )}

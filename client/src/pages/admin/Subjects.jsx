@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Button from '../../components/ui/Button';
@@ -61,17 +61,6 @@ const Subjects = () => {
     },
   ];
 
-  if (loading && !subjects) {
-    return (
-      <PageWrapper title="Subjects" subtitle="Loading academic components...">
-         <div className="animate-pulse space-y-4">
-            <div className="h-10 w-48 bg-muted/10 rounded-xl mb-6"></div>
-            <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
-         </div>
-      </PageWrapper>
-    );
-  }
-
   return (
     <PageWrapper title="Subjects" subtitle="Centralized academic component catalog for institution-wide mapping">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
@@ -102,7 +91,13 @@ const Subjects = () => {
            <p className="text-muted-foreground font-medium">{error}</p>
         </div>
       ) : (
-        <Table columns={columns} data={filtered} searchable searchPlaceholder="Filter by code or identifier..." />
+        <Table
+          columns={columns}
+          data={filtered}
+          loading={loading && !response}
+          searchable
+          searchPlaceholder="Filter by code or identifier..."
+        />
       )}
 
       {showCreate && (

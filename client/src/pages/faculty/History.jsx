@@ -48,7 +48,7 @@ const FacultyHistory = () => {
       <div className="flex flex-wrap items-center gap-4 mb-6">
         <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-muted shadow-sm">
            <Filter size={14} className="text-muted-foreground" />
-           <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground shrink-0">Semester:</span>
+           <span className="text-xs font-medium text-muted-foreground shrink-0">Semester</span>
            <select 
              className="text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer"
              value={semesterFilter}
@@ -62,7 +62,7 @@ const FacultyHistory = () => {
 
         <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-muted shadow-sm">
            <Layers size={14} className="text-muted-foreground" />
-           <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground shrink-0">Batch:</span>
+           <span className="text-xs font-medium text-muted-foreground shrink-0">Batch</span>
            <select className="text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer">
              <option value="all">All Batches</option>
              <option value="2025-26">2025-26</option>
