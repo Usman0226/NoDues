@@ -13,7 +13,8 @@ import { toast } from 'react-hot-toast';
 const StudentList = () => {
   const [showImport, setShowImport] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const { data: students, loading, error, request: fetchStudents } = useApi(getStudents, { immediate: true });
+  const { data: response, loading, error, request: fetchStudents } = useApi(getStudents, { immediate: true });
+  const students = response?.data || [];
 
   useEffect(() => {
     fetchStudents();

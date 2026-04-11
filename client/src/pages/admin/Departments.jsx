@@ -7,7 +7,8 @@ import { getDepartments } from '../../api/departments';
 import Button from '../../components/ui/Button';
 
 const Departments = () => {
-  const { data: depts, loading, error, request: fetchDepts } = useApi(getDepartments, { immediate: true });
+  const { data: response, loading, error, request: fetchDepts } = useApi(getDepartments, { immediate: true });
+  const depts = response?.data || [];
 
   useEffect(() => {
     fetchDepts();

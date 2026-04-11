@@ -27,13 +27,14 @@ const ClassDetail = () => {
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const { data: classData, loading, error, request: fetchClass } = useApi(() => getClass(classId), { immediate: true });
-  const { data: facultyList } = useApi(getFaculty, { immediate: true });
+  const { data: response, loading, error, request: fetchClass } = useApi(() => getClass(classId), { immediate: true });
+  const { data: facultyResponse } = useApi(getFaculty, { immediate: true });
 
   useEffect(() => {
     fetchClass();
   }, [fetchClass, classId]);
 
+  const classData = response?.data || {};
   const students = classData?.students || [];
   const subjects = classData?.subjects || [];
   const pastBatches = classData?.batchHistory || [];

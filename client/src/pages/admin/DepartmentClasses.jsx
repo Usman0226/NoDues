@@ -12,7 +12,8 @@ const DepartmentClasses = () => {
   const { deptId } = useParams();
   const [showCreate, setShowCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { data: classes, loading, error, request: fetchClasses } = useApi(() => getClasses({ departmentId: deptId }), { immediate: true });
+  const { data: response, loading, error, request: fetchClasses } = useApi(() => getClasses({ departmentId: deptId }), { immediate: true });
+  const classes = response?.data || [];
 
   const [formData, setFormData] = useState({
     name: '',

@@ -16,7 +16,7 @@ const seedAdmin = async () => {
   try {
     await connectDB();
 
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@nodues.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@csd.com';
     const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123';
     const adminName = process.env.ADMIN_NAME || 'System Admin';
 

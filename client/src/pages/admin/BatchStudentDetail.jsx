@@ -50,7 +50,7 @@ const BatchStudentDetail = () => {
     );
   }
 
-  const student = detail?.student || {};
+  const student = detail || {};
   const approvals = detail?.approvals || [];
 
   return (

@@ -95,7 +95,7 @@ const BatchView = () => {
   if (!batch) return null;
 
   return (
-    <PageWrapper title="Batch Clearance Matrix" subtitle={`${batch.className} · Cycle ${batch.academicYear}`}>
+    <PageWrapper title="Batch Clearance Matrix" subtitle={`${batch.batch?.className} · Cycle ${batch.batch?.academicYear}`}>
       <Link to="/admin/batches" className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy mb-8 -mt-6 transition-colors font-sans">
         <ArrowLeft size={12} strokeWidth={3} /> Return to History
       </Link>
@@ -114,10 +114,10 @@ const BatchView = () => {
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <Badge status={batch.status === 'active' ? 'pending' : 'cleared'} className="bg-navy/5 text-navy/70 border-none px-4">
-            Cycle State: {batch.status.toUpperCase()}
+          <Badge status={batch.batch?.status === 'active' ? 'pending' : 'cleared'} className="bg-navy/5 text-navy/70 border-none px-4">
+            Cycle State: {batch.batch?.status?.toUpperCase()}
           </Badge>
-          {batch.status === 'active' && (
+          {batch.batch?.status === 'active' && (
             <Button variant="danger" size="sm" className="h-9" onClick={handleCloseBatch}><X size={14} /> Close Cycle</Button>
           )}
         </div>

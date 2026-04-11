@@ -193,13 +193,13 @@ export const studentLogin = async (req, res, next) => {
 
 export const changePassword = async (req, res, next) => {
   try {
-    const { newPassword, confirmPassword } = req.body;
+    const { oldPassword, newPassword, confirmPassword } = req.body;
     const { userId, role } = req.user;
 
-    if (!newPassword || !confirmPassword) {
+    if (!oldPassword || !newPassword || !confirmPassword) {
       return next(
         new ErrorResponse(
-          'newPassword and confirmPassword are required',
+          'oldPassword, newPassword and confirmPassword are required',
           400,
           'AUTH_MISSING_FIELDS'
         )
@@ -226,7 +226,15 @@ export const changePassword = async (req, res, next) => {
       return next(new ErrorResponse('User not found', 404, 'NOT_FOUND'));
     }
 
-    // Prevent reuse of the current password
+    // 1. Verify old password
+    const isOldMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isOldMatch) {
+      return next(
+        new ErrorResponse('Current password is incorrect', 400, 'AUTH_INVALID_CURRENT_PASSWORD')
+      );
+    }
+
+    // 2. Prevent reuse of the current password
     const isSame = await bcrypt.compare(newPassword, user.password);
     if (isSame) {
       return next(
@@ -238,10 +246,9 @@ export const changePassword = async (req, res, next) => {
       );
     }
 
-    const salt     = await bcrypt.genSalt(12);
-    user.password  = await bcrypt.hash(newPassword, salt);
+    user.password  = newPassword;
     user.mustChangePassword = false;
-    await user.save({ validateBeforeSave: false });
+    await user.save();
 
     // Refresh the JWT so the mustChangePassword flag clears immediately
     const newPayload = {

@@ -17,8 +17,7 @@ axiosInstance.interceptors.request.use(
 // Response interceptor: Envelope preservation & global error handling
 axiosInstance.interceptors.response.use(
   (response) => {
-    // Return the full envelope (success, data, pagination) 
-    // to keep components informed about API states.
+
     return response.data;
   },
   (error) => {

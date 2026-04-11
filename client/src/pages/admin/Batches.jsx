@@ -11,7 +11,8 @@ import Button from '../../components/ui/Button';
 const Batches = () => {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState('all');
-  const { data: batches, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
+  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
+  const batches = response?.data || [];
 
   useEffect(() => {
     fetchBatches();

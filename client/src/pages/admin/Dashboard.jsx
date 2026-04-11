@@ -19,7 +19,8 @@ import { useNavigate } from 'react-router-dom';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { data: batches, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
+  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
+  const batches = response?.data || [];
 
   useEffect(() => {
     fetchBatches();

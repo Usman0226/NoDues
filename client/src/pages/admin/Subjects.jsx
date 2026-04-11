@@ -13,7 +13,8 @@ const Subjects = () => {
   const [semesterFilter, setSemesterFilter] = useState('all');
   const [submitting, setSubmitting] = useState(false);
 
-  const { data: subjects, loading, error, request: fetchSubjects } = useApi(getSubjects, { immediate: true });
+  const { data: response, loading, error, request: fetchSubjects } = useApi(getSubjects, { immediate: true });
+  const subjects = response?.data || [];
 
   const [formData, setFormData] = useState({
     code: '',

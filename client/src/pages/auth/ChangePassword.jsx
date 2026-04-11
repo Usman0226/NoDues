@@ -25,12 +25,16 @@ const ChangePassword = () => {
       return toast.error('New passwords do not match');
     }
 
-    if (newPwd.length < 6) {
-      return toast.error('Password must be at least 6 characters');
+    if (newPwd.length < 8) {
+      return toast.error('Password must be at least 8 characters');
     }
 
     try {
-      await request({ oldPassword: current, newPassword: newPwd });
+      await request({ 
+        oldPassword: current, 
+        newPassword: newPwd,
+        confirmPassword: confirm
+      });
       toast.success('Password updated successfully. Please login again.');
       localStorage.removeItem('token');
       navigate('/login');
@@ -67,7 +71,7 @@ const ChangePassword = () => {
                 type="password" 
                 value={newPwd} 
                 onChange={(e) => setNewPwd(e.target.value)}
-                placeholder="Minimum 6 characters"
+                placeholder="Minimum 8 characters"
                 className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 text-sm font-medium transition-all" 
               />
             </div>

@@ -21,8 +21,10 @@ const FacultyList = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { data: faculty, loading, error, request: fetchFaculty } = useApi(getFaculty, { immediate: true });
-  const { data: depts } = useApi(getDepartments, { immediate: true });
+  const { data: response, loading, error, request: fetchFaculty } = useApi(getFaculty, { immediate: true });
+  const faculty = response?.data || [];
+  const { data: deptResponse } = useApi(getDepartments, { immediate: true });
+  const depts = deptResponse?.data || [];
 
   const [formData, setFormData] = useState({
     name: '',

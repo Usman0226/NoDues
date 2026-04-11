@@ -299,6 +299,9 @@ export const getBatchStatus = async (req, res, next) => {
       };
     });
 
+    // Extract unique faculty from requests
+    const facultySnapshot = requests[0]?.facultySnapshot || [];
+
     return res.status(200).json({
       success: true,
       data: {
@@ -313,6 +316,13 @@ export const getBatchStatus = async (req, res, next) => {
           deadline:     batch.deadline,
         },
         students: grid,
+        faculty: facultySnapshot.map(f => ({
+          _id: f.facultyId,
+          name: f.facultyName,
+          subjectId: f.subjectId,
+          subjectName: f.subjectName,
+          type: f.approvalType
+        }))
       },
     });
   } catch (err) {
