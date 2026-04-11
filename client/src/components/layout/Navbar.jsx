@@ -12,12 +12,8 @@ const Navbar = ({ onMenuToggle }) => {
           <Menu size={22} />
         </button>
         <div className="hidden sm:flex items-center gap-3">
-          <span className="h-8 w-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
-            <Radar size={15} />
-          </span>
+       
           <div>
-            <p className="text-[9px] uppercase tracking-[0.28em] font-black text-zinc-500">Telemetry Node</p>
-            <p className="text-xs lg:text-sm font-black text-navy">NoDues Operations Grid</p>
           </div>
         </div>
         <span className="sm:hidden text-navy font-brand text-xl">ND</span>
