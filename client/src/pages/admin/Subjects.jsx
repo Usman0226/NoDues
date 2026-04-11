@@ -23,9 +23,6 @@ const Subjects = () => {
     isElective: false
   });
 
-  useEffect(() => {
-    fetchSubjects();
-  }, [fetchSubjects]);
 
   const filtered = useMemo(() => {
     if (!subjects) return [];

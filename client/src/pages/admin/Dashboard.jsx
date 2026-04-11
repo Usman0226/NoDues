@@ -22,10 +22,6 @@ const AdminDashboard = () => {
   const { data: response, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
   const batches = response?.data || [];
 
-  useEffect(() => {
-    fetchBatches();
-  }, [fetchBatches]);
-
   const stats = useMemo(() => {
     if (!batches) return [];
     

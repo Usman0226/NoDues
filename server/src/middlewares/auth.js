@@ -16,7 +16,6 @@ export const protect = async (req, res, next) => {
 
     req.user = decoded;
 
-    // Force password-change guard — skip for students and specific auth routes
     if (
       decoded.mustChangePassword &&
       req.user.role !== 'student' &&

@@ -61,9 +61,6 @@ const Pending = () => {
 
   const { data: approvals, loading, error, request: fetchApprovals, setData: setApprovals } = useApi(getPendingApprovals, { immediate: true });
 
-  useEffect(() => {
-    fetchApprovals();
-  }, [fetchApprovals]);
 
   const handleApprove = async (id) => {
     try {

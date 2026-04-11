@@ -34,10 +34,6 @@ const StudentStatus = () => {
     }
   });
 
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
-
   if (loading && !data) {
     return (
       <PageWrapper title="My Clearance" subtitle="Fetching your status...">

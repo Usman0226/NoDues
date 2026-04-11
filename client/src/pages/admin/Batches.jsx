@@ -14,9 +14,6 @@ const Batches = () => {
   const { data: response, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
   const batches = response?.data || [];
 
-  useEffect(() => {
-    fetchBatches();
-  }, [fetchBatches]);
 
   const filtered = useMemo(() => {
     if (!batches) return [];

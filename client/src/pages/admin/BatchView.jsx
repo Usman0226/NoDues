@@ -34,10 +34,6 @@ const BatchView = () => {
     }
   });
 
-  useEffect(() => {
-    fetchBatch();
-  }, [fetchBatch, batchId]);
-
   const handleCloseBatch = async () => {
     if (!window.confirm('Are you sure you want to CLOSE this academic cycle? This will lock all student records.')) return;
     try {

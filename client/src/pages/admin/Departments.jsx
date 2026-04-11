@@ -10,10 +10,6 @@ const Departments = () => {
   const { data: response, loading, error, request: fetchDepts } = useApi(getDepartments, { immediate: true });
   const depts = response?.data || [];
 
-  useEffect(() => {
-    fetchDepts();
-  }, [fetchDepts]);
-
   if (loading && !depts) {
     return (
       <PageWrapper title="Departments" subtitle="Fetching academic structure...">

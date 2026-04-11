@@ -16,10 +16,6 @@ const StudentList = () => {
   const { data: response, loading, error, request: fetchStudents } = useApi(getStudents, { immediate: true });
   const students = response?.data || [];
 
-  useEffect(() => {
-    fetchStudents();
-  }, [fetchStudents]);
-
   const columns = [
     { 
       key: 'rollNo', 

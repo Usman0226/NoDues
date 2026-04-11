@@ -19,9 +19,6 @@ const HodDashboard = () => {
   const navigate = useNavigate();
   const { data: overview, loading, error, request: fetchOverview } = useApi(getHodOverview, { immediate: true });
 
-  useEffect(() => {
-    fetchOverview();
-  }, [fetchOverview]);
 
   const avgCompletion = useMemo(() => {
     if (!overview?.batches?.length) return 0;

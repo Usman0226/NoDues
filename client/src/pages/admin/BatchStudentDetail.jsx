@@ -21,10 +21,6 @@ const BatchStudentDetail = () => {
   const { batchId, studentId } = useParams();
   const { data: detail, loading, error, request: fetchDetail } = useApi(() => getBatchStudentDetail(batchId, studentId), { immediate: true });
 
-  useEffect(() => {
-    fetchDetail();
-  }, [fetchDetail, batchId, studentId]);
-
   if (loading && !detail) {
     return (
       <PageWrapper title="Loading Metadata..." subtitle="Fetching candidate audit trail">

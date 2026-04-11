@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, {  useMemo } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { useApi } from '../../hooks/useApi';
 import { getPendingApprovals } from '../../api/approvals';
@@ -18,9 +18,6 @@ const FacultyDashboard = () => {
   const navigate = useNavigate();
   const { data: approvals, loading, error, request: fetchApprovals } = useApi(getPendingApprovals, { immediate: true });
 
-  useEffect(() => {
-    fetchApprovals();
-  }, [fetchApprovals]);
 
   const summary = useMemo(() => {
     if (!approvals) return [];

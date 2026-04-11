@@ -22,9 +22,6 @@ const DepartmentClasses = () => {
     department: deptId
   });
 
-  useEffect(() => {
-    fetchClasses();
-  }, [fetchClasses, deptId]);
 
   const grouped = useMemo(() => {
     if (!classes) return {};

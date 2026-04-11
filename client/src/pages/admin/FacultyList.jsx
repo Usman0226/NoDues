@@ -34,9 +34,6 @@ const FacultyList = () => {
     roles: ['faculty']
   });
 
-  useEffect(() => {
-    fetchFaculty();
-  }, [fetchFaculty]);
 
   const handleCreate = async () => {
     if (!formData.name || !formData.employeeId || !formData.email || !formData.department) {
