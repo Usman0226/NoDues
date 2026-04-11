@@ -116,6 +116,14 @@
     transform: translateY(-2px);
     box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
   }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
 }
 
 @keyframes fadeUp {

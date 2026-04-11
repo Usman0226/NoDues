@@ -98,11 +98,12 @@ const DepartmentClasses = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h4 className="text-base font-black text-navy group-hover:text-gold transition-colors">{cls.name}</h4>
-                      <p className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest mt-1">Session {cls.academicYear} · {cls.classTeacherName || 'No CT'}</p>
+                      <p className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest mt-1">Session {cls.academicYear} · {cls.classTeacher?.name || 'No CT'}</p>
                     </div>
-                    {cls.activeBatchId && (
+                    {cls.hasActiveBatch && (
                       <span className="text-[8px] px-2.5 py-1 rounded-full bg-navy text-white font-black uppercase tracking-widest animate-pulse">Live Batch</span>
                     )}
+
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-center">
                     <div className="p-2.5 rounded-xl bg-offwhite border border-muted/30">
