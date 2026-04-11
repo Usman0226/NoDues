@@ -44,14 +44,10 @@ const adminSchema = new mongoose.Schema(
   }
 );
 
-// Note: email unique:true creates its index automatically — no explicit index needed.
-
-// ── Pre-save: hash password ───────────────────────────────────────────────────
-adminSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+adminSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
-  next();
 });
 
 export default mongoose.model('Admin', adminSchema);

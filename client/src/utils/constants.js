@@ -1,8 +1,8 @@
 export const ROLES = {
-  ADMIN: 'ADMIN',
-  HOD: 'HOD',
-  FACULTY: 'FACULTY',
-  STUDENT: 'STUDENT',
+  ADMIN: 'admin',
+  HOD: 'hod',
+  FACULTY: 'faculty',
+  STUDENT: 'student',
 };
 
 export const STATUSES = {

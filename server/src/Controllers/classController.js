@@ -79,7 +79,6 @@ export const getClasses = async (req, res, next) => {
   }
 };
 
-// ── POST /api/classes ─────────────────────────────────────────────────────────
 export const createClass = async (req, res, next) => {
   try {
     const { name, departmentId, semester, academicYear, classTeacherId } = req.body;

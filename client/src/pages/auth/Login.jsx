@@ -12,7 +12,7 @@ const Login = () => {
   const [rollNo, setRollNo] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, studentLogin } = useAuth();
   const navigate = useNavigate();
 
   const handleStaffLogin = async (e) => {
@@ -50,14 +50,7 @@ const Login = () => {
       setLoading(false);
     }
   };
-  const fillDemo = (type) => {
-    setActiveTab(type === 'student' ? 'student' : 'staff');
-    if (type === 'admin') { setEmail('admin@mits.ac.in'); setPassword('admin123'); }
-    if (type === 'hod') { setEmail('hod_cse@mits.ac.in'); setPassword('hod123'); }
-    if (type === 'faculty') { setEmail('faculty@mits.ac.in'); setPassword('faculty123'); }
-    if (type === 'student') { setRollNo('21CSE001'); }
-    setError('');
-  };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-offwhite p-4 sm:p-6 lg:p-8">
@@ -135,16 +128,6 @@ const Login = () => {
               </form>
             )}
 
-            {/* Quick Demo Fill - Institutional Access */}
-            <div className="mt-8 sm:mt-10 pt-6 sm:pt-8 border-t border-muted/50">
-              <label className="block text-[8px] uppercase tracking-[0.3em] font-black text-muted-foreground/40 mb-4 text-center">Fast-Track Demo Access</label>
-              <div className="flex flex-wrap justify-center gap-2">
-                <button onClick={() => fillDemo('admin')} className="px-3 py-1.5 rounded-lg bg-navy/5 text-navy text-[9px] font-black uppercase tracking-widest hover:bg-navy hover:text-white transition-all border border-navy/10 active:scale-95">Admin</button>
-                <button onClick={() => fillDemo('hod')} className="px-3 py-1.5 rounded-lg bg-navy/5 text-navy text-[9px] font-black uppercase tracking-widest hover:bg-navy hover:text-white transition-all border border-navy/10 active:scale-95">HOD</button>
-                <button onClick={() => fillDemo('faculty')} className="px-3 py-1.5 rounded-lg bg-navy/5 text-navy text-[9px] font-black uppercase tracking-widest hover:bg-navy hover:text-white transition-all border border-navy/10 active:scale-95">Faculty</button>
-                <button onClick={() => fillDemo('student')} className="px-3 py-1.5 rounded-lg bg-navy/5 text-navy text-[9px] font-black uppercase tracking-widest hover:bg-navy hover:text-white transition-all border border-navy/10 active:scale-95">Student</button>
-              </div>
-            </div>
           </div>
         </div>
       </div>

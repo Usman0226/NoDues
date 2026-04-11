@@ -9,7 +9,11 @@
     "Student API — all 9 endpoints (CRUD, mentor, electives add/update/remove)",
     "All route files: auth, department, subject, class, faculty, student",
     "app.js — all 6 route groups mounted at correct base paths",
-    "Models updated: Faculty (employeeId, phone, indexes), Department (no enum, indexes), Admin (12-round), Student (indexes), Subject (isActive, indexes), Class (proper subdoc, indexes)"
+    "Models updated: Faculty (employeeId, phone, indexes), Department (no enum, indexes), Admin (12-round), Student (indexes), Subject (isActive, indexes), Class (proper subdoc, indexes)",
+    "Admin seed script implemented and executed (email: admin@nodues.com)",
+    "Fixed Mongoose async/await middleware pattern in Admin.js and Faculty.js to prevent 'next is not a function' errors",
+    "Removed demo credentials and bypass logic from AuthContext.jsx",
+    "Cleaned up Login.jsx UI (removed demo section) and fixed studentLogin bug"
   ],
   "in_progress": [],
   "pending": [

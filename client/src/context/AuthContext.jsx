@@ -8,13 +8,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const DEMO_USERS = {
-    'admin@mits.ac.in': { id: 'd1', name: 'Demo Administrator', role: 'ADMIN', email: 'admin@mits.ac.in' },
-    'hod_cse@mits.ac.in': { id: 'd2', name: 'Dr. Sarah (HOD CSE)', role: 'HOD', department: 'CSE', email: 'hod_cse@mits.ac.in' },
-    'faculty@mits.ac.in': { id: 'd3', name: 'Prof. Ramesh (Faculty)', role: 'FACULTY', email: 'faculty@mits.ac.in' },
-    '21CSE001': { id: 'd4', name: 'Yugesh (Demo Student)', role: 'STUDENT', rollNo: '21CSE001', department: 'CSE' }
-  };
-
   const fetchUser = async () => {
     try {
       // Guide §4.5: GET /api/auth/me returns success:true, data: {...user}
@@ -37,16 +30,6 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (credentials) => {
-    const { email, password } = credentials;
-    
-    // Bypass for Demo Staff (Guide Alignment)
-    if (DEMO_USERS[email] && (password === 'admin123' || password === 'hod123' || password === 'faculty123')) {
-      const demoUser = DEMO_USERS[email];
-      setUser(demoUser);
-      toast.success(`Demo Access: Authorized as ${demoUser.role}`);
-      return { success: true, data: demoUser };
-    }
-
     try {
       const response = await authService.login(credentials);
       // Guide: Response success envelope contains user info in 'data'
@@ -62,14 +45,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   const studentLogin = async (rollNo) => {
-    // Bypass for Demo Student
-    if (rollNo === '21CSE001') {
-      const demoUser = DEMO_USERS[rollNo];
-      setUser(demoUser);
-      toast.success(`Demo Access: Authorized Student`);
-      return { success: true, data: demoUser };
-    }
-
     try {
       const response = await authService.studentLogin(rollNo);
       if (response.success) {
@@ -87,7 +62,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await authService.logout();
     } catch (error) {
-      console.warn('Logout request failed, clearing local state anyway');
+      console.warn('Logout request failed, clearing local state anyway',error);
     } finally {
       setUser(null);
       toast.success('Logged out successfully');
