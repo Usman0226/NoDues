@@ -56,7 +56,7 @@ const BatchStudentDetail = () => {
       </Link>
 
       {/* Candidate Header */}
-      <div className="bg-white rounded-xl border border-muted p-8 mb-10 shadow-sm relative overflow-hidden">
+      <div className="bg-white rounded-2xl border border-muted p-8 mb-10 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 p-8 opacity-5 select-none pointer-events-none">
            <GraduationCap size={120} strokeWidth={1} />
         </div>
@@ -87,7 +87,7 @@ const BatchStudentDetail = () => {
       <h3 className="text-[10px] uppercase font-black tracking-[0.2em] text-navy/40 mb-6 px-1">Institutional Audit Trail</h3>
       <div className="grid grid-cols-1 gap-4">
         {approvals.map((item, i) => (
-          <div key={i} className="bg-white rounded-xl border border-muted shadow-sm p-6 hover:shadow-md transition-all group">
+          <div key={i} className="bg-white rounded-2xl border border-muted shadow-sm p-6 hover:shadow-md transition-all group">
             <div className="flex items-start justify-between gap-6">
               <div className="flex items-start gap-5">
                 <div className="h-12 w-12 rounded-xl bg-navy/5 flex items-center justify-center shrink-0 group-hover:bg-navy/10 transition-colors shadow-inner border border-navy/5">
@@ -110,8 +110,8 @@ const BatchStudentDetail = () => {
 
             {/* Contingency/Remarks */}
             {item.status === 'due_marked' && (
-              <div className="mt-6 ml-16 p-5 rounded-xl bg-red-50/50 border border-red-100 relative">
-                <div className="absolute -left-3 top-4 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white border-4 border-white">
+              <div className="mt-6 ml-0 sm:ml-16 p-5 rounded-2xl bg-red-50/50 border border-red-100 relative">
+                <div className="absolute -top-3 sm:top-4 left-4 sm:-left-3 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white border-4 border-white shadow-sm">
                   <AlertTriangle size={12} strokeWidth={3} />
                 </div>
                 <div className="flex items-center gap-2 mb-2">
@@ -125,8 +125,8 @@ const BatchStudentDetail = () => {
 
             {/* HOD Governance */}
             {item.status === 'hod_override' && (
-              <div className="mt-6 ml-16 p-5 rounded-xl bg-blue-50/50 border border-blue-100 relative">
-                 <div className="absolute -left-3 top-4 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white border-4 border-white">
+              <div className="mt-6 ml-0 sm:ml-16 p-5 rounded-2xl bg-blue-50/50 border border-blue-100 relative">
+                 <div className="absolute -top-3 sm:top-4 left-4 sm:-left-3 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white border-4 border-white shadow-sm">
                   <Shield size={12} strokeWidth={3} />
                 </div>
                 <div>

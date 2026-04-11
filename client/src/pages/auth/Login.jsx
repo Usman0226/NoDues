@@ -97,7 +97,7 @@ const Login = () => {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: 'easeOut' }}
-        className={`relative z-10 w-full max-w-md min-h-[560px] sm:min-h-[590px] max-h-[calc(100svh-1.5rem)] overflow-y-auto bg-white rounded-xl shadow-md border border-zinc-200 p-6 sm:p-8 transition-all duration-300 ${successFlash ? 'ring-4 ring-emerald-200 border-emerald-300 bg-emerald-50/30' : ''}`}
+        className={`relative z-10 w-full max-w-md min-h-[560px] sm:min-h-[590px] max-h-[calc(100svh-1.5rem)] overflow-y-auto bg-white rounded-3xl shadow-md border border-zinc-200 p-6 sm:p-8 transition-all duration-300 ${successFlash ? 'ring-4 ring-emerald-200 border-emerald-300 bg-emerald-50/30' : ''}`}
       >
         <div className="text-center mb-6 min-h-[98px]">
           <h1 className="text-4xl sm:text-5xl font-brand text-navy leading-none tracking-tight">
@@ -177,7 +177,7 @@ const Login = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@mits.ac.in"
-                      className="w-full rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
+                      className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
                     />
                   </div>
                   <div>
@@ -188,7 +188,7 @@ const Login = () => {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="********"
-                        className="w-full rounded-lg border border-zinc-200 bg-white pl-4 pr-12 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
+                        className="w-full rounded-full border border-zinc-200 bg-white pl-4 pr-12 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
                       />
                       <button
                         type="button"
@@ -223,10 +223,10 @@ const Login = () => {
                       value={rollNo}
                       onChange={(e) => setRollNo(e.target.value.toUpperCase())}
                       placeholder="21CSE001"
-                      className="w-full rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-mono tracking-wider font-black focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
+                      className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-sm font-mono tracking-wider font-black focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.08)] transition-all duration-200"
                     />
                   </div>
-                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs font-semibold text-zinc-500">
+                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs font-semibold text-zinc-500">
                     No password required. Use your roll number.
                   </div>
                   <Button type="submit" className="w-full rounded-full py-3" loading={loading}>

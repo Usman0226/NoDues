@@ -63,10 +63,9 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
       <nav className="flex-1 py-7 px-4 space-y-2 overflow-y-auto no-scrollbar">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path ||
-            (item.path !== '/' && !['/admin', '/hod', '/faculty'].includes(item.path) && location.pathname.startsWith(item.path + '/')) ||
-            (item.path === '/admin' && location.pathname === '/admin') ||
-            (item.path === '/hod' && location.pathname === '/hod') ||
-            (item.path === '/faculty' && location.pathname === '/faculty');
+            (item.path === '/admin/batches' && location.pathname.startsWith('/admin/batch/')) ||
+            (item.path === '/admin/departments' && location.pathname.startsWith('/admin/class/')) ||
+            (item.path !== '/' && !['/admin', '/hod', '/faculty'].includes(item.path) && location.pathname.startsWith(item.path + '/'));
           const Icon = item.icon;
 
           return (

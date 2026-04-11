@@ -75,17 +75,16 @@ const facultySchema = new mongoose.Schema(
 // ── M0-safe indexes (email & employeeId unique:true create their indexes automatically) ──
 facultySchema.index({ departmentId: 1, isActive: 1 });
 
-// ── Pre-save: hash password ───────────────────────────────────────────────────
+// ── Pre-save: process user data ──────────────────────────────────────────────
 facultySchema.pre('save', async function () {
-  if (!this.isModified('password')) return;
-  const salt = await bcrypt.genSalt(12);
-  this.password = await bcrypt.hash(this.password, salt);
-});
+  // Hash password if modified
+  if (this.isModified('password')) {
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+  }
 
-// ── Pre-save: derive primary role from roleTags ───────────────────────────────
-facultySchema.pre('save', function (next) {
+  // Derive primary role from roleTags
   this.role = this.roleTags.includes('hod') ? 'hod' : 'faculty';
-  next();
 });
 
 export default mongoose.model('Faculty', facultySchema);

@@ -10,7 +10,9 @@
     "Standardized student API service and resolved component import paths.",
     "Implemented mobile-first responsive UI in PageWrapper and Table components.",
     "Optimized Login, Student Status, and Faculty/HOD dashboards for mobile viewports.",
-    "Department Metrics Integration (Student, Faculty, Class, Batch counts)"
+    "Department Metrics Integration (Student, Faculty, Class, Batch counts)",
+    "Implemented reusable UI components (ActionMenu, ConfirmModal) for standard table actions.",
+    "Added Edit (Update), Delete (Deactivate), and View Classes functionalities to the Faculty Admin Tab using the new reusable components."
   ],
   "in_progress": [],
   "pending": [

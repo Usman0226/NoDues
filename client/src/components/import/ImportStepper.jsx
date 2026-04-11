@@ -15,7 +15,7 @@ import Button from '../ui/Button';
 import FileDropzone from '../ui/FileDropzone';
 import Table from '../ui/Table';
 import Badge from '../ui/Badge';
-import { previewImport, commitImport } from '../../api/import';
+import { previewImport, commitImport, getTemplate } from '../../api/import';
 import { toast } from 'react-hot-toast';
 
 const STEPS = [
@@ -29,6 +29,7 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
   const [file, setFile] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState(null);
 
   const handleFileUpload = useCallback(async (uploadedFile) => {
@@ -65,6 +66,25 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
       setLoading(false);
     }
   }, [type, previewData, onComplete]);
+
+  const handleDownloadTemplate = useCallback(async () => {
+    setDownloading(true);
+    try {
+      const blob = await getTemplate(type);
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${type}_template.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error('Failed to download template.');
+    } finally {
+      setDownloading(false);
+    }
+  }, [type]);
 
   const dataRows = previewData?.previewRows || [];
   const validCount = previewData?.summary?.valid || 0;
@@ -124,8 +144,15 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
                   <p className="text-[10px] text-muted-foreground font-medium mt-1">Includes proper headers for {type}</p>
                 </div>
               </div>
-              <Button variant="secondary" size="sm" className="gap-2">
-                <Download size={14} /> Download
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="gap-2"
+                onClick={handleDownloadTemplate}
+                disabled={downloading}
+              >
+                {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} 
+                {downloading ? 'Downloading...' : 'Download'}
               </Button>
             </div>
           </div>
