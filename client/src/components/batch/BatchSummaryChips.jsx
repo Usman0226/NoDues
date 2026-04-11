@@ -6,44 +6,44 @@ const CHIPS_CONFIG = {
   [STATUSES.CLEARED]: { 
     label: 'Cleared', 
     icon: CheckCircle, 
-    color: 'text-status-cleared', 
-    bg: 'bg-status-cleared/10' 
+    color: 'text-emerald-700', 
+    bg: 'bg-emerald-50/60' 
   },
   [STATUSES.PENDING]: { 
     label: 'Pending', 
     icon: Clock, 
-    color: 'text-status-pending', 
-    bg: 'bg-status-pending/10' 
+    color: 'text-amber-700', 
+    bg: 'bg-amber-50/60' 
   },
   [STATUSES.HAS_DUES]: { 
     label: 'Has Dues', 
     icon: AlertTriangle, 
-    color: 'text-status-has-dues', 
-    bg: 'bg-status-has-dues/10' 
+    color: 'text-red-700', 
+    bg: 'bg-red-50/60' 
   },
   [STATUSES.HOD_OVERRIDE]: { 
     label: 'Overrides', 
     icon: Shield, 
-    color: 'text-status-hod-override', 
-    bg: 'bg-status-hod-override/10' 
+    color: 'text-blue-700', 
+    bg: 'bg-blue-50/60' 
   },
 };
 
 const BatchSummaryChips = ({ counts = {} }) => {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
       {Object.entries(CHIPS_CONFIG).map(([key, config]) => {
         const Icon = config.icon;
         const count = counts[key] ?? 0;
         return (
-          <div key={key} className={`${config.bg} rounded-2xl p-5 border border-transparent hover:border-current/10 transition-all shadow-sm`}>
+          <div key={key} className={`${config.bg} rounded-xl p-6 border border-white/40 shadow-sm transition-academic hover:shadow-md`}>
             <div className="flex items-center gap-4">
-              <div className={`h-10 w-10 rounded-xl ${config.bg.replace('/10', '/20')} flex items-center justify-center`}>
+              <div className={`h-11 w-11 rounded-lg ${config.bg.replace('/60', '')} flex items-center justify-center border border-current/10`}>
                 <Icon size={20} className={config.color} />
               </div>
               <div>
-                <p className={`text-2xl font-bold ${config.color}`}>{count.toLocaleString()}</p>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">{config.label}</p>
+                <p className={`text-2xl font-black ${config.color} tracking-tight leading-none mb-1`}>{count.toLocaleString()}</p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-black opacity-80">{config.label}</p>
               </div>
             </div>
           </div>

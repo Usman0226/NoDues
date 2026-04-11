@@ -1,5 +1,7 @@
 import api from './axiosInstance';
-export const getApprovals = (params) => api.get('/approvals', { params });
-export const approve = (id) => api.post(`/approvals/${id}/approve`);
-export const reject = (id) => api.post(`/approvals/${id}/reject`);
-export const markDue = (id, data) => api.post(`/approvals/${id}/due`, data);
+
+export const getPendingApprovals = () => api.get('/approvals/pending');
+export const getApprovalHistory = (params) => api.get('/approvals/history', { params });
+export const approveRecord = (approvalId) => api.post('/approvals/approve', { approvalId });
+export const markDueRecord = (data) => api.post('/approvals/mark-due', data);
+export const updateApproval = (id, data) => api.patch(`/approvals/${id}`, data);

@@ -12,25 +12,15 @@
     --accent-foreground: #1A1A1A;
 
     --muted: #E2E8F0;
-    --muted-foreground: #64748B;
+    --muted-foreground: #718096;
 
-    /* PRD Aligned Status Colors */
-    --status-approved: #10B981;    /* Green */
-    --status-pending: #F59E0B;     /* Amber */
-    --status-due-marked: #EF4444;  /* Red */
-    --status-has-dues: #EF4444;    /* Red */
-    --status-cleared: #10B981;     /* Green */
-    --status-hod-override: #3B82F6; /* Blue */
-  }
-
-  @font-face {
-    font-family: 'Playfair Display';
-    src: url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
-  }
-
-  @font-face {
-    font-family: 'Inter';
-    src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+    /* PRD Aligned Status Colors - Refined for Modern Look */
+    --status-approved: #059669;    /* Clean Emerald */
+    --status-pending: #D97706;     /* Muted Amber */
+    --status-due-marked: #DC2626;  /* Clean Red */
+    --status-has-dues: #DC2626;    
+    --status-cleared: #059669;     
+    --status-hod-override: #2563EB; /* Clean Blue */
   }
 
   body {
@@ -38,21 +28,30 @@
     color: var(--foreground);
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
   }
 
+  /* All headings use Inter for the clean academic look */
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Inter', sans-serif;
     font-weight: 700;
+  }
+
+  /* Specific Brand Class for limited Serif usage */
+  .font-brand {
+    font-family: 'Playfair Display', serif;
   }
 
   .nav-text {
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.15em;
+    font-weight: 600;
   }
 
-  .tagline {
-    font-family: 'Playfair Display', serif;
-    font-style: italic;
+  .transition-academic {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
   }
 }
 
@@ -61,12 +60,12 @@
   --color-gold: #D4AF37;
   --color-offwhite: #F5F7FA;
   
-  --color-status-approved: #10B981;
-  --color-status-pending: #F59E0B;
-  --color-status-due-marked: #EF4444;
-  --color-status-has-dues: #EF4444;
-  --color-status-cleared: #10B981;
-  --color-status-hod-override: #3B82F6;
+  --color-status-approved: #059669;
+  --color-status-pending: #D97706;
+  --color-status-due-marked: #DC2626;
+  --color-status-has-dues: #DC2626;
+  --color-status-cleared: #059669;
+  --color-status-hod-override: #2563EB;
 
   --font-serif: "Playfair Display", serif;
   --font-sans: "Inter", sans-serif;

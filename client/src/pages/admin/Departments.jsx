@@ -1,58 +1,89 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
-import { Building2, Users, GraduationCap, BookOpen, Layers, ArrowRight } from 'lucide-react';
+import { Building2, Users, GraduationCap, BookOpen, Layers, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
+import { useApi } from '../../hooks/useApi';
+import { getDepartments } from '../../api/departments';
+import Button from '../../components/ui/Button';
 
-const MOCK_DEPTS = [
-  { id: 'd1', name: 'CSE', hod: 'Dr. Ramesh Kumar', classes: 4, faculty: 15, students: 240, activeBatches: 2 },
-  { id: 'd2', name: 'ECE', hod: 'Dr. S. Krishnan', classes: 3, faculty: 12, students: 180, activeBatches: 1 },
-];
+const Departments = () => {
+  const { data: depts, loading, error, request: fetchDepts } = useApi(getDepartments, { immediate: true });
 
-const Departments = () => (
-  <PageWrapper title="Departments" subtitle="Department overview and class management">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {MOCK_DEPTS.map((dept) => (
-        <Link key={dept.id} to={`/admin/departments/${dept.id}/classes`}
-          className="bg-white rounded-2xl border border-muted shadow-sm p-6 hover:shadow-md transition-all group">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-xl bg-navy/5 flex items-center justify-center group-hover:bg-navy/10 transition-colors">
-                <Building2 size={24} className="text-navy" />
+  useEffect(() => {
+    fetchDepts();
+  }, [fetchDepts]);
+
+  if (loading && !depts) {
+    return (
+      <PageWrapper title="Departments" subtitle="Fetching academic structure...">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-pulse">
+           {[1, 2].map(i => <div key={i} className="h-64 bg-muted/5 rounded-xl border border-muted"></div>)}
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageWrapper title="Departments" subtitle="Sync interrupted">
+        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
+          <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
+          <h2 className="text-xl font-black text-navy mb-2">Structure Unavailable</h2>
+          <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
+          <Button variant="primary" onClick={() => fetchDepts()}>
+             <RefreshCw size={14} className="mr-2" /> Retry
+          </Button>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  return (
+    <PageWrapper title="Departments" subtitle="Academic department structure and oversight management">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {(depts || []).map((dept) => (
+          <Link key={dept._id} to={`/admin/departments/${dept._id}/classes`}
+            className="bg-white rounded-xl border border-muted shadow-sm p-8 hover:shadow-md transition-academic group">
+            <div className="flex items-start justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 rounded-xl bg-offwhite flex items-center justify-center group-hover:bg-navy/5 transition-colors">
+                  <Building2 size={28} className="text-navy/70" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-navy group-hover:text-gold transition-colors">{dept.name}</h3>
+                  <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 mt-1">HOD: {dept.hodName || 'Not Assigned'}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-serif text-navy">{dept.name}</h3>
-                <p className="text-xs text-muted-foreground">HoD: {dept.hod}</p>
+              <ArrowRight size={20} className="text-muted-foreground group-hover:text-gold transition-all translate-x-0 group-hover:translate-x-1" />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-3.5 rounded-xl bg-offwhite/50 text-center border border-muted/30">
+                <BookOpen size={14} className="text-navy mx-auto mb-1.5 opacity-60" />
+                <p className="text-lg font-black text-navy">{dept.classesCount || 0}</p>
+                <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold leading-none">Classes</p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-offwhite/50 text-center border border-muted/30">
+                <Users size={14} className="text-navy mx-auto mb-1.5 opacity-60" />
+                <p className="text-lg font-black text-navy">{dept.facultyCount || 0}</p>
+                <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold leading-none">Faculty</p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-offwhite/50 text-center border border-muted/30">
+                <GraduationCap size={14} className="text-navy mx-auto mb-1.5 opacity-60" />
+                <p className="text-lg font-black text-navy">{dept.studentsCount || 0}</p>
+                <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold leading-none">Students</p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-offwhite/50 text-center border border-muted/30">
+                <Layers size={14} className={`mx-auto mb-1.5 ${dept.activeBatchesCount > 0 ? 'text-gold' : 'text-muted-foreground opacity-40'}`} />
+                <p className="text-lg font-black text-navy">{dept.activeBatchesCount || 0}</p>
+                <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold leading-none">Active</p>
               </div>
             </div>
-            <ArrowRight size={20} className="text-muted-foreground group-hover:text-gold transition-colors mt-1" />
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-2.5 rounded-lg bg-offwhite text-center">
-              <BookOpen size={14} className="text-navy mx-auto mb-1" />
-              <p className="text-lg font-bold text-navy">{dept.classes}</p>
-              <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">Classes</p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-offwhite text-center">
-              <Users size={14} className="text-navy mx-auto mb-1" />
-              <p className="text-lg font-bold text-navy">{dept.faculty}</p>
-              <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">Faculty</p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-offwhite text-center">
-              <GraduationCap size={14} className="text-navy mx-auto mb-1" />
-              <p className="text-lg font-bold text-navy">{dept.students}</p>
-              <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">Students</p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-offwhite text-center">
-              <Layers size={14} className={`mx-auto mb-1 ${dept.activeBatches > 0 ? 'text-amber-500' : 'text-muted-foreground'}`} />
-              <p className="text-lg font-bold text-navy">{dept.activeBatches}</p>
-              <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">Active Batches</p>
-            </div>
-          </div>
-        </Link>
-      ))}
-    </div>
-  </PageWrapper>
-);
+          </Link>
+        ))}
+      </div>
+    </PageWrapper>
+  );
+};
 
 export default Departments;

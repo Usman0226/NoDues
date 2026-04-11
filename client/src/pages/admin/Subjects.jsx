@@ -1,87 +1,176 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import { Plus, BookOpen, Filter } from 'lucide-react';
-
-const MOCK_SUBJECTS = [
-  { id: 1, code: 'CS301', name: 'Data Structures', semester: 5, isElective: false },
-  { id: 2, code: 'CS302', name: 'DBMS', semester: 5, isElective: false },
-  { id: 3, code: 'CS303', name: 'Computer Networks', semester: 5, isElective: false },
-  { id: 4, code: 'CS304', name: 'Operating Systems', semester: 5, isElective: false },
-  { id: 5, code: 'CS305', name: 'Web Technologies', semester: 5, isElective: false },
-  { id: 6, code: 'CS601', name: 'Machine Learning', semester: 6, isElective: true },
-  { id: 7, code: 'CS602', name: 'Data Science', semester: 6, isElective: true },
-  { id: 8, code: 'CS603', name: 'Cloud Computing', semester: 6, isElective: true },
-  { id: 9, code: 'MA301', name: 'Engineering Mathematics', semester: 3, isElective: false },
-  { id: 10, code: 'EC401', name: 'Digital Electronics', semester: 4, isElective: false },
-];
-
-const COLUMNS = [
-  { key: 'code', label: 'Code' },
-  { key: 'name', label: 'Subject Name' },
-  { key: 'semester', label: 'Semester' },
-  {
-    key: 'isElective', label: 'Type', render: (v) => (
-      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${v ? 'bg-amber-50 text-amber-700' : 'bg-navy/5 text-navy'}`}>
-        {v ? 'Elective' : 'Core'}
-      </span>
-    )
-  },
-];
+import { useApi } from '../../hooks/useApi';
+import { getSubjects, createSubject } from '../../api/subjects';
+import { Plus, BookOpen, Filter, RefreshCw, AlertCircle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 const Subjects = () => {
   const [showCreate, setShowCreate] = useState(false);
-  const [semester, setSemester] = useState('all');
+  const [semesterFilter, setSemesterFilter] = useState('all');
+  const [submitting, setSubmitting] = useState(false);
 
-  const filtered = semester === 'all' ? MOCK_SUBJECTS : MOCK_SUBJECTS.filter((s) => s.semester === Number(semester));
+  const { data: subjects, loading, error, request: fetchSubjects } = useApi(getSubjects, { immediate: true });
+
+  const [formData, setFormData] = useState({
+    code: '',
+    name: '',
+    semester: 1,
+    isElective: false
+  });
+
+  useEffect(() => {
+    fetchSubjects();
+  }, [fetchSubjects]);
+
+  const filtered = useMemo(() => {
+    if (!subjects) return [];
+    if (semesterFilter === 'all') return subjects;
+    return subjects.filter((s) => s.semester === Number(semesterFilter));
+  }, [subjects, semesterFilter]);
+
+  const handleCreate = async () => {
+    if (!formData.code || !formData.name) {
+      return toast.error('Required fields missing');
+    }
+    setSubmitting(true);
+    try {
+      await createSubject(formData);
+      toast.success('Subject registered with catalog');
+      setShowCreate(false);
+      fetchSubjects();
+      setFormData({ code: '', name: '', semester: 1, isElective: false });
+    } catch (err) {
+      toast.error(err?.message || 'Failed to create subject');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const columns = [
+    { key: 'code', label: 'Identity', render: (v) => <span className="font-mono text-[10px] font-black uppercase text-navy bg-offwhite px-2 py-0.5 rounded border border-muted/50">{v}</span> },
+    { key: 'name', label: 'Component Name', render: (v) => <span className="font-bold text-navy/80">{v}</span> },
+    { key: 'semester', label: 'Standard Sem', render: (v) => <span className="font-bold text-muted-foreground/60">{v}</span> },
+    {
+      key: 'isElective', label: 'Category', render: (v) => (
+        <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${v ? 'bg-amber-50 text-amber-700' : 'bg-navy/5 text-navy/70'}`}>
+          {v ? 'Elective' : 'Core'}
+        </span>
+      )
+    },
+  ];
+
+  if (loading && !subjects) {
+    return (
+      <PageWrapper title="Subjects" subtitle="Loading academic components...">
+         <div className="animate-pulse space-y-4">
+            <div className="h-10 w-48 bg-muted/10 rounded-xl mb-6"></div>
+            <div className="h-96 bg-muted/5 rounded-2xl border border-muted"></div>
+         </div>
+      </PageWrapper>
+    );
+  }
 
   return (
-    <PageWrapper title="Subjects" subtitle="Global subject catalog — shared across all departments">
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}><Plus size={14} /> Create Subject</Button>
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-muted-foreground" />
-          <select value={semester} onChange={(e) => setSemester(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-muted bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy/10">
-            <option value="all">All Semesters</option>
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>Semester {s}</option>)}
-          </select>
+    <PageWrapper title="Subjects" subtitle="Centralized academic component catalog for institution-wide mapping">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <Button variant="primary" size="sm" onClick={() => setShowCreate(true)} className="gap-2">
+            <Plus size={14} /> Register Subject
+          </Button>
+          <div className="flex items-center gap-3 bg-white border border-muted/40 p-1 rounded-xl shadow-sm">
+             <Filter size={12} className="ml-2 text-muted-foreground" />
+             <select 
+                value={semesterFilter} 
+                onChange={(e) => setSemesterFilter(e.target.value)}
+                className="pr-8 pl-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-navy bg-transparent border-none focus:ring-0 cursor-pointer"
+             >
+               <option value="all">All Sessions</option>
+               {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>Semester {s}</option>)}
+             </select>
+          </div>
         </div>
+        <Button variant="ghost" size="sm" onClick={() => fetchSubjects()} className="text-muted-foreground">
+          <RefreshCw size={14} /> Reload
+        </Button>
       </div>
 
-      <Table columns={COLUMNS} data={filtered} searchable searchPlaceholder="Search by code or name..." />
+      {error ? (
+        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
+           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
+           <p className="text-muted-foreground font-medium">{error}</p>
+        </div>
+      ) : (
+        <Table columns={columns} data={filtered} searchable searchPlaceholder="Filter by code or identifier..." />
+      )}
 
       {showCreate && (
-        <Modal title="Create Subject" onClose={() => setShowCreate(false)}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1.5">Subject Code</label>
-              <input type="text" className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10" placeholder="e.g. CS501" />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1.5">Subject Name</label>
-              <input type="text" className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10" placeholder="e.g. Database Management Systems" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+        <Modal isOpen={showCreate} title="Register New Component" onClose={() => setShowCreate(false)}>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-5">
               <div>
-                <label className="block text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1.5">Semester</label>
-                <select className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10">
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Internal Code</label>
+                <input 
+                  type="text" 
+                  value={formData.code}
+                  onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})}
+                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
+                  placeholder="CODE-XYZ" 
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Academic Semester</label>
+                <select 
+                  value={formData.semester}
+                  onChange={e => setFormData({...formData, semester: Number(e.target.value)})}
+                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
+                >
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1.5">Type</label>
-                <select className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10">
-                  <option value="false">Core</option>
-                  <option value="true">Elective</option>
-                </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Title</label>
+              <input 
+                type="text" 
+                value={formData.name}
+                onChange={e => setFormData({...formData, name: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                placeholder="Full Component Name" 
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-3">Classification</label>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input 
+                    type="radio" 
+                    checked={!formData.isElective} 
+                    onChange={() => setFormData({...formData, isElective: false})}
+                    className="w-4 h-4 text-navy focus:ring-navy/10 border-muted"
+                  />
+                  <span className="text-xs font-bold text-navy/70 group-hover:text-navy transition-colors">Core Mandatory</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input 
+                    type="radio" 
+                    checked={formData.isElective} 
+                    onChange={() => setFormData({...formData, isElective: true})}
+                    className="w-4 h-4 text-amber-600 focus:ring-amber-100 border-muted"
+                  />
+                  <span className="text-xs font-bold text-navy/70 group-hover:text-navy transition-colors">Elective Stream</span>
+                </label>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>
-              <Button variant="primary"><Plus size={14} /> Create</Button>
+
+            <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowCreate(false)}>Abort</Button>
+              <Button variant="primary" onClick={handleCreate} loading={submitting}>Finalize Registration</Button>
             </div>
           </div>
         </Modal>

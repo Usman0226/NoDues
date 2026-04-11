@@ -1,60 +1,99 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
-import { Eye, Filter } from 'lucide-react';
-
-const MOCK_BATCHES = [
-  { id: 'b1', className: 'CSE-A Sem 5', department: 'CSE', semester: 5, year: '2025-26', status: 'pending', initiated: '2026-04-28', cleared: 48, pending: 10, dues: 2, total: 60 },
-  { id: 'b2', className: 'CSE-B Sem 5', department: 'CSE', semester: 5, year: '2025-26', status: 'pending', initiated: '2026-04-28', cleared: 35, pending: 20, dues: 5, total: 60 },
-  { id: 'b3', className: 'ECE-A Sem 7', department: 'ECE', semester: 7, year: '2025-26', status: 'cleared', initiated: '2026-04-25', cleared: 55, pending: 3, dues: 0, total: 58 },
-  { id: 'b4', className: 'CSE-A Sem 4', department: 'CSE', semester: 4, year: '2024-25', status: 'cleared', initiated: '2025-11-10', cleared: 58, pending: 0, dues: 2, total: 60 },
-];
-
-const COLUMNS = [
-  { key: 'className', label: 'Class' },
-  { key: 'department', label: 'Dept' },
-  { key: 'semester', label: 'Sem' },
-  { key: 'year', label: 'Year' },
-  { key: 'initiated', label: 'Initiated' },
-  { key: 'cleared', label: 'Cleared', render: (v) => <span className="text-emerald-600 font-semibold">{v}</span> },
-  { key: 'pending', label: 'Pending', render: (v) => <span className="text-amber-600 font-semibold">{v}</span> },
-  { key: 'dues', label: 'Dues', render: (v) => <span className={`font-semibold ${v > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>{v}</span> },
-  { key: 'status', label: 'Status', render: (v) => <Badge status={v === 'pending' ? 'pending' : 'cleared'} /> },
-  {
-    key: 'id', label: 'Action', sortable: false, render: (v) => (
-      <Link to={`/admin/batch/${v}`} className="inline-flex items-center gap-1 text-xs text-navy hover:text-gold font-semibold transition-colors">
-        <Eye size={14} /> View
-      </Link>
-    )
-  },
-];
+import { useApi } from '../../hooks/useApi';
+import { getBatches } from '../../api/batch';
+import { Eye, Filter, RefreshCw, AlertCircle } from 'lucide-react';
+import Button from '../../components/ui/Button';
 
 const Batches = () => {
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState('all');
+  const { data: batches, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
 
-  const filtered = statusFilter === 'all' ? MOCK_BATCHES : MOCK_BATCHES.filter((b) => {
-    if (statusFilter === 'active') return b.status === 'pending';
-    return b.status === 'cleared';
-  });
+  useEffect(() => {
+    fetchBatches();
+  }, [fetchBatches]);
+
+  const filtered = useMemo(() => {
+    if (!batches) return [];
+    if (statusFilter === 'all') return batches;
+    return batches.filter((b) => {
+      if (statusFilter === 'active') return b.status === 'active';
+      return b.status === 'closed';
+    });
+  }, [batches, statusFilter]);
+
+  const columns = [
+    { key: 'className', label: 'Identity', render: (v) => <span className="font-black text-navy">{v}</span> },
+    { key: 'departmentName', label: 'Department' },
+    { key: 'academicYear', label: 'Year', render: (v, row) => <span className="font-semibold text-muted-foreground/60">{v} · S{row.semester}</span> },
+    { key: 'initiatorName', label: 'Originator' },
+    { 
+      key: 'clearedCount', 
+      label: 'Clearance Status', 
+      render: (v, row) => (
+        <div className="flex flex-col">
+           <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">{v} Cleared</span>
+           <span className="text-[9px] font-bold text-muted-foreground/40">{row.totalStudents - v} Remaining</span>
+        </div>
+      ) 
+    },
+    { 
+      key: 'duesCount', 
+      label: 'Flags', 
+      render: (v) => <span className={`font-black tabular-nums ${v > 0 ? 'text-status-due' : 'text-muted-foreground/20'}`}>{v}</span> 
+    },
+    { key: 'status', label: 'State', render: (v) => <Badge status={v} /> },
+    {
+      key: '_id', label: 'Oversight', sortable: false, render: (v) => (
+        <button onClick={() => navigate(`/admin/batch/${v}`)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] bg-navy text-white hover:bg-navy/90 font-black uppercase tracking-widest transition-all shadow-sm shadow-navy/10">
+          <Eye size={12} strokeWidth={3} /> Analyze
+        </button>
+      )
+    },
+  ];
+
+  if (loading && !batches) {
+    return (
+      <PageWrapper title="Batches" subtitle="Syncing historical data...">
+        <div className="animate-pulse space-y-4">
+           <div className="h-12 w-64 bg-muted/10 rounded-xl mb-6"></div>
+           <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
-    <PageWrapper title="Batches" subtitle="All no-due batches across departments">
-      <div className="flex items-center gap-3 mb-6">
-        <Filter size={14} className="text-muted-foreground" />
-        <div className="flex gap-1 bg-offwhite rounded-xl p-1">
-          {['all', 'active', 'closed'].map((f) => (
-            <button key={f} onClick={() => setStatusFilter(f)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
-                ${statusFilter === f ? 'bg-white text-navy shadow-sm' : 'text-muted-foreground hover:text-navy'}`}>
-              {f === 'all' ? 'All' : f === 'active' ? 'Active' : 'Closed'}
-            </button>
-          ))}
+    <PageWrapper title="Batches" subtitle="All academic clearance batches across departments">
+      <div className="flex items-center justify-between mb-8 px-1">
+        <div className="flex items-center gap-4">
+           <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-muted shadow-sm">
+             {['all', 'active', 'closed'].map((f) => (
+               <button key={f} onClick={() => setStatusFilter(f)}
+                 className={`px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all
+                   ${statusFilter === f ? 'bg-navy text-white shadow-md' : 'text-muted-foreground hover:bg-offwhite'}`}>
+                 {f}
+               </button>
+             ))}
+           </div>
         </div>
+        <Button variant="ghost" size="sm" onClick={() => fetchBatches()} className="text-muted-foreground">
+          <RefreshCw size={14} /> Refetch
+        </Button>
       </div>
 
-      <Table columns={COLUMNS} data={filtered} searchable searchPlaceholder="Search by class name..." />
+      {error ? (
+        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
+           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
+           <p className="text-muted-foreground font-medium">{error}</p>
+        </div>
+      ) : (
+        <Table columns={columns} data={filtered} searchable searchPlaceholder="Search by class name..." />
+      )}
     </PageWrapper>
   );
 };

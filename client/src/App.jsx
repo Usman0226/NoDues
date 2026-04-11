@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ToastProvider } from './components/ui/Toast';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ROLES } from './utils/constants';
 import { getRoleRedirect } from './utils/roleRedirect';
+import { Toaster } from 'react-hot-toast';
 
 import Sidebar from './components/layout/Sidebar';
 import Navbar from './components/layout/Navbar';
@@ -42,7 +42,9 @@ const AppLayout = () => {
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar onMenuToggle={() => setMobileOpen(true)} />
-        <div className="flex-1 overflow-y-auto"><Outlet /></div>
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+          <Outlet />
+        </div>
       </div>
     </div>
   );
@@ -52,10 +54,12 @@ const AppLayout = () => {
 const StudentLayout = () => (
   <div className="min-h-screen bg-offwhite flex flex-col">
     <nav className="h-14 lg:h-16 bg-navy flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
-      <h2 className="text-white font-serif text-lg">No<span className="text-gold">Dues</span></h2>
+      <h2 className="text-white font-brand text-lg">No<span className="text-gold">Dues</span></h2>
       <StudentNavRight />
     </nav>
-    <div className="flex-1 overflow-y-auto"><Outlet /></div>
+    <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+      <Outlet />
+    </div>
   </div>
 );
 
@@ -67,7 +71,7 @@ const StudentNavRight = () => {
         <p className="text-sm font-semibold text-white leading-none">{user?.rollNo}</p>
         <p className="text-[10px] text-white/60 uppercase tracking-widest mt-0.5">{user?.name}</p>
       </div>
-      <button onClick={logout} className="px-3 py-1.5 rounded-full bg-white/10 text-white text-xs uppercase tracking-wider hover:bg-white/20 transition-colors">
+      <button onClick={logout} className="px-3 py-1.5 rounded-full bg-white/10 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-white/20 transition-colors">
         Logout
       </button>
     </div>
@@ -75,41 +79,72 @@ const StudentNavRight = () => {
 };
 
 const RoleRedirect = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return null; // Avoid flicker during session restore
   if (!user) return <Navigate to="/login" replace />;
   return <Navigate to={getRoleRedirect(user.role)} replace />;
 };
 
-const App = () => (
-  <ErrorBoundary>
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
+const App = () => {
+  return (
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Toaster 
+          position="top-right"
+          containerStyle={{ top: 40, right: 40 }}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#FFFFFF',
+              color: '#1E3A5F',
+              borderRadius: '16px',
+              border: '1px solid #E2E8F0',
+              fontWeight: '700',
+              fontSize: '13px',
+              padding: '16px 24px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              fontFamily: 'Inter, sans-serif',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+        <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<RoleRedirect />} />
 
             {/* Staff Layout (sidebar) */}
             <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.HOD, ROLES.FACULTY]}><AppLayout /></ProtectedRoute>}>
-              <Route path="/admin" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><AdminDashboard /></ProtectedRoute>} />
-              <Route path="/admin/departments" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><Departments /></ProtectedRoute>} />
-              <Route path="/admin/departments/:deptId/classes" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><DepartmentClasses /></ProtectedRoute>} />
-              <Route path="/admin/class/:classId" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><ClassDetail /></ProtectedRoute>} />
-              <Route path="/admin/faculty" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><FacultyList /></ProtectedRoute>} />
-              <Route path="/admin/students" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><StudentList /></ProtectedRoute>} />
-              <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><Subjects /></ProtectedRoute>} />
-              <Route path="/admin/batches" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><Batches /></ProtectedRoute>} />
-              <Route path="/admin/batch/:batchId" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><BatchView /></ProtectedRoute>} />
-              <Route path="/admin/batch/:batchId/students/:studentId" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><BatchStudentDetail /></ProtectedRoute>} />
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/departments" element={<Departments />} />
+              <Route path="/admin/departments/:deptId/classes" element={<DepartmentClasses />} />
+              <Route path="/admin/class/:classId" element={<ClassDetail />} />
+              <Route path="/admin/faculty" element={<FacultyList />} />
+              <Route path="/admin/students" element={<StudentList />} />
+              <Route path="/admin/subjects" element={<Subjects />} />
+              <Route path="/admin/batches" element={<Batches />} />
+              <Route path="/admin/batch/:batchId" element={<BatchView />} />
+              <Route path="/admin/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
               <Route path="/change-password" element={<ChangePassword />} />
 
-              <Route path="/hod" element={<ProtectedRoute allowedRoles={[ROLES.HOD]}><HodDashboard /></ProtectedRoute>} />
-              <Route path="/hod/dues" element={<ProtectedRoute allowedRoles={[ROLES.HOD]}><Dues /></ProtectedRoute>} />
-              <Route path="/hod/overrides" element={<ProtectedRoute allowedRoles={[ROLES.HOD]}><Overrides /></ProtectedRoute>} />
+              <Route path="/hod" element={<HodDashboard />} />
+              <Route path="/hod/dues" element={<Dues />} />
+              <Route path="/hod/overrides" element={<Overrides />} />
 
-              <Route path="/faculty" element={<ProtectedRoute allowedRoles={[ROLES.FACULTY]}><FacultyDashboard /></ProtectedRoute>} />
-              <Route path="/faculty/pending" element={<ProtectedRoute allowedRoles={[ROLES.FACULTY]}><Pending /></ProtectedRoute>} />
-              <Route path="/faculty/history" element={<ProtectedRoute allowedRoles={[ROLES.FACULTY]}><FacultyHistory /></ProtectedRoute>} />
+              <Route path="/faculty" element={<FacultyDashboard />} />
+              <Route path="/faculty/pending" element={<Pending />} />
+              <Route path="/faculty/history" element={<FacultyHistory />} />
             </Route>
 
             {/* Student Layout (NO sidebar — PRD §6.3) */}
@@ -120,7 +155,7 @@ const App = () => (
             <Route path="/unauthorized" element={
               <div className="min-h-screen flex items-center justify-center bg-offwhite">
                 <div className="text-center">
-                  <h1 className="text-4xl font-serif text-navy mb-2">403</h1>
+                  <h1 className="text-4xl font-brand text-navy mb-2">403</h1>
                   <p className="text-muted-foreground">You do not have permission to access this page.</p>
                 </div>
               </div>
@@ -128,16 +163,16 @@ const App = () => (
             <Route path="*" element={
               <div className="min-h-screen flex items-center justify-center bg-offwhite">
                 <div className="text-center">
-                  <h1 className="text-4xl font-serif text-navy mb-2">404</h1>
+                  <h1 className="text-4xl font-brand text-navy mb-2">404</h1>
                   <p className="text-muted-foreground">Page not found.</p>
                 </div>
               </div>
             } />
           </Routes>
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  </ErrorBoundary>
-);
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
+  );
+};
 
 export default App;

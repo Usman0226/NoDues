@@ -1,30 +1,22 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 
 const PageWrapper = ({ children, title, subtitle }) => {
   return (
-    <motion.main
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full"
-    >
-      {(title || subtitle) && (
-        <div className="mb-6 lg:mb-10">
-          {title && (
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif text-navy mb-1 lg:mb-2 tracking-tight">
-              {title}
-            </h1>
-          )}
+    <div className="flex-1 min-w-0 p-6 lg:p-10 animate-in fade-in duration-500">
+      <div className="max-w-7xl mx-auto">
+        <header className="mb-10">
+          <h1 className="text-3xl font-black text-navy tracking-tight mb-1">
+            {title}
+          </h1>
           {subtitle && (
-            <p className="tagline text-muted-foreground text-sm lg:text-lg italic">
+            <p className="text-sm text-muted-foreground font-medium">
               {subtitle}
             </p>
           )}
-        </div>
-      )}
-      {children}
-    </motion.main>
+        </header>
+        <main>{children}</main>
+      </div>
+    </div>
   );
 };
 
