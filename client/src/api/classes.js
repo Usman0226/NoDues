@@ -11,3 +11,4 @@ export const updateClassSubject = (classId, subjectId, data) => api.patch(`/clas
 export const removeClassSubject = (classId, subjectId) => api.delete(`/classes/${classId}/subjects/${subjectId}`);
 export const updateClassTeacher = (id, facultyId) => api.patch(`/classes/${id}/class-teacher`, { facultyId });
 export const cloneSubjects = (id, sourceClassId) => api.post(`/classes/${id}/clone-subjects`, { sourceClassId });
+export const initiateBatch = (id, sourceClassId) => api.post(`/classes/${id}/initiate-batch`, { sourceClassId });
