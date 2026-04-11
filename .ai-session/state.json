@@ -9,7 +9,8 @@
     "Aligned AuthContext with /api/auth/me and demo bypass logic.",
     "Standardized student API service and resolved component import paths.",
     "Implemented mobile-first responsive UI in PageWrapper and Table components.",
-    "Optimized Login, Student Status, and Faculty/HOD dashboards for mobile viewports."
+    "Optimized Login, Student Status, and Faculty/HOD dashboards for mobile viewports.",
+    "Department Metrics Integration (Student, Faculty, Class, Batch counts)"
   ],
   "in_progress": [],
   "pending": [

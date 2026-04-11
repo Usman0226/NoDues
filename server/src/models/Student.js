@@ -89,7 +89,6 @@ const studentSchema = new mongoose.Schema(
   }
 );
 
-// ── M0-safe indexes (rollNo unique:true creates its index automatically) ─────
 studentSchema.index({ classId: 1, isActive: 1 });
 studentSchema.index({ departmentId: 1, isActive: 1 });
 studentSchema.index({ mentorId: 1 });

@@ -21,16 +21,13 @@ export const useApi = (apiFunc, options = {}) => {
       const response = await apiFuncRef.current(...args);
       setData(response);
       optionsRef.current.onSuccess?.(response);
-      optionsRef.current.onSuccess?.(response);
       return response;
     } catch (err) {
       const errorMessage = err?.response?.data?.error?.message || err.message || 'Something went wrong';
       setError(errorMessage);
       if (!optionsRef.current.silent) {
-      if (!optionsRef.current.silent) {
         toast.error(errorMessage);
       }
-      optionsRef.current.onError?.(err);
       optionsRef.current.onError?.(err);
       throw err;
     } finally {
@@ -44,7 +41,7 @@ export const useApi = (apiFunc, options = {}) => {
     if (options.immediate) {
       request();
     }
-  }, []); // Run once on mount
+  }, []); 
 
   return { data, loading, error, request, setData };
 };

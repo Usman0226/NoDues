@@ -1,7 +1,8 @@
 import Department from '../models/Department.js';
-import Faculty from '../models/Faculty.js';
 import Class from '../models/Class.js';
 import NodueBatch from '../models/NodueBatch.js';
+import Student from '../models/Student.js';
+import Faculty from '../models/Faculty.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
@@ -27,7 +28,7 @@ export const getDepartments = async (req, res, next) => {
     // Enrich with class & active-batch counts in a single aggregation each
     const deptIds = departments.map((d) => d._id);
 
-    const [classCounts, batchCounts] = await Promise.all([
+    const [classCounts, batchCounts, facultyCounts, studentCounts] = await Promise.all([
       Class.aggregate([
         { $match: { departmentId: { $in: deptIds }, isActive: true } },
         { $group: { _id: '$departmentId', count: { $sum: 1 } } },
@@ -36,10 +37,20 @@ export const getDepartments = async (req, res, next) => {
         { $match: { departmentId: { $in: deptIds }, status: 'active' } },
         { $group: { _id: '$departmentId', count: { $sum: 1 } } },
       ]),
+      Faculty.aggregate([
+        { $match: { departmentId: { $in: deptIds }, isActive: true } },
+        { $group: { _id: '$departmentId', count: { $sum: 1 } } },
+      ]),
+      Student.aggregate([
+        { $match: { departmentId: { $in: deptIds }, isActive: true } },
+        { $group: { _id: '$departmentId', count: { $sum: 1 } } },
+      ]),
     ]);
 
-    const classMap = Object.fromEntries(classCounts.map((c) => [c._id.toString(), c.count]));
-    const batchMap = Object.fromEntries(batchCounts.map((b) => [b._id.toString(), b.count]));
+    const classMap   = Object.fromEntries(classCounts.map((c) => [c._id.toString(), c.count]));
+    const batchMap   = Object.fromEntries(batchCounts.map((b) => [b._id.toString(), b.count]));
+    const facultyMap = Object.fromEntries(facultyCounts.map((f) => [f._id.toString(), f.count]));
+    const studentMap = Object.fromEntries(studentCounts.map((s) => [s._id.toString(), s.count]));
 
     const data = departments.map((d) => ({
       _id:              d._id,
@@ -49,6 +60,8 @@ export const getDepartments = async (req, res, next) => {
         : null,
       classCount:       classMap[d._id.toString()] ?? 0,
       activeBatchCount: batchMap[d._id.toString()] ?? 0,
+      facultyCount:     facultyMap[d._id.toString()] ?? 0,
+      studentCount:     studentMap[d._id.toString()] ?? 0,
       createdAt:        d.createdAt,
     }));
 
@@ -122,9 +135,11 @@ export const getDepartmentById = async (req, res, next) => {
       return next(new ErrorResponse('Department not found', 404, 'NOT_FOUND'));
     }
 
-    const [classCount, activeBatchCount] = await Promise.all([
+    const [classCount, activeBatchCount, facultyCount, studentCount] = await Promise.all([
       Class.countDocuments({ departmentId: id, isActive: true }),
       NodueBatch.countDocuments({ departmentId: id, status: 'active' }),
+      Faculty.countDocuments({ departmentId: id, isActive: true }),
+      Student.countDocuments({ departmentId: id, isActive: true }),
     ]);
 
     const data = {
@@ -140,6 +155,8 @@ export const getDepartmentById = async (req, res, next) => {
         : null,
       classCount,
       activeBatchCount,
+      facultyCount,
+      studentCount,
       createdAt: dept.createdAt,
     };
 

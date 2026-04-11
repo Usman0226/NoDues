@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, {useState } from 'react';
 import { Link } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { Building2, Users, GraduationCap, BookOpen, Layers, ArrowRight, RefreshCw, AlertCircle, Plus, Edit2 } from 'lucide-react';
@@ -143,6 +143,16 @@ const Departments = () => {
                   <Layers size={14} className={`mx-auto mb-1.5 ${dept.activeBatchCount > 0 ? 'text-gold' : 'text-muted-foreground opacity-40'}`} />
                   <p className="text-lg font-black text-navy">{dept.activeBatchCount || 0}</p>
                   <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold leading-none">Active Batches</p>
+                </div>
+                <div className="p-3.5 rounded-xl bg-offwhite/50 text-center border border-muted/30">
+                  <GraduationCap size={14} className="text-navy mx-auto mb-1.5 opacity-60" />
+                  <p className="text-lg font-black text-navy">{dept.studentCount || 0}</p>
+                  <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold leading-none">Students</p>
+                </div>
+                <div className="p-3.5 rounded-xl bg-offwhite/50 text-center border border-muted/30">
+                  <Users size={14} className="text-navy mx-auto mb-1.5 opacity-60" />
+                  <p className="text-lg font-black text-navy">{dept.facultyCount || 0}</p>
+                  <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold leading-none">Faculty</p>
                 </div>
               </div>
             </Link>
