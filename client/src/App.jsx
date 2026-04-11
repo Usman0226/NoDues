@@ -38,7 +38,7 @@ import StudentStatus from './pages/student/Status';
 const AppLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
-    <div className="flex min-h-screen bg-offwhite">
+    <div className="flex h-screen overflow-hidden bg-offwhite">
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <div className="flex-1 flex flex-col min-w-0 relative">
         <div className="absolute inset-0 pointer-events-none grid-overlay opacity-[0.32]" />
@@ -53,7 +53,7 @@ const AppLayout = () => {
 
 /* Layout WITHOUT sidebar (Student — PRD §6.3) */
 const StudentLayout = () => (
-  <div className="min-h-screen bg-offwhite flex flex-col">
+  <div className="h-screen overflow-hidden bg-offwhite flex flex-col">
     <nav className="h-14 lg:h-16 bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-900 border-b border-white/10 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
       <h2 className="text-white font-brand text-lg">No<span className="text-gold">Dues</span></h2>
       <StudentNavRight />

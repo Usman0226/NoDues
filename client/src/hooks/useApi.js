@@ -21,17 +21,22 @@ export const useApi = (apiFunc, options = {}) => {
       const response = await apiFuncRef.current(...args);
       setData(response);
       optionsRef.current.onSuccess?.(response);
+      optionsRef.current.onSuccess?.(response);
       return response;
     } catch (err) {
-      const errorMessage = err.message || 'Something went wrong';
+      const errorMessage = err?.response?.data?.error?.message || err.message || 'Something went wrong';
       setError(errorMessage);
+      if (!optionsRef.current.silent) {
       if (!optionsRef.current.silent) {
         toast.error(errorMessage);
       }
       optionsRef.current.onError?.(err);
+      optionsRef.current.onError?.(err);
       throw err;
     } finally {
-      setLoading(false);
+      if (optionsRef.current.isMounted !== false) {
+        setLoading(false);
+      }
     }
   }, []);
 
