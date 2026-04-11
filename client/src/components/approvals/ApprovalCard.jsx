@@ -5,7 +5,7 @@ import { User, Check, X, AlertTriangle } from 'lucide-react';
 
 const ApprovalCard = ({ student = {}, status = 'pending', onApprove, onReject, onMarkDue }) => {
   return (
-    <div className="bg-white rounded-2xl border border-muted shadow-sm p-6 hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-xl border border-muted shadow-sm p-6 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-navy/10 flex items-center justify-center">

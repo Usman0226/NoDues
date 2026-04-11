@@ -106,7 +106,7 @@ const Pending = () => {
         <div className="space-y-4 animate-pulse">
           <div className="h-10 w-full bg-muted/10 rounded-xl mb-6"></div>
           {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-24 bg-muted/5 rounded-2xl"></div>
+            <div key={i} className="h-24 bg-muted/5 rounded-xl"></div>
           ))}
         </div>
       </PageWrapper>
@@ -116,7 +116,7 @@ const Pending = () => {
   if (error) {
     return (
       <PageWrapper title="Pending Approvals" subtitle="Connection error">
-        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
+        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
           <AlertTriangle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Sync Interrupted</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
@@ -135,7 +135,7 @@ const Pending = () => {
         <div className="flex items-center gap-2">
           <label className="text-[10px] uppercase tracking-widest font-bold text-navy/40">Group:</label>
           <select value={selectedBatch} onChange={(e) => setSelectedBatch(e.target.value)}
-            className="px-4 py-2 rounded-xl border border-muted bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-semibold text-navy">
+            className="px-4 py-2 rounded-lg border border-muted bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-semibold text-navy">
             <option value="all">Check All Classes</option>
             {batches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
@@ -144,7 +144,7 @@ const Pending = () => {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Find roll no or name..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-muted bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy/5" />
+            className="w-full pl-9 pr-4 py-2 rounded-lg border border-muted bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy/5" />
         </div>
       </div>
 
@@ -154,7 +154,7 @@ const Pending = () => {
           const count = (approvals || []).filter((a) => f === 'all' || a.action === f).length;
           return (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
+              className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all
                 ${filter === f ? 'bg-white text-navy shadow-sm' : 'text-muted-foreground hover:text-navy'}`}>
               {f === 'all' ? 'All' : f === 'due_marked' ? 'Dues' : f.charAt(0).toUpperCase() + f.slice(1)}
               <span className="ml-1.5 opacity-40">({count})</span>
@@ -166,7 +166,7 @@ const Pending = () => {
       {/* Approval Cards */}
       <div className="space-y-4">
         {filtered.map((item) => (
-          <div key={item._id} className="bg-white rounded-2xl border border-muted shadow-sm p-5 hover:shadow-md transition-shadow">
+          <div key={item._id} className="bg-white rounded-xl border border-muted shadow-sm p-5 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="min-w-0">
                 <p className="text-sm font-black text-navy flex items-center gap-2">
@@ -217,7 +217,7 @@ const Pending = () => {
         ))}
 
         {filtered.length === 0 && (
-          <div className="text-center py-20 bg-offwhite/50 rounded-2xl border border-dashed border-muted">
+          <div className="text-center py-20 bg-offwhite/50 rounded-xl border border-dashed border-muted">
             <p className="text-sm font-black text-navy/20 uppercase tracking-widest">No candidates found for this view</p>
           </div>
         )}

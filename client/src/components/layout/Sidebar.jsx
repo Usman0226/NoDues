@@ -73,7 +73,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
             <NavLink
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group border
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group border
                 ${isActive
                   ? 'bg-white/12 border-white/20 text-white shadow-xl shadow-black/20'
                   : 'border-transparent text-indigo-100/55 hover:bg-white/7 hover:text-white hover:border-white/10'
@@ -99,7 +99,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
 
       <div className="p-6 border-t border-white/10 shrink-0">
         {!collapsed && (
-          <div className="rounded-2xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
+          <div className="rounded-xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
             <span className="block text-[8px] text-indigo-100/45 uppercase tracking-[0.3em] font-black mb-1">Access Layer</span>
             <span className="text-[10px] text-gold uppercase tracking-[0.2em] font-black">
               {user?.role}

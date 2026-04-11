@@ -43,7 +43,7 @@ const AppLayout = () => {
       <div className="flex-1 flex flex-col min-w-0 relative">
         <div className="absolute inset-0 pointer-events-none grid-overlay opacity-[0.32]" />
         <Navbar onMenuToggle={() => setMobileOpen(true)} />
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8 relative z-10">
+        <div className="flex-1 overflow-y-auto relative z-10">
           <Outlet />
         </div>
       </div>
@@ -58,7 +58,7 @@ const StudentLayout = () => (
       <h2 className="text-white font-brand text-lg">No<span className="text-gold">Dues</span></h2>
       <StudentNavRight />
     </nav>
-    <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+    <div className="flex-1 overflow-y-auto">
       <Outlet />
     </div>
   </div>
@@ -72,7 +72,7 @@ const StudentNavRight = () => {
         <p className="text-sm font-black text-white leading-none tracking-tight">{user?.rollNo}</p>
         <p className="text-[9px] text-indigo-100/70 uppercase tracking-[0.24em] mt-1">{user?.name}</p>
       </div>
-      <button onClick={logout} className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-white/20 transition-colors">
+      <button onClick={logout} className="px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-white/20 transition-colors">
         Logout
       </button>
     </div>

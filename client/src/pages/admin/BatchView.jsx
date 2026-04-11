@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
@@ -9,7 +9,8 @@ import useSSE from '../../hooks/useSSE';
 import { getBatch, closeBatch } from '../../api/batch';
 import { getBatchSSEUrl } from '../../api/sse';
 import { STATUSES } from '../../utils/constants';
-import { ArrowLeft, X, Filter, ChevronRight, Info, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import Modal from '../../components/ui/Modal';
+import { ArrowLeft, X, ChevronRight, Info, AlertTriangle, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const ICON_MAP = {
@@ -119,6 +120,18 @@ const BatchView = () => {
         </div>
       </div>
 
+      <p className="text-xs text-muted-foreground font-semibold mb-4 -mt-2">
+        Showing <span className="text-navy font-black tabular-nums">{filtered.length}</span> of{' '}
+        <span className="text-navy font-black tabular-nums">{batch.students?.length ?? 0}</span> candidates
+        {filter !== 'all' ? (
+          <span className="text-muted-foreground/80">
+            {' '}
+            · filter: <span className="uppercase tracking-wider font-black text-[10px]">{filter.replace('_', ' ')}</span>
+          </span>
+        ) : null}
+        . Select a cell for faculty decision details.
+      </p>
+
       {/* Matrix */}
       <div className="overflow-x-auto rounded-xl border border-muted shadow-sm bg-white">
         <table className="w-full text-sm border-collapse">
@@ -158,7 +171,7 @@ const BatchView = () => {
                     <td key={fac._id} className="px-4 py-4 border-l border-muted/30 text-center">
                       <button onClick={() => setPopover({ ...data, faculty: fac.name, student: row.name, subject: fac.subjectName || fac.type, action })}
                         className={`
-                          w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black border transition-all
+                          w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border transition-all
                           hover:scale-110 shadow-sm mx-auto
                           ${config.cls}
                         `}
@@ -174,40 +187,53 @@ const BatchView = () => {
         </table>
       </div>
 
-      {/* Popover Detail Modal */}
-      {popover && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-navy/60 backdrop-blur-sm" onClick={() => setPopover(null)} />
-          <div className="relative bg-white rounded-2xl shadow-xl p-8 max-w-sm w-full border border-muted animate-in zoom-in-95 duration-200">
-            <button onClick={() => setPopover(null)} className="absolute top-4 right-4 text-muted-foreground hover:text-navy transition-colors"><X size={20} /></button>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-10 w-10 bg-offwhite rounded-xl flex items-center justify-center">
+      <Modal
+        isOpen={!!popover}
+        onClose={() => setPopover(null)}
+        title="Status Insight"
+        size="sm"
+      >
+        {popover && (
+          <>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-offwhite rounded-xl flex items-center justify-center shrink-0">
                 <Info size={20} className="text-navy" />
               </div>
-              <h3 className="text-lg font-black text-navy tracking-tight">Status Insight</h3>
+              <p className="text-xs text-muted-foreground font-semibold leading-snug">
+                {popover.student ? (
+                  <>
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70 block mb-0.5">Candidate</span>
+                    {popover.student}
+                  </>
+                ) : null}
+              </p>
             </div>
             <div className="space-y-4">
-               <div>
-                 <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 mb-1 leading-none">Stakeholder</p>
-                 <p className="text-sm font-bold text-navy">{popover.subject} · {popover.faculty}</p>
-               </div>
-               <div>
-                 <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 mb-1 leading-none">Decision State</p>
-                 <Badge status={popover.action} />
-               </div>
-               {popover.action === STATUSES.DUE_MARKED && (
-                 <div className="p-4 rounded-xl bg-red-50 border border-red-100">
-                    <p className="text-[9px] font-black text-red-600 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                      <AlertTriangle size={10} strokeWidth={3} /> Decisive: {popover.dueType || 'Overage'}
-                    </p>
-                    <p className="text-xs text-red-800 font-medium italic leading-relaxed">"{popover.remarks || 'No specific remarks provided.'}"</p>
-                 </div>
-               )}
+              <div>
+                <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 mb-1 leading-none">Stakeholder</p>
+                <p className="text-sm font-bold text-navy">{popover.subject} · {popover.faculty}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 mb-1 leading-none">Decision State</p>
+                <Badge status={popover.action} />
+              </div>
+              {popover.action === STATUSES.DUE_MARKED && (
+                <div className="p-4 rounded-xl bg-red-50 border border-red-100">
+                  <p className="text-[9px] font-black text-red-600 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    <AlertTriangle size={10} strokeWidth={3} /> Decisive: {popover.dueType || 'Overage'}
+                  </p>
+                  <p className="text-xs text-red-800 font-medium italic leading-relaxed">
+                    {`"${popover.remarks || 'No specific remarks provided.'}"`}
+                  </p>
+                </div>
+              )}
             </div>
-            <Button variant="secondary" className="w-full mt-8" onClick={() => setPopover(null)}>Dismiss Insight</Button>
-          </div>
-        </div>
-      )}
+            <Button variant="secondary" className="w-full" onClick={() => setPopover(null)}>
+              Dismiss Insight
+            </Button>
+          </>
+        )}
+      </Modal>
     </PageWrapper>
   );
 };

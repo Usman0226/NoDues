@@ -17,7 +17,7 @@ const PreviewTable = ({ validRows = [], errorRows = [], columns = [] }) => {
 
       {/* Valid Rows */}
       {validRows.length > 0 && (
-        <div className="bg-white rounded-2xl border border-muted shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-muted shadow-sm overflow-hidden">
           <div className="px-5 py-3 bg-status-approved/5 border-b border-muted">
             <h4 className="text-xs font-bold uppercase tracking-[0.15em] text-status-approved">Valid Entries</h4>
           </div>

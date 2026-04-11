@@ -18,7 +18,7 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-offwhite p-6">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-status-rejected/20 text-center">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-xl p-8 border border-status-rejected/20 text-center">
             <h2 className="text-3xl mb-4 text-navy">Something went wrong</h2>
             <p className="text-muted-foreground mb-6">
               The application encountered an unexpected error. Please try refreshing the page.

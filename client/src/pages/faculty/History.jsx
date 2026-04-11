@@ -83,7 +83,7 @@ const FacultyHistory = () => {
       />
 
       {MOCK_HISTORY.length === 0 && (
-        <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-muted">
+        <div className="text-center py-20 bg-white rounded-xl border border-dashed border-muted">
            <History size={40} className="text-muted-foreground mx-auto mb-3 opacity-20" />
            <p className="text-muted-foreground text-sm font-medium">No past actions recorded.</p>
         </div>

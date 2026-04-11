@@ -25,7 +25,7 @@ const BatchStudentDetail = () => {
     return (
       <PageWrapper title="Loading Metadata..." subtitle="Fetching candidate audit trail">
          <div className="animate-pulse space-y-6">
-            <div className="h-24 bg-muted/5 rounded-2xl border border-muted"></div>
+            <div className="h-24 bg-muted/5 rounded-xl border border-muted"></div>
             <div className="space-y-3">
                {[1, 2, 3, 4].map(i => <div key={i} className="h-20 bg-muted/5 rounded-xl border border-muted"></div>)}
             </div>
@@ -37,7 +37,7 @@ const BatchStudentDetail = () => {
   if (error) {
     return (
       <PageWrapper title="Audit Fetch Error" subtitle="Record retrieval failed">
-        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
+        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
            <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
            <p className="text-muted-foreground font-medium mb-6">{error}</p>
            <Button variant="primary" onClick={() => fetchDetail()}>Retry Fetch</Button>
@@ -56,13 +56,13 @@ const BatchStudentDetail = () => {
       </Link>
 
       {/* Candidate Header */}
-      <div className="bg-white rounded-2xl border border-muted p-8 mb-10 shadow-sm relative overflow-hidden">
+      <div className="bg-white rounded-xl border border-muted p-8 mb-10 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 p-8 opacity-5 select-none pointer-events-none">
            <GraduationCap size={120} strokeWidth={1} />
         </div>
         <div className="flex flex-wrap items-center justify-between gap-6 relative z-10">
           <div className="flex items-center gap-6">
-            <div className="h-20 w-20 rounded-2xl bg-navy/5 flex items-center justify-center border border-navy/5 shadow-inner">
+            <div className="h-20 w-20 rounded-xl bg-navy/5 flex items-center justify-center border border-navy/5 shadow-inner">
               <User size={40} className="text-navy/40" />
             </div>
             <div>
@@ -87,7 +87,7 @@ const BatchStudentDetail = () => {
       <h3 className="text-[10px] uppercase font-black tracking-[0.2em] text-navy/40 mb-6 px-1">Institutional Audit Trail</h3>
       <div className="grid grid-cols-1 gap-4">
         {approvals.map((item, i) => (
-          <div key={i} className="bg-white rounded-2xl border border-muted shadow-sm p-6 hover:shadow-md transition-all group">
+          <div key={i} className="bg-white rounded-xl border border-muted shadow-sm p-6 hover:shadow-md transition-all group">
             <div className="flex items-start justify-between gap-6">
               <div className="flex items-start gap-5">
                 <div className="h-12 w-12 rounded-xl bg-navy/5 flex items-center justify-center shrink-0 group-hover:bg-navy/10 transition-colors shadow-inner border border-navy/5">
@@ -110,7 +110,7 @@ const BatchStudentDetail = () => {
 
             {/* Contingency/Remarks */}
             {item.status === 'due_marked' && (
-              <div className="mt-6 ml-16 p-5 rounded-2xl bg-red-50/50 border border-red-100 relative">
+              <div className="mt-6 ml-16 p-5 rounded-xl bg-red-50/50 border border-red-100 relative">
                 <div className="absolute -left-3 top-4 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white border-4 border-white">
                   <AlertTriangle size={12} strokeWidth={3} />
                 </div>
@@ -125,7 +125,7 @@ const BatchStudentDetail = () => {
 
             {/* HOD Governance */}
             {item.status === 'hod_override' && (
-              <div className="mt-6 ml-16 p-5 rounded-2xl bg-blue-50/50 border border-blue-100 relative">
+              <div className="mt-6 ml-16 p-5 rounded-xl bg-blue-50/50 border border-blue-100 relative">
                  <div className="absolute -left-3 top-4 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white border-4 border-white">
                   <Shield size={12} strokeWidth={3} />
                 </div>

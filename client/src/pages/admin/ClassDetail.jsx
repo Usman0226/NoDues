@@ -81,7 +81,7 @@ const ClassDetail = () => {
       <PageWrapper title="Loading Class..." subtitle="Syncing academic records">
         <div className="animate-pulse space-y-4">
           <div className="h-10 w-64 bg-muted/10 rounded-xl mb-8"></div>
-          <div className="h-96 bg-muted/5 rounded-2xl border border-muted"></div>
+          <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
         </div>
       </PageWrapper>
     );
@@ -90,7 +90,7 @@ const ClassDetail = () => {
   if (error) {
     return (
       <PageWrapper title="Sync Error" subtitle="Academic record unavailable">
-        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
+        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
            <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
            <p className="text-muted-foreground font-medium">{error}</p>
            <Button variant="primary" className="mt-6" onClick={() => fetchClass()}>Retry Sync</Button>
@@ -100,32 +100,50 @@ const ClassDetail = () => {
   }
 
   return (
-    <PageWrapper title={classData?.name} subtitle={`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}>
-      <Link to="/admin/departments" className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy mb-4 -mt-4 transition-colors">
-        <ArrowLeft size={12} strokeWidth={3} /> Return to Directory
-      </Link>
+    <PageWrapper 
+      title={classData?.name} 
+      subtitle={`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}
+      backLink={
+        <Link to="/admin/departments" className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy transition-colors">
+          <ArrowLeft size={12} strokeWidth={3} /> Return to Directory
+        </Link>
+      }
+    >
+      {/* Controls Container: Tabs (Left) and Action Buttons (Right) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        {/* Tab Switcher */}
+        <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-xl p-1 w-fit">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            return (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all
+                  ${tab === t.key ? 'bg-navy text-white shadow-md' : 'text-muted-foreground hover:bg-offwhite'}`}>
+                <Icon size={14} /> {t.label}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Tab Switcher */}
-      <div className="flex gap-1 mb-10 bg-white border border-muted/40 shadow-sm rounded-xl p-1 w-fit">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          return (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all
-                ${tab === t.key ? 'bg-navy text-white shadow-md' : 'text-muted-foreground hover:bg-offwhite'}`}>
-              <Icon size={14} /> {t.label}
-            </button>
-          );
-        })}
+        {/* Tab-Specific Actions */}
+        {tab === 'students' && (
+          <div className="flex items-center gap-2 animate-in fade-in">
+            <Button variant="primary" size="sm" onClick={() => setShowImport('students')}><Upload size={14} /> Import Roster</Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowImport('mentors')}><Users size={14} /> Map Mentors</Button>
+          </div>
+        )}
+
+        {tab === 'subjects' && (
+          <div className="flex items-center gap-2 animate-in fade-in">
+            <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}><Plus size={14} /> New Assignment</Button>
+            <Button variant="secondary" size="sm"><Copy size={14} /> Inherit Plan</Button>
+          </div>
+        )}
       </div>
 
       {/* TAB 1: Students */}
       {tab === 'students' && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <div className="flex flex-wrap gap-2 mb-6">
-            <Button variant="primary" size="sm" onClick={() => setShowImport('students')}><Upload size={14} /> Import Roster</Button>
-            <Button variant="secondary" size="sm" onClick={() => setShowImport('mentors')}><Users size={14} /> Map Mentors</Button>
-          </div>
           <Table columns={STUDENT_COLS} data={students} searchable searchPlaceholder="Search by roll no or name..." />
         </div>
       )}
@@ -133,10 +151,6 @@ const ClassDetail = () => {
       {/* TAB 2: Subjects */}
       {tab === 'subjects' && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <div className="flex flex-wrap gap-2 mb-6">
-            <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}><Plus size={14} /> New Assignment</Button>
-            <Button variant="secondary" size="sm"><Copy size={14} /> Inherit Plan</Button>
-          </div>
           <Table columns={SUBJECT_COLS} data={subjects} />
         </div>
       )}
@@ -145,7 +159,7 @@ const ClassDetail = () => {
       {tab === 'batch' && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
           {activeBatch ? (
-            <div className="bg-white rounded-2xl border border-navy/10 p-8 mb-10 shadow-sm shadow-navy/5 relative overflow-hidden">
+            <div className="bg-white rounded-xl border border-navy/10 p-8 mb-10 shadow-sm shadow-navy/5 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-1 bg-navy text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl">LIVE SESSION</div>
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -159,7 +173,7 @@ const ClassDetail = () => {
               </Button>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-muted border-dashed p-12 mb-10 text-center">
+            <div className="bg-white rounded-xl border border-muted border-dashed p-12 mb-10 text-center">
               <Layers size={48} className="text-muted-foreground/30 mx-auto mb-4" />
               <h4 className="text-lg font-black text-navy mb-2">Cycle Inactive</h4>
               <p className="text-sm text-muted-foreground mb-8 max-w-[300px] mx-auto">No live clearance session detected for this academic group.</p>
@@ -195,7 +209,7 @@ const ClassDetail = () => {
       {showInitiate && (
         <Modal isOpen={showInitiate} title="Initiate Clearance Cycle" onClose={() => setShowInitiate(false)}>
           <div className="space-y-6">
-            <div className="p-5 rounded-2xl bg-offwhite border border-muted shadow-inner">
+            <div className="p-5 rounded-xl bg-offwhite border border-muted shadow-inner">
               <p className="text-xs font-black text-navy uppercase tracking-widest mb-1">{classData?.name}</p>
               <p className="text-[10px] text-muted-foreground font-bold">Academic Session {classData?.academicYear}</p>
             </div>

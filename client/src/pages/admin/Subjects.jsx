@@ -66,7 +66,7 @@ const Subjects = () => {
       <PageWrapper title="Subjects" subtitle="Loading academic components...">
          <div className="animate-pulse space-y-4">
             <div className="h-10 w-48 bg-muted/10 rounded-xl mb-6"></div>
-            <div className="h-96 bg-muted/5 rounded-2xl border border-muted"></div>
+            <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
          </div>
       </PageWrapper>
     );
@@ -97,7 +97,7 @@ const Subjects = () => {
       </div>
 
       {error ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
+        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
            <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
            <p className="text-muted-foreground font-medium">{error}</p>
         </div>
@@ -115,7 +115,7 @@ const Subjects = () => {
                   type="text" 
                   value={formData.code}
                   onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
                   placeholder="CODE-XYZ" 
                 />
               </div>
@@ -124,7 +124,7 @@ const Subjects = () => {
                 <select 
                   value={formData.semester}
                   onChange={e => setFormData({...formData, semester: Number(e.target.value)})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
                 >
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -137,7 +137,7 @@ const Subjects = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="Full Component Name" 
               />
             </div>

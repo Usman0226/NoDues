@@ -38,7 +38,7 @@ const StudentStatus = () => {
     return (
       <PageWrapper title="My Clearance" subtitle="Fetching your status...">
         <div className="flex flex-col items-center justify-center min-h-[400px] animate-pulse">
-           <div className="h-48 w-full bg-muted/5 rounded-2xl border border-muted mb-12 shadow-inner"></div>
+           <div className="h-48 w-full bg-muted/5 rounded-xl border border-muted mb-12 shadow-inner"></div>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full px-4">
               {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-muted/5 rounded-xl border border-muted"></div>)}
            </div>
@@ -50,15 +50,15 @@ const StudentStatus = () => {
   if (error) {
     return (
       <PageWrapper title="My Clearance" subtitle="Error loading status">
-        <div className="text-center py-24 px-6 bg-white rounded-3xl border border-muted shadow-sm">
-          <div className="h-20 w-20 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+        <div className="text-center py-24 px-6 bg-white rounded-xl border border-muted shadow-sm">
+          <div className="h-20 w-20 bg-red-50 rounded-xl flex items-center justify-center mx-auto mb-6">
              <AlertTriangle className="text-red-500" size={40} />
           </div>
           <h2 className="text-2xl font-black text-navy mb-3 italic">Sync Disruption</h2>
           <p className="text-muted-foreground mb-8 max-w-xs mx-auto text-sm leading-relaxed">{error}</p>
           <button 
             onClick={() => fetchStatus()}
-            className="px-8 py-3 bg-navy text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-navy/90 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 mx-auto shadow-xl shadow-navy/10"
+            className="px-8 py-3 bg-navy text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-navy/90 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 mx-auto shadow-xl shadow-navy/10"
           >
             <RefreshCw size={14} strokeWidth={3} /> Re-establish Link
           </button>
@@ -74,9 +74,9 @@ const StudentStatus = () => {
   return (
     <PageWrapper title="Institutional Clearance" subtitle={`Cycle: ${data.academicYear} · Sem ${data.semester}`}>
       {/* Overall Status Banner */}
-      <div className={`${cfg.banner} rounded-3xl p-6 sm:p-8 md:p-10 text-white mb-8 sm:mb-14 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 relative overflow-hidden transition-all duration-700`}>
+      <div className={`${cfg.banner} rounded-xl p-6 sm:p-8 md:p-10 text-white mb-8 sm:mb-14 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 relative overflow-hidden transition-all duration-700`}>
         <div className="relative z-10 flex flex-col sm:flex-row items-center text-center sm:text-left gap-4 sm:gap-8">
-          <div className="h-16 w-16 sm:h-20 sm:w-20 bg-white/20 rounded-2xl flex items-center justify-center shrink-0 backdrop-blur-md border border-white/20 shadow-inner">
+          <div className="h-16 w-16 sm:h-20 sm:w-20 bg-white/20 rounded-xl flex items-center justify-center shrink-0 backdrop-blur-md border border-white/20 shadow-inner">
              <cfg.icon className="w-8 h-8 sm:w-10 sm:h-10" strokeWidth={2.5} />
           </div>
           <div>
@@ -84,7 +84,7 @@ const StudentStatus = () => {
             <p className="text-white/80 text-[10px] sm:text-xs font-bold uppercase tracking-widest leading-relaxed max-w-sm">{cfg.sub}</p>
           </div>
         </div>
-        <div className="relative z-10 bg-white/10 px-6 py-3 sm:px-8 sm:py-4 rounded-2xl border border-white/20 backdrop-blur-md text-center hover:bg-white/20 transition-all cursor-default w-full sm:w-auto">
+        <div className="relative z-10 bg-white/10 px-6 py-3 sm:px-8 sm:py-4 rounded-xl border border-white/20 backdrop-blur-md text-center hover:bg-white/20 transition-all cursor-default w-full sm:w-auto">
            <p className="text-[8px] sm:text-[9px] uppercase tracking-[0.3em] font-black opacity-50 mb-1 leading-none">Record State</p>
            <p className="text-[10px] sm:text-xs font-black flex items-center justify-center sm:justify-start gap-2 tracking-widest uppercase">{data.overallStatus === 'cleared' ? 'Verified' : 'Active Cycle'}</p>
         </div>
@@ -93,11 +93,11 @@ const StudentStatus = () => {
 
       {/* Profile Metrics */}
       <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10 sm:mb-12">
-        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-muted shadow-sm flex items-center gap-3 sm:gap-4 hover:border-navy/10 transition-colors">
+        <div className="bg-white p-4 sm:p-6 rounded-xl border border-muted shadow-sm flex items-center gap-3 sm:gap-4 hover:border-navy/10 transition-colors">
           <div className="h-10 w-10 sm:h-12 sm:w-12 bg-navy/5 rounded-xl flex items-center justify-center text-navy/40 shrink-0"><GraduationCap size={20} className="sm:w-6 sm:h-6" /></div>
           <div className="min-w-0"><p className="text-[8px] sm:text-[10px] uppercase font-black text-muted-foreground/50 tracking-[0.15em] mb-0.5 truncate">Identification</p><p className="text-xs sm:text-sm font-black text-navy truncate">{data.rollNo}</p></div>
         </div>
-        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-muted shadow-sm flex items-center gap-3 sm:gap-4 hover:border-navy/10 transition-colors">
+        <div className="bg-white p-4 sm:p-6 rounded-xl border border-muted shadow-sm flex items-center gap-3 sm:gap-4 hover:border-navy/10 transition-colors">
           <div className="h-10 w-10 sm:h-12 sm:w-12 bg-navy/5 rounded-xl flex items-center justify-center text-navy/40 shrink-0"><Calendar size={20} className="sm:w-6 sm:h-6" /></div>
           <div className="min-w-0"><p className="text-[8px] sm:text-[10px] uppercase font-black text-muted-foreground/50 tracking-[0.15em] mb-0.5 truncate">Academic Cycle</p><p className="text-xs sm:text-sm font-black text-navy truncate">{data.academicYear}</p></div>
         </div>
@@ -111,12 +111,12 @@ const StudentStatus = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {data.approvals?.map((item, i) => (
-          <div key={i} className="bg-white rounded-2xl border border-muted shadow-sm p-6 sm:p-8 flex items-start gap-4 sm:gap-6 hover:shadow-xl hover:translate-y-[-2px] transition-all group overflow-hidden relative">
+          <div key={i} className="bg-white rounded-xl border border-muted shadow-sm p-6 sm:p-8 flex items-start gap-4 sm:gap-6 hover:shadow-xl hover:translate-y-[-2px] transition-all group overflow-hidden relative">
             <div className="absolute top-0 right-0 p-6 sm:p-8 opacity-5 group-hover:opacity-10 transition-opacity select-none pointer-events-none">
                {item.approvalType === 'subject' ? <BookOpen size={48} className="sm:w-16 sm:h-16" /> : <UserCheck size={48} className="sm:w-16 sm:h-16" />}
             </div>
             
-            <div className={`h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-offwhite flex items-center justify-center shrink-0 group-hover:bg-navy/5 transition-all shadow-inner border border-muted/50`}>
+            <div className={`h-12 w-12 sm:h-14 sm:w-14 rounded-xl bg-offwhite flex items-center justify-center shrink-0 group-hover:bg-navy/5 transition-all shadow-inner border border-muted/50`}>
                {item.approvalType === 'subject' ? <BookOpen size={20} className="text-navy/60 group-hover:text-navy sm:w-6 sm:h-6" /> : <UserCheck size={20} className="text-navy/60 group-hover:text-navy sm:w-6 sm:h-6" />}
             </div>
             <div className="flex-1 min-w-0 relative z-10">
@@ -132,7 +132,7 @@ const StudentStatus = () => {
               </div>
 
               {item.action === 'due_marked' && (
-                <div className="mt-4 sm:mt-5 p-4 sm:p-5 rounded-2xl bg-red-50/50 border border-red-100/50 relative">
+                <div className="mt-4 sm:mt-5 p-4 sm:p-5 rounded-xl bg-red-50/50 border border-red-100/50 relative">
                   <div className="absolute -left-1 sm:-left-2 top-3 sm:top-4 w-3 h-3 sm:w-4 sm:h-4 bg-red-500 rounded-full flex items-center justify-center text-[6px] sm:text-[8px] text-white border-2 border-white">
                     <AlertTriangle size={8} strokeWidth={4} />
                   </div>
@@ -142,7 +142,7 @@ const StudentStatus = () => {
               )}
 
               {item.action === 'hod_override' && (
-                <div className="mt-4 sm:mt-5 p-4 sm:p-5 rounded-2xl bg-blue-50/50 border border-blue-100/50 flex items-start gap-3 sm:gap-4 relative">
+                <div className="mt-4 sm:mt-5 p-4 sm:p-5 rounded-xl bg-blue-50/50 border border-blue-100/50 flex items-start gap-3 sm:gap-4 relative">
                   <div className="absolute -left-1 sm:-left-2 top-3 sm:top-4 w-3 h-3 sm:w-4 sm:h-4 bg-blue-500 rounded-full flex items-center justify-center text-[6px] sm:text-[8px] text-white border-2 border-white">
                     <Shield size={8} strokeWidth={4} />
                   </div>

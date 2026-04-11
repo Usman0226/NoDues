@@ -126,7 +126,7 @@ const FacultyList = () => {
                   type="text" 
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all text-navy font-bold" 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all text-navy font-bold" 
                   placeholder="e.g. Dr. Jane Doe" 
                 />
               </div>
@@ -136,7 +136,7 @@ const FacultyList = () => {
                   type="text" 
                   value={formData.employeeId}
                   onChange={e => setFormData({...formData, employeeId: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
                   placeholder="EMP-000" 
                 />
               </div>
@@ -149,7 +149,7 @@ const FacultyList = () => {
                   type="email" 
                   value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
                   placeholder="name@mits.ac.in" 
                 />
               </div>
@@ -158,7 +158,7 @@ const FacultyList = () => {
                 <select 
                   value={formData.department}
                   onChange={e => setFormData({...formData, department: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
                 >
                   <option value="">Select Dept</option>
                   {depts?.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
@@ -175,7 +175,7 @@ const FacultyList = () => {
                       type="checkbox" 
                       checked={formData.roles.includes(role)}
                       onChange={() => toggleRole(role)}
-                      className="w-4 h-4 rounded-md border-muted text-navy focus:ring-navy/20 cursor-pointer" 
+                      className="w-4 h-4 rounded-lg border-muted text-navy focus:ring-navy/20 cursor-pointer" 
                     />
                     <span className="font-bold text-navy/70 group-hover:text-navy transition-colors">{role === 'classTeacher' ? 'Co-ordinator' : role === 'hod' ? 'HoD' : role.toUpperCase()}</span>
                   </label>

@@ -27,7 +27,7 @@ const Button = ({
     <button
       disabled={disabled || loading}
       className={`
-        inline-flex items-center justify-center gap-2 rounded-xl font-sans font-extrabold
+        inline-flex items-center justify-center gap-2 rounded-full font-sans font-extrabold
         uppercase tracking-[0.18em] transition-all duration-300 ease-out
         disabled:opacity-50 disabled:cursor-not-allowed
         active:scale-[0.98] cursor-pointer hover-lift

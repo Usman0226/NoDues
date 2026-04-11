@@ -1,4 +1,4 @@
-import React, {useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { Building2, Users, GraduationCap, BookOpen, Layers, ArrowRight, RefreshCw, AlertCircle, Plus, Edit2 } from 'lucide-react';
@@ -49,6 +49,13 @@ const Departments = () => {
     }
   };
 
+  const deptStats = useMemo(() => {
+    const total = depts.length;
+    const withHod = depts.filter((d) => d.hod?._id || d.hod?.name).length;
+    const classes = depts.reduce((n, d) => n + (d.classCount || 0), 0);
+    return { total, withHod, withoutHod: total - withHod, classes };
+  }, [depts]);
+
   const handleSubmit = async () => {
     if (!formData.name) return toast.error('Department name is required');
     setSubmitting(true);
@@ -82,7 +89,7 @@ const Departments = () => {
   if (error) {
     return (
       <PageWrapper title="Departments" subtitle="Sync interrupted">
-        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
+        <div className="text-center py-16 bg-white rounded-xl border border-muted shadow-sm">
           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Structure Unavailable</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
@@ -96,6 +103,26 @@ const Departments = () => {
 
   return (
     <PageWrapper title="Departments" subtitle="Academic department structure and oversight management">
+      {depts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-6 text-[10px] font-black uppercase tracking-widest text-navy">
+          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-muted shadow-sm">
+            {deptStats.total} departments
+          </span>
+          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-800">
+            {deptStats.withHod} with HoD
+          </span>
+          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-50 border border-amber-100 text-amber-900">
+            {deptStats.withoutHod} unassigned
+          </span>
+          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-offwhite border border-muted text-muted-foreground">
+            {deptStats.classes} classes total
+          </span>
+          <span className="text-[11px] font-semibold normal-case tracking-normal text-muted-foreground">
+            Assign HoD when creating or editing a department.
+          </span>
+        </div>
+      )}
+
       <div className="flex justify-end gap-3 mb-6">
         <Button variant="ghost" size="sm" onClick={() => fetchDepts()} className="text-muted-foreground">
           <RefreshCw size={14} className="mr-2"/> Sync
@@ -106,7 +133,7 @@ const Departments = () => {
       </div>
 
       {depts.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm border-dashed">
+        <div className="text-center py-16 bg-white rounded-xl border border-muted shadow-sm border-dashed">
            <Building2 className="mx-auto text-muted-foreground/20 mb-4" size={64} />
            <p className="text-muted-foreground font-medium">No departments found. Create one to get started.</p>
         </div>
@@ -168,7 +195,7 @@ const Departments = () => {
               type="text" 
               value={formData.name}
               onChange={e => setFormData({...formData, name: e.target.value})}
-              className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold uppercase" 
+              className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold uppercase" 
               placeholder="e.g. CSE" 
             />
           </div>
@@ -177,7 +204,7 @@ const Departments = () => {
             <select 
               value={formData.hodId}
               onChange={e => setFormData({...formData, hodId: e.target.value})}
-              className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
+              className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
             >
               <option value="">-- No HoD Assigned --</option>
               {facultyList.map(f => (

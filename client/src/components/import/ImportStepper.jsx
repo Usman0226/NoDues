@@ -73,7 +73,7 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
   return (
     <div className="w-full">
       {/* Steps Indicator - Pill Style */}
-      <div className="flex items-center justify-center mb-12">
+      <div className="flex items-center justify-center mb-8">
         {STEPS.map((step, i) => {
           const Icon = step.icon;
           const isActive = i === currentStep;
@@ -97,15 +97,15 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
         })}
       </div>
 
-      <div className="min-h-[340px]">
+      <div className="min-h-[280px]">
         {currentStep === 0 && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="max-w-md mx-auto text-center mb-10">
+            <div className="max-w-md mx-auto text-center mb-6">
               <h3 className="text-xl font-black text-navy mb-2">{contextLabel || 'Upload Data Source'}</h3>
               <p className="text-sm text-muted-foreground">Select a clean .xlsx or .csv file following the academic template.</p>
             </div>
             
-            <FileDropzone onFileSelect={handleFileUpload} isLoading={loading} />
+            <FileDropzone onFileSelect={handleFileUpload} />
             
             {error && (
               <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-100 flex items-center gap-3 animate-pulse">
@@ -114,9 +114,9 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
               </div>
             )}
 
-            <div className="mt-10 flex items-center justify-between p-5 rounded-xl border border-muted/60 bg-white shadow-sm">
+            <div className="mt-8 flex items-center justify-between p-5 rounded-xl border border-muted/60 bg-white shadow-sm">
               <div className="flex items-center gap-4">
-                <div className="p-2.5 bg-offwhite rounded-lg">
+                <div className="p-2.5 bg-offwhite rounded-xl">
                   <FileText className="text-navy/60" size={20} />
                 </div>
                 <div className="text-left">
@@ -184,12 +184,12 @@ const ImportStepper = ({ type = 'students', contextLabel, onComplete }) => {
         )}
 
         {currentStep === 2 && (
-          <div className="animate-in zoom-in-95 duration-300 text-center py-10">
+          <div className="animate-in zoom-in-95 duration-300 text-center py-8">
             <div className="h-16 w-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-6 border border-emerald-100 shadow-sm shadow-emerald-100/50">
               <Check size={32} strokeWidth={2.5} />
             </div>
             <h3 className="text-2xl font-black text-navy mb-2 tracking-tight">System Ready</h3>
-            <p className="text-muted-foreground text-sm max-w-[280px] mx-auto mb-10 font-medium leading-relaxed">
+            <p className="text-muted-foreground text-sm max-w-[280px] mx-auto mb-8 font-medium leading-relaxed">
               We parsed <span className="text-navy font-bold">{validCount}</span> compliant records. Committing will update the live academic directory.
             </p>
             

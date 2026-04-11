@@ -115,7 +115,7 @@ const FacultyDashboard = () => {
                      <p className="text-[8px] sm:text-[9px] uppercase font-black tracking-widest leading-none truncate">{item.role}</p>
                   </div>
                 </div>
-                <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center shrink-0 ${item.pending > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 ${item.pending > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
                    <Layers size={18} className="sm:w-5 sm:h-5" />
                 </div>
               </div>

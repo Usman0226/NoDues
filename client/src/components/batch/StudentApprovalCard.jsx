@@ -4,7 +4,7 @@ import { User, FileText, Shield } from 'lucide-react';
 
 const StudentApprovalCard = ({ student = {}, approvals = [] }) => {
   return (
-    <div className="bg-white rounded-2xl border border-muted shadow-sm p-6">
+    <div className="bg-white rounded-xl border border-muted shadow-sm p-6">
       <div className="flex items-start gap-4 mb-6">
         <div className="h-12 w-12 rounded-full bg-navy/10 flex items-center justify-center">
           <User size={20} className="text-navy" />

@@ -33,7 +33,7 @@ const FileDropzone = ({ onFileSelect, accept = '.csv,.xlsx', label = 'Upload Fil
       onDragOver={handleDrag}
       onDrop={handleDrop}
       onClick={() => !file && inputRef.current?.click()}
-      className={`relative border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200
+      className={`relative border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200
         ${dragActive ? 'border-gold bg-gold/5 scale-[1.01]' : 'border-muted hover:border-navy/30 hover:bg-navy/[0.02]'}
         ${file ? 'cursor-default' : ''}`}
     >

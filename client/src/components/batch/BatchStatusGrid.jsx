@@ -11,7 +11,7 @@ const STATUS_BG = {
 
 const BatchStatusGrid = ({ students = [], subjects = [], statusMap = {}, onCellClick }) => {
   return (
-    <div className="bg-white rounded-2xl border border-muted shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-muted shadow-sm overflow-hidden">
       <div className="overflow-auto max-h-[70vh]">
         <table className="w-full text-sm border-collapse">
           <thead className="sticky top-0 z-20">

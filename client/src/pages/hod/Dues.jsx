@@ -57,12 +57,12 @@ const Dues = () => {
       {/* Tabs: Active Dues | Overridden (PRD §6.6) */}
       <div className="flex gap-1 mb-6 bg-offwhite rounded-xl p-1 w-fit">
         <button onClick={() => setTab('active')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
+          className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all
             ${tab === 'active' ? 'bg-white text-navy shadow-sm' : 'text-muted-foreground hover:text-navy'}`}>
           Active Dues <span className="text-muted-foreground">({MOCK_DUES.length})</span>
         </button>
         <button onClick={() => setTab('overridden')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
+          className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all
             ${tab === 'overridden' ? 'bg-white text-navy shadow-sm' : 'text-muted-foreground hover:text-navy'}`}>
           Overridden <span className="text-muted-foreground">({MOCK_OVERRIDDEN.length})</span>
         </button>
@@ -72,7 +72,7 @@ const Dues = () => {
 
       {/* Override Modal (PRD §6.6) */}
       {overrideTarget && (
-        <Modal title="Override & Clear" onClose={() => setOverrideTarget(null)}>
+        <Modal isOpen={!!overrideTarget} title="Override & Clear" onClose={() => setOverrideTarget(null)}>
           <div className="space-y-4">
             {/* Context Display */}
             <div className="p-4 rounded-xl bg-offwhite border border-muted">
@@ -97,7 +97,7 @@ const Dues = () => {
                 Override Remark <span className="text-red-500">*</span>
               </label>
               <textarea value={overrideRemark} onChange={(e) => setOverrideRemark(e.target.value)} rows={3}
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10 resize-none"
+                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10 resize-none"
                 placeholder="Reason for overriding this due (required)..." />
             </div>
 

@@ -16,7 +16,7 @@ const DueForm = ({ onSubmit, onCancel }) => {
       <div>
         <label className="block text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground mb-1.5">Due Type</label>
         <select value={dueType} onChange={(e) => setDueType(e.target.value)}
-          className="w-full px-4 py-2.5 text-sm rounded-xl border border-muted bg-white focus:outline-none focus:ring-2 focus:ring-navy/10 focus:border-navy/30">
+          className="w-full px-4 py-2.5 text-sm rounded-lg border border-muted bg-white focus:outline-none focus:ring-2 focus:ring-navy/10 focus:border-navy/30">
           <option value="">Select type</option>
           <option value="library">Library</option>
           <option value="lab">Lab Equipment</option>
@@ -28,7 +28,7 @@ const DueForm = ({ onSubmit, onCancel }) => {
       <div>
         <label className="block text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground mb-1.5">Remarks</label>
         <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={3} placeholder="Describe the pending due..."
-          className="w-full px-4 py-2.5 text-sm rounded-xl border border-muted bg-white focus:outline-none focus:ring-2 focus:ring-navy/10 focus:border-navy/30 resize-none" />
+          className="w-full px-4 py-2.5 text-sm rounded-lg border border-muted bg-white focus:outline-none focus:ring-2 focus:ring-navy/10 focus:border-navy/30 resize-none" />
       </div>
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>

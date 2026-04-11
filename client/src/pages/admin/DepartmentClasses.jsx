@@ -52,7 +52,7 @@ const DepartmentClasses = () => {
          <div className="animate-pulse space-y-8">
             <div className="h-20 bg-muted/5 rounded-xl border border-muted"></div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-               {[1, 2, 3].map(i => <div key={i} className="h-40 bg-muted/5 rounded-2xl border border-muted"></div>)}
+               {[1, 2, 3].map(i => <div key={i} className="h-40 bg-muted/5 rounded-xl border border-muted"></div>)}
             </div>
          </div>
       </PageWrapper>
@@ -75,12 +75,12 @@ const DepartmentClasses = () => {
       </div>
 
       {error ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
+        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
            <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
            <p className="text-muted-foreground font-medium">{error}</p>
         </div>
       ) : Object.keys(grouped).length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm border-dashed">
+        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm border-dashed">
            <GraduationCap className="mx-auto text-muted-foreground/20 mb-4" size={64} />
            <p className="text-muted-foreground font-medium">No active groups mapped for this department</p>
         </div>
@@ -91,7 +91,7 @@ const DepartmentClasses = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {classes.map((cls) => (
                 <Link key={cls._id} to={`/admin/class/${cls._id}`}
-                  className="bg-white rounded-2xl border border-muted shadow-sm p-6 hover:shadow-md transition-academic group">
+                  className="bg-white rounded-xl border border-muted shadow-sm p-6 hover:shadow-md transition-academic group">
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h4 className="text-base font-black text-navy group-hover:text-gold transition-colors">{cls.name}</h4>
@@ -132,7 +132,7 @@ const DepartmentClasses = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="e.g. CSE-A Sem 5" 
               />
             </div>
@@ -142,7 +142,7 @@ const DepartmentClasses = () => {
                 <select 
                    value={formData.semester}
                    onChange={e => setFormData({...formData, semester: Number(e.target.value)})}
-                   className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
+                   className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
                 >
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -153,7 +153,7 @@ const DepartmentClasses = () => {
                   type="text" 
                   value={formData.academicYear}
                   onChange={e => setFormData({...formData, academicYear: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
                   placeholder="2025-26" 
                 />
               </div>

@@ -46,7 +46,7 @@ const ChangePassword = () => {
   return (
     <PageWrapper title="Security Settings" subtitle="Update your institutional credentials">
       <div className="max-w-md">
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-muted shadow-sm p-8 space-y-6 relative overflow-hidden">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-muted shadow-sm p-8 space-y-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
              <ShieldCheck size={80} strokeWidth={1} />
           </div>
@@ -59,7 +59,7 @@ const ChangePassword = () => {
                 value={current} 
                 onChange={(e) => setCurrent(e.target.value)}
                 placeholder="Enter current password"
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 text-sm font-medium transition-all" 
+                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 text-sm font-medium transition-all" 
               />
             </div>
 
@@ -72,7 +72,7 @@ const ChangePassword = () => {
                 value={newPwd} 
                 onChange={(e) => setNewPwd(e.target.value)}
                 placeholder="Minimum 8 characters"
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 text-sm font-medium transition-all" 
+                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 text-sm font-medium transition-all" 
               />
             </div>
             <div>
@@ -82,7 +82,7 @@ const ChangePassword = () => {
                 value={confirm} 
                 onChange={(e) => setConfirm(e.target.value)}
                 placeholder="Re-enter new password"
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 text-sm font-medium transition-all" 
+                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 text-sm font-medium transition-all" 
               />
             </div>
           </div>

@@ -42,7 +42,7 @@ const Table = ({ columns, data, loading = false, searchable = false, searchPlace
               value={filter} 
               onChange={(e) => setFilter(e.target.value)} 
               placeholder={searchPlaceholder}
-              className="w-full pl-9 pr-4 py-2.5 text-xs sm:text-sm rounded-2xl border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all font-semibold" 
+              className="w-full pl-9 pr-4 py-2.5 text-xs sm:text-sm rounded-lg border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all font-semibold" 
             />
           </div>
         </div>
