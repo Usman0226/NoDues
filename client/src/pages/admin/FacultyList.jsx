@@ -162,25 +162,13 @@ const FacultyList = () => {
     }
   ];
 
-  if (loading && !faculty) {
-    return (
-      <PageWrapper title="Faculty" subtitle="Syncing directory...">
-        <div className="animate-pulse space-y-4">
-          <div className="flex gap-3 mb-8">
-            <div className="h-10 w-32 bg-muted/10 rounded-full"></div>
-            <div className="h-10 w-32 bg-muted/10 rounded-full"></div>
-          </div>
-          <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
-        </div>
-      </PageWrapper>
-    );
-  }
-
   return (
     <PageWrapper title="Faculty" subtitle="Manage academic staff and coordination roles">
       <div className="flex flex-wrap gap-3 mb-8">
         <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}><UserPlus size={14} /> Add Faculty</Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}><Upload size={14} /> Import Directory</Button>
+        <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
+          <Upload size={14} /> Import directory
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => fetchFaculty()} className="text-muted-foreground"><RefreshCw size={14} /> Refresh</Button>
       </div>
 
@@ -190,7 +178,13 @@ const FacultyList = () => {
            <p className="text-muted-foreground font-medium">{error}</p>
         </div>
       ) : (
-        <Table columns={columns} data={faculty || []} searchable searchPlaceholder="Search staff by name or ID..." />
+        <Table
+          columns={columns}
+          data={faculty || []}
+          loading={loading && !response}
+          searchable
+          searchPlaceholder="Search staff by name or ID..."
+        />
       )}
 
       {showImport && (

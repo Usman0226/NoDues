@@ -169,13 +169,17 @@ const BatchView = () => {
                   
                   return (
                     <td key={fac._id} className="px-4 py-4 border-l border-muted/30 text-center">
-                      <button onClick={() => setPopover({ ...data, faculty: fac.name, student: row.name, subject: fac.subjectName || fac.type, action })}
+                      <button
+                        type="button"
+                        onClick={() => setPopover({ ...data, faculty: fac.name, student: row.name, subject: fac.subjectName || fac.type, action })}
                         className={`
-                          w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border transition-all
-                          hover:scale-110 shadow-sm mx-auto
+                          min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 rounded-full inline-flex items-center justify-center text-xs font-black border transition-all
+                          hover:scale-110 shadow-sm mx-auto touch-manipulation
                           ${config.cls}
                         `}
-                        title={action.replace('_', ' ')}>
+                        title={action.replace('_', ' ')}
+                        aria-label={`${fac.name}: ${action.replace('_', ' ')}`}
+                      >
                         {config.icon}
                       </button>
                     </td>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
@@ -33,25 +33,13 @@ const StudentList = () => {
     },
   ];
 
-  if (loading && !students) {
-    return (
-      <PageWrapper title="Students" subtitle="Fetching roster...">
-        <div className="animate-pulse space-y-4">
-          <div className="flex gap-3 mb-8">
-            <div className="h-10 w-32 bg-muted/10 rounded-full"></div>
-            <div className="h-10 w-32 bg-muted/10 rounded-full"></div>
-          </div>
-          <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
-        </div>
-      </PageWrapper>
-    );
-  }
-
   return (
     <PageWrapper title="Students" subtitle="Global roster of all registered academic candidates">
       <div className="flex flex-wrap gap-3 mb-8">
         <Button variant="primary" size="sm" onClick={() => setShowAdd(true)}><UserPlus size={14} /> Add Student</Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}><Upload size={14} /> Import List</Button>
+        <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
+          <Upload size={14} /> Import list
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => fetchStudents()} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
       </div>
 
@@ -61,11 +49,12 @@ const StudentList = () => {
            <p className="text-muted-foreground font-medium">{error}</p>
         </div>
       ) : (
-        <Table 
-          columns={columns} 
-          data={students || []} 
-          searchable 
-          searchPlaceholder="Filter by roll no, name, or group..." 
+        <Table
+          columns={columns}
+          data={students || []}
+          loading={loading && !response}
+          searchable
+          searchPlaceholder="Filter by roll no, name, or group..."
         />
       )}
 
