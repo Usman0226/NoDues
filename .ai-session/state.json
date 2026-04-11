@@ -21,6 +21,27 @@
       "context": "SSE Architecture",
       "decision": "Switched from a poll-based model to SSE for lower latency and better student UX during the clearance process.",
       "trade_offs": "Increased open connection count on the server; mitigated by using lightweight SSE over WebSockets."
+    "Refactored axiosInstance to rely on httpOnly cookies and production response envelopes.",
+    "Aligned AuthContext with /api/auth/me and demo bypass logic.",
+    "Standardized student API service and resolved component import paths.",
+    "Implemented mobile-first responsive UI in PageWrapper and Table components.",
+    "Optimized Login, Student Status, and Faculty/HOD dashboards for mobile viewports."
+  ],
+  "in_progress": [],
+  "pending": [
+    "Backend API alignment (if required as a follow-up)",
+    "Admin portal responsiveness refactor (explicitly excluded from current scope)"
+  ],
+  "decisions": [
+    {
+      "context": "API Response Structure",
+      "decision": "Preserved the full API envelope {success, data, pagination} in the Axios interceptor.",
+      "trade_offs": "Requires components to access '.data' property, but enables consistent metadata/pagination access across the app."
+    },
+    {
+      "context": "Authentication",
+      "decision": "Removed localStorage token persistence in favor of browser-managed cookies.",
+      "trade_offs": "Improved security (XSS mitigation) at the cost of requiring 'withCredentials: true' on all cross-origin requests."
     }
   ],
   "blockers": []

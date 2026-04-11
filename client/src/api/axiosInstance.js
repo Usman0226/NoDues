@@ -2,33 +2,51 @@ import axios from 'axios';
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  withCredentials: true, // Required for httpOnly cookies if used
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add a request interceptor to include auth token
+// Request interceptor: Minimal - rely on httpOnly cookies (nds_token)
 axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
+  (config) => config,
   (error) => Promise.reject(error)
 );
 
-// Add a response interceptor for error handling
+// Response interceptor: Envelope preservation & global error handling
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Return the full envelope (success, data, pagination) 
+    // to keep components informed about API states.
+    return response.data;
+  },
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+    const status = error.response?.status;
+    const errorData = error.response?.data?.error || {};
+
+    // 1. Force Redirect to Change Password (PRD §2, Guide §2)
+    if (status === 403 && errorData.code === 'AUTH_PASSWORD_CHANGE_REQUIRED') {
+      if (window.location.pathname !== '/change-password') {
+        window.location.href = '/change-password';
+      }
     }
-    return Promise.reject(error);
+
+    // 2. Clear session on Unauthorized
+    if (status === 401) {
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+
+    // Standardize error delivery to components
+    return Promise.reject({
+      code: errorData.code || 'UNKNOWN_ERROR',
+      message: errorData.message || error.message || 'An unexpected error occurred',
+      statusCode: status || 500
+    });
   }
 );
 
 export default axiosInstance;
+

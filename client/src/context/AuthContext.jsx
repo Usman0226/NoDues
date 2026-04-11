@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { ROLES } from '../utils/constants';
+import * as authService from '../api/auth';
+import { toast } from 'react-hot-toast';
 
 const AuthContext = createContext(null);
 
@@ -7,65 +8,94 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const storedUser = JSON.parse(localStorage.getItem('user'));
-          if (storedUser) setUser(storedUser);
-        } catch (error) {
-          localStorage.removeItem('token');
-        }
+  const DEMO_USERS = {
+    'admin@mits.ac.in': { id: 'd1', name: 'Demo Administrator', role: 'ADMIN', email: 'admin@mits.ac.in' },
+    'hod_cse@mits.ac.in': { id: 'd2', name: 'Dr. Sarah (HOD CSE)', role: 'HOD', department: 'CSE', email: 'hod_cse@mits.ac.in' },
+    'faculty@mits.ac.in': { id: 'd3', name: 'Prof. Ramesh (Faculty)', role: 'FACULTY', email: 'faculty@mits.ac.in' },
+    '21CSE001': { id: 'd4', name: 'Yugesh (Demo Student)', role: 'STUDENT', rollNo: '21CSE001', department: 'CSE' }
+  };
+
+  const fetchUser = async () => {
+    try {
+      // Guide §4.5: GET /api/auth/me returns success:true, data: {...user}
+      const response = await authService.getMe();
+      if (response?.success) {
+        setUser(response.data);
       }
+    } catch (error) {
+      console.error('Session restore failed:', error);
+      setUser(null);
+    } finally {
       setLoading(false);
-    };
-    checkAuth();
+    }
+  };
+
+  useEffect(() => {
+    // Rely on /api/auth/me for all session checks.
+    // Cookies are automatically sent by the browser.
+    fetchUser();
   }, []);
 
   const login = async (credentials) => {
-    let mockUser = null;
-
-    // Student login (roll number only)
-    if (credentials.rollNo) {
-      mockUser = {
-        id: 100,
-        name: 'Riya Sharma',
-        role: ROLES.STUDENT,
-        rollNo: credentials.rollNo,
-        department: 'CSE',
-        semester: 5,
-        academicYear: '2025-26',
-      };
+    const { email, password } = credentials;
+    
+    // Bypass for Demo Staff (Guide Alignment)
+    if (DEMO_USERS[email] && (password === 'admin123' || password === 'hod123' || password === 'faculty123')) {
+      const demoUser = DEMO_USERS[email];
+      setUser(demoUser);
+      toast.success(`Demo Access: Authorized as ${demoUser.role}`);
+      return { success: true, data: demoUser };
     }
-    // Staff login (email + password)
-    else {
-      const { email } = credentials;
-      if (email.includes('admin')) {
-        mockUser = { id: 1, name: 'Admin User', role: ROLES.ADMIN, email, departmentId: null };
-      } else if (email.includes('hod')) {
-        mockUser = { id: 2, name: 'Dr. Ramesh Kumar', role: ROLES.HOD, email, departmentId: 'dept-cse', department: 'CSE' };
-      } else if (email.includes('faculty')) {
-        mockUser = { id: 3, name: 'Dr. Anand Sharma', role: ROLES.FACULTY, email, departmentId: 'dept-cse', department: 'CSE', roleTags: ['faculty'] };
-      } else {
-        mockUser = { id: 1, name: 'Admin User', role: ROLES.ADMIN, email, departmentId: null };
+
+    try {
+      const response = await authService.login(credentials);
+      // Guide: Response success envelope contains user info in 'data'
+      if (response.success) {
+        setUser(response.data);
+        toast.success(`Welcome back, ${response.data.name}`);
       }
+      return response;
+    } catch (error) {
+      toast.error(error.message || 'Login failed');
+      throw error;
     }
-
-    setUser(mockUser);
-    localStorage.setItem('token', 'mock-jwt-token');
-    localStorage.setItem('user', JSON.stringify(mockUser));
-    return mockUser;
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const studentLogin = async (rollNo) => {
+    // Bypass for Demo Student
+    if (rollNo === '21CSE001') {
+      const demoUser = DEMO_USERS[rollNo];
+      setUser(demoUser);
+      toast.success(`Demo Access: Authorized Student`);
+      return { success: true, data: demoUser };
+    }
+
+    try {
+      const response = await authService.studentLogin(rollNo);
+      if (response.success) {
+        setUser(response.data);
+        toast.success(`Logged in as Roll No: ${rollNo}`);
+      }
+      return response;
+    } catch (error) {
+      toast.error(error.message || 'Student login failed');
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.warn('Logout request failed, clearing local state anyway');
+    } finally {
+      setUser(null);
+      toast.success('Logged out successfully');
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, studentLogin, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

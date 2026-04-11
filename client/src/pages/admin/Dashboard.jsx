@@ -1,105 +1,183 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useMemo } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
-import Badge from '../../components/ui/Badge';
 import Table from '../../components/ui/Table';
-import { Building2, Users, GraduationCap, BookOpen, Layers, Clock, CheckCircle, AlertTriangle, Eye } from 'lucide-react';
+import Badge from '../../components/ui/Badge';
+import { useApi } from '../../hooks/useApi';
+import { getBatches } from '../../api/batch';
+import { 
+  Users, 
+  Layers, 
+  CheckCircle, 
+  Clock, 
+  AlertTriangle,
+  ArrowRight,
+  RefreshCw,
+  AlertCircle
+} from 'lucide-react';
+import Button from '../../components/ui/Button';
+import { useNavigate } from 'react-router-dom';
 
-const STATS = [
-  { label: 'Active Batches', value: 3, icon: Layers, color: 'text-navy' },
-  { label: 'Total Students', value: 1847, icon: GraduationCap, color: 'text-emerald-600' },
-  { label: 'Cleared', value: 1203, icon: CheckCircle, color: 'text-emerald-500' },
-  { label: 'Pending', value: 412, icon: Clock, color: 'text-amber-500' },
-  { label: 'Has Dues', value: 187, icon: AlertTriangle, color: 'text-red-500' },
-];
+const AdminDashboard = () => {
+  const navigate = useNavigate();
+  const { data: batches, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
 
-const ACTIVE_BATCHES = [
-  { id: 'b1', className: 'CSE-A Sem 5', semester: 5, year: '2025-26', initiatedAt: '2026-04-28', cleared: 48, pending: 10, dues: 2, total: 60 },
-  { id: 'b2', className: 'CSE-B Sem 5', semester: 5, year: '2025-26', initiatedAt: '2026-04-28', cleared: 35, pending: 20, dues: 5, total: 60 },
-  { id: 'b3', className: 'ECE-A Sem 7', semester: 7, year: '2025-26', initiatedAt: '2026-04-25', cleared: 55, pending: 3, dues: 0, total: 58 },
-];
+  useEffect(() => {
+    fetchBatches();
+  }, [fetchBatches]);
 
-const RECENT_ACTIVITY = [
-  { time: '2 min ago', text: 'Dr. Sharma approved Arun Kumar for DBMS', type: 'approved' },
-  { time: '5 min ago', text: 'Dr. Patel marked due for Priya Sharma — Lab (Networks)', type: 'due_marked' },
-  { time: '12 min ago', text: 'Dr. Gupta approved Deepa Nair for OS', type: 'approved' },
-  { time: '18 min ago', text: 'HoD Dr. Kumar overrode dues for Rahul Verma', type: 'hod_override' },
-  { time: '25 min ago', text: 'Dr. Sharma approved Sneha R. for DBMS', type: 'approved' },
-];
+  const stats = useMemo(() => {
+    if (!batches) return [];
+    
+    const activeBatches = batches.filter(b => b.status === 'active');
+    const closedBatches = batches.filter(b => b.status === 'closed');
+    
+    // Aggregating progress for the whole institution
+    let totalCands = 0;
+    let totalCleared = 0;
+    let totalDues = 0;
 
-const BATCH_COLUMNS = [
-  { key: 'className', label: 'Class' },
-  { key: 'year', label: 'Year' },
-  { key: 'initiatedAt', label: 'Initiated' },
-  {
-    key: 'cleared', label: 'Cleared', render: (v) => (
-      <span className="text-emerald-600 font-semibold">{v}</span>
-    )
-  },
-  {
-    key: 'pending', label: 'Pending', render: (v) => (
-      <span className="text-amber-600 font-semibold">{v}</span>
-    )
-  },
-  {
-    key: 'dues', label: 'Dues', render: (v) => (
-      <span className={`font-semibold ${v > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>{v}</span>
-    )
-  },
-  {
-    key: 'id', label: 'Action', sortable: false, render: (v) => (
-      <Link to={`/admin/batch/${v}`} className="inline-flex items-center gap-1 text-xs text-navy hover:text-gold font-semibold transition-colors">
-        <Eye size={14} /> View Grid
-      </Link>
-    )
-  },
-];
+    batches.forEach(b => {
+      totalCands += b.totalStudents || 0;
+      totalCleared += b.clearedCount || 0;
+      totalDues += b.duesCount || 0;
+    });
 
-const ACTIVITY_DOT = {
-  approved: 'bg-emerald-500',
-  due_marked: 'bg-red-500',
-  hod_override: 'bg-blue-500',
-  pending: 'bg-amber-500',
-};
+    return [
+      { label: 'Active Cycles', value: activeBatches.length, icon: Layers, color: 'text-navy', bg: 'bg-navy/5' },
+      { label: 'Total Candidates', value: totalCands.toLocaleString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+      { label: 'Cleared', value: totalCleared.toLocaleString(), icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+      { label: 'In Progress', value: (totalCands - totalCleared - totalDues).toLocaleString(), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+      { label: 'Flagged', value: totalDues.toLocaleString(), icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50' },
+    ];
+  }, [batches]);
 
-const AdminDashboard = () => (
-  <PageWrapper title="Dashboard" subtitle="Administrative overview of the NoDues platform">
-    {/* Stats Row */}
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-      {STATS.map((stat) => {
-        const Icon = stat.icon;
+  const columns = [
+    { key: 'className', label: 'Academic Group', render: (v) => <span className="font-black text-navy">{v}</span> },
+    { key: 'academicYear', label: 'Session', render: (v, row) => <span className="text-muted-foreground/60 font-semibold">{v} · Sem {row.semester}</span> },
+    { 
+      key: 'progress', 
+      label: 'Clearance Status', 
+      render: (_, row) => {
+        const pct = row.totalStudents > 0 ? Math.round((row.clearedCount / row.totalStudents) * 100) : 0;
         return (
-          <div key={stat.label} className="bg-white rounded-2xl border border-muted shadow-sm p-5 hover:shadow-md transition-shadow">
-            <Icon size={22} className={`${stat.color} mb-3`} />
-            <p className="text-2xl font-bold text-navy">{stat.value.toLocaleString()}</p>
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mt-1">{stat.label}</p>
+          <div className="flex items-center gap-3 min-w-[120px]">
+            <div className="flex-1 h-1.5 bg-offwhite rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-emerald-500 rounded-full transition-all duration-1000" 
+                style={{ width: `${pct}%` }} 
+              />
+            </div>
+            <span className="text-[10px] font-black tabular-nums">{pct}%</span>
           </div>
         );
-      })}
-    </div>
+      }
+    },
+    { 
+      key: 'status', 
+      label: 'Condition', 
+      render: (v) => <Badge status={v === 'active' ? 'pending' : 'cleared'}>{v.toUpperCase()}</Badge> 
+    },
+    {
+      key: 'action',
+      label: '',
+      sortable: false,
+      render: (_, row) => (
+        <button onClick={() => navigate(`/admin/batch/${row._id}`)} className="p-2 hover:bg-muted/30 rounded-full transition-colors">
+          <ArrowRight size={14} className="text-muted-foreground/40" />
+        </button>
+      )
+    }
+  ];
 
-    {/* Active Batches Table (PRD §6.4) */}
-    <div className="mb-8">
-      <h2 className="text-xl font-serif text-navy mb-4">Active Batches</h2>
-      <Table columns={BATCH_COLUMNS} data={ACTIVE_BATCHES} />
-    </div>
+  if (loading && !batches) {
+    return (
+      <PageWrapper title="Institutional Control" subtitle="Loading metrics...">
+        <div className="animate-pulse">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-32 bg-muted/5 rounded-xl border border-muted"></div>)}
+          </div>
+          <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
-    {/* Recent Activity Feed (PRD §6.4) */}
-    <div>
-      <h2 className="text-xl font-serif text-navy mb-4">Recent Activity</h2>
-      <div className="bg-white rounded-2xl border border-muted shadow-sm divide-y divide-muted">
-        {RECENT_ACTIVITY.map((item, i) => (
-          <div key={i} className="flex items-start gap-3 p-4">
-            <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${ACTIVITY_DOT[item.type] || ACTIVITY_DOT.pending}`}></div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm text-navy">{item.text}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{item.time}</p>
+  if (error) {
+    return (
+      <PageWrapper title="Institutional Control" subtitle="System connectivity issue">
+        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
+          <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
+          <h2 className="text-xl font-black text-navy mb-2">Metrics Unavailable</h2>
+          <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
+          <Button variant="primary" onClick={() => fetchBatches()}>
+             <RefreshCw size={14} className="mr-2" /> Refresh Data
+          </Button>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  return (
+    <PageWrapper title="Institutional Control" subtitle="System-wide clearance health and batch metrics">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+        {stats.map((stat, i) => (
+          <div key={i} className="bg-white rounded-xl p-6 border border-muted shadow-sm hover:shadow-md transition-academic group">
+            <div className={`h-10 w-10 rounded-lg ${stat.bg} flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>
+              <stat.icon size={20} className={stat.color} />
             </div>
+            <p className="text-2xl font-black text-navy tracking-tight">{stat.value}</p>
+            <p className="text-[9px] uppercase tracking-widest font-black text-muted-foreground/60">{stat.label}</p>
           </div>
         ))}
       </div>
-    </div>
-  </PageWrapper>
-);
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Activity Table */}
+        <div className="lg:col-span-2">
+          <div className="flex items-center justify-between mb-4 px-1">
+            <h2 className="text-sm font-black uppercase tracking-widest text-navy/40">Ongoing Batches</h2>
+            <button className="text-[10px] font-black text-gold uppercase tracking-widest hover:underline" onClick={() => navigate('/admin/batches')}>View All Data</button>
+          </div>
+          <Table columns={columns} data={batches || []} />
+        </div>
+
+        {/* Informational Feed */}
+        <div>
+          <div className="flex items-center justify-between mb-4 px-1">
+             <h2 className="text-sm font-black uppercase tracking-widest text-navy/40">Status Insight</h2>
+             <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Now
+             </span>
+          </div>
+          <div className="bg-white rounded-xl border border-muted shadow-sm p-6 space-y-6">
+            <div className="flex gap-4 items-start group">
+              <div className="h-2 w-2 rounded-full bg-gold mt-1.5 shrink-0 group-hover:scale-125 transition-transform" />
+              <div>
+                <p className="text-xs font-bold text-navy leading-relaxed">
+                   The system is operating normally. All {stats[0]?.value || 0} active cycles are syncing results correctly across departments.
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1 font-medium">Just now · System Health</p>
+              </div>
+            </div>
+            <div className="p-4 rounded-xl bg-offwhite border border-muted/50">
+               <p className="text-[10px] uppercase font-black tracking-widest text-navy/40 mb-2">Batch Summary</p>
+               <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                     <span className="text-xs font-bold text-navy/60">Active Cycles</span>
+                     <span className="text-xs font-black text-navy">{stats[0]?.value || 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-xs font-bold text-navy/60">Critical Dues</span>
+                     <span className="text-xs font-black text-status-due">{stats[4]?.value || 0}</span>
+                  </div>
+               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </PageWrapper>
+  );
+};
 
 export default AdminDashboard;

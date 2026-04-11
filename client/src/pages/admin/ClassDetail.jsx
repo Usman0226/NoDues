@@ -1,154 +1,191 @@
-import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ImportStepper from '../../components/import/ImportStepper';
-import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play } from 'lucide-react';
-
-const CLASS_META = { id: 'c1', name: 'CSE-A Sem 5', department: 'CSE', semester: 5, academicYear: '2025-26', classTeacher: 'Dr. Patel', studentCount: 60, subjectCount: 6 };
-
-const MOCK_STUDENTS = [
-  { rollNo: '21CSE001', name: 'Arun Kumar', email: 'arun@mits.ac.in', mentor: 'Dr. Meena', electives: 'Machine Learning', status: 'cleared' },
-  { rollNo: '21CSE002', name: 'Priya Sharma', email: 'priya@mits.ac.in', mentor: 'Dr. Meena', electives: 'Data Science', status: 'pending' },
-  { rollNo: '21CSE003', name: 'Rahul Verma', email: 'rahul@mits.ac.in', mentor: 'Dr. Gupta', electives: 'Cloud Computing', status: 'has_dues' },
-  { rollNo: '21CSE004', name: 'Deepa Nair', email: 'deepa@mits.ac.in', mentor: 'Dr. Gupta', electives: '—', status: 'pending' },
-  { rollNo: '21CSE005', name: 'Sneha R.', email: 'sneha@mits.ac.in', mentor: 'Dr. Meena', electives: 'Machine Learning', status: 'cleared' },
-];
-
-const MOCK_SUBJECTS = [
-  { subjectCode: 'CS301', subjectName: 'Data Structures', faculty: 'Dr. Sharma', type: 'Core' },
-  { subjectCode: 'CS302', subjectName: 'DBMS', faculty: 'Dr. Verma', type: 'Core' },
-  { subjectCode: 'CS303', subjectName: 'Networks', faculty: 'Dr. Patel', type: 'Core' },
-  { subjectCode: 'CS304', subjectName: 'Operating Systems', faculty: 'Dr. Gupta', type: 'Core' },
-  { subjectCode: 'CS305', subjectName: 'Web Technologies', faculty: 'Dr. Kumar', type: 'Core' },
-  { subjectCode: 'CS306', subjectName: 'Software Engineering', faculty: 'Dr. Reddy', type: 'Core' },
-];
-
-const MOCK_PAST_BATCHES = [
-  { id: 'pb1', semester: 4, year: '2024-25', status: 'closed', initiated: '2025-11-10', cleared: 58, dues: 2, total: 60 },
-];
-
-const STUDENT_COLS = [
-  { key: 'rollNo', label: 'Roll No' },
-  { key: 'name', label: 'Name' },
-  { key: 'email', label: 'Email' },
-  { key: 'mentor', label: 'Mentor' },
-  { key: 'electives', label: 'Electives' },
-  { key: 'status', label: 'Status', render: (v) => <Badge status={v} /> },
-];
-
-const SUBJECT_COLS = [
-  { key: 'subjectCode', label: 'Code' },
-  { key: 'subjectName', label: 'Subject Name' },
-  { key: 'faculty', label: 'Faculty' },
-  { key: 'type', label: 'Type', render: (v) => (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${v === 'Core' ? 'bg-navy/5 text-navy' : 'bg-amber-50 text-amber-700'}`}>{v}</span>
-  )},
-];
+import { useApi } from '../../hooks/useApi';
+import { getClass, initiateBatch, addSubjectToClass } from '../../api/classes';
+import { getFaculty } from '../../api/faculty';
+import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 const TABS = [
   { key: 'students', label: 'Students', icon: Users },
   { key: 'subjects', label: 'Subjects', icon: BookOpen },
-  { key: 'batch', label: 'Batch', icon: Layers },
+  { key: 'batch', label: 'History', icon: Layers },
 ];
 
 const ClassDetail = () => {
   const { classId } = useParams();
+  const navigate = useNavigate();
   const [tab, setTab] = useState('students');
   const [showImport, setShowImport] = useState(null);
   const [showInitiate, setShowInitiate] = useState(false);
   const [showAddSubject, setShowAddSubject] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const hasActiveBatch = false;
+  const { data: classData, loading, error, request: fetchClass } = useApi(() => getClass(classId), { immediate: true });
+  const { data: facultyList } = useApi(getFaculty, { immediate: true });
 
-  const preflight = [
-    { label: 'Students enrolled', ok: MOCK_STUDENTS.length > 0, detail: `${MOCK_STUDENTS.length} students` },
-    { label: 'Subjects assigned', ok: MOCK_SUBJECTS.length > 0, detail: `${MOCK_SUBJECTS.length} subjects` },
-    { label: 'Class teacher set', ok: !!CLASS_META.classTeacher, detail: CLASS_META.classTeacher || 'Not set' },
-    { label: 'All mentors assigned', ok: MOCK_STUDENTS.every((s) => s.mentor !== '—'), detail: `${MOCK_STUDENTS.filter((s) => s.mentor !== '—').length}/${MOCK_STUDENTS.length} assigned` },
+  useEffect(() => {
+    fetchClass();
+  }, [fetchClass, classId]);
+
+  const students = classData?.students || [];
+  const subjects = classData?.subjects || [];
+  const pastBatches = classData?.batchHistory || [];
+  const activeBatch = classData?.activeBatch;
+
+  const preflight = useMemo(() => [
+    { label: 'Roster Loaded', ok: students.length > 0, detail: `${students.length} students enrolled` },
+    { label: 'Subject Load', ok: subjects.length > 0, detail: `${subjects.length} assignments` },
+    { label: 'Class Teacher', ok: !!classData?.classTeacher, detail: classData?.classTeacherName || 'Not Assigned' },
+    { label: 'Mentor Mapping', ok: students.every(s => s.mentorId), detail: `${students.filter(s => s.mentorId).length}/${students.length} mapped` },
+  ], [students, subjects, classData]);
+
+  const canInitiate = preflight.every(p => p.ok);
+
+  const onInitiateSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await initiateBatch({ classId });
+      toast.success('No-Due Batch initiated for this class');
+      setShowInitiate(false);
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Initiation failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const STUDENT_COLS = [
+    { key: 'rollNo', label: 'Roll No', render: (v) => <span className="font-mono text-xs font-black text-navy">{v}</span> },
+    { key: 'name', label: 'Candidate Name', render: (v) => <span className="font-bold">{v}</span> },
+    { key: 'email', label: 'Email', render: (v) => <span className="text-muted-foreground/60">{v}</span> },
+    { key: 'mentorName', label: 'Mentor' },
+    { key: 'status', label: 'Last Cycle', render: (v) => <Badge status={v || 'pending'} /> },
   ];
-  const canInitiate = preflight.every((p) => p.ok);
+
+  const SUBJECT_COLS = [
+    { key: 'subjectCode', label: 'Code', render: (v) => <span className="font-mono text-[10px] bg-offwhite px-1.5 py-0.5 rounded border border-muted/50">{v}</span> },
+    { key: 'subjectName', label: 'Component Name', render: (v) => <span className="font-bold text-navy">{v}</span> },
+    { key: 'facultyName', label: 'Handling Faculty' },
+    { key: 'type', label: 'Category', render: (v) => (
+      <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${v === 'Core' ? 'bg-navy/5 text-navy/70' : 'bg-amber-50 text-amber-700'}`}>{v || 'Core'}</span>
+    )},
+  ];
+
+  if (loading && !classData) {
+    return (
+      <PageWrapper title="Loading Class..." subtitle="Syncing academic records">
+        <div className="animate-pulse space-y-4">
+          <div className="h-10 w-64 bg-muted/10 rounded-xl mb-8"></div>
+          <div className="h-96 bg-muted/5 rounded-2xl border border-muted"></div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageWrapper title="Sync Error" subtitle="Academic record unavailable">
+        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
+           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
+           <p className="text-muted-foreground font-medium">{error}</p>
+           <Button variant="primary" className="mt-6" onClick={() => fetchClass()}>Retry Sync</Button>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
-    <PageWrapper title={CLASS_META.name} subtitle={`${CLASS_META.department} · Semester ${CLASS_META.semester} · ${CLASS_META.academicYear}`}>
-      <Link to="/admin/departments" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-navy mb-4 -mt-4">
-        <ArrowLeft size={14} /> Back to Classes
+    <PageWrapper title={classData?.name} subtitle={`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}>
+      <Link to="/admin/departments" className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy mb-4 -mt-4 transition-colors">
+        <ArrowLeft size={12} strokeWidth={3} /> Return to Directory
       </Link>
 
       {/* Tab Switcher */}
-      <div className="flex gap-1 mb-6 bg-offwhite rounded-xl p-1 w-fit">
+      <div className="flex gap-1 mb-10 bg-white border border-muted/40 shadow-sm rounded-xl p-1 w-fit">
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
-                ${tab === t.key ? 'bg-white text-navy shadow-sm' : 'text-muted-foreground hover:text-navy'}`}>
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all
+                ${tab === t.key ? 'bg-navy text-white shadow-md' : 'text-muted-foreground hover:bg-offwhite'}`}>
               <Icon size={14} /> {t.label}
             </button>
           );
         })}
       </div>
 
-      {/* TAB 1: Students (PRD §6.4) */}
+      {/* TAB 1: Students */}
       {tab === 'students' && (
-        <div>
-          <div className="flex flex-wrap gap-2 mb-5">
-            <Button variant="primary" size="sm" onClick={() => setShowImport('students')}><Upload size={14} /> Import Students</Button>
-            <Button variant="ghost" size="sm"><UserPlus size={14} /> Add Single Student</Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowImport('mentors')}><Upload size={14} /> Bulk Assign Mentors</Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowImport('electives')}><Upload size={14} /> Bulk Assign Electives</Button>
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex flex-wrap gap-2 mb-6">
+            <Button variant="primary" size="sm" onClick={() => setShowImport('students')}><Upload size={14} /> Import Roster</Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowImport('mentors')}><Users size={14} /> Map Mentors</Button>
           </div>
-          <Table columns={STUDENT_COLS} data={MOCK_STUDENTS} searchable searchPlaceholder="Search by roll no or name..." />
+          <Table columns={STUDENT_COLS} data={students} searchable searchPlaceholder="Search by roll no or name..." />
         </div>
       )}
 
-      {/* TAB 2: Subjects (PRD §6.4) */}
+      {/* TAB 2: Subjects */}
       {tab === 'subjects' && (
-        <div>
-          <div className="flex flex-wrap gap-2 mb-5">
-            <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}><Plus size={14} /> Add Subject Assignment</Button>
-            <Button variant="ghost" size="sm"><Copy size={14} /> Clone from Another Class</Button>
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex flex-wrap gap-2 mb-6">
+            <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}><Plus size={14} /> New Assignment</Button>
+            <Button variant="secondary" size="sm"><Copy size={14} /> Inherit Plan</Button>
           </div>
-          <Table columns={SUBJECT_COLS} data={MOCK_SUBJECTS} />
+          <Table columns={SUBJECT_COLS} data={subjects} />
         </div>
       )}
 
-      {/* TAB 3: Batch (PRD §6.4) */}
+      {/* TAB 3: Batch History */}
       {tab === 'batch' && (
-        <div>
-          {hasActiveBatch ? (
-            <div className="bg-white rounded-2xl border border-muted p-6 mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-navy">Active Batch</h3>
-                <Badge status="pending">In Progress</Badge>
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {activeBatch ? (
+            <div className="bg-white rounded-2xl border border-navy/10 p-8 mb-10 shadow-sm shadow-navy/5 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-1 bg-navy text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl">LIVE SESSION</div>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-black text-navy mb-1">Active No-Due Session</h3>
+                  <p className="text-xs text-muted-foreground">Cycle initiated on {new Date(activeBatch.createdAt).toLocaleDateString()}</p>
+                </div>
+                <Badge status="pending" />
               </div>
-              <Link to="/admin/batch/b1" className="text-xs text-navy hover:text-gold font-semibold">View Full Grid →</Link>
+              <Button variant="primary" onClick={() => navigate(`/admin/batch/${activeBatch._id}`)}>
+                Open Progress Matrix
+              </Button>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-muted p-6 mb-6 text-center">
-              <Layers size={32} className="text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground mb-4">No active batch for this class</p>
-              <Button variant="primary" onClick={() => setShowInitiate(true)}>
-                <Play size={14} /> Initiate No-Due Batch
+            <div className="bg-white rounded-2xl border border-muted border-dashed p-12 mb-10 text-center">
+              <Layers size={48} className="text-muted-foreground/30 mx-auto mb-4" />
+              <h4 className="text-lg font-black text-navy mb-2">Cycle Inactive</h4>
+              <p className="text-sm text-muted-foreground mb-8 max-w-[300px] mx-auto">No live clearance session detected for this academic group.</p>
+              <Button variant="primary" onClick={() => setShowInitiate(true)} className="h-12 px-8">
+                <Play size={16} fill="currentColor" /> Initiate Clearance Cycle
               </Button>
             </div>
           )}
 
-          {/* Past Batches */}
-          {MOCK_PAST_BATCHES.length > 0 && (
+          {/* Past Cycles */}
+          {pastBatches.length > 0 && (
             <div>
-              <h3 className="text-base font-serif text-navy mb-3">Past Batches</h3>
-              <div className="space-y-2">
-                {MOCK_PAST_BATCHES.map((b) => (
-                  <div key={b.id} className="bg-white rounded-xl border border-muted p-4 flex items-center justify-between">
+              <h3 className="text-[10px] uppercase font-black tracking-[0.2em] text-navy/40 mb-4 px-1">Historical Analytics</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {pastBatches.map((b) => (
+                  <div key={b._id} className="bg-white rounded-xl border border-muted p-5 flex items-center justify-between hover:border-navy/20 transition-colors">
                     <div>
-                      <p className="text-sm font-semibold text-navy">Semester {b.semester} · {b.year}</p>
-                      <p className="text-xs text-muted-foreground">Initiated {b.initiated} · {b.cleared}/{b.total} cleared · {b.dues} dues</p>
+                      <p className="text-xs font-black text-navy uppercase tracking-tight">Cycle S{b.semester} · {b.academicYear}</p>
+                      <p className="text-[10px] text-muted-foreground font-bold font-mono mt-1 uppercase">
+                        {b.clearedCount}/{b.totalStudents} Success · {b.duesCount} Flags
+                      </p>
                     </div>
-                    <Badge status="cleared">Closed</Badge>
+                    <Badge status="cleared">Archived</Badge>
                   </div>
                 ))}
               </div>
@@ -157,39 +194,43 @@ const ClassDetail = () => {
         </div>
       )}
 
-      {/* Initiation Modal with Preflight Checklist (PRD §6.4) */}
+      {/* Initiation Modal */}
       {showInitiate && (
-        <Modal title="Initiate No-Due Batch" onClose={() => setShowInitiate(false)}>
-          <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-offwhite border border-muted">
-              <p className="text-sm font-semibold text-navy mb-1">{CLASS_META.name}</p>
-              <p className="text-xs text-muted-foreground">Semester {CLASS_META.semester} · {CLASS_META.academicYear}</p>
+        <Modal isOpen={showInitiate} title="Initiate Clearance Cycle" onClose={() => setShowInitiate(false)}>
+          <div className="space-y-6">
+            <div className="p-5 rounded-2xl bg-offwhite border border-muted shadow-inner">
+              <p className="text-xs font-black text-navy uppercase tracking-widest mb-1">{classData?.name}</p>
+              <p className="text-[10px] text-muted-foreground font-bold">Academic Session {classData?.academicYear}</p>
             </div>
 
             <div>
-              <h4 className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-3">Pre-Flight Checklist</h4>
-              <div className="space-y-2">
+              <h4 className="text-[9px] uppercase tracking-[0.2em] font-black text-muted-foreground mb-4">Integrity Preflight Checklist</h4>
+              <div className="grid grid-cols-1 gap-2.5">
                 {preflight.map((p, i) => (
-                  <div key={i} className={`flex items-center gap-3 p-3 rounded-lg ${p.ok ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                    {p.ok ? <CheckCircle size={16} className="text-emerald-500" /> : <AlertTriangle size={16} className="text-red-500" />}
+                  <div key={i} className={`flex items-center gap-4 p-4 rounded-xl border ${p.ok ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-100'}`}>
+                    <div className={p.ok ? 'text-emerald-500' : 'text-red-500'}>
+                      {p.ok ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
+                    </div>
                     <div>
-                      <p className="text-sm font-medium text-navy">{p.label}</p>
-                      <p className="text-[10px] text-muted-foreground">{p.detail}</p>
+                      <p className="text-xs font-black text-navy uppercase tracking-tight">{p.label}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground/60">{p.detail}</p>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1.5">Deadline (optional)</label>
-              <input type="date" className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10" />
-            </div>
+            {!canInitiate && (
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-100 flex items-start gap-3">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-[10px] font-bold text-amber-900 leading-relaxed uppercase italic">Incomplete records detected. Ensure all pre-flight stages are cleared before cycle instantiation.</p>
+              </div>
+            )}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowInitiate(false)}>Cancel</Button>
-              <Button variant="primary" disabled={!canInitiate}>
-                <Play size={14} /> Initiate Batch
+              <Button variant="primary" disabled={!canInitiate} onClick={onInitiateSubmit} loading={submitting} className="gap-2">
+                <Play size={16} fill="currentColor" /> Start Batch Cycle
               </Button>
             </div>
           </div>
@@ -198,36 +239,17 @@ const ClassDetail = () => {
 
       {/* Import Modal */}
       {showImport && (
-        <Modal title={`Import ${showImport === 'students' ? 'Students' : showImport === 'mentors' ? 'Mentor Assignments' : 'Elective Assignments'}`} onClose={() => setShowImport(null)}>
-          <ImportStepper contextLabel={`Importing for ${CLASS_META.name}`} onComplete={() => setShowImport(null)} />
+        <Modal isOpen={!!showImport} title={`Bulk ${showImport} Import`} onClose={() => setShowImport(null)}>
+          <ImportStepper type={showImport} contextLabel={`Context: ${classData?.name}`} onComplete={() => { setShowImport(null); fetchClass(); }} />
         </Modal>
       )}
 
-      {/* Add Subject Modal */}
+      {/* Add Subject Modal Placeholder */}
       {showAddSubject && (
-        <Modal title="Add Subject Assignment" onClose={() => setShowAddSubject(false)}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1.5">Search Subject</label>
-              <input type="text" className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10" placeholder="Search by name or code..." />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1.5">Assign Faculty</label>
-              <select className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10">
-                <option value="">Select faculty...</option>
-                <option>Dr. Sharma</option>
-                <option>Dr. Verma</option>
-                <option>Dr. Patel</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1.5">Subject Code Override (optional)</label>
-              <input type="text" className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10" placeholder="Leave blank to use default code" />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setShowAddSubject(false)}>Cancel</Button>
-              <Button variant="primary"><Plus size={14} /> Add Subject</Button>
-            </div>
+        <Modal isOpen={showAddSubject} title="Create Component Mapping" onClose={() => setShowAddSubject(false)}>
+          <div className="p-4 text-center">
+            <p className="text-sm text-muted-foreground mb-6 uppercase font-black text-[10px] tracking-widest italic opacity-50">Component management coming soon to UI. Use API for mapping.</p>
+            <Button variant="primary" className="w-full" onClick={() => setShowAddSubject(false)}>Close</Button>
           </div>
         </Modal>
       )}
