@@ -4,8 +4,8 @@ import logger from '../utils/logger.js';
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      maxPoolSize: 10,        // max 10 concurrent DB connections
-      minPoolSize: 2,         // keep 2 warm connections alive—cold-start requests don't wait
+      maxPoolSize: 10,        
+      minPoolSize: 2,         
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });

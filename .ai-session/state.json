@@ -6,7 +6,8 @@
     "Implemented robust API response extraction in Faculty portal",
     "Fixed setApprovals reference error in Pending.jsx",
     "Updated action handlers to support both array and object state shapes",
-    "Created vercel.json for frontend SPA rewrites"
+    "Created vercel.json for frontend SPA rewrites",
+    "Fixed 401 Unauthorized after login by standardizing cookie path"
   ],
   "in_progress": [],
   "pending": [],

@@ -13,6 +13,7 @@ const COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === 'production',
   sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
   maxAge: 8 * 60 * 60 * 1000, // 8 hours in ms
+  path: '/',
 };
 
 

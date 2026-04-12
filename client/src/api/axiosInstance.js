@@ -8,13 +8,10 @@ const axiosInstance = axios.create({
   },
 });
 
-// Request interceptor: Minimal - rely on httpOnly cookies (nds_token)
 axiosInstance.interceptors.request.use(
   (config) => config,
   (error) => Promise.reject(error)
 );
-
-// Response interceptor: Envelope preservation & global error handling
 axiosInstance.interceptors.response.use(
   (response) => {
 
@@ -24,21 +21,18 @@ axiosInstance.interceptors.response.use(
     const status = error.response?.status;
     const errorData = error.response?.data?.error || {};
 
-    // 1. Force Redirect to Change Password (PRD §2, Guide §2)
     if (status === 403 && errorData.code === 'AUTH_PASSWORD_CHANGE_REQUIRED') {
       if (window.location.pathname !== '/change-password') {
         window.location.href = '/change-password';
       }
     }
 
-    // 2. Clear session on Unauthorized
     if (status === 401) {
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
 
-    // Standardize error delivery to components
     return Promise.reject({
       code: errorData.code || 'UNKNOWN_ERROR',
       message: errorData.message || error.message || 'An unexpected error occurred',

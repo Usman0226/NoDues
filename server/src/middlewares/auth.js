@@ -6,6 +6,10 @@ export const protect = async (req, res, next) => {
   const token = req.cookies?.nds_token;
 
   if (!token) {
+    logger.warn('Auth missing: nds_token cookie not found', {
+      path: req.path,
+      cookiesFound: Object.keys(req.cookies || {}),
+    });
     return next(
       new ErrorResponse('Not authorized, please log in', 401, 'AUTH_REQUIRED')
     );

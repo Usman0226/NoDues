@@ -13,8 +13,6 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-// Connect to MongoDB BEFORE accepting requests.
-// With minPoolSize: 2, two warm connections are ready before the first request.
 const start = async () => {
   await connectDB();
 
