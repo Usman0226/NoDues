@@ -365,7 +365,7 @@ export const getBatchStudentDetail = async (req, res, next) => {
     const { batchId, studentId } = req.params;
 
     // Both queries hit { batchId: 1, studentId: 1 } compound index
-    const [request, approvals] = await Promise.all([
+    const [request, approvals, batch] = await Promise.all([
       NodueRequest.findOne({ batchId, studentId })
         .select('studentSnapshot status overrideRemark')
         .lean(),
@@ -373,9 +373,15 @@ export const getBatchStudentDetail = async (req, res, next) => {
         .select('_id facultyId facultyName subjectName approvalType roleTag action dueType remarks actionedAt')
         .populate('facultyId', 'name employeeId')
         .lean(),
+      NodueBatch.findById(batchId).select('departmentId').lean()
     ]);
 
-    if (!request) return next(new ErrorResponse('Record not found', 404, 'NOT_FOUND'));
+    if (!request || !batch) return next(new ErrorResponse('Record not found', 404, 'NOT_FOUND'));
+
+    // HoD Scope Check
+    if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
 
     return res.status(200).json({
       success: true,
@@ -464,6 +470,12 @@ export const addStudentToBatch = async (req, res, next) => {
     if (batch.status !== 'active') {
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
+
+    // HoD Scope Check
+    if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
     if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
 
     const existing = await NodueRequest.findOne({ batchId, studentId })
@@ -521,6 +533,11 @@ export const removeFacultyFromBatch = async (req, res, next) => {
     const batch = await NodueBatch.findById(batchId).select('status departmentId').lean();
     if (!batch)                    return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
     if (batch.status !== 'active') return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
+
+    // HoD Scope Check
+    if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
 
     // Delete only PENDING approvals; preserve actioned ones (approved/due_marked)
     const result = await NodueApproval.deleteMany({

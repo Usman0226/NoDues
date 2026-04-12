@@ -10,6 +10,7 @@ import { getDepartments } from '../../api/departments';
 import ImportStepper from '../../components/import/ImportStepper';
 import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
 const ROLE_TAG_COLORS = {
@@ -29,10 +30,28 @@ const FacultyList = () => {
   const [facultyClasses, setFacultyClasses] = useState([]);
   const [classesLoading, setClassesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { data: response, loading, error, request: fetchFaculty } = useApi(getFaculty, { immediate: true });
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [includeInactive, setIncludeInactive] = useState(false);
+
+  const { user } = useAuth();
+  const isHod = user?.role === 'hod';
+
+  const { data: response, loading, error, request: fetchFaculty } = useApi(getFaculty);
   const faculty = response?.data || [];
+  const total = response?.total || 0;
+  
   const { data: deptResponse } = useApi(getDepartments, { immediate: true });
-  const depts = deptResponse?.data || [];
+  const allDepts = deptResponse?.data || [];
+  const depts = isHod ? allDepts.filter(d => d._id === user.departmentId) : allDepts;
+
+  useEffect(() => {
+    const params = { page, limit, includeInactive };
+    if (isHod) params.departmentId = user.departmentId;
+    fetchFaculty(params);
+  }, [fetchFaculty, isHod, user?.departmentId, page, limit, includeInactive]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -41,6 +60,12 @@ const FacultyList = () => {
     departmentId: '',
     roleTags: ['faculty']
   });
+
+  useEffect(() => {
+    if (showCreate && isHod) {
+      setFormData(prev => ({ ...prev, departmentId: user.departmentId }));
+    }
+  }, [showCreate, isHod, user?.departmentId]);
 
 
   const handleCreate = async () => {
@@ -174,15 +199,25 @@ const FacultyList = () => {
   };
 
   return (
-    <PageWrapper title="Faculty" subtitle="Manage academic staff and coordination roles">
-      <div className="flex flex-wrap gap-3 mb-8">
-        <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}><UserPlus size={14} /> Add Faculty</Button>
-        <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
-          <Upload size={14} /> Import directory
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => fetchFaculty()} className="text-muted-foreground"><RefreshCw size={14} /> Refresh</Button>
-      </div>
+    <PageWrapper title="Faculty Directory" subtitle="Manage academic staff and department roles">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div className="flex flex-wrap gap-3">
+          <Button variant="primary" size="sm" onClick={() => {
+            setFormData({ name: '', employeeId: '', email: '', departmentId: isHod ? user.departmentId : '', roleTags: ['faculty'] });
+            setSelectedFaculty(null);
+            setShowCreate(true);
+          }}><Plus size={14} /> Register Staff</Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite"><Upload size={14} /> Batch Import</Button>
+        </div>
 
+        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+             onClick={() => setIncludeInactive(!includeInactive)}>
+           <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
+           </div>
+           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Inactivated</span>
+        </div>
+      </div>
       {error ? (
         <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
            <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
@@ -193,6 +228,13 @@ const FacultyList = () => {
           columns={columns}
           data={faculty || []}
           loading={loading && !response}
+          pagination={{
+            total,
+            page,
+            limit,
+            onPageChange: (p) => setPage(p),
+            onLimitChange: (l) => { setLimit(l); setPage(1); }
+          }}
           searchable
           searchPlaceholder="Search staff by name or ID..."
         />
@@ -246,9 +288,10 @@ const FacultyList = () => {
                 <select 
                   value={formData.departmentId}
                   onChange={e => setFormData({...formData, departmentId: e.target.value})}
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all disabled:opacity-50"
+                  disabled={isHod}
                 >
-                  <option value="">Select Dept</option>
+                  {!isHod && <option value="">Select Dept</option>}
                   {depts?.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
                 </select>
               </div>
@@ -323,9 +366,10 @@ const FacultyList = () => {
                 <select 
                   value={formData.departmentId}
                   onChange={e => setFormData({...formData, departmentId: e.target.value})}
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
+                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all disabled:opacity-50"
+                  disabled={isHod}
                 >
-                  <option value="">Select Dept</option>
+                  {!isHod && <option value="">Select Dept</option>}
                   {depts?.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
                 </select>
               </div>

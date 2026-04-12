@@ -14,8 +14,14 @@ const Batches = () => {
   const { user } = useAuth();
   const basePath = user?.role === 'hod' ? '/hod' : '/admin';
   const [statusFilter, setStatusFilter] = useState('all');
-  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
+  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches);
   const batches = response?.data || [];
+
+  React.useEffect(() => {
+    const params = {};
+    if (user?.role === 'hod') params.departmentId = user.departmentId;
+    fetchBatches(params);
+  }, [fetchBatches, user?.role, user?.departmentId]);
 
 
   const filtered = useMemo(() => {

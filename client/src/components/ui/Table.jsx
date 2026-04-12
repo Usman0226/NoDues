@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronUp, ChevronDown, Search, Inbox, Check, X } from 'lucide-react';
+import { ChevronUp, ChevronDown, Search, Inbox, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const SKELETON_DEFAULT_ROWS = 8;
@@ -68,8 +68,10 @@ const Table = ({
   selection = [],
   onSelectionChange,
   primaryKey = '_id',
-  selectionActions = null, // Custom components to show in the selection bar
+  selectionActions = null,
   showCount = true,
+  // Pagination Props
+  pagination = null, // { total, page, limit, onPageChange, onLimitChange }
 }) => {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -124,6 +126,11 @@ const Table = ({
     }
   };
 
+  // Pagination Logic
+  const canPrev = pagination ? (pagination.page > 1) : false;
+  const canNext = pagination ? (pagination.page * pagination.limit < pagination.total) : false;
+  const totalPages = pagination ? Math.ceil(pagination.total / pagination.limit) : 0;
+
   return (
     <div className="surface-panel overflow-hidden fade-up relative flex flex-col">
       {(searchable || showCount) && (
@@ -146,11 +153,11 @@ const Table = ({
                 <>
                   <span className="text-zinc-600">Showing {processed.length}</span>
                   <span className="opacity-50">of</span>
-                  <span>{data?.length || 0} Records</span>
+                  <span>{pagination ? pagination.total : data?.length || 0} Records</span>
                 </>
               ) : (
                 <>
-                  <span className="text-zinc-600">{data?.length || 0} Total Records</span>
+                  <span className="text-zinc-600">{pagination ? pagination.total : data?.length || 0} Total Records</span>
                 </>
               )}
             </div>
@@ -258,6 +265,50 @@ const Table = ({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Footer */}
+      {pagination && pagination.total > 0 && (
+        <div className="p-4 sm:p-5 border-t border-muted bg-zinc-50/30 flex flex-col sm:flex-row items-center justify-between gap-4 sticky bottom-0 z-20 backdrop-blur-sm">
+          <div className="flex items-center gap-4">
+             <div className="flex items-center gap-1.5">
+               <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">View</span>
+               <select 
+                 value={pagination.limit}
+                 onChange={(e) => pagination.onLimitChange?.(Number(e.target.value))}
+                 className="bg-transparent border-none text-xs font-bold text-navy focus:ring-0 cursor-pointer"
+               >
+                 {[20, 50, 100].map(val => <option key={val} value={val}>{val}</option>)}
+               </select>
+             </div>
+             <div className="h-4 w-px bg-zinc-200" />
+             <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+               Showing {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)} - {Math.min(pagination.page * pagination.limit, pagination.total)} <span className="mx-1 opacity-40">of</span> {pagination.total}
+             </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => pagination.onPageChange?.(pagination.page - 1)}
+              disabled={!canPrev || loading}
+              className="p-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-30 disabled:hover:bg-white transition-all text-navy"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="flex items-center gap-1 px-2">
+               <span className="text-xs font-black text-navy">{pagination.page}</span>
+               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mx-1">/</span>
+               <span className="text-xs font-bold text-zinc-400">{totalPages}</span>
+            </div>
+            <button
+              onClick={() => pagination.onPageChange?.(pagination.page + 1)}
+              disabled={!canNext || loading}
+              className="p-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-30 disabled:hover:bg-white transition-all text-navy"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

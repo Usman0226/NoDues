@@ -14,6 +14,7 @@ import { createStudent, updateStudent, deleteStudent, assignMentor, addElective,
 import { getFaculty } from '../../api/faculty';
 import { getSubjects, createSubject } from '../../api/subjects';
 import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
 const TABS = [
@@ -32,6 +33,7 @@ const ClassDetail = () => {
   const [showImport, setShowImport] = useState(null);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [showInitiate, setShowInitiate] = useState(false);
+  const [initiateForm, setInitiateForm] = useState({ deadline: '' });
   
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [showQuickAddSubject, setShowQuickAddSubject] = useState(false);
@@ -60,8 +62,18 @@ const ClassDetail = () => {
   
   const [submitting, setSubmitting] = useState(false);
 
+  const { user } = useAuth();
+  const isHod = user?.role === 'hod';
+  const basePath = isHod ? '/hod' : '/admin';
+
   const { data: response, loading, error, request: fetchClass } = useApi(() => getClass(classId), { immediate: true });
-  const { data: facultyResponse } = useApi(getFaculty, { immediate: true });
+  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty);
+
+  useEffect(() => {
+    const params = {};
+    if (isHod) params.departmentId = user.departmentId;
+    fetchFaculty(params);
+  }, [fetchFaculty, isHod, user?.departmentId]);
 
   const classData = response?.data || {};
   const students = classData?.students || [];
@@ -99,7 +111,7 @@ const ClassDetail = () => {
   const onInitiateSubmit = async () => {
     setSubmitting(true);
     try {
-      await initiateBatch(classId);
+      await initiateBatch(classId, initiateForm.deadline);
       toast.success('No-Due Batch initiated for this class');
       setShowInitiate(false);
       fetchClass();
@@ -471,7 +483,7 @@ const ClassDetail = () => {
       title={classData?.name} 
       subtitle={`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}
       backLink={
-        <Link to="/admin/departments" className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy transition-colors">
+        <Link to={isHod ? '/hod/classes' : '/admin/departments'} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy transition-colors">
           <ArrowLeft size={12} strokeWidth={3} /> Return to Directory
         </Link>
       }
@@ -539,7 +551,7 @@ const ClassDetail = () => {
                 </div>
                 <Badge status="pending" />
               </div>
-              <Button variant="primary" onClick={() => navigate(`/admin/batch/${activeBatch._id}`)}>
+              <Button variant="primary" onClick={() => navigate(`${basePath}/batch/${activeBatch._id}`)}>
                 Open Progress Matrix
               </Button>
             </div>
@@ -580,6 +592,18 @@ const ClassDetail = () => {
             <div className="p-5 rounded-xl bg-offwhite border border-muted shadow-inner">
               <p className="text-xs font-black text-navy uppercase tracking-widest mb-1">{classData?.name}</p>
               <p className="text-[10px] text-muted-foreground font-bold">Academic Session {classData?.academicYear}</p>
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Target Completion Deadline (Optional)</label>
+              <input 
+                type="date"
+                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:ring-2 focus:ring-navy/5 font-bold"
+                value={initiateForm.deadline}
+                min={new Date().toISOString().split('T')[0]}
+                onChange={(e) => setInitiateForm({ ...initiateForm, deadline: e.target.value })}
+              />
+              <p className="text-[9px] text-muted-foreground/60 uppercase tracking-widest mt-2 font-bold px-1">Institutional recommendation: 48 hours before examination window.</p>
             </div>
 
             <div>

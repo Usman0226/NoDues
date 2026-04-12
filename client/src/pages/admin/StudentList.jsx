@@ -1,4 +1,4 @@
-import React, { useState} from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
@@ -11,6 +11,7 @@ import { useApi } from '../../hooks/useApi';
 import { getStudents, createStudent, updateStudent, deleteStudent } from '../../api/students';
 import { getClasses } from '../../api/classes';
 import ImportStepper from '../../components/import/ImportStepper';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
 const StudentList = () => {
@@ -21,11 +22,32 @@ const StudentList = () => {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   
-  const { data: response, loading, error, request: fetchStudents } = useApi(getStudents, { immediate: true });
-  const students = response?.data || [];
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [includeInactive, setIncludeInactive] = useState(false);
 
-  const { data: classResponse, request: fetchClasses } = useApi(getClasses, { immediate: true });
+  const { user } = useAuth();
+  const isHod = user?.role === 'hod';
+  
+  const { data: response, loading, error, request: fetchStudents } = useApi(getStudents);
+  const students = response?.data || [];
+  const total = response?.total || 0;
+
+  const { data: classResponse, request: fetchClasses } = useApi(getClasses);
   const classes = classResponse?.data || [];
+
+  useEffect(() => {
+    const params = { page, limit, includeInactive };
+    if (isHod) params.departmentId = user.departmentId;
+    fetchStudents(params);
+  }, [fetchStudents, isHod, user?.departmentId, page, limit, includeInactive]);
+
+  useEffect(() => {
+    const params = {};
+    if (isHod) params.departmentId = user.departmentId;
+    fetchClasses(params);
+  }, [fetchClasses, isHod, user?.departmentId]);
 
   const [formData, setFormData] = useState({
     rollNo: '',
@@ -59,7 +81,7 @@ const StudentList = () => {
       await createStudent(formData);
       toast.success('Student added successfully');
       setShowAdd(false);
-      fetchStudents();
+      fetchStudents({ page, limit, includeInactive, ...(isHod ? { departmentId: user.departmentId } : {}) });
     } catch (err) {
       toast.error(err?.message || 'Failed to add student');
     } finally {
@@ -74,7 +96,7 @@ const StudentList = () => {
       await updateStudent(selectedStudent._id, formData);
       toast.success('Student updated successfully');
       setShowEdit(false);
-      fetchStudents();
+      fetchStudents({ page, limit, includeInactive, ...(isHod ? { departmentId: user.departmentId } : {}) });
     } catch (err) {
       toast.error(err?.message || 'Failed to update student');
     } finally {
@@ -88,7 +110,7 @@ const StudentList = () => {
       await deleteStudent(selectedStudent._id);
       toast.success('Student deactivated');
       setShowDelete(false);
-      fetchStudents();
+      fetchStudents({ page, limit, includeInactive, ...(isHod ? { departmentId: user.departmentId } : {}) });
     } catch (err) {
       toast.error(err?.message || 'Failed to deactivate student');
     } finally {
@@ -109,7 +131,7 @@ const StudentList = () => {
     { 
       key: 'status', 
       label: 'Onboarding', 
-      render: (v) => <Badge status={v || 'pending'} className="scale-90 origin-left" /> 
+      render: (v, row) => <Badge status={row.isActive ? (v || 'pending') : 'rejected'} className="scale-90 origin-left" /> 
     },
     {
       key: 'actions',
@@ -127,15 +149,25 @@ const StudentList = () => {
 
   return (
     <PageWrapper title="Students" subtitle="Global roster of all registered academic candidates">
-      <div className="flex flex-wrap gap-3 mb-8">
-        <Button variant="primary" size="sm" onClick={() => {
-           setFormData({ rollNo: '', name: '', email: '', classId: '', yearOfStudy: '' });
-           setShowAdd(true);
-        }}><UserPlus size={14} /> Add Student</Button>
-        <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
-          <Upload size={14} /> Import list
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => fetchStudents()} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div className="flex flex-wrap gap-3">
+          <Button variant="primary" size="sm" onClick={() => {
+             setFormData({ rollNo: '', name: '', email: '', classId: '', yearOfStudy: '' });
+             setShowAdd(true);
+          }}><UserPlus size={14} /> Add Student</Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
+            <Upload size={14} /> Import list
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => fetchStudents({ page, limit, includeInactive })} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
+        </div>
+
+        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+             onClick={() => setIncludeInactive(!includeInactive)}>
+           <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
+           </div>
+           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Inactivated</span>
+        </div>
       </div>
 
       {error ? (
@@ -148,6 +180,13 @@ const StudentList = () => {
           columns={columns}
           data={students || []}
           loading={loading && !response}
+          pagination={{
+            total,
+            page,
+            limit,
+            onPageChange: (p) => setPage(p),
+            onLimitChange: (l) => { setLimit(l); setPage(1); }
+          }}
           searchable
           searchPlaceholder="Filter by roll no, name, or group..."
         />

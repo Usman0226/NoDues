@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getOverview, getDues, overrideDues } from '../Controllers/hodController.js';
+import { getOverview, getDues, overrideDues, getActivity } from '../Controllers/hodController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
 
@@ -10,6 +10,7 @@ router.use(RoleGuard(['hod']));
 
 router.get('/overview', getOverview);
 router.get('/dues',     getDues);
+router.get('/activity', getActivity);
 router.post('/override', overrideDues);
 
 export default router;

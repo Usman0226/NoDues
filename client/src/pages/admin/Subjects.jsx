@@ -8,6 +8,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import { useApi } from '../../hooks/useApi';
 import { getSubjects, createSubject, updateSubject, deleteSubject } from '../../api/subjects';
 import { Plus, Filter, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
 const Subjects = () => {
@@ -16,6 +17,8 @@ const Subjects = () => {
   const [showDelete, setShowDelete] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [semesterFilter, setSemesterFilter] = useState('all');
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [submitting, setSubmitting] = useState(false);
 
   const { data: response, loading, error, request: fetchSubjects } = useApi(getSubjects, { immediate: true });
@@ -111,7 +114,7 @@ const Subjects = () => {
         </span>
       )
     },
-    {
+    ...(isAdmin ? [{
       key: 'actions', label: '', sortable: false, render: (_, row) => (
         <div className="flex justify-end">
           <ActionMenu
@@ -122,19 +125,21 @@ const Subjects = () => {
           />
         </div>
       )
-    }
+    }] : [])
   ];
 
   return (
     <PageWrapper title="Subjects" subtitle="Centralized academic component catalog for institution-wide mapping">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
-          <Button variant="primary" size="sm" onClick={() => {
-            setFormData({ code: '', name: '', semester: 1, isElective: false });
-            setShowCreate(true);
-          }} className="gap-2">
-            <Plus size={14} /> Register Subject
-          </Button>
+          {isAdmin && (
+            <Button variant="primary" size="sm" onClick={() => {
+              setFormData({ code: '', name: '', semester: 1, isElective: false });
+              setShowCreate(true);
+            }} className="gap-2">
+              <Plus size={14} /> Register Subject
+            </Button>
+          )}
           <div className="flex items-center gap-3 bg-white border border-muted/40 p-1 rounded-xl shadow-sm">
              <Filter size={12} className="ml-2 text-muted-foreground" />
              <select 

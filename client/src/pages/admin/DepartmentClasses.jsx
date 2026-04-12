@@ -9,7 +9,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
 import { getClasses, createClass, updateClass, deleteClass } from '../../api/classes';
-import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const containerVariants = {
@@ -33,6 +33,7 @@ const itemVariants = {
 const DepartmentClasses = () => {
   const { deptId: urlDeptId } = useParams();
   const { user } = useAuth();
+  const isHod = user?.role === 'hod';
   
   // Fall back to user.departmentId for HoD accessing their own classes directly
   const deptId = urlDeptId || user?.departmentId;
@@ -42,11 +43,20 @@ const DepartmentClasses = () => {
   const [showDelete, setShowDelete] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [includeInactive, setIncludeInactive] = useState(false);
   
-  // Notice we only pass departmentId to API if we have it logically, but actually 
-  // backend handles HoD auto-scoping if departmentId is missing in the query
-  const { data: response, loading, error, request: fetchClasses } = useApi(() => getClasses({ departmentId: deptId }), { immediate: true });
+  const { data: response, loading, error, request: fetchClasses } = useApi(getClasses);
   const classes = response?.data || [];
+  const total = response?.total || 0;
+
+  useEffect(() => {
+    const params = { departmentId: deptId, page, limit, includeInactive };
+    fetchClasses(params);
+  }, [fetchClasses, deptId, page, limit, includeInactive]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -141,23 +151,23 @@ const DepartmentClasses = () => {
 
 
   return (
-    <PageWrapper title="Classes & Groups" subtitle="Academic structure and section oversight">
-      {urlDeptId && (
-        <Link to="/admin/departments" className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy mb-6 -mt-4 transition-colors">
-          <ArrowLeft size={12} strokeWidth={3} /> Return to Directory
-        </Link>
-      )}
+    <PageWrapper title="Academic Groups" subtitle="Manage classes, semesters and department structure">
+       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div className="flex flex-wrap gap-3">
+            <Button variant="primary" size="sm" onClick={() => {
+                setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId });
+                setShowCreate(true);
+            }}><Plus size={14} /> New Group</Button>
+            <Button variant="ghost" size="sm" onClick={() => fetchClasses({ departmentId: deptId, page, limit, includeInactive })} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
+        </div>
 
-      <div className="flex items-center justify-between mb-8">
-         <Button variant="primary" size="sm" onClick={() => {
-            setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId });
-            setShowCreate(true);
-         }} className="gap-2">
-           <Plus size={14} /> New Class
-         </Button>
-         <Button variant="ghost" size="sm" onClick={() => fetchClasses()} className="text-muted-foreground">
-           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Sync
-         </Button>
+        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+             onClick={() => setIncludeInactive(!includeInactive)}>
+           <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
+           </div>
+           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Inactivated</span>
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -173,17 +183,12 @@ const DepartmentClasses = () => {
                 <div className="h-4 w-32 bg-muted/10 rounded-full animate-pulse"></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                    {[1, 2, 3].map(i => (
-                     <div key={i} className="bg-white rounded-xl border border-muted p-6 h-[180px] space-y-4 animate-pulse">
+                     <div key={i} className="bg-white rounded-xl border border-muted p-6 h-[180px] space-y-3 animate-pulse">
                         <div className="flex justify-between">
                            <div className="space-y-2">
                               <div className="h-5 w-32 bg-muted/10 rounded-lg"></div>
                               <div className="h-3 w-24 bg-muted/5 rounded-md"></div>
                            </div>
-                           <div className="h-6 w-16 bg-muted/10 rounded-full"></div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 mt-auto">
-                           <div className="h-14 bg-muted/5 rounded-xl"></div>
-                           <div className="h-14 bg-muted/5 rounded-xl"></div>
                         </div>
                      </div>
                    ))}
@@ -198,7 +203,7 @@ const DepartmentClasses = () => {
             className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm"
           >
              <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
-             <p className="text-muted-foreground font-medium">{error}</p>
+             <p className="text-muted-foreground font-medium">{error || 'Failed to initialize session'}</p>
           </motion.div>
         ) : Object.keys(grouped).length === 0 ? (
           <motion.div 
@@ -207,54 +212,71 @@ const DepartmentClasses = () => {
             animate={{ opacity: 1, y: 0 }}
             className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm border-dashed"
           >
-             <GraduationCap className="mx-auto text-muted-foreground/20 mb-4" size={64} />
-             <p className="text-muted-foreground font-medium">No active groups mapped for this department</p>
+             <Inbox size={48} className="mx-auto text-muted mb-4 opacity-20" />
+             <p className="text-muted-foreground font-semibold italic">No academic groups found matching criteria</p>
+             <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mt-1">Try adjusting filters or checking inactive records</p>
           </motion.div>
         ) : (
-          <motion.div 
+          <motion.div
             key="content"
             variants={containerVariants}
             initial="hidden"
             animate="visible"
+            className="space-y-12"
           >
-            {Object.entries(grouped).sort(([a], [b]) => Number(b) - Number(a)).map(([sem, semesterClasses]) => (
-              <div key={sem} className="mb-12">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/40 mb-4 px-1">Curriculum Semester {sem}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {semesterClasses.map((cls) => (
+            {Object.entries(grouped)
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([sem, semClasses]) => (
+              <div key={sem} className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-navy flex items-center justify-center text-xs font-black text-white shadow-lg shadow-navy/20">
+                    S{sem}
+                  </div>
+                  <h3 className="text-xs font-black uppercase tracking-[0.2em] text-navy/40">Semester {sem} Groups</h3>
+                  <div className="h-px flex-1 bg-gradient-to-r from-muted/50 to-transparent"></div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {semClasses.map((cls) => (
                     <motion.div key={cls._id} variants={itemVariants} layout>
-                      <Link to={urlDeptId ? `/admin/class/${cls._id}` : `/hod/class/${cls._id}`}
-                        className="block bg-white rounded-xl border border-muted shadow-sm p-6 hover:shadow-lg hover:border-gold/30 transition-all duration-300 group relative overflow-hidden"
+                       <Link 
+                        to={isHod ? `/hod/class/${cls._id}` : `/admin/class/${cls._id}`}
+                        className="group block bg-white rounded-2xl border border-muted p-6 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] hover:border-indigo-200 transition-all duration-300 relative overflow-hidden"
                       >
-                        <div className="flex items-start justify-between mb-4">
+                        {!cls.isActive && (
+                          <div className="absolute top-0 right-0 px-3 py-1 bg-zinc-100 text-[8px] font-black uppercase tracking-widest text-zinc-400 rounded-bl-lg">
+                            Inactive
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-between items-start mb-6">
                           <div>
-                            <h4 className="text-base font-black text-navy group-hover:text-gold transition-colors">{cls.name}</h4>
-                            <p className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest mt-1">Session {cls.academicYear} · {cls.classTeacher?.name || 'No CT'}</p>
+                            <h4 className="font-black text-navy text-lg group-hover:text-gold transition-colors uppercase tracking-tight">{cls.name}</h4>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 mt-1">
+                               Batch: {cls.academicYear}
+                            </p>
                           </div>
-                          <div className="flex items-center gap-2">
-                             {cls.hasActiveBatch && (
-                               <span className="text-[8px] px-2.5 py-1 rounded-full bg-navy text-white font-black uppercase tracking-widest animate-pulse">Live Batch</span>
-                             )}
-                             <div className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.preventDefault()}>
-                               <ActionMenu 
-                                 actions={[
-                                   { label: 'Edit Class', icon: Edit, onClick: () => handleEditClick(cls) },
-                                   { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(cls), variant: 'danger' }
-                                 ]}
-                               />
-                             </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.preventDefault()}>
+                             <button onClick={(e) => handleEditClick(cls, e)} className="p-2 hover:bg-zinc-50 rounded-lg text-muted-foreground hover:text-navy transition-all border border-transparent hover:border-muted">
+                               <Edit size={14} />
+                             </button>
+                             <button onClick={(e) => handleDeleteClick(cls, e)} className="p-2 hover:bg-status-due/10 rounded-lg text-muted-foreground hover:text-status-due transition-all border border-transparent hover:border-muted">
+                               <Trash2 size={14} />
+                             </button>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 text-center">
-                          <div className="p-2.5 rounded-xl bg-offwhite border border-muted/30">
-                            <p className="text-lg font-black text-navy leading-none mb-1">{cls.studentCount || 0}</p>
-                            <p className="text-[8px] text-muted-foreground font-black uppercase tracking-widest">Candidates</p>
+
+                        <div className="grid grid-cols-2 gap-3 mt-auto">
+                          <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100/50">
+                            <p className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-tighter mb-1">Subjects</p>
+                            <p className="text-sm font-black text-navy">{cls.subjectCount || 0}</p>
                           </div>
-                          <div className="p-2.5 rounded-xl bg-offwhite border border-muted/30">
-                            <p className="text-lg font-black text-navy leading-none mb-1">{cls.subjectCount || 0}</p>
-                            <p className="text-[8px] text-muted-foreground font-black uppercase tracking-widest">Modules</p>
+                          <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100/50">
+                            <p className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-tighter mb-1">Students</p>
+                            <p className="text-sm font-black text-navy">{cls.studentCount || 0}</p>
                           </div>
                         </div>
+                        
                         <div className="mt-4 pt-4 border-t border-muted/30 flex items-center justify-between">
                            <span className="text-[9px] font-black text-navy/40 uppercase tracking-widest group-hover:text-navy transition-colors">Open Analytics</span>
                            <ArrowRight size={14} className="text-muted-foreground group-hover:text-gold group-hover:translate-x-1 transition-all" />
@@ -268,6 +290,23 @@ const DepartmentClasses = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Manual Pagination for Cards */}
+      {total > limit && (
+         <div className="mt-12 p-5 bg-white rounded-2xl border border-muted flex items-center justify-between shadow-sm">
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+               Page <span className="text-navy">{page}</span> <span className="mx-1">of</span> {Math.ceil(total / limit)}
+            </p>
+            <div className="flex items-center gap-2">
+               <button onClick={() => setPage(page-1)} disabled={page === 1} className="p-2 hover:bg-zinc-50 rounded-lg border border-muted disabled:opacity-30 transition-all text-navy shadow-sm">
+                  <ChevronLeft size={16} />
+               </button>
+               <button onClick={() => setPage(page+1)} disabled={page * limit >= total} className="p-2 hover:bg-zinc-50 rounded-lg border border-muted disabled:opacity-30 transition-all text-navy shadow-sm">
+                  <ChevronRight size={16} />
+               </button>
+            </div>
+         </div>
+      )}
 
       {showCreate && (
         <Modal isOpen={showCreate} title="Instantiate Academic Group" onClose={() => setShowCreate(false)}>

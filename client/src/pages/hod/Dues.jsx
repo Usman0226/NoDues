@@ -7,14 +7,25 @@ import Modal from '../../components/ui/Modal';
 import { Shield, AlertTriangle, User, BookOpen, RefreshCw } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
 import { getHodDues, overrideDue } from '../../api/hod';
+import { getDepartmentSSEUrl } from '../../api/sse';
+import useSSE from '../../hooks/useSSE';
+import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const Dues = () => {
+  const { user } = useAuth();
   const [overrideTarget, setOverrideTarget] = useState(null);
   const [overrideRemark, setOverrideRemark] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const { data: response, loading, error, request: fetchDues } = useApi(getHodDues, { immediate: true });
+  
+  // Real-time awareness (§9)
+  useSSE(user?.departmentId ? getDepartmentSSEUrl(user.departmentId) : null, (event) => {
+    if (event.type === 'APPROVAL_UPDATED' || event.type === 'HOD_OVERRIDE') {
+      fetchDues();
+    }
+  });
   
   const flattenedDues = React.useMemo(() => {
     if (!response?.data) return [];

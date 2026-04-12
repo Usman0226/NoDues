@@ -16,11 +16,22 @@ import {
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
+  const { user } = useAuth();
+  const isHod = user?.role === 'hod';
+  const basePath = isHod ? '/hod' : '/admin';
+
+  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches);
   const batches = response?.data || [];
+
+  React.useEffect(() => {
+    const params = {};
+    if (isHod) params.departmentId = user.departmentId;
+    fetchBatches(params);
+  }, [fetchBatches, isHod, user?.departmentId]);
 
   const stats = useMemo(() => {
     if (!batches) return [];
@@ -80,7 +91,7 @@ const AdminDashboard = () => {
       render: (_, row) => (
         <button
           type="button"
-          onClick={() => navigate(`/admin/batch/${row._id}`)}
+          onClick={() => navigate(`${basePath}/batch/${row._id}`)}
           className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 inline-flex items-center justify-center rounded-full hover:bg-muted/30 transition-colors touch-manipulation"
           aria-label="Open batch"
         >
@@ -106,7 +117,7 @@ const AdminDashboard = () => {
   }
 
   return (
-    <PageWrapper title="Institutional Control" subtitle="System-wide clearance health and batch metrics">
+    <PageWrapper title={isHod ? "Departmental Control" : "Institutional Control"} subtitle={isHod ? "Department-specific clearance health and metrics" : "System-wide clearance health and batch metrics"}>
       {/* Stats Grid */}
       <div className={`grid grid-cols-2 lg:grid-cols-5 gap-6 mb-12 ${loading && !response ? 'animate-pulse' : ''}`}>
         {stats.map((stat, i) => (
@@ -128,7 +139,7 @@ const AdminDashboard = () => {
             <button
               type="button"
               className="text-xs font-semibold text-navy hover:text-gold shrink-0 min-h-11 px-2 sm:min-h-0 rounded-lg sm:rounded-none"
-              onClick={() => navigate('/admin/batches')}
+              onClick={() => navigate(`${basePath}/batches`)}
             >
               View all batches
             </button>
