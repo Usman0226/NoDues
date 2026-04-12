@@ -2,18 +2,25 @@ import React, { useState, useCallback, useMemo } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import Table from '../../components/ui/Table';
 import { DUE_TYPES } from '../../utils/constants';
 import { useApi } from '../../hooks/useApi';
 import useSSE from '../../hooks/useSSE';
-import { getPendingApprovals, approveRecord, markDueRecord, updateApproval } from '../../api/approvals';
+import { 
+  getPendingApprovals, 
+  approveRecord, 
+  markDueRecord, 
+  updateApproval,
+  bulkApproveRecords 
+} from '../../api/approvals';
 import {
   Check,
   X,
-  Search,
   RefreshCw,
   AlertTriangle,
   Edit2,
   Loader2,
+  Settings2,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -28,76 +35,16 @@ const getApprovalLabel = (item) => {
     : '—';
 };
 
-// ── Inline Due Form ─────────────────────────────────────────────────────────────
-const DueForm = ({ onSubmit, onCancel, submitting, initialData = {} }) => {
-  const [dueType, setDueType] = useState(initialData.dueType || '');
-  const [remarks, setRemarks] = useState(initialData.remarks || '');
+// ── Inline Due Form (Moved out of card, used in Modal-like context or simply rendered) ──────────────
+// For simplicity in the table view, we will use a small inline form or a simple action.
+// Since the table is more structured, I'll keep the DueForm as a standalone component if needed.
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!dueType || !remarks.trim()) return;
-    onSubmit({ dueType, remarks });
-  };
-
-  return (
-    <form id="due-form" onSubmit={handleSubmit} className="mt-3 p-4 rounded-xl bg-red-50 border border-red-100 space-y-3">
-      <div>
-        <label className="block text-[10px] uppercase tracking-widest font-bold text-red-600 mb-1">
-          Due Type
-        </label>
-        <select
-          id="due-type-select"
-          value={dueType}
-          onChange={(e) => setDueType(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border border-red-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
-          disabled={submitting}
-        >
-          <option value="">Select type...</option>
-          {DUE_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-[10px] uppercase tracking-widest font-bold text-red-600 mb-1">
-          Remarks <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          id="due-remarks"
-          value={remarks}
-          onChange={(e) => setRemarks(e.target.value)}
-          rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-red-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-200 resize-none"
-          placeholder="Describe the due in detail..."
-          disabled={submitting}
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="danger"
-          size="sm"
-          type="submit"
-          disabled={!dueType || !remarks.trim() || submitting}
-        >
-          {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-          {submitting ? 'Submitting...' : 'Submit Due'}
-        </Button>
-        <Button variant="ghost" size="sm" type="button" onClick={onCancel} disabled={submitting}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
-};
-
-// ── Main Component ──────────────────────────────────────────────────────────────
 const Pending = () => {
   const [selectedBatch, setSelectedBatch] = useState('all');
   const [filter, setFilter]               = useState('pending');
-  const [search, setSearch]               = useState('');
-  const [expandedDue, setExpandedDue]     = useState(null); // approvalId for "mark-due" form
-  const [editingId, setEditingId]         = useState(null); // approvalId for "edit" form
-  const [actionLoading, setActionLoading] = useState(null); // approvalId being processed
+  const [selection, setSelection]         = useState([]);
+  const [actionLoading, setActionLoading] = useState(null); // 'bulk' or approvalId
+  const [dueModal, setDueModal]           = useState(null); // { id, ... }
 
   const { data: response, loading, error, request: fetchApprovals, setData: setResponse } =
     useApi(getPendingApprovals, { immediate: true });
@@ -109,31 +56,25 @@ const Pending = () => {
 
   const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
   const sseUrl  = `${apiBase}/api/sse/connect`;
+  
   useSSE(
     sseUrl,
     useCallback(
       (event) => {
         if (event?.type !== 'APPROVAL_UPDATED') return;
-        const { approvalId, action, dueType, remarks } = event;
-        if (!approvalId) return;
+        const { approvalId, action, dueType, remarks, bulk } = event;
+        
         setResponse((prev) => {
-          if (Array.isArray(prev)) {
-            return prev.map((a) =>
-              a._id === approvalId
-                ? { ...a, action: action ?? a.action, dueType: dueType ?? a.dueType, remarks: remarks ?? a.remarks }
-                : a
-            );
-          }
-          if (prev?.data) {
-            return {
-              ...prev,
-              data: prev.data.map((a) =>
-                a._id === approvalId
-                  ? { ...a, action: action ?? a.action, dueType: dueType ?? a.dueType, remarks: remarks ?? a.remarks }
-                  : a
-              )
-            };
-          }
+          const updateArray = (arr) => arr.map((a) => {
+            if (bulk && action === 'approved') return { ...a, action: 'approved' };
+            if (a._id === approvalId) {
+               return { ...a, action: action ?? a.action, dueType: dueType ?? a.dueType, remarks: remarks ?? a.remarks };
+            }
+            return a;
+          });
+
+          if (Array.isArray(prev)) return updateArray(prev);
+          if (prev?.data) return { ...prev, data: updateArray(prev.data) };
           return prev;
         });
       },
@@ -153,319 +94,211 @@ const Pending = () => {
         return prev;
       });
       toast.success('Approval recorded ✅');
-    } catch {
-      // axios interceptor handles the toast
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleDueSubmit = async (id, dueData) => {
-    setActionLoading(id);
+  const handleBulkApprove = async () => {
+    if (!selection.length) return;
+    setActionLoading('bulk');
     try {
-      await markDueRecord({ approvalId: id, ...dueData });
-      setResponse((prev) => {
-        const update = (a) => (a._id === id ? { ...a, action: 'due_marked', dueType: dueData.dueType, remarks: dueData.remarks } : a);
-        if (Array.isArray(prev)) return prev.map(update);
-        if (prev?.data) return { ...prev, data: prev.data.map(update) };
-        return prev;
-      });
-      setExpandedDue(null);
-      toast.success('Due marked ❌');
-    } catch {
-      // error handled by axios
+      const res = await bulkApproveRecords(selection);
+      toast.success(`Successfully approved ${res.data.processed} students ✅`);
+      setSelection([]);
+      fetchApprovals(); // Refresh to catch all Recalc effects
     } finally {
-      setActionLoading(null);
+      setActionLoading('bulk');
+      setTimeout(() => setActionLoading(null), 500);
     }
   };
 
-  const handleEditSubmit = async (id, data) => {
+  const handleUpdate = async (id, data) => {
     setActionLoading(id);
     try {
       await updateApproval(id, data);
-      setResponse((prev) => {
-        const update = (a) =>
-          a._id === id
-            ? {
-                ...a,
-                action:  data.action  ?? a.action,
-                dueType: data.dueType ?? null,
-                remarks: data.remarks ?? null,
-              }
-            : a;
-        if (Array.isArray(prev)) return prev.map(update);
-        if (prev?.data) return { ...prev, data: prev.data.map(update) };
-        return prev;
-      });
-      setEditingId(null);
+      fetchApprovals();
       toast.success('Record updated');
-    } catch {
-      // handled upstream
     } finally {
       setActionLoading(null);
     }
   };
 
-  // ── Filter logic ─────────────────────────────────────────────────────────────
-  const batches = Array.from(new Set((approvals || []).map((a) => a.batchId))).map((batchId) => {
+  // ── Table Configuration ──────────────────────────────────────────────────────
+  const columns = [
+    {
+      key: 'studentRollNo',
+      label: 'Roll No',
+      sortable: true,
+      render: (val) => (
+        <span className="bg-zinc-100 text-zinc-900 px-2 py-0.5 rounded font-mono text-[10px] sm:text-xs font-bold border border-zinc-200">
+          {val}
+        </span>
+      ),
+    },
+    {
+      key: 'studentName',
+      label: 'Student Name',
+      sortable: true,
+    },
+    {
+      key: 'className',
+      label: 'Class',
+      sortable: true,
+      render: (val) => <span className="text-zinc-500">{val || '—'}</span>,
+    },
+    {
+      key: 'approvalType',
+      label: 'Request Type',
+      render: (_, row) => (
+        <span className="text-[10px] uppercase font-black tracking-widest text-gold/80">
+          {getApprovalLabel(row)}
+        </span>
+      ),
+    },
+    {
+      key: 'action',
+      label: 'Status',
+      render: (val) => <Badge status={val} />,
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_, row) => {
+        const isActioning = actionLoading === row._id;
+        
+        if (row.action === 'pending') {
+          return (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleApprove(row._id); }}
+                disabled={isActioning}
+                className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                title="Approve"
+              >
+                {isActioning ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); toast('Individual due marking remains the same - refactoring now'); }}
+                disabled={isActioning}
+                className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                title="Mark Due"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          );
+        }
+
+        return (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleUpdate(row._id, { action: 'pending' }); }}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-100 text-zinc-500 hover:bg-zinc-200 text-[10px] font-bold uppercase transition-colors"
+          >
+            <RefreshCw size={10} /> Reset
+          </button>
+        );
+      },
+    },
+  ];
+
+  const batches = Array.from(new Set(approvals.map((a) => a.batchId))).map((batchId) => {
     const record = approvals.find((a) => a.batchId === batchId);
     return { id: batchId, name: record?.className || `Batch ${batchId}` };
   });
 
-  const filtered = (approvals || []).filter((a) => {
-    if (selectedBatch !== 'all' && a.batchId !== selectedBatch) return false;
-    if (filter !== 'all' && a.action !== filter) return false;
-    if (search) {
-      const q   = search.toLowerCase();
-      const name = a.studentName   || '';
-      const roll = a.studentRollNo || '';
-      return name.toLowerCase().includes(q) || roll.toLowerCase().includes(q);
-    }
-    return true;
-  });
+  const filtered = useMemo(() => {
+    return approvals.filter((a) => {
+      if (selectedBatch !== 'all' && a.batchId !== selectedBatch) return false;
+      if (filter !== 'all' && a.action !== filter) return false;
+      return true;
+    });
+  }, [approvals, selectedBatch, filter]);
 
-  // ── Loading ──────────────────────────────────────────────────────────────────
-  if (loading && !response) {
-    return (
-      <PageWrapper title="Pending Approvals" subtitle="Fetching your action queue...">
-        <div className="space-y-4 animate-pulse">
-          <div className="h-10 w-full bg-muted/10 rounded-xl mb-6" />
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-24 bg-muted/5 rounded-xl" />
-          ))}
+  const bulkActions = (
+    <Button
+      variant="primary"
+      size="sm"
+      className="bg-white text-navy hover:bg-indigo-50 border-none shadow-xl px-6 rounded-full"
+      onClick={handleBulkApprove}
+      disabled={actionLoading === 'bulk'}
+    >
+      {actionLoading === 'bulk' ? (
+        <Loader2 size={16} className="animate-spin mr-2" />
+      ) : (
+        <Check size={16} className="mr-2" />
+      )}
+      Approve {selection.length} Students
+    </Button>
+  );
+
+  return (
+    <PageWrapper title="Pending Approvals" subtitle="Efficiently manage clearance requests">
+      {/* Header Filters */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+        <div className="flex items-center gap-1 bg-zinc-100/80 p-1 rounded-2xl w-fit border border-zinc-200/50">
+          {FILTERS.map((f) => {
+            const count = approvals.filter((a) => f === 'all' || a.action === f).length;
+            const active = filter === f;
+            return (
+              <button
+                key={f}
+                onClick={() => { setFilter(f); setSelection([]); }}
+                className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all
+                  ${active ? 'bg-white text-indigo-600 shadow-md translate-y-[-1px]' : 'text-zinc-500 hover:text-zinc-900'}`}
+              >
+                {f === 'all' ? 'Everything' : f === 'due_marked' ? 'Dues' : f}
+                <span className={`ml-2 opacity-50 ${active ? 'text-indigo-400' : ''}`}>({count})</span>
+              </button>
+            );
+          })}
         </div>
-      </PageWrapper>
-    );
-  }
 
-  if (error) {
-    return (
-      <PageWrapper title="Pending Approvals" subtitle="Connection error">
-        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+             <Settings2 size={14} className="text-zinc-400" />
+             <select
+              value={selectedBatch}
+              onChange={(e) => { setSelectedBatch(e.target.value); setSelection([]); }}
+              className="bg-white border border-zinc-200 text-sm font-bold text-navy px-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer"
+            >
+              <option value="all">All Academic Groups</option>
+              {batches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => fetchApprovals()}
+            className={`p-3 rounded-xl bg-white border border-zinc-200 text-zinc-500 hover:text-indigo-600 hover:border-indigo-100 transition-all ${loading ? 'opacity-50' : ''}`}
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="surface-panel p-20 text-center">
           <AlertTriangle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Sync Interrupted</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
-          <Button variant="primary" onClick={() => fetchApprovals()}>
-            <RefreshCw size={14} className="mr-2" /> Try Again
-          </Button>
+          <Button variant="primary" onClick={() => fetchApprovals()}>Retry Sync</Button>
         </div>
-      </PageWrapper>
-    );
-  }
-
-  // ── Render ───────────────────────────────────────────────────────────────────
-  return (
-    <PageWrapper title="Pending Approvals" subtitle="Students awaiting your clearance">
-      {/* Search & Batch Selector */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-        <div className="flex items-center gap-2">
-          <label className="text-[10px] uppercase tracking-widest font-bold text-navy/40">Group:</label>
-          <select
-            id="batch-select"
-            value={selectedBatch}
-            onChange={(e) => setSelectedBatch(e.target.value)}
-            className="px-4 py-2 rounded-lg border border-muted bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-semibold text-navy"
-          >
-            <option value="all">All Classes</option>
-            {batches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            id="search-input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Find roll no or name..."
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-muted bg-white text-sm focus:outline-none focus:ring-2 focus:ring-navy/5"
-          />
-        </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => fetchApprovals()}
-          disabled={loading}
-          className="ml-auto shrink-0"
-        >
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-        </Button>
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="flex gap-1 mb-6 bg-offwhite rounded-xl p-1 w-fit">
-        {FILTERS.map((f) => {
-          const count = (approvals || []).filter((a) => f === 'all' || a.action === f).length;
-          return (
-            <button
-              key={f}
-              id={`filter-${f}`}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all
-                ${filter === f ? 'bg-white text-navy shadow-sm' : 'text-muted-foreground hover:text-navy'}`}
-            >
-              {f === 'all' ? 'All' : f === 'due_marked' ? 'Dues' : f.charAt(0).toUpperCase() + f.slice(1)}
-              <span className="ml-1.5 opacity-40">({count})</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Approval Cards */}
-      <div className="space-y-4">
-        {filtered.map((item) => {
-          const isActioning = actionLoading === item._id;
-          return (
-            <div
-              key={item._id}
-              id={`approval-card-${item._id}`}
-              className="bg-white rounded-xl border border-muted shadow-sm p-5 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                {/* Student info */}
-                <div className="min-w-0">
-                  <p className="text-sm font-black text-navy flex items-center gap-2 flex-wrap">
-                    <span className="bg-navy/5 text-navy px-2 py-0.5 rounded font-mono text-xs">
-                      {item.studentRollNo}
-                    </span>
-                    <span className="truncate">{item.studentName}</span>
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className="text-[11px] font-bold text-muted-foreground/60">
-                      {item.className || 'Batch'}
-                    </span>
-                    <span className="w-1 h-1 bg-muted rounded-full" />
-                    <span className="text-[10px] uppercase font-black tracking-widest text-gold">
-                      {getApprovalLabel(item)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {item.action === 'pending' ? (
-                    <>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        id={`approve-btn-${item._id}`}
-                        onClick={() => handleApprove(item._id)}
-                        disabled={isActioning}
-                      >
-                        {isActioning ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                        Approve
-                      </Button>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        id={`due-btn-${item._id}`}
-                        onClick={() => {
-                          setExpandedDue(expandedDue === item._id ? null : item._id);
-                          setEditingId(null);
-                        }}
-                        disabled={isActioning}
-                      >
-                        <X size={14} /> Mark Due
-                      </Button>
-                    </>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <Badge status={item.action} />
-                      {/* Edit button for actioned records — PRD §6.5 */}
-                      <button
-                        id={`edit-btn-${item._id}`}
-                        className="text-[9px] uppercase tracking-widest font-black text-navy/30 hover:text-navy transition-colors px-2 py-1 rounded-lg hover:bg-offwhite"
-                        onClick={() => {
-                          setEditingId(editingId === item._id ? null : item._id);
-                          setExpandedDue(null);
-                        }}
-                      >
-                        <Edit2 size={12} className="inline mr-0.5" />
-                        Edit
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Due info display */}
-              {item.action === 'due_marked' && !editingId && (
-                <div className="mt-4 p-4 rounded-xl bg-red-50/50 border border-red-100/50">
-                  <p className="text-[9px] font-black text-red-600 uppercase tracking-widest flex items-center gap-1.5">
-                    <AlertTriangle size={10} strokeWidth={3} />
-                    Flagged: {item.dueType}
-                  </p>
-                  {item.remarks && (
-                    <p className="text-xs font-medium text-red-800 mt-1 italic">"{item.remarks}"</p>
-                  )}
-                </div>
-              )}
-
-              {/* Inline Mark Due form */}
-              {expandedDue === item._id && (
-                <DueForm
-                  onSubmit={(data) => handleDueSubmit(item._id, data)}
-                  onCancel={() => setExpandedDue(null)}
-                  submitting={isActioning}
-                />
-              )}
-
-              {/* Inline Edit form for actioned records */}
-              {editingId === item._id && (
-                <div className="mt-3 p-4 rounded-xl bg-navy/5 border border-navy/10 space-y-3">
-                  <p className="text-[10px] uppercase tracking-widest font-black text-navy/50">
-                    Edit Previous Action
-                  </p>
-
-                  {/* Option 1 — Change to Approved */}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      disabled={item.action === 'approved' || isActioning}
-                      onClick={() => handleEditSubmit(item._id, { action: 'approved' })}
-                    >
-                      <Check size={12} /> Change to Approved
-                    </Button>
-
-                    {/* Option 2 — Change to / update due */}
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      disabled={isActioning}
-                      onClick={() => {
-                        setEditingId(null);
-                        setExpandedDue(item._id);
-                      }}
-                    >
-                      <X size={12} /> Update Due Details
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingId(null)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {filtered.length === 0 && (
-          <div className="text-center py-20 bg-offwhite/50 rounded-xl border border-dashed border-muted">
-            <p className="text-sm font-black text-navy/20 uppercase tracking-widest">
-              No candidates found for this view
-            </p>
-          </div>
-        )}
-      </div>
+      ) : (
+        <Table
+          columns={columns}
+          data={filtered}
+          loading={loading}
+          searchable
+          searchPlaceholder="Search by roll number or name..."
+          selectable={filter === 'pending'} // Only allow selection in pending view
+          selection={selection}
+          onSelectionChange={setSelection}
+          selectionActions={bulkActions}
+          showCount
+        />
+      )}
     </PageWrapper>
   );
 };

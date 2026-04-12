@@ -29,6 +29,7 @@ import Dues from './pages/hod/Dues';
 import Overrides from './pages/hod/Overrides';
 
 import FacultyDashboard from './pages/faculty/Dashboard';
+import MyClasses from './pages/faculty/MyClasses';
 import Pending from './pages/faculty/Pending';
 import FacultyHistory from './pages/faculty/History';
 
@@ -152,6 +153,7 @@ const App = () => {
               <Route path="/hod/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
 
               <Route path="/faculty" element={<FacultyDashboard />} />
+              <Route path="/faculty/classes" element={<MyClasses />} />
               <Route path="/faculty/pending" element={<Pending />} />
               <Route path="/faculty/history" element={<FacultyHistory />} />
             </Route>

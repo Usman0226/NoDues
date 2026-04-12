@@ -1,6 +1,7 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { User, LogOut, Bell, Menu, Radar } from 'lucide-react';
+import { User, LogOut, Bell, Menu, Radar, ShieldCheck } from 'lucide-react';
 
 const Navbar = ({ onMenuToggle }) => {
   const { user, logout } = useAuth();
@@ -42,13 +43,22 @@ const Navbar = ({ onMenuToggle }) => {
                 <p className="text-xs font-black text-navy truncate">{user?.email}</p>
                 <p className="text-[9px] text-zinc-500 uppercase tracking-[0.2em] mt-1 sm:hidden">{user?.role}</p>
               </div>
-              <button
-                onClick={logout}
-                className="w-full text-left px-4 py-3 text-sm font-semibold text-status-rejected hover:bg-red-50 flex items-center gap-2 transition-colors"
-              >
-                <LogOut size={16} />
-                <span>Logout</span>
-              </button>
+              <div className="py-1">
+                <Link
+                  to="/change-password"
+                  className="w-full text-left px-4 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 flex items-center gap-2 transition-colors"
+                >
+                  <ShieldCheck size={16} />
+                  <span>Security Settings</span>
+                </Link>
+                <button
+                  onClick={logout}
+                  className="w-full text-left px-4 py-3 text-sm font-semibold text-status-rejected hover:bg-red-50 flex items-center gap-2 transition-colors"
+                >
+                  <LogOut size={16} />
+                  <span>Logout</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

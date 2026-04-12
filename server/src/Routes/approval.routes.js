@@ -3,6 +3,7 @@ import {
   getPendingApprovals,
   getApprovalHistory,
   approveRequest,
+  bulkApproveRequests,
   markDue,
   updateApproval,
 } from '../Controllers/approvalController.js';
@@ -17,6 +18,7 @@ router.use(RoleGuard(['faculty', 'hod'])); // faculty and hod can action approva
 router.get('/pending',  getPendingApprovals);
 router.get('/history',  getApprovalHistory);
 router.post('/approve', approveRequest);
+router.post('/bulk-approve', bulkApproveRequests);
 router.post('/mark-due', markDue);
 router.patch('/:approvalId', updateApproval);
 

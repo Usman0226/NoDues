@@ -332,3 +332,30 @@ Sample Response (200):
 }
 
 Error Codes: 401 (auth), 404 (not found)
+
+---
+
+### POST /api/approvals/bulk-approve
+Description: Approve multiple clearance requests at once.
+
+curl -X POST http://localhost:5000/api/approvals/bulk-approve \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "approvalIds": ["6627a3f2e4b0cc9d8f0000a1", "6627a3f2e4b0cc9d8f0000a2"]
+  }'
+
+Sample Response (200):
+{
+  "success": true,
+  "data": {
+    "count": 2,
+    "results": [
+      { "id": "6627a3f2e4b0cc9d8f0000a1", "status": "approved" },
+      { "id": "6627a3f2e4b0cc9d8f0000a2", "status": "approved" }
+    ]
+  }
+}
+
+Error Codes: 400 (validation), 401 (auth)
+

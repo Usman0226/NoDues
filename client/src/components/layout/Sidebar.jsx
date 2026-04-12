@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../utils/constants';
 import {
@@ -29,6 +30,7 @@ const NAV_CONFIG = {
   ],
   [ROLES.FACULTY]: [
     { label: 'Dashboard', path: '/faculty', icon: LayoutDashboard },
+    { label: 'My Classes', path: '/faculty/classes', icon: GraduationCap },
     { label: 'Pending', path: '/faculty/pending', icon: ClipboardCheck },
     { label: 'History', path: '/faculty/history', icon: History },
   ],
@@ -127,14 +129,29 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
       <aside className={`hidden lg:flex ${collapsed ? 'w-20' : 'w-72'} min-h-screen bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex-col transition-all duration-300 ease-in-out relative shrink-0 shadow-2xl shadow-indigo-900/30`}>
         {sidebarContent}
       </aside>
-      {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={onMobileClose} />
-          <aside className="relative w-72 max-w-[82vw] bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex flex-col animate-in slide-in-from-left duration-300 shadow-2xl">
-            {sidebarContent}
-          </aside>
-        </div>
-      )}
+      <AnimatePresence>
+        {mobileOpen && (
+          <div className="lg:hidden fixed inset-0 z-50 flex">
+            <motion.div
+              className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              onClick={onMobileClose}
+            />
+            <motion.aside
+              className="relative w-72 max-w-[82vw] bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex flex-col shadow-2xl"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', stiffness: 350, damping: 35, mass: 0.8 }}
+            >
+              {sidebarContent}
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 };

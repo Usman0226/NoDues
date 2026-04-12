@@ -68,7 +68,6 @@ app.use('/api/student',     studentPortalRoutes);
 app.use('/api/sse',         sseRoutes);
 app.use('/api/import',      importRoutes);
 
-// ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({
     success: false,
@@ -80,7 +79,6 @@ app.use((_req, res) => {
   });
 });
 
-// ── Central error handler (must be last) ──────────────────────────────────────
 app.use(errorHandler);
 
 export default app;

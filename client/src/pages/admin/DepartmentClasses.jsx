@@ -153,7 +153,7 @@ const DepartmentClasses = () => {
             setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId });
             setShowCreate(true);
          }} className="gap-2">
-           <Plus size={14} /> New Group
+           <Plus size={14} /> New Class
          </Button>
          <Button variant="ghost" size="sm" onClick={() => fetchClasses()} className="text-muted-foreground">
            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Sync
@@ -306,7 +306,7 @@ const DepartmentClasses = () => {
             </div>
             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowCreate(false)}>Abort</Button>
-              <Button variant="primary" onClick={handleCreate} loading={submitting}>Establish Group</Button>
+              <Button variant="primary" onClick={handleCreate} loading={submitting}>Establish Class</Button>
             </div>
           </div>
         </Modal>

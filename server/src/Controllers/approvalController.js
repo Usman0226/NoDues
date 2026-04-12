@@ -157,7 +157,6 @@ export const approveRequest = async (req, res, next) => {
       return next(new ErrorResponse('This approval has already been actioned', 400, 'APPROVAL_ALREADY_ACTIONED'));
     }
 
-    // Verify batch is still active — run in parallel with the save
     const batch = await NodueBatch.findById(approval.batchId).select('status').lean();
     if (!batch || batch.status !== 'active') {
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
@@ -169,12 +168,8 @@ export const approveRequest = async (req, res, next) => {
     approval.actionedAt = new Date();
     await approval.save();
 
-    // Recalculate and invalidate cache — both in parallel
-    await Promise.all([
-      recalcRequestStatus(approval.requestId),
-    ]);
+    await Promise.all([recalcRequestStatus(approval.requestId)]);
 
-    // Surgical cache invalidation — never flushAll
     invalidateApprovalCaches(approval);
 
     logger.info('approval_actioned', {
@@ -182,7 +177,6 @@ export const approveRequest = async (req, res, next) => {
       action: 'APPROVE', resource_id: approvalId,
     });
 
-    // Notify student via SSE (fire-and-forget — never block response)
     pushEvent([approval.studentId.toString()], 'APPROVAL_UPDATED', {
       studentId:  approval.studentId,
       requestId:  approval.requestId,
@@ -191,6 +185,83 @@ export const approveRequest = async (req, res, next) => {
     });
 
     return res.status(200).json({ success: true, data: { approvalId, action: 'approved' } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /api/approvals/bulk-approve ──────────────────────────────────────────
+export const bulkApproveRequests = async (req, res, next) => {
+  try {
+    const { approvalIds } = req.body;
+    if (!Array.isArray(approvalIds) || !approvalIds.length) {
+      return next(new ErrorResponse('approvalIds array is required', 400, 'VALIDATION_ERROR'));
+    }
+
+    const approvals = await NodueApproval.find({
+      _id: { $in: approvalIds },
+      facultyId: req.user.userId,
+      action: 'pending'
+    });
+
+    if (!approvals.length) {
+      return next(new ErrorResponse('No pending approval records found with provided IDs', 404, 'NOT_FOUND'));
+    }
+
+    const batchIds = [...new Set(approvals.map(a => a.batchId))];
+    const batches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' }).select('_id').lean();
+    const activeBatchIds = new Set(batches.map(b => b._id.toString()));
+
+    const eligibleApprovals = approvals.filter(a => activeBatchIds.has(a.batchId.toString()));
+    
+    if (!eligibleApprovals.length) {
+      return next(new ErrorResponse('All specified batches are closed or inaccessible', 400, 'BATCH_CLOSED'));
+    }
+
+    const now = new Date();
+    const results = [];
+    const requestIdsToRecalc = new Set();
+    const studentIdsToNotify = new Set();
+
+    for (const approval of eligibleApprovals) {
+      approval.action = 'approved';
+      approval.dueType = null;
+      approval.remarks = null;
+      approval.actionedAt = now;
+      await approval.save();
+
+      requestIdsToRecalc.add(approval.requestId.toString());
+      studentIdsToNotify.add(approval.studentId.toString());
+      results.push(approval._id);
+
+      invalidateApprovalCaches(approval);
+    }
+
+    await Promise.all([...requestIdsToRecalc].map(id => recalcRequestStatus(id)));
+
+    logger.info('bulk_approval_actioned', {
+      timestamp: now.toISOString(),
+      actor: req.user.userId,
+      count: results.length,
+      action: 'BULK_APPROVE'
+    });
+
+    if (studentIdsToNotify.size > 0) {
+      pushEvent([...studentIdsToNotify], 'APPROVAL_UPDATED', {
+        action: 'approved',
+        bulk: true,
+        timestamp: now
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { 
+        processed: results.length, 
+        ids: results,
+        skipped: approvalIds.length - results.length
+      }
+    });
   } catch (err) {
     next(err);
   }
@@ -229,7 +300,6 @@ export const markDue = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId);
 
-    // Surgical cache invalidation
     invalidateApprovalCaches(approval);
 
     logger.info('due_marked', {
@@ -285,7 +355,6 @@ export const updateApproval = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId);
 
-    // Surgical cache invalidation
     invalidateApprovalCaches(approval);
 
     logger.info('approval_updated', {
@@ -312,19 +381,10 @@ export const updateApproval = async (req, res, next) => {
 };
 
 // ── Internal helper ────────────────────────────────────────────────────────────
-/**
- * Recalculates NodueRequest.status from its approval records.
- * Uses { requestId: 1, action: 1 } index — projection only fetches 'action'.
- *
- * Rules:
- *  - Any due_marked → has_dues
- *  - All approved, none pending → cleared
- *  - Otherwise → pending
- */
 async function recalcRequestStatus(requestId) {
   const approvals = await NodueApproval.find(
     { requestId },
-    'action'          // project only the field we need
+    'action'
   ).lean();
 
   const hasDue     = approvals.some((a) => a.action === 'due_marked');

@@ -14,6 +14,11 @@ import { RoleGuard } from '../middlewares/RoleGuard.js';
 const router = Router();
 
 router.use(protect);
+router.get('/me/classes', (req, res, next) => {
+  req.params.id = req.user.userId;
+  next();
+}, getFacultyClasses);
+
 router.use(RoleGuard(['admin', 'hod']));
 
 router.route('/')

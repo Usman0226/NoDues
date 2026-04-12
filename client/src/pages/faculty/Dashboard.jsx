@@ -13,10 +13,22 @@ import {
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
+import useSSE from '../../hooks/useSSE';
 
 const FacultyDashboard = () => {
   const navigate = useNavigate();
   const { data: response, loading, error, request: fetchApprovals } = useApi(getPendingApprovals, { immediate: true });
+  
+  // Real-time synchronization
+  const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
+  const sseUrl  = `${apiBase}/api/sse/connect`;
+  
+  useSSE(sseUrl, (event) => {
+    if (event?.type === 'APPROVAL_UPDATED') {
+      fetchApprovals();
+    }
+  });
+
   const approvals = useMemo(() => {
     if (Array.isArray(response)) return response;
     return response?.data || [];
