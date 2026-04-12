@@ -321,7 +321,16 @@ const StudentList = () => {
         </div>
       </Modal>
 
-   
+      <ConfirmModal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Deactivate Student"
+        description={`You are about to deactivate the account for ${selectedStudent?.name}. They will be removed from all future clearance operations.`}
+        confirmText="Deactivate"
+        isDestructive={true}
+        loading={submitting}
+      />
 
       <ConfirmModal
         isOpen={showBulkDelete}

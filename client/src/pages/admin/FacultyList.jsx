@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Button from '../../components/ui/Button';
@@ -443,6 +443,17 @@ const FacultyList = () => {
           </div>
         </Modal>
       )}
+
+      <ConfirmModal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Deactivate Faculty"
+        description={`You are about to deactivate the account for ${selectedFaculty?.name}. This action will revoke their access to the system immediately.`}
+        confirmText="Deactivate"
+        isDestructive={true}
+        loading={submitting}
+      />
 
       <ConfirmModal
         isOpen={showBulkDelete}

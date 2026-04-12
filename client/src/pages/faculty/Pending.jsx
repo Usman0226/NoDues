@@ -13,12 +13,14 @@ import {
   updateApproval,
   bulkApproveRecords 
 } from '../../api/approvals';
+import Modal from '../../components/ui/Modal';
 import {
   Check,
   X,
   RefreshCw,
   AlertTriangle,
   Edit2,
+  Clock,
   Loader2,
   Settings2,
 } from 'lucide-react';
@@ -179,7 +181,7 @@ const Pending = () => {
                 {isActioning ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); toast('Individual due marking remains the same - refactoring now'); }}
+                onClick={(e) => { e.stopPropagation(); setDueModal(row); }}
                 disabled={isActioning}
                 className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm"
                 title="Mark Due"
@@ -234,6 +236,42 @@ const Pending = () => {
 
   return (
     <PageWrapper title="Pending Approvals" subtitle="Efficiently manage clearance requests">
+      {/* Summary Banner */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white p-6 rounded-2xl border border-muted shadow-sm flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+             <Clock size={24} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Total Pending</p>
+            <p className="text-xl font-black text-navy">{approvals.filter(a => a.action === 'pending').length}</p>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl border border-muted shadow-sm flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+             <AlertTriangle size={24} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Actioned Dues</p>
+            <p className="text-xl font-black text-navy">{approvals.filter(a => a.action === 'due_marked').length}</p>
+          </div>
+        </div>
+        {selection.length > 0 && (
+          <div className="lg:col-span-2 bg-indigo-600 rounded-2xl p-4 flex items-center justify-between text-white shadow-lg shadow-indigo-600/20 animate-in slide-in-from-top-4 duration-500">
+             <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
+                   <Check size={20} />
+                </div>
+                <div>
+                   <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Selection Active</p>
+                   <p className="text-sm font-bold">{selection.length} students selected for bulk approval</p>
+                </div>
+             </div>
+             {bulkActions}
+          </div>
+        )}
+      </div>
+
       {/* Header Filters */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div className="flex items-center gap-1 bg-zinc-100/80 p-1 rounded-2xl w-fit border border-zinc-200/50">
@@ -299,6 +337,68 @@ const Pending = () => {
           showCount
         />
       )}
+      {/* Due Marking Modal */}
+      <Modal
+        isOpen={!!dueModal}
+        onClose={() => setDueModal(null)}
+        title="Flag Clearance Deficiency"
+        size="sm"
+      >
+        {dueModal && (
+          <form 
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              await handleUpdate(dueModal._id, {
+                action: 'due_marked',
+                dueType: formData.get('dueType'),
+                remarks: formData.get('remarks')
+              });
+              setDueModal(null);
+            }}
+            className="space-y-6"
+          >
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">Target Candidate</p>
+              <div className="p-4 rounded-xl bg-offwhite border border-muted/50">
+                 <p className="text-sm font-black text-navy">{dueModal.studentRollNo} · {dueModal.studentName}</p>
+                 <p className="text-[10px] font-bold text-gold uppercase tracking-widest mt-1">{getApprovalLabel(dueModal)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-navy mb-2 block">Deficiency Category</label>
+                <select 
+                  name="dueType" 
+                  required
+                  className="w-full bg-white border border-muted text-sm font-bold text-navy px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-red-100 transition-all"
+                >
+                  {DUE_TYPES.map(type => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-navy mb-2 block">Specific Remarks</label>
+                <textarea 
+                  name="remarks"
+                  required
+                  rows={4}
+                  placeholder="Explain why the clearance is blocked (e.g., 'Internal exams fee pending', 'Lab equipment damaged')"
+                  className="w-full bg-white border border-muted text-sm font-medium text-navy px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-red-100 transition-all resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-4">
+              <Button type="button" variant="ghost" className="flex-1" onClick={() => setDueModal(null)}>Cancel</Button>
+              <Button type="submit" variant="danger" className="flex-1" loading={actionLoading === dueModal._id}>Confirm Flag</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </PageWrapper>
   );
 };

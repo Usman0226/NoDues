@@ -13,6 +13,7 @@ import {
 } from '../Controllers/classController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
+import { initiateBatch } from '../Controllers/batchController.js';
 
 const router = Router();
 
@@ -43,5 +44,11 @@ router.route('/:id/subjects/:assignmentId')
 
 // Clone subjects
 router.post('/:id/clone-subjects', cloneSubjects);
+
+// Batch initiation bridge
+router.post('/:id/initiate-batch', (req, res, next) => {
+  req.body.classId = req.params.id; // Inject ID from URL into body as expected by controller
+  initiateBatch(req, res, next);
+});
 
 export default router;

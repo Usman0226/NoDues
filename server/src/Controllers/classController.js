@@ -218,7 +218,7 @@ export const updateClass = async (req, res, next) => {
     if (academicYear) cls.academicYear = academicYear;
     await cls.save();
 
-    invalidateClassCache(id);
+    invalidateClassCache(id, cls.departmentId);
 
     return res.status(200).json({
       success: true,
@@ -260,25 +260,22 @@ export const assignClassTeacher = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { classTeacherId } = req.body;
-    if (!classTeacherId) {
-      return next(new ErrorResponse('classTeacherId is required', 400, 'VALIDATION_ERROR'));
-    }
 
     const [cls, teacher] = await Promise.all([
       Class.findOne({ _id: id, isActive: true }),
-      Faculty.findOne({ _id: classTeacherId, isActive: true }).lean(),
+      classTeacherId ? Faculty.findOne({ _id: classTeacherId, isActive: true }).lean() : Promise.resolve(null),
     ]);
 
     if (!cls)     return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
-    if (!teacher) return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
+    if (classTeacherId && !teacher) return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
 
     if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
-    cls.classTeacherId = classTeacherId;
+    cls.classTeacherId = classTeacherId || null;
     await cls.save();
-    invalidateClassCache(id);
+    invalidateClassCache(id, cls.departmentId);
 
     return res.status(200).json({
       success: true,

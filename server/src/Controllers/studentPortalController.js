@@ -19,7 +19,7 @@ export const getStudentStatus = async (req, res, next) => {
           .lean(),
         NodueRequest.findOne({ studentId: userId })
           .sort({ createdAt: -1 })
-          .select('_id batchId status overriddenBy overrideRemark overriddenAt')
+          .select('_id batchId status facultySnapshot overriddenBy overrideRemark overriddenAt')
           .lean(),
       ]);
 
@@ -45,29 +45,52 @@ export const getStudentStatus = async (req, res, next) => {
       return {
         requestId:      request._id,
         batchId:        request.batchId,
-        className:      batch?.className    ?? null,
-        semester:       batch?.semester     ?? null,
-        academicYear:   batch?.academicYear ?? null,
+        className:      batch?.className    ?? 'N/A',
+        semester:       batch?.semester     ?? 0,
+        academicYear:   batch?.academicYear ?? 'N/A',
         deadline:       batch?.deadline     ?? null,
-        rollNo:         student?.rollNo     ?? null,
-        name:           student?.name       ?? null,
+        rollNo:         student?.rollNo     ?? 'N/A',
+        name:           student?.name       ?? 'N/A',
         status:         request.status,
+        overallStatus:  request.status,
         overrideRemark: request.overrideRemark ?? null,
-        approvals: approvals.map((a) => ({
-          facultyName:  a.facultyName  ?? null,
-          subjectName:  a.subjectName  ?? null,
-          approvalType: a.approvalType,
-          roleTag:      a.roleTag,
-          action:       a.action,
-          dueType:      a.dueType    ?? null,
-          remarks:      a.remarks    ?? null,
-          actionedAt:   a.actionedAt ?? null,
-        })),
+        approvals: approvals.map((a) => {
+          // Look up details from the facultySnapshot object
+          const snapshotKey = a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag;
+          const snapshot = request.facultySnapshot?.[snapshotKey] || {};
+
+          let displayContext = snapshot.subjectName || a.subjectName;
+          if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
+          if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Academic Advisor (Class Teacher)';
+          if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Institutional Mentor';
+
+          return {
+            id:           a._id,
+            facultyName:  snapshot.facultyName || 'Office of Administration',
+            subjectName:  displayContext       || 'General Appraisal',
+            subjectCode:  snapshot.subjectCode || null,
+            approvalType: a.approvalType,
+            roleTag:      a.roleTag,
+            action:       a.action,
+            dueType:      a.dueType            || null,
+            remarks:      a.remarks            || null,
+            actionedAt:   a.actionedAt         || null,
+          };
+        }),
       };
     });
 
-    // No browser caching — rely on server-side cache (30s TTL)
     res.setHeader('Cache-Control', 'no-store');
+    
+    if (process.env.NODE_ENV !== 'production' || userId === '69dbf9e4344fe25b6768d0e5') {
+      console.log(`[Diagnostic] Student Status for ${userId}:`, {
+        requestId: data.requestId,
+        approvalsCount: data.approvals?.length,
+        status: data.status
+      });
+    }
+
+    console.dir(data);
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);

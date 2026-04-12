@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-12T18:48:00Z",
+  "last_updated": "2026-04-12T20:43:00Z",
   "completed": [
     "Integrated bulk selection in FacultyList, StudentList, Subjects, Batches, Dues, and ClassDetail",
     "Implemented HOD bulkOverrideDues in backend",
@@ -9,17 +9,19 @@
     "Implemented bulkDeactivateSubjects in backend",
     "Updated client API wrappers for all administrative modules",
     "Updated api.md with documentation for all new bulk endpoints",
-    "Fixed syntax error in ClassDetail.jsx table column definitions"
+    "Fixed student clearance data visibility issue in Student Portal",
+    "Refactored facultySnapshot to Object-based indexing for O(1) lookups",
+    "Corrected frontend property mapping in Status.jsx (accessed payload instead of envelope)"
   ],
   "in_progress": [],
   "pending": [
-    "Final end-to-end user verification of bulk modal interactions"
+    "Final end-to-end user verification of student dashboard visibility"
   ],
   "decisions": [
     {
-      "context": "Bulk removal of subject mappings in ClassDetail",
-      "decision": "Used sequential Promise.all(removeClassSubject) instead of a new bulk endpoint",
-      "trade_offs": "Slightly more network overhead for very large classes, but avoided creating a redundant bulk-specific mapping-only endpoint since counts are typically <10 per class."
+      "context": "Student clearance data missing from portal despite backend returning data",
+      "decision": "Identified property access mismatch in Status.jsx (component was reading from response envelope instead of nested data object). Also refactored backend snapshot to Object type to prevent flaky array indexing.",
+      "trade_offs": "Snapshot schema change required a Mixed type in Mongoose, which reduces some schema-enforced structure but provides massive efficiency for student-side lookups."
     }
   ],
   "blockers": []
