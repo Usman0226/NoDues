@@ -13,9 +13,14 @@ export const invalidateStudentCache = (id) => cache.del(`student:${id}`);
 // ── GET /api/students ─────────────────────────────────────────────────────────
 export const getStudents = async (req, res, next) => {
   try {
-    const { classId, departmentId, semester, search, page = 1, limit = 20 } = req.query;
+    const { classId, departmentId, semester, search, page = 1, limit = 50, includeInactive } = req.query;
+    const isPrivileged = ['admin', 'hod'].includes(req.user.role);
 
-    const query = { isActive: true };
+    const query = {};
+    // Only exclude inactive by default unless requested by admin/hod
+    if (includeInactive !== 'true' || !isPrivileged) {
+      query.isActive = true;
+    }
 
     if (req.user.role === 'hod') query.departmentId = req.user.departmentId;
     else if (departmentId)       query.departmentId = departmentId;
@@ -30,18 +35,17 @@ export const getStudents = async (req, res, next) => {
       ];
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
-    const [students, total] = await Promise.all([
-      Student.find(query)
-        .populate('classId', 'name semester')
-        .populate('departmentId', 'name')
-        .populate('mentorId', 'name employeeId')
-        .sort({ rollNo: 1 })
-        .skip(skip)
-        .limit(Number(limit))
-        .lean(),
-      Student.countDocuments(query),
-    ]);
+    const total = await Student.countDocuments(query);
+    const skip  = (Number(page) - 1) * Number(limit);
+
+    const students = await Student.find(query)
+      .populate('classId', 'name semester')
+      .populate('departmentId', 'name')
+      .populate('mentorId', 'name employeeId')
+      .sort({ rollNo: 1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean();
 
     return res.status(200).json({
       success: true,
@@ -276,6 +280,11 @@ export const assignMentor = async (req, res, next) => {
     if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
     if (!mentor)  return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
 
+    // HoD Scope Check
+    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
     student.mentorId = mentor._id;
     await student.save();
     invalidateStudentCache(id);
@@ -319,6 +328,11 @@ export const addElective = async (req, res, next) => {
     if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
     if (!subject) return next(new ErrorResponse('Elective subject not found', 404, 'NOT_FOUND'));
     if (!faculty) return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
+
+    // HoD Scope Check
+    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
 
     const alreadyAssigned = student.electiveSubjects.some(
       (e) => e.subjectId?.toString() === subjectId
@@ -371,6 +385,11 @@ export const updateElective = async (req, res, next) => {
     if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
     if (!faculty) return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
 
+    // HoD Scope Check
+    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
     const elective = student.electiveSubjects.id(assignmentId);
     if (!elective) return next(new ErrorResponse('Elective assignment not found', 404, 'NOT_FOUND'));
 
@@ -409,6 +428,11 @@ export const removeElective = async (req, res, next) => {
 
     const elective = student.electiveSubjects.id(assignmentId);
     if (!elective) return next(new ErrorResponse('Elective assignment not found', 404, 'NOT_FOUND'));
+
+    // HoD Scope Check
+    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
 
     elective.deleteOne();
     await student.save();

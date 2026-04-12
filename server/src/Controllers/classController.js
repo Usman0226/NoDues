@@ -25,13 +25,17 @@ const deptScope = (req) =>
 // ── GET /api/classes ──────────────────────────────────────────────────────────
 export const getClasses = async (req, res, next) => {
   try {
-    const { departmentId, semester, academicYear, page = 1, limit = 20 } = req.query;
+    const { departmentId, semester, academicYear, page = 1, limit = 50, includeInactive } = req.query;
+    const isPrivileged = ['admin', 'hod'].includes(req.user.role);
 
-    const cacheKey = `classes:list:dept_${departmentId || 'all'}:${semester || 'all'}:${academicYear || 'all'}:${page}:${limit}`;
+    const cacheKey = `classes:list:dept_${departmentId || 'all'}:${semester || 'all'}:${academicYear || 'all'}:${page}:${limit}:${includeInactive}`;
     const cachedData = cache.get(cacheKey);
     if (cachedData) return res.status(200).json({ success: true, ...cachedData });
 
-    const query = { isActive: true };
+    const query = {};
+    if (includeInactive !== 'true' || !isPrivileged) {
+      query.isActive = true;
+    }
     const scopedDept = deptScope(req);
     if (scopedDept)    query.departmentId = scopedDept;
     else if (departmentId) query.departmentId = departmentId;
@@ -307,6 +311,11 @@ export const addSubjectAssignment = async (req, res, next) => {
     if (!subject) return next(new ErrorResponse('Subject not found', 404, 'NOT_FOUND'));
     if (facultyId && !faculty) return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
 
+    // HoD Scope Check
+    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
     // Prevent duplicate subject in this class
     const alreadyAssigned = cls.subjectAssignments.some(
       (a) => a.subjectId?.toString() === subjectId
@@ -355,6 +364,11 @@ export const updateSubjectAssignment = async (req, res, next) => {
 
     const cls = await Class.findOne({ _id: id, isActive: true });
     if (!cls) return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+
+    // HoD Scope Check
+    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
 
     const assignment = cls.subjectAssignments.id(assignmentId);
     if (!assignment) return next(new ErrorResponse('Assignment not found', 404, 'NOT_FOUND'));
@@ -405,6 +419,11 @@ export const removeSubjectAssignment = async (req, res, next) => {
     const cls = await Class.findOne({ _id: id, isActive: true });
     if (!cls) return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
 
+    // HoD Scope Check
+    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
     const assignment = cls.subjectAssignments.id(assignmentId);
     if (!assignment) return next(new ErrorResponse('Assignment not found', 404, 'NOT_FOUND'));
 
@@ -435,6 +454,14 @@ export const cloneSubjects = async (req, res, next) => {
 
     if (!cls)    return next(new ErrorResponse('Target class not found', 404, 'NOT_FOUND'));
     if (!source) return next(new ErrorResponse('Source class not found', 404, 'NOT_FOUND'));
+    
+    // HoD Scope Check
+    if (req.user.role === 'hod') {
+      if (cls.departmentId?.toString() !== req.user.departmentId || source.departmentId?.toString() !== req.user.departmentId) {
+         return next(new ErrorResponse('Access denied: cross-department cloning', 403, 'AUTH_DEPARTMENT_SCOPE'));
+      }
+    }
+
     if (id === sourceClassId) {
       return next(new ErrorResponse('Cannot clone from self', 400, 'VALIDATION_ERROR'));
     }

@@ -11,6 +11,7 @@ import { getBatchSSEUrl } from '../../api/sse';
 import { STATUSES } from '../../utils/constants';
 import Modal from '../../components/ui/Modal';
 import { ArrowLeft, X, ChevronRight, Info, AlertTriangle, RefreshCw } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
 const ICON_MAP = {
@@ -23,6 +24,10 @@ const ICON_MAP = {
 const BatchView = () => {
   const { batchId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isHod = user?.role === 'hod';
+  const basePath = isHod ? '/hod' : '/admin';
+
   const [filter, setFilter] = useState('all');
   const [popover, setPopover] = useState(null);
 
@@ -93,7 +98,7 @@ const BatchView = () => {
 
   return (
     <PageWrapper title="Batch Clearance Matrix" subtitle={`${batch.batch?.className} · Cycle ${batch.batch?.academicYear}`}>
-      <Link to="/admin/batches" className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy mb-8 -mt-6 transition-colors font-sans">
+      <Link to={`${basePath}/batches`} className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy mb-8 -mt-6 transition-colors font-sans">
         <ArrowLeft size={12} strokeWidth={3} /> Return to History
       </Link>
 
@@ -151,7 +156,7 @@ const BatchView = () => {
             {filtered.map((row) => (
               <tr key={row._id} className="hover:bg-offwhite/30 transition-colors group">
                 <td className="px-6 py-4 sticky left-0 bg-white z-10 border-r border-muted/30">
-                  <Link to={`/admin/batch/${batchId}/students/${row._id}`} className="flex items-center justify-between group/link">
+                  <Link to={`${basePath}/batch/${batchId}/students/${row._id}`} className="flex items-center justify-between group/link">
                     <div className="flex flex-col">
                       <span className="font-mono text-xs font-black tracking-tight text-navy">{row.rollNo}</span>
                       <span className="text-navy/70 font-bold text-[11px] mt-0.5">{row.name}</span>

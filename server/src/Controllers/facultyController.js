@@ -21,9 +21,13 @@ const generateTempPassword = (empId) =>
 // ── GET /api/faculty ──────────────────────────────────────────────────────────
 export const getFaculty = async (req, res, next) => {
   try {
-    const { departmentId, roleTag, search, page = 1, limit = 20 } = req.query;
+    const { departmentId, roleTag, search, page = 1, limit = 50, includeInactive } = req.query;
+    const isPrivileged = ['admin', 'hod'].includes(req.user.role);
 
-    const query = { isActive: true };
+    const query = {};
+    if (includeInactive !== 'true' || !isPrivileged) {
+      query.isActive = true;
+    }
 
     // HoD is automatically scoped to their own department
     if (req.user.role === 'hod') {
@@ -338,6 +342,14 @@ export const getFacultyClasses = async (req, res, next) => {
       return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
     }
 
+    // HoD can only view classes for faculty in own department
+    if (
+      req.user.role === 'hod' &&
+      faculty.departmentId?.toString() !== req.user.departmentId
+    ) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
     const classes = await Class.find({
       isActive: true,
       $or: [
@@ -395,6 +407,14 @@ export const resendCredentials = async (req, res, next) => {
     const faculty = await Faculty.findById(id);
     if (!faculty) {
       return next(new ErrorResponse('Faculty not found', 404));
+    }
+
+    // HoD can only resend credentials for faculty in own department
+    if (
+      req.user.role === 'hod' &&
+      faculty.departmentId?.toString() !== req.user.departmentId
+    ) {
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     // Generate new temp password

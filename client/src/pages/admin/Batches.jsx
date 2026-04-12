@@ -19,8 +19,14 @@ const Batches = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkClose, setShowBulkClose] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches, { immediate: true });
+  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches);
   const batches = response?.data || [];
+
+  React.useEffect(() => {
+    const params = {};
+    if (user?.role === 'hod') params.departmentId = user.departmentId;
+    fetchBatches(params);
+  }, [fetchBatches, user?.role, user?.departmentId]);
 
 
   const filtered = useMemo(() => {

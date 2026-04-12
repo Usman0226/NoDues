@@ -72,6 +72,65 @@ export const getOverview = async (req, res, next) => {
   }
 };
 
+// ── GET /api/hod/activity ─────────────────────────────────────────────────────
+// Last 10 departmental actions: approvals/dues marked by faculty OR overrides by HoD
+export const getActivity = async (req, res, next) => {
+  try {
+    const deptId = hodDept(req);
+    
+    // 1. Get all batches for this department
+    const deptBatches = await NodueBatch.find({ departmentId: deptId }, '_id').lean();
+    const batchIds = deptBatches.map((b) => b._id);
+
+    if (!batchIds.length) return res.status(200).json({ success: true, data: [] });
+
+    // 2. Fetch last 5 approvals (actioned) and last 5 overrides
+    const [approvals, overrides] = await Promise.all([
+      NodueApproval.find({ 
+        batchId: { $in: batchIds }, 
+        action: { $in: ['approved', 'due_marked'] } 
+      })
+        .sort({ actionedAt: -1 })
+        .limit(5)
+        .populate('facultyId', 'name')
+        .lean(),
+      NodueRequest.find({
+        batchId: { $in: batchIds },
+        status: 'hod_override'
+      })
+        .sort({ overriddenAt: -1 })
+        .limit(5)
+        .lean()
+    ]);
+
+    // 3. Normalize into a single timeline feed
+    const feed = [
+      ...approvals.map(a => ({
+        id: a._id,
+        type: a.action === 'approved' ? 'CLEARANCE' : 'DUE_FLAG',
+        actor: a.facultyId?.name || 'Faculty',
+        student: a.studentName || a.studentRollNo,
+        context: a.subjectName || a.approvalType,
+        timestamp: a.actionedAt,
+        remark: a.remarks
+      })),
+      ...overrides.map(o => ({
+        id: o._id,
+        type: 'HOD_OVERRIDE',
+        actor: 'Department Office',
+        student: o.studentSnapshot?.name || o.studentSnapshot?.rollNo,
+        context: 'Manual Clearance',
+        timestamp: o.overriddenAt,
+        remark: o.overrideRemark
+      }))
+    ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    return res.status(200).json({ success: true, data: feed.slice(0, 10) });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ── GET /api/hod/dues ─────────────────────────────────────────────────────────
 export const getDues = async (req, res, next) => {
   try {

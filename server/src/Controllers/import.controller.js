@@ -41,6 +41,10 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
   };
 
   const targetClass = await Class.findById(classId);
+  if (req.user.role === 'hod' && targetClass?.departmentId?.toString() !== req.user.departmentId) {
+    return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+  }
+
   if (!targetClass) {
     return next(new ErrorResponse('Target class not found', 404));
   }
@@ -92,6 +96,11 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
   const targetClass = await Class.findById(classId);
   if (!targetClass) {
     return next(new ErrorResponse('Target class not found', 404));
+  }
+
+  // HoD Scope Check
+  if (req.user.role === 'hod' && targetClass.departmentId?.toString() !== req.user.departmentId) {
+    return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
   }
 
   const createdStudents = [];
@@ -197,6 +206,11 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
 
     if (!departmentId) continue;
 
+    // HoD Scope Check
+    if (req.user.role === 'hod' && departmentId.toString() !== req.user.departmentId) {
+      continue; // Skip faculty members not in HoD's department
+    }
+
     const tempPassword = crypto.randomBytes(4).toString('hex');
     
     const facultyMember = await Faculty.create({
@@ -261,6 +275,8 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
 
     if (!student) {
       results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} not found` });
+    } else if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} does not belong to your department` });
     } else if (!subject) {
       results.errors.push({ row: i+1, data: row, reason: `Subject ${subjectCode} not found` });
     } else if (!faculty) {
@@ -296,6 +312,10 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
   for (const item of electives) {
     const student = await Student.findById(item.studentId);
     if (student) {
+      // HoD Scope Check
+      if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+        continue;
+      }
       // Remove existing assignment for this subject if any to prevent duplicates
       student.electiveSubjects = student.electiveSubjects.filter(e => e.subjectId.toString() !== item.subjectId.toString());
       
@@ -348,7 +368,13 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
     const faculty = await Faculty.findOne({ employeeId: empId.toUpperCase() });
 
     if (!student || !faculty) {
-      results.errors.push({ row: i+1, data: row, reason: !student ? `Student ${rollNo} not found` : `Faculty ${empId} not found` });
+      if (!student) {
+        results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} not found` });
+      } else if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+        results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} does not belong to your department` });
+      } else {
+        results.errors.push({ row: i+1, data: row, reason: `Faculty ${empId} not found` });
+      }
       results.summary.errors++;
     } else {
       results.valid.push({ 
@@ -376,6 +402,10 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
   for (const item of mentors) {
     const student = await Student.findById(item.studentId);
     if (student) {
+      // HoD Scope Check
+      if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+        continue;
+      }
       student.mentorId = item.mentorId;
       await student.save();
       invalidateStudentCache(student._id);
