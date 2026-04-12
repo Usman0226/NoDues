@@ -12,9 +12,10 @@ axiosInstance.interceptors.request.use(
   (config) => config,
   (error) => Promise.reject(error)
 );
+let isRedirecting = false;
+
 axiosInstance.interceptors.response.use(
   (response) => {
-
     return response.data;
   },
   (error) => {
@@ -22,14 +23,16 @@ axiosInstance.interceptors.response.use(
     const errorData = error.response?.data?.error || {};
 
     if (status === 403 && errorData.code === 'AUTH_PASSWORD_CHANGE_REQUIRED') {
-      if (window.location.pathname !== '/change-password') {
-        window.location.href = '/change-password';
+      if (window.location.pathname !== '/change-password' && !isRedirecting) {
+        isRedirecting = true;
+        window.location.replace('/change-password');
       }
     }
 
     if (status === 401) {
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      if (window.location.pathname !== '/login' && !isRedirecting) {
+        isRedirecting = true;
+        window.location.replace('/login');
       }
     }
 

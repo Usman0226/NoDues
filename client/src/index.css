@@ -58,7 +58,8 @@
   textarea,
   select {
     font-family: inherit;
-  }
+    font-size: 16px; 
+    }
 
   .font-brand {
     font-family: 'Outfit', 'Geist', sans-serif;

@@ -11,8 +11,8 @@ import logger from '../utils/logger.js';
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-  maxAge: 8 * 60 * 60 * 1000, // 8 hours in ms
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  maxAge: 8 * 60 * 60 * 24 * 1000, 
   path: '/',
 };
 
@@ -269,7 +269,8 @@ export const logout = async (req, res, next) => {
     res.clearCookie('nds_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
     });
 
     return res.status(200).json({

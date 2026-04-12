@@ -21,6 +21,7 @@ const Button = ({
   disabled = false,
   loading = false,
   className = '',
+  type = 'button',
   ...props
 }) => {
   return (
