@@ -16,11 +16,15 @@ import { useNavigate } from 'react-router-dom';
 
 const FacultyDashboard = () => {
   const navigate = useNavigate();
-  const { data: approvals, loading, error, request: fetchApprovals } = useApi(getPendingApprovals, { immediate: true });
+  const { data: response, loading, error, request: fetchApprovals } = useApi(getPendingApprovals, { immediate: true });
+  const approvals = useMemo(() => {
+    if (Array.isArray(response)) return response;
+    return response?.data || [];
+  }, [response]);
 
 
   const summary = useMemo(() => {
-    if (!approvals) return [];
+    if (!approvals.length) return [];
     
     // Group by batchId
     const groups = approvals.reduce((acc, curr) => {
@@ -43,9 +47,9 @@ const FacultyDashboard = () => {
     return Object.values(groups);
   }, [approvals]);
 
-  const totalPending = approvals?.filter(a => a.action === 'pending').length || 0;
+  const totalPending = approvals.filter(a => a.action === 'pending').length || 0;
 
-  if (loading && !approvals) {
+  if (loading && !response) {
     return (
       <PageWrapper title="Candidate Approvals" subtitle="Loading your duties...">
         <div className="animate-pulse">

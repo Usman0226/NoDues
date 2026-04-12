@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -99,10 +99,14 @@ const Pending = () => {
   const [editingId, setEditingId]         = useState(null); // approvalId for "edit" form
   const [actionLoading, setActionLoading] = useState(null); // approvalId being processed
 
-  const { data: approvals, loading, error, request: fetchApprovals, setData: setApprovals } =
+  const { data: response, loading, error, request: fetchApprovals, setData: setResponse } =
     useApi(getPendingApprovals, { immediate: true });
 
-  // SSE: listen for APPROVAL_UPDATED events and refresh matching cards
+  const approvals = useMemo(() => {
+    if (Array.isArray(response)) return response;
+    return response?.data || [];
+  }, [response]);
+
   const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
   const sseUrl  = `${apiBase}/api/sse/connect`;
   useSSE(
@@ -112,17 +116,28 @@ const Pending = () => {
         if (event?.type !== 'APPROVAL_UPDATED') return;
         const { approvalId, action, dueType, remarks } = event;
         if (!approvalId) return;
-        setApprovals((prev) =>
-          prev
-            ? prev.map((a) =>
+        setResponse((prev) => {
+          if (Array.isArray(prev)) {
+            return prev.map((a) =>
+              a._id === approvalId
+                ? { ...a, action: action ?? a.action, dueType: dueType ?? a.dueType, remarks: remarks ?? a.remarks }
+                : a
+            );
+          }
+          if (prev?.data) {
+            return {
+              ...prev,
+              data: prev.data.map((a) =>
                 a._id === approvalId
                   ? { ...a, action: action ?? a.action, dueType: dueType ?? a.dueType, remarks: remarks ?? a.remarks }
                   : a
               )
-            : prev
-        );
+            };
+          }
+          return prev;
+        });
       },
-      [setApprovals]
+      [setResponse]
     )
   );
 
@@ -131,9 +146,12 @@ const Pending = () => {
     setActionLoading(id);
     try {
       await approveRecord(id);
-      setApprovals((prev) =>
-        prev.map((a) => (a._id === id ? { ...a, action: 'approved', dueType: null, remarks: null } : a))
-      );
+      setResponse((prev) => {
+        const update = (a) => (a._id === id ? { ...a, action: 'approved', dueType: null, remarks: null } : a);
+        if (Array.isArray(prev)) return prev.map(update);
+        if (prev?.data) return { ...prev, data: prev.data.map(update) };
+        return prev;
+      });
       toast.success('Approval recorded ✅');
     } catch {
       // axios interceptor handles the toast
@@ -146,11 +164,12 @@ const Pending = () => {
     setActionLoading(id);
     try {
       await markDueRecord({ approvalId: id, ...dueData });
-      setApprovals((prev) =>
-        prev.map((a) =>
-          a._id === id ? { ...a, action: 'due_marked', dueType: dueData.dueType, remarks: dueData.remarks } : a
-        )
-      );
+      setResponse((prev) => {
+        const update = (a) => (a._id === id ? { ...a, action: 'due_marked', dueType: dueData.dueType, remarks: dueData.remarks } : a);
+        if (Array.isArray(prev)) return prev.map(update);
+        if (prev?.data) return { ...prev, data: prev.data.map(update) };
+        return prev;
+      });
       setExpandedDue(null);
       toast.success('Due marked ❌');
     } catch {
@@ -164,8 +183,8 @@ const Pending = () => {
     setActionLoading(id);
     try {
       await updateApproval(id, data);
-      setApprovals((prev) =>
-        prev.map((a) =>
+      setResponse((prev) => {
+        const update = (a) =>
           a._id === id
             ? {
                 ...a,
@@ -173,9 +192,11 @@ const Pending = () => {
                 dueType: data.dueType ?? null,
                 remarks: data.remarks ?? null,
               }
-            : a
-        )
-      );
+            : a;
+        if (Array.isArray(prev)) return prev.map(update);
+        if (prev?.data) return { ...prev, data: prev.data.map(update) };
+        return prev;
+      });
       setEditingId(null);
       toast.success('Record updated');
     } catch {
@@ -204,7 +225,7 @@ const Pending = () => {
   });
 
   // ── Loading ──────────────────────────────────────────────────────────────────
-  if (loading && !approvals) {
+  if (loading && !response) {
     return (
       <PageWrapper title="Pending Approvals" subtitle="Fetching your action queue...">
         <div className="space-y-4 animate-pulse">

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, {  useMemo } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
@@ -28,7 +28,6 @@ const AdminDashboard = () => {
     const activeBatches = batches.filter(b => b.status === 'active');
     const closedBatches = batches.filter(b => b.status === 'closed');
     
-    // Aggregating progress for the whole institution
     let totalCands = 0;
     let totalCleared = 0;
     let totalDues = 0;

@@ -1,24 +1,20 @@
 {
-  "last_updated": "2026-04-12T02:26:00Z",
+  "last_updated": "2026-04-12T09:33:00Z",
   "completed": [
-    "Fix duplicate password hashing in faculty credential regeneration",
-    "Add Employee ID support to login controller",
-    "Verify password hashing logic via diagnostic scripts"
+    "Fixed TypeError in Faculty Dashboard",
+    "Fixed TypeError in Pending Approvals page",
+    "Implemented robust API response extraction in Faculty portal",
+    "Fixed setApprovals reference error in Pending.jsx",
+    "Updated action handlers to support both array and object state shapes",
+    "Created vercel.json for frontend SPA rewrites"
   ],
   "in_progress": [],
-  "pending": [
-    "Cleanup scratch files (optional, left for user audit)"
-  ],
+  "pending": [],
   "decisions": [
     {
-      "context": "Faculty unable to login after credential resend",
-      "decision": "Remove manual bcrypt.hash in controller; rely on Faculty model's pre-save hook",
-      "trade_offs": "Ensures no double-hashing, maintains consistency with import flow"
-    },
-    {
-      "context": "User confusion over 'Institutional Email' vs 'Employee ID'",
-      "decision": "Allow login with either email or employeeId in the email field",
-      "trade_offs": "Increases login flexibility and reduces support requests"
+      "context": "Frontend was inconsistent in handling API envelope vs raw array.",
+      "decision": "Implemented a 'dual-mode' extractor using Array.isArray checks to handle both shapes safely.",
+      "trade_offs": "Slightly more verbose state update logic in components."
     }
   ],
   "blockers": []

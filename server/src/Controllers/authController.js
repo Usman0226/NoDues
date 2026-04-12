@@ -24,7 +24,6 @@ const signAndSetCookie = (payload, res) => {
   return token;
 };
 
-// ─── Audit log helper ─────────────────────────────────────────────────────────
 const auditLog = (action, actor, resourceId = null) => {
   logger.info('auth_event', {
     timestamp: new Date().toISOString(),
@@ -34,13 +33,7 @@ const auditLog = (action, actor, resourceId = null) => {
   });
 };
 
-// ─── Controllers ─────────────────────────────────────────────────────────────
 
-/**
- * POST /api/auth/login
- * Admin and Faculty login with email + password.
- * Returns JWT in httpOnly cookie.
- */
 export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -53,7 +46,6 @@ export const login = async (req, res, next) => {
 
     const sanitizedEmail = email.trim().toLowerCase();
 
-    // Check admin first
     let user = await Admin.findOne({ email: sanitizedEmail }).select('+password');
     let userType = 'admin';
 
@@ -72,7 +64,6 @@ export const login = async (req, res, next) => {
       );
     }
 
-    // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -82,10 +73,8 @@ export const login = async (req, res, next) => {
       );
     }
 
-    // Resolve role — faculty with hod roleTag → role is 'hod'
     const role = user.role || userType;
 
-    // Build JWT payload (shape defined in API design guide §2)
     const payload = {
       userId: user._id.toString(),
       role,
@@ -99,7 +88,6 @@ export const login = async (req, res, next) => {
 
     signAndSetCookie(payload, res);
 
-    // Resolve department name for response (cache-aware)
     let departmentName = null;
     if (user.departmentId) {
       const cacheKey = `dept:${user.departmentId}`;
@@ -137,11 +125,7 @@ export const login = async (req, res, next) => {
   }
 };
 
-/**
- * POST /api/auth/student-login
- * Student login — roll number only, no password.
- * Returns JWT in httpOnly cookie.
- */
+
 export const studentLogin = async (req, res, next) => {
   try {
     const { rollNo } = req.body;
@@ -225,7 +209,6 @@ export const changePassword = async (req, res, next) => {
       );
     }
 
-    // Determine model based on role
     const Model = role === 'admin' ? Admin : Faculty;
 
     const user = await Model.findById(userId).select('+password');
@@ -233,7 +216,6 @@ export const changePassword = async (req, res, next) => {
       return next(new ErrorResponse('User not found', 404, 'NOT_FOUND'));
     }
 
-    // 1. Verify old password
     const isOldMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isOldMatch) {
       return next(
@@ -241,7 +223,6 @@ export const changePassword = async (req, res, next) => {
       );
     }
 
-    // 2. Prevent reuse of the current password
     const isSame = await bcrypt.compare(newPassword, user.password);
     if (isSame) {
       return next(
@@ -257,7 +238,6 @@ export const changePassword = async (req, res, next) => {
     user.mustChangePassword = false;
     await user.save();
 
-    // Refresh the JWT so the mustChangePassword flag clears immediately
     const newPayload = {
       userId: user._id.toString(),
       role,
