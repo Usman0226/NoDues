@@ -1,26 +1,26 @@
 import React, { useState } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
-import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import { Shield, AlertTriangle, User, BookOpen, RefreshCw } from 'lucide-react';
+import { Shield, AlertTriangle, RefreshCw, CheckCircle } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
-import { getHodDues, overrideDue } from '../../api/hod';
+import { getHodDues, overrideDue, bulkOverrideDues } from '../../api/hod';
 import toast from 'react-hot-toast';
 
 const Dues = () => {
   const [overrideTarget, setOverrideTarget] = useState(null);
   const [overrideRemark, setOverrideRemark] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkOverride, setShowBulkOverride] = useState(false);
+  const [bulkRemark, setBulkRemark] = useState('');
 
   const { data: response, loading, error, request: fetchDues } = useApi(getHodDues, { immediate: true });
   
   const flattenedDues = React.useMemo(() => {
     if (!response?.data) return [];
     return response.data.flatMap(req => {
-      // If a student has multiple dues, create a row for each due,
-      // but the override action will override the entire request.
       if (req.dues && req.dues.length > 0) {
         return req.dues.map((due, idx) => ({
           id: `${req.requestId}-${idx}`,
@@ -33,7 +33,6 @@ const Dues = () => {
           dueType: due.dueType,
           remarks: due.remarks,
           status: 'has_dues',
-           // Count to show if multiple dues exist
           dueCount: req.dues.length
         }));
       }
@@ -46,7 +45,7 @@ const Dues = () => {
     { key: 'name', label: 'Name', render: (v) => <span className="font-bold">{v}</span> },
     { key: 'className', label: 'Class', render: (v) => <span className="text-xs">{v}</span> },
     { key: 'facultyName', label: 'Faculty', render: (v) => <span className="text-xs">{v}</span> },
-    { key: 'subject', label: 'Subject', render: (v, row) => <span className="text-xs">{v || 'General'}</span> },
+    { key: 'subject', label: 'Subject', render: (v) => <span className="text-xs">{v || 'General'}</span> },
     { key: 'dueType', label: 'Due Type', render: (v) => (
       <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-bold uppercase tracking-widest border border-red-100">{v}</span>
     )},
@@ -75,6 +74,25 @@ const Dues = () => {
     }
   };
 
+  const handleBulkOverride = async () => {
+    if (!bulkRemark.trim()) return toast.error('Please provide an override reason');
+    const requestIds = [...new Set(selectedIds.map(id => id.split('-')[0]))];
+    
+    setSubmitting(true);
+    try {
+      await bulkOverrideDues({ requestIds, overrideRemark: bulkRemark });
+      toast.success(`Clearance overridden for ${requestIds.length} students`);
+      setShowBulkOverride(false);
+      setBulkRemark('');
+      setSelectedIds([]);
+      fetchDues();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to bulk override dues.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <PageWrapper title="Dues Management" subtitle="Students with blocked clearances in your department">
       
@@ -91,48 +109,97 @@ const Dues = () => {
         loading={loading}
         searchable 
         searchPlaceholder="Search by roll no or name..." 
+        showCount={true}
+        selectable
+        selection={selectedIds}
+        onSelectionChange={setSelectedIds}
+        bulkActions={[
+          { 
+            label: 'Bulk Override Details', 
+            icon: CheckCircle, 
+            onClick: () => setShowBulkOverride(true) 
+          }
+        ]}
       />
 
-      {/* Override Modal (PRD §6.6) */}
+      {/* Override Modal */}
       {overrideTarget && (
-        <Modal isOpen={!!overrideTarget} title="Override & Clear" onClose={() => setOverrideTarget(null)}>
-          <div className="space-y-4">
-            {/* Context Display */}
-            <div className="p-4 rounded-xl bg-offwhite border border-muted">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-0.5">Student</span><span className="font-semibold text-navy">{overrideTarget.rollNo} · {overrideTarget.name}</span></div>
-                <div><span className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-0.5">Class</span><span className="font-semibold text-navy">{overrideTarget.className}</span></div>
-                <div><span className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-0.5">Flagged By</span><span className="font-semibold text-navy">{overrideTarget.facultyName}</span></div>
-                <div><span className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-0.5">Subject</span><span className="font-semibold text-navy">{overrideTarget.subject || 'N/A'}</span></div>
+        <Modal isOpen={!!overrideTarget} title="Manual Clearance Override" onClose={() => setOverrideTarget(null)}>
+          <div className="space-y-6">
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-100">
+              <div className="flex items-center gap-3 mb-2">
+                <AlertTriangle className="text-amber-600" size={18} />
+                <span className="text-sm font-bold text-amber-900">High Privilege Action</span>
               </div>
-              <div className="mt-3 pt-3 border-t border-muted">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle size={14} className="text-red-500" />
-                  <span className="text-xs font-bold uppercase text-red-600">Due: {overrideTarget.dueType}</span>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Overriding this due will mark the student as cleared for <strong>{overrideTarget.subject || 'General Dues'}</strong>. This action is irreversible and will be logged under your credentials.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-offwhite rounded-lg border border-muted/50">
+                  <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Student</p>
+                  <p className="text-sm font-bold text-navy">{overrideTarget.name}</p>
                 </div>
-                <p className="text-sm text-red-700">"{overrideTarget.remarks}"</p>
-                {overrideTarget.dueCount > 1 && (
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 mt-3 pt-3 border-t border-amber-200 border-dashed">
-                    Warning: Override will clear {overrideTarget.dueCount} dues for this student.
-                  </p>
-                )}
+                <div className="p-3 bg-offwhite rounded-lg border border-muted/50">
+                  <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Due Type</p>
+                  <p className="text-sm font-bold text-status-due">{overrideTarget.dueType}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Override Remark (Required)</label>
+                <textarea 
+                  value={overrideRemark}
+                  onChange={(e) => setOverrideRemark(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-medium transition-all"
+                  placeholder="State the reason for manual clearance..."
+                  rows={3}
+                />
               </div>
             </div>
 
-            {/* Override Remark Input (required — PRD §6.6) */}
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1.5">
-                Override Remark <span className="text-red-500">*</span>
-              </label>
-              <textarea value={overrideRemark} onChange={(e) => setOverrideRemark(e.target.value)} rows={3}
-                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite text-sm focus:outline-none focus:ring-2 focus:ring-navy/10 resize-none"
-                placeholder="Reason for overriding this due (required)..." />
+            <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setOverrideTarget(null)}>Cancel</Button>
+              <Button variant="primary" onClick={handleOverride} loading={submitting} disabled={!overrideRemark.trim()}>
+                Confirm Override
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk Override Modal */}
+      {showBulkOverride && (
+        <Modal isOpen={showBulkOverride} title="Bulk Clearance Override" onClose={() => setShowBulkOverride(false)}>
+          <div className="space-y-6">
+            <div className="flex items-center gap-4 p-4 rounded-2xl bg-navy text-white shadow-xl overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+              <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-xl font-black shrink-0 border border-white/10">
+                {[...new Set(selectedIds.map(id => id.split('-')[0]))].length}
+              </div>
+              <div>
+                <p className="text-sm font-bold tracking-tight">Candidates Selected</p>
+                <p className="text-[10px] uppercase font-black tracking-widest opacity-50">Mass Approval Protocol</p>
+              </div>
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setOverrideTarget(null)}>Cancel</Button>
-              <Button variant="primary" onClick={handleOverride} disabled={!overrideRemark.trim()} loading={submitting}>
-                <Shield size={14} /> Confirm Override
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Universal Reason for Clearance</label>
+              <textarea 
+                value={bulkRemark} 
+                onChange={(e) => setBulkRemark(e.target.value)} 
+                rows={3}
+                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-medium transition-all"
+                placeholder="Required for audit trail..." 
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowBulkOverride(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleBulkOverride} loading={submitting} disabled={!bulkRemark.trim()}>
+                Clear All Selected
               </Button>
             </div>
           </div>

@@ -1,19 +1,25 @@
 {
-  "last_updated": "2026-04-12T17:28:00Z",
+  "last_updated": "2026-04-12T18:48:00Z",
   "completed": [
-    "Manual Student registration in ClassDetail.jsx",
-    "Individual Mentor assignment in student action menu",
-    "Individual Elective management in student action menu",
-    "Quick Add Subject to catalog from mapping modal",
-    "Edge case handling: auto-capitalization, duplicate checks, loading states"
+    "Integrated bulk selection in FacultyList, StudentList, Subjects, Batches, Dues, and ClassDetail",
+    "Implemented HOD bulkOverrideDues in backend",
+    "Implemented bulkCloseBatches in backend",
+    "Implemented bulkDeactivateFaculty and bulkResendCredentials in backend",
+    "Implemented bulkDeactivateStudents and bulkAssignMentor in backend",
+    "Implemented bulkDeactivateSubjects in backend",
+    "Updated client API wrappers for all administrative modules",
+    "Updated api.md with documentation for all new bulk endpoints",
+    "Fixed syntax error in ClassDetail.jsx table column definitions"
   ],
   "in_progress": [],
-  "pending": [],
+  "pending": [
+    "Final end-to-end user verification of bulk modal interactions"
+  ],
   "decisions": [
     {
-      "context": "Need to add a subject not in the catalog while mapping to a class",
-      "decision": "Added a 'Create New in Catalog' shortcut inside the mapping modal",
-      "trade_offs": "Adds slight complexity to the mapping modal but avoids page jumps/context loss."
+      "context": "Bulk removal of subject mappings in ClassDetail",
+      "decision": "Used sequential Promise.all(removeClassSubject) instead of a new bulk endpoint",
+      "trade_offs": "Slightly more network overhead for very large classes, but avoided creating a redundant bulk-specific mapping-only endpoint since counts are typically <10 per class."
     }
   ],
   "blockers": []

@@ -68,7 +68,8 @@ const Table = ({
   selection = [],
   onSelectionChange,
   primaryKey = '_id',
-  selectionActions = null, // Custom components to show in the selection bar
+  selectionActions = null, 
+  bulkActions = [], // New reusable actions array: [{ label, icon, onClick, variant }]
   showCount = true,
 }) => {
   const [sortKey, setSortKey] = useState(null);
@@ -158,32 +159,61 @@ const Table = ({
         </div>
       )}
 
-      {/* Floating Selection Bar */}
+      {/* Reusable Premium Bulk Action Bar */}
       <AnimatePresence>
         {selectable && selection.length > 0 && (
           <motion.div
-            initial={{ y: 20, opacity: 0, scale: 0.95 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 20, opacity: 0, scale: 0.95 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 bg-navy text-white rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center gap-6 border border-white/10 backdrop-blur-md"
+            initial={{ y: 100, x: '-50%', opacity: 0 }}
+            animate={{ y: 0, x: '-50%', opacity: 1 }}
+            exit={{ y: 100, x: '-50%', opacity: 0 }}
+            className="fixed bottom-10 left-1/2 z-[100] flex items-center gap-1.5 p-1.5 bg-white/95 backdrop-blur-xl rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-zinc-200 border border-white select-none"
           >
-            <div className="flex items-center gap-3 pl-2 border-r border-white/20 pr-6">
-              <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] font-black">
+            {/* Selection Info */}
+            <div className="flex items-center gap-2.5 px-4 h-10 bg-zinc-50 border border-zinc-100 rounded-full mr-1">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-black text-white shadow-sm ring-2 ring-indigo-100">
                 {selection.length}
-              </div>
-              <span className="text-sm font-bold tracking-tight">Records Selected</span>
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 whitespace-nowrap">
+                Selected
+              </span>
             </div>
             
-            <div className="flex items-center gap-2">
+            {/* Actions Area */}
+            <div className="flex items-center gap-1">
+              {/* Legacy fallback */}
               {selectionActions}
-              <button
-                onClick={() => onSelectionChange?.([])}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/70 hover:text-white"
-                title="Clear selection"
-              >
-                <X size={18} />
-              </button>
+
+              {/* Standard reusable actions */}
+              {bulkActions.map((action, idx) => {
+                const ActionIcon = action.icon;
+                const isDanger = action.variant === 'danger';
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => action.onClick?.()}
+                    className={`
+                      flex items-center gap-2 px-4 h-10 rounded-full transition-all text-[10px] font-black uppercase tracking-[0.10em] whitespace-nowrap
+                      ${isDanger 
+                        ? 'text-red-500 hover:bg-red-50' 
+                        : 'text-zinc-600 hover:text-indigo-600 hover:bg-zinc-50'}
+                    `}
+                  >
+                    {ActionIcon && <ActionIcon size={14} className={isDanger ? 'text-red-500' : 'text-zinc-400'} />}
+                    {action.label}
+                  </button>
+                );
+              })}
             </div>
+
+            {/* Close/Clear Button */}
+            <div className="w-[1px] h-6 bg-zinc-200 mx-1" />
+            <button
+              onClick={() => onSelectionChange?.([])}
+              className="p-2.5 hover:bg-zinc-50 rounded-full transition-all text-zinc-400 hover:text-zinc-900 group"
+              title="Clear selection"
+            >
+              <X size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

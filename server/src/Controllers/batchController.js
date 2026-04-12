@@ -551,3 +551,48 @@ export const removeFacultyFromBatch = async (req, res, next) => {
     next(err);
   }
 };
+
+// ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
+
+export const bulkCloseBatches = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return next(new ErrorResponse('IDs array is required', 400));
+    }
+
+    const query = { _id: { $in: ids }, status: 'active' };
+    if (req.user.role === 'hod') {
+      query.departmentId = req.user.departmentId;
+    }
+
+    const batches = await NodueBatch.find(query).select('_id').lean();
+    const result = await NodueBatch.updateMany(query, { status: 'closed' });
+
+    for (const batch of batches) {
+      const bid = batch._id.toString();
+      invalidateKeys([`batch_status:${bid}`, `batch_summary:${bid}`]);
+      
+      // Notify students of each batch
+      const batchRequests = await NodueRequest.find({ batchId: bid }, 'studentId').lean();
+      const studentIds = batchRequests.map(r => r.studentId.toString());
+      if (studentIds.length) {
+        pushEvent(studentIds, 'BATCH_CLOSED', { batchId: bid });
+      }
+    }
+
+    logger.info('batches_bulk_closed', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_CLOSE_BATCH',
+      details: { count: result.modifiedCount, requested: ids.length }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (err) {
+    next(err);
+  }
+};

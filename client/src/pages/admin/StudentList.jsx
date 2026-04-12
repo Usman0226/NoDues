@@ -6,9 +6,10 @@ import Button from '../../components/ui/Button';
 import ActionMenu from '../../components/ui/ActionMenu';
 import Modal from '../../components/ui/Modal';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import { Upload, UserPlus, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { Upload, UserPlus, RefreshCw, AlertCircle, Edit, Trash2,Users } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
-import { getStudents, createStudent, updateStudent, deleteStudent } from '../../api/students';
+import { getStudents, createStudent, updateStudent, deleteStudent, bulkDeactivateStudents, bulkAssignMentor } from '../../api/students';
+import { getFaculty } from '../../api/faculty';
 import { getClasses } from '../../api/classes';
 import ImportStepper from '../../components/import/ImportStepper';
 import { toast } from 'react-hot-toast';
@@ -20,12 +21,19 @@ const StudentList = () => {
   const [showDelete, setShowDelete] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showBulkMentor, setShowBulkMentor] = useState(false);
+  const [bulkMentorId, setBulkMentorId] = useState('');
   
   const { data: response, loading, error, request: fetchStudents } = useApi(getStudents, { immediate: true });
   const students = response?.data || [];
 
   const { data: classResponse, request: fetchClasses } = useApi(getClasses, { immediate: true });
   const classes = classResponse?.data || [];
+
+  const { data: facultyResponse } = useApi(getFaculty, { immediate: true });
+  const faculty = facultyResponse?.data || [];
 
   const [formData, setFormData] = useState({
     rollNo: '',
@@ -96,6 +104,38 @@ const StudentList = () => {
     }
   };
 
+  const handleBulkDeactivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await bulkDeactivateStudents(selectedIds);
+      toast.success(`${selectedIds.length} students deactivated`);
+      setShowBulkDelete(false);
+      setSelectedIds([]);
+      fetchStudents();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to deactivate students');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBulkAssignMentor = async () => {
+    if (!bulkMentorId) return toast.error('Please select a mentor');
+    setSubmitting(true);
+    try {
+      await bulkAssignMentor(selectedIds, bulkMentorId);
+      toast.success(`Mentor assigned to ${selectedIds.length} students`);
+      setShowBulkMentor(false);
+      setSelectedIds([]);
+      setBulkMentorId('');
+      fetchStudents();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to assign mentor');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const columns = [
     { 
       key: 'rollNo', 
@@ -150,6 +190,22 @@ const StudentList = () => {
           loading={loading && !response}
           searchable
           searchPlaceholder="Filter by roll no, name, or group..."
+          selectable
+          selection={selectedIds}
+          onSelectionChange={setSelectedIds}
+          bulkActions={[
+            { 
+              label: 'Assign Mentor', 
+              icon: Users, 
+              onClick: () => setShowBulkMentor(true) 
+            },
+            { 
+              label: 'Archive Students', 
+              icon: Trash2, 
+              onClick: () => setShowBulkDelete(true),
+              variant: 'danger'
+            }
+          ]}
         />
       )}
 
@@ -226,16 +282,41 @@ const StudentList = () => {
         </div>
       </Modal>
 
+   
+
       <ConfirmModal
-        isOpen={showDelete}
-        onClose={() => setShowDelete(false)}
-        onConfirm={handleDeleteConfirm}
-        title="Deactivate Student"
-        description={`Are you sure you want to drop ${selectedStudent?.name} (${selectedStudent?.rollNo})? Activating this will disable their access and exclude them from new clearance batches.`}
-        confirmText="Deactivate"
+        isOpen={showBulkDelete}
+        onClose={() => setShowBulkDelete(false)}
+        onConfirm={handleBulkDeactivateConfirm}
+        title="Deactivate Multiple Students"
+        description={`You are about to deactivate ${selectedIds.length} students. They will be removed from all future clearance operations.`}
+        confirmText="Deactivate All"
         isDestructive={true}
         loading={submitting}
       />
+
+      <Modal isOpen={showBulkMentor} onClose={() => setShowBulkMentor(false)} title="Bulk Mentor Assignment">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">Assign a mentor to the {selectedIds.length} selected students.</p>
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Select Mentor</label>
+            <select 
+              value={bulkMentorId} 
+              onChange={e => setBulkMentorId(e.target.value)} 
+              className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all"
+            >
+              <option value="">Select a faculty member...</option>
+              {faculty.filter(f => f.roleTags?.includes('mentor')).map(f => (
+                <option key={f._id} value={f._id}>{f.name} ({f.employeeId})</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-muted/30">
+            <Button variant="ghost" onClick={() => setShowBulkMentor(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleBulkAssignMentor} loading={submitting}>Assign Mentor</Button>
+          </div>
+        </div>
+      </Modal>
     </PageWrapper>
   );
 };

@@ -8,3 +8,6 @@ export const deleteFaculty = (id) => api.delete(`/faculty/${id}`);
 export const getFacultyClasses = (id) => api.get(`/faculty/${id}/classes`);
 export const getMyClasses = () => api.get('/faculty/me/classes');
 export const resendCredentials = (id) => api.post(`/faculty/${id}/resend-creds`);
+
+export const bulkDeactivateFaculty = (ids) => api.post('/faculty/bulk-deactivate', { ids });
+export const bulkResendCredentials = (ids) => api.post('/faculty/bulk-resend-creds', { ids });

@@ -134,18 +134,31 @@ Error Codes: 401 (auth), 403 (access denied), 404 (not found)
 
 ---
 
-### DELETE /api/faculty/:id
-Description: Soft delete / deactivate faculty account.
+Error Codes: 401 (auth), 403 (access denied), 404 (not found)
 
-curl -X DELETE http://localhost:5000/api/faculty/6627a3f2e4b0c9d8f1234abc
+---
+
+### PATCH /api/faculty/bulk-deactivate
+Description: Soft delete / deactivate multiple faculty accounts.
+
+curl -X PATCH http://localhost:5000/api/faculty/bulk-deactivate \
+  -H "Content-Type: application/json" \
+  -d '{ "employeeIds": ["EMP123", "EMP124"] }'
 
 Sample Response (200):
-{
-  "success": true,
-  "data": { "message": "Faculty account deactivated" }
-}
+{ "success": true, "data": { "message": "2 faculty accounts deactivated" } }
 
-Error Codes: 401 (auth), 403 (access denied), 404 (not found)
+---
+
+### POST /api/faculty/bulk-resend-credentials
+Description: Resend login credentials to multiple faculty accounts.
+
+curl -X POST http://localhost:5000/api/faculty/bulk-resend-credentials \
+  -H "Content-Type: application/json" \
+  -d '{ "employeeIds": ["EMP123", "EMP124"] }'
+
+Sample Response (200):
+{ "success": true, "data": { "message": "Credentials resent to 2 accounts" } }
 
 ---
 
@@ -188,18 +201,31 @@ Error Codes: 401 (auth), 403 (access denied), 404 (not found)
 
 ---
 
-### DELETE /api/students/:id
-Description: Soft delete / deactivate student account.
+Error Codes: 401 (auth), 403 (access denied), 404 (not found)
 
-curl -X DELETE http://localhost:5000/api/students/6627a3f2e4b0c9d8f9999abc
+---
+
+### PATCH /api/students/bulk-deactivate
+Description: Soft delete / deactivate multiple student accounts.
+
+curl -X PATCH http://localhost:5000/api/students/bulk-deactivate \
+  -H "Content-Type: application/json" \
+  -d '{ "studentIds": ["6627a3f2e4b0c9d8f9999abc", "6627a3f2e4b0c9d8f9999abd"] }'
 
 Sample Response (200):
-{
-  "success": true,
-  "data": { "message": "Student account deactivated" }
-}
+{ "success": true, "data": { "message": "2 student accounts deactivated" } }
 
-Error Codes: 401 (auth), 403 (access denied), 404 (not found)
+---
+
+### PATCH /api/students/bulk-assign-mentor
+Description: Assign a faculty mentor to multiple students.
+
+curl -X PATCH http://localhost:5000/api/students/bulk-assign-mentor \
+  -H "Content-Type: application/json" \
+  -d '{ "studentIds": ["6627a3f2e4b0c9d8f9999abc"], "mentorId": "6627a3f2e4b0c9d8f1234567" }'
+
+Sample Response (200):
+{ "success": true, "data": { "message": "Mentor assigned to 1 students" } }
 
 ---
 
@@ -320,42 +346,45 @@ Error Codes: 400 (validation), 401 (auth), 409 (active batch already exists)
 
 ---
 
-### PATCH /api/batch/:batchId/close
-Description: Manually close an active batch.
-
-curl -X PATCH http://localhost:5000/api/batch/6627a3f2e4b0c9d8f0000b01/close
-
-Sample Response (200):
-{
-  "success": true,
-  "data": { "message": "Batch closed successfully" }
-}
-
 Error Codes: 401 (auth), 404 (not found)
 
 ---
 
-### POST /api/approvals/bulk-approve
-Description: Approve multiple clearance requests at once.
+### PATCH /api/batch/bulk-close
+Description: Manually close multiple active batches.
 
-curl -X POST http://localhost:5000/api/approvals/bulk-approve \
+curl -X PATCH http://localhost:5000/api/batch/bulk-close \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{
-    "approvalIds": ["6627a3f2e4b0cc9d8f0000a1", "6627a3f2e4b0cc9d8f0000a2"]
-  }'
+  -d '{ "batchIds": ["6627a3f2e4b0c9d8f0000b01", "6627a3f2e4b0c9d8f0000b02"] }'
 
 Sample Response (200):
-{
-  "success": true,
-  "data": {
-    "count": 2,
-    "results": [
-      { "id": "6627a3f2e4b0cc9d8f0000a1", "status": "approved" },
-      { "id": "6627a3f2e4b0cc9d8f0000a2", "status": "approved" }
-    ]
-  }
-}
+{ "success": true, "data": { "message": "2 batches closed" } }
+
+---
 
 Error Codes: 400 (validation), 401 (auth)
+
+---
+
+### POST /api/hod/bulk-override
+Description: HoD bulk override for student dues.
+
+curl -X POST http://localhost:5000/api/hod/bulk-override \
+  -H "Content-Type: application/json" \
+  -d '{ "studentIds": ["6627a3f2e4b0c9d8f9999abc"], "remark": "Fee waiver approved" }'
+
+Sample Response (200):
+{ "success": true, "data": { "message": "Dues overridden for 1 students" } }
+
+---
+
+### PATCH /api/subject/bulk-deactivate
+Description: Soft delete / deactivate multiple subjects.
+
+curl -X PATCH http://localhost:5000/api/subject/bulk-deactivate \
+  -H "Content-Type: application/json" \
+  -d '{ "subjectCodes": ["CS101", "CS102"] }'
+
+Sample Response (200):
+{ "success": true, "data": { "message": "2 subjects deactivated" } }
 

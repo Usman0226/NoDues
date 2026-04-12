@@ -7,6 +7,8 @@ import {
   deleteFaculty,
   getFacultyClasses,
   resendCredentials,
+  bulkDeactivateFaculty,
+  bulkResendCredentials,
 } from '../Controllers/facultyController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -32,5 +34,8 @@ router.route('/:id')
 
 router.get('/:id/classes', getFacultyClasses);
 router.post('/:id/resend-creds', resendCredentials);
+
+router.post('/bulk-deactivate', bulkDeactivateFaculty);
+router.post('/bulk-resend-creds', bulkResendCredentials);
 
 export default router;

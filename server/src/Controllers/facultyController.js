@@ -424,3 +424,81 @@ export const resendCredentials = async (req, res, next) => {
     next(err);
   }
 };
+
+// ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
+
+export const bulkDeactivateFaculty = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return next(new ErrorResponse('IDs array is required', 400));
+    }
+
+    const query = { _id: { $in: ids }, isActive: true };
+    if (req.user.role === 'hod') {
+      query.departmentId = req.user.departmentId;
+    }
+
+    const result = await Faculty.updateMany(query, { isActive: false });
+
+    ids.forEach(id => invalidateFacultyCache(id));
+    cache.del('faculty:all');
+
+    logger.info('faculty_bulk_deactivated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_DELETE_FACULTY',
+      details: { count: result.modifiedCount, requested: ids.length }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const bulkResendCredentials = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return next(new ErrorResponse('IDs array is required', 400));
+    }
+
+    const query = { _id: { $in: ids }, isActive: true };
+    if (req.user.role === 'hod') {
+      query.departmentId = req.user.departmentId;
+    }
+
+    const faculties = await Faculty.find(query);
+    
+    // We do this in a loop because we need to send individual emails and update passwords
+    // For large numbers, this might be slow, but usually batch size is small (<50)
+    for (const faculty of faculties) {
+      const tempPassword = crypto.randomBytes(4).toString('hex');
+      faculty.password = tempPassword;
+      faculty.mustChangePassword = true;
+      await faculty.save();
+
+      sendCredentialEmail(faculty.email, faculty.name, faculty.email, tempPassword, 'faculty').catch(err => {
+        logger.error(`Bulk cred resend failed for ${faculty.email}:`, err);
+      });
+    }
+
+    logger.info('faculty_bulk_creds_resent', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_RESEND_CREDS',
+      details: { count: faculties.length }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Emails dispatched for ${faculties.length} faculty members`
+    });
+  } catch (err) {
+    next(err);
+  }
+};
