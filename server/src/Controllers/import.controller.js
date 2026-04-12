@@ -114,13 +114,14 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
 
   await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: { $each: createdStudents } } });
 
-  // Invalidate class list cache for this department only
   invalidateClassCache(classId, targetClass.departmentId);
 
-  logger.info(`Imported ${createdStudents.length} students into class ${classId}`, {
+  logger.info('Student batch import completed', {
+    timestamp: new Date().toISOString(),
     actor: req.user.userId,
     action: 'IMPORT_STUDENTS',
-    resource_id: classId
+    resource_id: classId,
+    meta: { count: createdStudents.length }
   });
 
   res.status(201).json({
@@ -129,11 +130,6 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
   });
 });
 
-/**
- * @desc    Preview faculty import
- * @route   POST /api/import/faculty/preview
- * @access  Admin, HoD
- */
 export const previewFaculty = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
 
@@ -159,18 +155,28 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    results.valid.push({ employeeId, name, email, departmentName: deptName });
+    const existingId = await Faculty.findOne({ employeeId: employeeId.toUpperCase() });
+    const existingEmail = await Faculty.findOne({ email: email.toLowerCase() });
+
+    if (existingId) {
+      results.errors.push({ row: i + 1, data: row, reason: `Employee ID ${employeeId} already exists` });
+      results.summary.errors++;
+      continue;
+    }
+
+    if (existingEmail) {
+      results.errors.push({ row: i + 1, data: row, reason: `Email ${email} already exists` });
+      results.summary.errors++;
+      continue;
+    }
+
+    results.valid.push({ employeeId: employeeId.toUpperCase(), name, email: email.toLowerCase(), departmentName: deptName });
     results.summary.valid++;
   }
 
   res.status(200).json({ success: true, data: results });
 });
 
-/**
- * @desc    Commit faculty import
- * @route   POST /api/import/faculty/commit
- * @access  Admin, HoD
- */
 export const commitFaculty = asyncHandler(async (req, res, next) => {
   const { faculty } = req.body;
 
@@ -214,9 +220,11 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
     depts.forEach(d => invalidateDeptCache(d));
   }
 
-  logger.info(`Imported ${createdCount} faculty members`, {
+  logger.info('Faculty batch import completed', {
+    timestamp: new Date().toISOString(),
     actor: req.user.userId,
-    action: 'IMPORT_FACULTY'
+    action: 'IMPORT_FACULTY',
+    meta: { count: createdCount }
   });
 
   res.status(201).json({
@@ -242,14 +250,14 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
     const empId = (row['Faculty Employee ID'] || row['employeeId'])?.toString().trim();
 
     if (!rollNo || !subjectCode || !empId) {
-      results.errors.push({ row: i+1, data: row, reason: 'Missing required columns' });
+      results.errors.push({ row: i + 1, data: row, reason: 'Missing required columns (Roll No, Subject Code, Faculty Employee ID)' });
       results.summary.errors++;
       continue;
     }
 
-    const student = await Student.findOne({ rollNo });
-    const subject = await Subject.findOne({ code: subjectCode });
-    const faculty = await Faculty.findOne({ employeeId: empId });
+    const student = await Student.findOne({ rollNo: rollNo.toUpperCase() });
+    const subject = await Subject.findOne({ code: subjectCode.toUpperCase() });
+    const faculty = await Faculty.findOne({ employeeId: empId.toUpperCase() });
 
     if (!student) {
       results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} not found` });
@@ -258,7 +266,17 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
     } else if (!faculty) {
       results.errors.push({ row: i+1, data: row, reason: `Faculty ${empId} not found` });
     } else {
-      results.valid.push({ studentId: student._id, rollNo, subjectId: subject._id, subjectCode, facultyId: faculty._id, employeeId: empId });
+      results.valid.push({ 
+        studentId: student._id, 
+        rollNo: student.rollNo, 
+        studentName: student.name,
+        subjectId: subject._id, 
+        subjectCode: subject.code,
+        subjectName: subject.name,
+        facultyId: faculty._id, 
+        employeeId: faculty.employeeId,
+        facultyName: faculty.name
+      });
       results.summary.valid++;
       continue;
     }
@@ -272,25 +290,38 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
  */
 export const commitElectives = asyncHandler(async (req, res, next) => {
   const { electives } = req.body;
+  if (!electives || !Array.isArray(electives)) return next(new ErrorResponse('Invalid data', 400));
+
   let updated = 0;
   for (const item of electives) {
     const student = await Student.findById(item.studentId);
     if (student) {
-      const ele = {
+      // Remove existing assignment for this subject if any to prevent duplicates
+      student.electiveSubjects = student.electiveSubjects.filter(e => e.subjectId.toString() !== item.subjectId.toString());
+      
+      student.electiveSubjects.push({
         subjectId: item.subjectId,
         subjectName: item.subjectName,
         subjectCode: item.subjectCode,
         facultyId: item.facultyId,
         facultyName: item.facultyName
-      };
-      student.electiveSubjects.push(ele);
+      });
+      
       await student.save();
       invalidateStudentCache(student._id);
       if (student.classId) invalidateClassCache(student.classId, student.departmentId);
+      updated++;
     }
-    updated++;
   }
-  res.status(200).json({ success: true, data: { message: `Updated ${updated} elective assignments` } });
+
+  logger.info('Elective mapping import completed', {
+    timestamp: new Date().toISOString(),
+    actor: req.user.userId,
+    action: 'IMPORT_ELECTIVES',
+    meta: { count: updated }
+  });
+
+  res.status(200).json({ success: true, data: { message: `Successfully updated ${updated} elective assignments` } });
 });
 
 /**
@@ -306,14 +337,28 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
     const row = rows[i];
     const rollNo = (row['Roll No'] || row['rollNo'])?.toString().trim();
     const empId = (row['Faculty Employee ID'] || row['employeeId'])?.toString().trim();
-    const student = await Student.findOne({ rollNo });
-    const faculty = await Faculty.findOne({ employeeId: empId });
+    
+    if (!rollNo || !empId) {
+      results.errors.push({ row: i+1, data: row, reason: 'Missing required columns (Roll No, Faculty Employee ID)' });
+      results.summary.errors++;
+      continue;
+    }
+
+    const student = await Student.findOne({ rollNo: rollNo.toUpperCase() });
+    const faculty = await Faculty.findOne({ employeeId: empId.toUpperCase() });
 
     if (!student || !faculty) {
-      results.errors.push({ row: i+1, data: row, reason: `Invalid rollNo or employeeId` });
+      results.errors.push({ row: i+1, data: row, reason: !student ? `Student ${rollNo} not found` : `Faculty ${empId} not found` });
       results.summary.errors++;
     } else {
-      results.valid.push({ studentId: student._id, rollNo, mentorId: faculty._id, employeeId: empId });
+      results.valid.push({ 
+        studentId: student._id, 
+        rollNo: student.rollNo, 
+        studentName: student.name,
+        mentorId: faculty._id, 
+        employeeId: faculty.employeeId,
+        facultyName: faculty.name
+      });
       results.summary.valid++;
     }
   }
@@ -325,6 +370,8 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
  */
 export const commitMentors = asyncHandler(async (req, res, next) => {
   const { mentors } = req.body;
+  if (!mentors || !Array.isArray(mentors)) return next(new ErrorResponse('Invalid data', 400));
+
   let updated = 0;
   for (const item of mentors) {
     const student = await Student.findById(item.studentId);
@@ -333,10 +380,18 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
       await student.save();
       invalidateStudentCache(student._id);
       if (student.classId) invalidateClassCache(student.classId, student.departmentId);
+      updated++;
     }
-    updated++;
   }
-  res.status(200).json({ success: true, data: { message: `Updated ${updated} mentor assignments` } });
+
+  logger.info('Mentor mapping import completed', {
+    timestamp: new Date().toISOString(),
+    actor: req.user.userId,
+    action: 'IMPORT_MENTORS',
+    meta: { count: updated }
+  });
+
+  res.status(200).json({ success: true, data: { message: `Successfully updated ${updated} mentor assignments` } });
 });
 
 /**
@@ -361,3 +416,4 @@ export const getTemplate = asyncHandler(async (req, res, next) => {
   res.setHeader('Content-Disposition', `attachment; filename=NDS_Template_${type}.xlsx`);
   res.send(buffer);
 });
+

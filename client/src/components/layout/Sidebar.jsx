@@ -40,8 +40,13 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const location = useLocation();
   const navItems = NAV_CONFIG[user?.role] || [];
 
+  const lastPath = React.useRef(location.pathname);
+  
   useEffect(() => {
-    onMobileClose?.();
+    if (lastPath.current !== location.pathname) {
+      onMobileClose?.();
+      lastPath.current = location.pathname;
+    }
   }, [location.pathname, onMobileClose]);
 
   if (user?.role === ROLES.STUDENT) return null;

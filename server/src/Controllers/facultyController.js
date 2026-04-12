@@ -167,9 +167,9 @@ export const createFaculty = async (req, res, next) => {
       actor: req.user.userId,
       action: 'CREATE_FACULTY',
       resource_id: faculty._id.toString(),
+      details: { email: faculty.email, employeeId: faculty.employeeId }
     });
 
-    // Send credential email asynchronously (fire and forget)
     sendCredentialEmail(email, name, email, tempPassword, 'faculty').catch(err => {
       logger.error('Background email dispatch failed for new faculty:', err);
     });
@@ -277,6 +277,7 @@ export const updateFaculty = async (req, res, next) => {
       actor: req.user.userId,
       action: 'UPDATE_FACULTY',
       resource_id: id,
+      details: { updatedFields: Object.keys(req.body) }
     });
 
     return res.status(200).json({
@@ -315,6 +316,7 @@ export const deleteFaculty = async (req, res, next) => {
       actor: req.user.userId,
       action: 'DELETE_FACULTY',
       resource_id: id,
+      details: { email: faculty.email }
     });
 
     return res.status(200).json({
@@ -402,11 +404,12 @@ export const resendCredentials = async (req, res, next) => {
     
     await faculty.save();
 
-    logger.info(`Credentials regenerated for faculty ${faculty.email}`, {
+    logger.info('faculty_credentials_resent', {
       timestamp: new Date().toISOString(),
       actor: req.user?.userId || 'SYSTEM',
       action: 'RESEND_CREDS',
       resource_id: faculty._id.toString(),
+      details: { email: faculty.email }
     });
 
     sendCredentialEmail(faculty.email, faculty.name, faculty.email, tempPassword, 'faculty').catch(err => {

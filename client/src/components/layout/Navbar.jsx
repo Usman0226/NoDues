@@ -6,7 +6,7 @@ const Navbar = ({ onMenuToggle }) => {
   const { user, logout } = useAuth();
 
   return (
-    <nav className="h-16 lg:h-20 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40 pointer-events-none">
+    <nav className="h-16 lg:h-20 flex items-center justify-between px-4 lg:px-8 bg-white border-b border-zinc-200 shadow-sm z-40">
       <div className="flex items-center pointer-events-auto">
         <button onClick={onMenuToggle} className="lg:hidden p-2 -ml-1 text-navy hover:bg-zinc-100 rounded-full transition-colors">
           <Menu size={22} />

@@ -1,21 +1,19 @@
 {
-  "last_updated": "2026-04-12T09:33:00Z",
+  "last_updated": "2026-04-12T17:28:00Z",
   "completed": [
-    "Fixed TypeError in Faculty Dashboard",
-    "Fixed TypeError in Pending Approvals page",
-    "Implemented robust API response extraction in Faculty portal",
-    "Fixed setApprovals reference error in Pending.jsx",
-    "Updated action handlers to support both array and object state shapes",
-    "Created vercel.json for frontend SPA rewrites",
-    "Fixed 401 Unauthorized after login by standardizing cookie path"
+    "Manual Student registration in ClassDetail.jsx",
+    "Individual Mentor assignment in student action menu",
+    "Individual Elective management in student action menu",
+    "Quick Add Subject to catalog from mapping modal",
+    "Edge case handling: auto-capitalization, duplicate checks, loading states"
   ],
   "in_progress": [],
   "pending": [],
   "decisions": [
     {
-      "context": "Frontend was inconsistent in handling API envelope vs raw array.",
-      "decision": "Implemented a 'dual-mode' extractor using Array.isArray checks to handle both shapes safely.",
-      "trade_offs": "Slightly more verbose state update logic in components."
+      "context": "Need to add a subject not in the catalog while mapping to a class",
+      "decision": "Added a 'Create New in Catalog' shortcut inside the mapping modal",
+      "trade_offs": "Adds slight complexity to the mapping modal but avoids page jumps/context loss."
     }
   ],
   "blockers": []

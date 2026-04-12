@@ -99,8 +99,11 @@ export const createStudent = async (req, res, next) => {
     invalidateClassCache(classId, student.departmentId);
 
     logger.info('student_created', {
-      timestamp: new Date().toISOString(), actor: req.user.userId,
-      action: 'CREATE_STUDENT', resource_id: student._id.toString(),
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'CREATE_STUDENT',
+      resource_id: student._id.toString(),
+      details: { rollNo: student.rollNo, classId: student.classId.toString() }
     });
 
     return res.status(201).json({
@@ -211,6 +214,14 @@ export const updateStudent = async (req, res, next) => {
     if (oldClassId) invalidateClassCache(oldClassId, student.departmentId);
     if (student.classId && student.classId !== oldClassId) invalidateClassCache(student.classId, student.departmentId);
 
+    logger.info('student_updated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'UPDATE_STUDENT',
+      resource_id: id,
+      details: { updatedFields: Object.keys(req.body) }
+    });
+
     return res.status(200).json({
       success: true,
       data: { _id: student._id, name: student.name, rollNo: student.rollNo, email: student.email, classId: student.classId },
@@ -237,8 +248,11 @@ export const deleteStudent = async (req, res, next) => {
     if (student.classId) invalidateClassCache(student.classId, student.departmentId);
 
     logger.info('student_deactivated', {
-      timestamp: new Date().toISOString(), actor: req.user.userId,
-      action: 'DELETE_STUDENT', resource_id: id,
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'DELETE_STUDENT',
+      resource_id: id,
+      details: { rollNo: student.rollNo }
     });
 
     return res.status(200).json({ success: true, data: { message: 'Student account deactivated' } });
@@ -266,6 +280,14 @@ export const assignMentor = async (req, res, next) => {
     await student.save();
     invalidateStudentCache(id);
     if (student.classId) invalidateClassCache(student.classId, student.departmentId);
+
+    logger.info('mentor_assigned', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'ASSIGN_MENTOR',
+      resource_id: student._id.toString(),
+      details: { mentorId: mentor._id.toString() }
+    });
 
     return res.status(200).json({
       success: true,
@@ -312,6 +334,14 @@ export const addElective = async (req, res, next) => {
     await student.save();
     invalidateStudentCache(id);
 
+    logger.info('elective_added', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'ADD_ELECTIVE',
+      resource_id: student._id.toString(),
+      details: { subjectId: subject._id.toString(), facultyId: faculty._id.toString() }
+    });
+
     const saved = student.electiveSubjects[student.electiveSubjects.length - 1];
     return res.status(201).json({
       success: true,
@@ -349,6 +379,14 @@ export const updateElective = async (req, res, next) => {
     await student.save();
     invalidateStudentCache(id);
 
+    logger.info('elective_updated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'UPDATE_ELECTIVE',
+      resource_id: student._id.toString(),
+      details: { assignmentId, newFacultyId: faculty._id.toString() }
+    });
+
     return res.status(200).json({
       success: true,
       data: {
@@ -375,6 +413,14 @@ export const removeElective = async (req, res, next) => {
     elective.deleteOne();
     await student.save();
     invalidateStudentCache(id);
+
+    logger.info('elective_removed', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'REMOVE_ELECTIVE',
+      resource_id: student._id.toString(),
+      details: { assignmentId }
+    });
 
     return res.status(200).json({ success: true, data: { message: 'Elective removed' } });
   } catch (err) {

@@ -49,7 +49,7 @@ app.get('/api/health', (_req, res) => {
     success: true,
     data: {
       status:    'healthy',
-      timestamp: Date.now(),   // Date.now() is faster than new Date().toISOString()
+      timestamp: Date.now(),  
       env:       process.env.NODE_ENV || 'development',
     },
   });

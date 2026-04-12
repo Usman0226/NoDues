@@ -10,9 +10,9 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import ImportStepper from '../../components/import/ImportStepper';
 import { useApi } from '../../hooks/useApi';
 import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, updateClassSubject, removeClassSubject } from '../../api/classes';
-import { updateStudent, deleteStudent, addElective, removeElective } from '../../api/students';
+import { createStudent, updateStudent, deleteStudent, assignMentor, addElective, removeElective } from '../../api/students';
 import { getFaculty } from '../../api/faculty';
-import { getSubjects } from '../../api/subjects';
+import { getSubjects, createSubject } from '../../api/subjects';
 import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -23,13 +23,19 @@ const TABS = [
 ];
 
 const ClassDetail = () => {
+  // Debug log to verify imports during runtime
+  console.log('DEBUG: API Imports check', { assignMentor, createStudent, createSubject });
+
   const { classId } = useParams();
   const navigate = useNavigate();
   const [tab, setTab] = useState('students');
   const [showImport, setShowImport] = useState(null);
+  const [showAddStudent, setShowAddStudent] = useState(false);
   const [showInitiate, setShowInitiate] = useState(false);
   
   const [showAddSubject, setShowAddSubject] = useState(false);
+  const [showQuickAddSubject, setShowQuickAddSubject] = useState(false);
+  const [quickSubjectForm, setQuickSubjectForm] = useState({ name: '', code: '', isElective: false });
   const [showEditSubject, setShowEditSubject] = useState(false);
   const [showDeleteSubject, setShowDeleteSubject] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
@@ -41,6 +47,10 @@ const ClassDetail = () => {
   const [showDeleteStudent, setShowDeleteStudent] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentFormData, setStudentFormData] = useState({ name: '', rollNo: '', email: '' });
+  const [addStudentFormData, setAddStudentFormData] = useState({ name: '', rollNo: '', email: '' });
+  
+  const [showAssignMentor, setShowAssignMentor] = useState(false);
+  const [showManageElectives, setShowManageElectives] = useState(false);
   
   const [showMapElective, setShowMapElective] = useState(false);
   const [selectedElective, setSelectedElective] = useState(null);
@@ -62,8 +72,13 @@ const ClassDetail = () => {
   
   const departmentId = classData?.departmentId || classData?.department;
 
-  const { data: deptClassesRes } = useApi(() => getClasses({ departmentId }), { immediate: !!departmentId });
-  const otherClasses = (deptClassesRes?.data || []).filter(c => c._id !== classId);
+  const [otherClasses, setOtherClasses] = useState([]);
+  useEffect(() => {
+    if (!departmentId) return;
+    getClasses({ departmentId, limit: 100 })
+      .then((res) => setOtherClasses((res?.data || []).filter((c) => c._id !== classId)))
+      .catch(() => {}); // silent — non-critical
+  }, [departmentId, classId]);
 
   const { data: deptSubjectsRes } = useApi(() => getSubjects({ limit: 100 }), { immediate: true });
   const globalSubjects = deptSubjectsRes?.data || [];
@@ -130,6 +145,46 @@ const ClassDetail = () => {
       fetchClass();
     } catch (err) {
       toast.error(err?.message || 'Failed to delete student');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  const handleCreateStudentSubmit = async () => {
+    if (!addStudentFormData.name || !addStudentFormData.rollNo) return toast.error('Required fields missing');
+    setSubmitting(true);
+    try {
+      await createStudent({ ...addStudentFormData, classId });
+      toast.success('Candidate registered successfully');
+      setShowAddStudent(false);
+      setAddStudentFormData({ name: '', rollNo: '', email: '' });
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to register candidate');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleQuickSubjectSubmit = async () => {
+    if (!quickSubjectForm.name || !quickSubjectForm.code) return toast.error('Required fields missing');
+    setSubmitting(true);
+    try {
+      const parentDept = classData.departmentId;
+      const res = await createSubject({ ...quickSubjectForm, departmentId: parentDept });
+      toast.success('Global component created');
+      
+      // Refresh global subjects list
+      const updatedGlobal = await getSubjects();
+      setGlobalSubjects(updatedGlobal);
+      
+      // Auto-select the new subject in the assignment form
+      setSubjectFormData({ ...subjectFormData, subjectId: res.data._id || res.data.id, subjectCode: res.data.code });
+      
+      setShowQuickAddSubject(false);
+      setQuickSubjectForm({ name: '', code: '', isElective: false });
+    } catch (err) {
+      toast.error(err?.message || 'Failed to create global component');
     } finally {
       setSubmitting(false);
     }
@@ -230,6 +285,69 @@ const ClassDetail = () => {
     setShowMapElective(true);
   };
 
+  const handleAssignMentorClick = (student) => {
+    setSelectedStudent(student);
+    setStudentFormData({ ...student, mentorId: student.mentorId || '' });
+    setShowAssignMentor(true);
+  };
+
+  const handleAssignMentorSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await assignMentor(selectedStudent._id, studentFormData.mentorId);
+      toast.success('Mentor assigned successfully');
+      setShowAssignMentor(false);
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to assign mentor');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const [studentElectiveSelections, setStudentElectiveSelections] = useState({});
+  const handleManageElectivesClick = (student) => {
+    setSelectedStudent(student);
+    const initial = {};
+    const classElectives = subjects.filter(s => s.isElective);
+    classElectives.forEach(e => {
+       const isAssigned = student.electiveSubjects?.some(es => es.subjectId === e.subjectId);
+       initial[e.subjectId] = !!isAssigned;
+    });
+    setStudentElectiveSelections(initial);
+    setShowManageElectives(true);
+  };
+
+  const handleManageElectivesSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const classElectives = subjects.filter(s => s.isElective);
+      const promises = classElectives.map(async (e) => {
+        const isCurrentlyAssigned = selectedStudent.electiveSubjects?.some(es => es.subjectId === e.subjectId);
+        const shouldBeAssigned = studentElectiveSelections[e.subjectId];
+
+        if (shouldBeAssigned && !isCurrentlyAssigned) {
+          await addElective(selectedStudent._id, {
+            subjectId: e.subjectId,
+            facultyId: e.faculty?._id
+          });
+        } else if (!shouldBeAssigned && isCurrentlyAssigned) {
+          const assignmentToDel = selectedStudent.electiveSubjects.find(es => es.subjectId === e.subjectId);
+          await removeElective(selectedStudent._id, assignmentToDel._id);
+        }
+      });
+      await Promise.all(promises);
+      toast.success('Electives updated for candidate');
+      setShowManageElectives(false);
+      fetchClass();
+    } catch (err) {
+      console.warn(err);
+      toast.error('Failed to fully update electives');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleMapElectiveSubmit = async () => {
     setSubmitting(true);
     let successCount = 0;
@@ -251,11 +369,11 @@ const ClassDetail = () => {
         }
       });
       await Promise.all(promises);
-      toast.success('Elective batch mapped successfully');
+      toast.success(`Elective batch mapped successfully (${successCount} updates)`);
       setShowMapElective(false);
       fetchClass();
     } catch (err) {
-      console.warn(err)
+      console.warn(err);
       toast.error('Failed to update some mappings. Partial completion may have occurred.');
     } finally {
       setSubmitting(false);
@@ -270,12 +388,14 @@ const ClassDetail = () => {
     { key: 'status', label: 'Last Cycle', render: (v) => <Badge status={v || 'pending'} /> },
     { key: 'actions', label: '', sortable: false, render: (_, row) => (
        <div className="flex justify-end">
-         <ActionMenu
-           actions={[
-             { label: 'Edit Student', icon: Edit, onClick: () => handleEditStudentClick(row) },
-             { label: 'Unenroll Student', icon: Trash2, onClick: () => handleDeleteStudentClick(row), variant: 'danger' },
-           ]}
-         />
+          <ActionMenu
+            actions={[
+              { label: 'Edit Identity', icon: Edit, onClick: () => handleEditStudentClick(row) },
+              { label: 'Manage Electives', icon: BookOpen, onClick: () => handleManageElectivesClick(row) },
+              { label: 'Assign Mentor', icon: Users, onClick: () => handleAssignMentorClick(row) },
+              { label: 'Unenroll Student', icon: Trash2, onClick: () => handleDeleteStudentClick(row), variant: 'danger' },
+            ]}
+          />
        </div>
     )}
   ];
@@ -302,10 +422,33 @@ const ClassDetail = () => {
 
   if (loading && !classData.name) {
     return (
-      <PageWrapper title="Loading Class..." subtitle="Syncing academic records">
-        <div className="animate-pulse space-y-4">
-          <div className="h-10 w-64 bg-muted/10 rounded-xl mb-8"></div>
-          <div className="h-96 bg-muted/5 rounded-xl border border-muted"></div>
+      <PageWrapper title="Loading..." subtitle="Syncing academic records">
+        <div className="space-y-8">
+          {/* Header Skeleton */}
+          <div className="flex items-center justify-between pb-6 border-b border-muted animate-pulse">
+            <div className="space-y-2">
+              <div className="h-4 w-40 bg-muted/10 rounded-full"></div>
+              <div className="h-8 w-64 bg-muted/10 rounded-xl"></div>
+            </div>
+            <div className="h-10 w-32 bg-muted/10 rounded-full"></div>
+          </div>
+
+          {/* Stats Skeleton */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-pulse">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-24 bg-muted/5 rounded-xl border border-muted"></div>
+            ))}
+          </div>
+
+          {/* Table Skeleton */}
+          <div className="bg-white rounded-xl border border-muted shadow-sm overflow-hidden animate-pulse">
+            <div className="h-12 bg-muted/5 border-b border-muted"></div>
+            <div className="space-y-4 p-4">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="h-10 bg-muted/5 rounded-lg"></div>
+              ))}
+            </div>
+          </div>
         </div>
       </PageWrapper>
     );
@@ -348,8 +491,16 @@ const ClassDetail = () => {
         </div>
 
         {tab === 'students' && (
-          <div className="flex items-center gap-2 animate-in fade-in">
-            <Button variant="primary" size="sm" onClick={() => setShowImport('students')}><Upload size={14} /> Import roster</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="primary" size="sm" onClick={() => {
+              setAddStudentFormData({ name: '', rollNo: '', email: '' });
+              setShowAddStudent(true);
+            }}>
+              <UserPlus size={14} /> New Candidate
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowImport('students')} className="text-navy border border-muted hover:bg-offwhite">
+              <Upload size={14} /> Import roster
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setShowImport('mentors')} className="text-navy border border-muted hover:bg-offwhite">
               <Users size={14} /> Map mentors
             </Button>
@@ -357,24 +508,27 @@ const ClassDetail = () => {
         )}
 
         {tab === 'subjects' && (
-          <div className="flex items-center gap-2 animate-in fade-in">
+          <div className="flex items-center gap-2">
             <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}><Plus size={14} /> New assignment</Button>
             <Button variant="ghost" size="sm" type="button" onClick={() => setShowClone(true)} className="text-navy border border-muted hover:bg-offwhite">
               <Copy size={14} /> Inherit plan
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowImport('electives')} className="text-navy border border-muted hover:bg-offwhite">
+              <Upload size={14} /> Bulk Map Electives
             </Button>
           </div>
         )}
       </div>
 
-      <div className={tab === 'students' ? 'block animate-in fade-in slide-in-from-bottom-2 duration-300' : 'hidden'}>
+      <div className={tab === 'students' ? 'block' : 'hidden'}>
           <Table columns={STUDENT_COLS} data={students} searchable searchPlaceholder="Search by roll no or name..." />
       </div>
 
-      <div className={tab === 'subjects' ? 'block animate-in fade-in slide-in-from-bottom-2 duration-300' : 'hidden'}>
+      <div className={tab === 'subjects' ? 'block' : 'hidden'}>
           <Table columns={SUBJECT_COLS} data={subjects} />
       </div>
 
-      <div className={tab === 'batch' ? 'block animate-in fade-in slide-in-from-bottom-2 duration-300' : 'hidden'}>
+      <div className={tab === 'batch' ? 'block' : 'hidden'}>
           {activeBatch ? (
             <div className="bg-white rounded-xl border border-navy/10 p-8 mb-10 shadow-sm shadow-navy/5 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-1 bg-navy text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl">LIVE SESSION</div>
@@ -473,6 +627,53 @@ const ClassDetail = () => {
         </Modal>
       )}
 
+      {showAddStudent && (
+        <Modal isOpen={showAddStudent} title="Register New Candidate" onClose={() => setShowAddStudent(false)}>
+           <div className="space-y-6">
+              <div className="p-4 rounded-xl bg-offwhite border border-muted/50 mb-4 text-xs text-muted-foreground">
+                 This will create a new student record and automatically link them to <strong>{classData?.name}</strong>.
+              </div>
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Roll Number</label>
+                  <input 
+                    className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:ring-2 focus:ring-navy/5 font-mono font-bold"
+                    placeholder="e.g. 21691A0501"
+                    value={addStudentFormData.rollNo}
+                    onChange={(e) => setAddStudentFormData({...addStudentFormData, rollNo: e.target.value.toUpperCase()})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Candidate Name</label>
+                  <input 
+                    className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:ring-2 focus:ring-navy/5 font-bold"
+                    placeholder="Full Name"
+                    value={addStudentFormData.name}
+                    onChange={(e) => setAddStudentFormData({...addStudentFormData, name: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div>
+                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Email Identity (Institutional)</label>
+                 <input 
+                    type="email"
+                    className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:ring-2 focus:ring-navy/5 font-bold"
+                    placeholder="name@mits.ac.in"
+                    value={addStudentFormData.email}
+                    onChange={(e) => setAddStudentFormData({...addStudentFormData, email: e.target.value})}
+                  />
+              </div>
+
+             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowAddStudent(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleCreateStudentSubmit} loading={submitting}>
+                Register & Enroll
+              </Button>
+            </div>
+           </div>
+        </Modal>
+      )}
+
       {showClone && (
         <Modal isOpen={showClone} title="Inherit Subject Plan" onClose={() => setShowClone(false)}>
            <div className="space-y-6">
@@ -557,6 +758,80 @@ const ClassDetail = () => {
         loading={submitting}
       />
 
+      {showAssignMentor && (
+        <Modal isOpen={showAssignMentor} title="Assign Personal Mentor" onClose={() => setShowAssignMentor(false)}>
+           <div className="space-y-6">
+              <div className="p-4 rounded-xl bg-offwhite border border-muted/50 mb-4">
+                 <p className="text-xs font-bold text-navy mb-1">{selectedStudent?.name}</p>
+                 <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">{selectedStudent?.rollNo}</p>
+              </div>
+              <div>
+                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Select Faculty Mentor</label>
+                 <select 
+                   className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
+                   value={studentFormData.mentorId}
+                   onChange={(e) => setStudentFormData({...studentFormData, mentorId: e.target.value})}
+                 >
+                   <option value="">-- No Mentor Assigned --</option>
+                   {facultyList.map(f => (
+                      <option key={f._id} value={f._id}>{f.name} ({f.department})</option>
+                   ))}
+                 </select>
+              </div>
+
+             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowAssignMentor(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleAssignMentorSubmit} loading={submitting}>
+                Update Mentor
+              </Button>
+            </div>
+           </div>
+        </Modal>
+      )}
+
+      {showManageElectives && (
+        <Modal isOpen={showManageElectives} title="Manual Elective Mapping" onClose={() => setShowManageElectives(false)}>
+           <div className="space-y-6">
+              <div className="p-4 rounded-xl bg-offwhite border border-muted/50 mb-4">
+                 <p className="text-xs font-bold text-navy mb-1">{selectedStudent?.name}</p>
+                 <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Toggle component enrollment for this candidate</p>
+              </div>
+              
+              <div className="space-y-2">
+                 {subjects.filter(s => s.isElective).map(e => (
+                   <label key={e.subjectId} className="flex items-center justify-between p-4 rounded-xl border border-muted/30 hover:bg-offwhite/30 cursor-pointer transition-all">
+                      <div className="flex items-center gap-3">
+                         <input 
+                           type="checkbox"
+                           className="w-4 h-4 rounded border-muted text-navy focus:ring-navy"
+                           checked={studentElectiveSelections[e.subjectId] || false}
+                           onChange={(evt) => setStudentElectiveSelections({ ...studentElectiveSelections, [e.subjectId]: evt.target.checked })}
+                         />
+                         <div>
+                            <p className="text-xs font-bold text-navy">{e.subjectName}</p>
+                            <p className="text-[9px] text-muted-foreground font-mono uppercase">{e.subjectCode}</p>
+                         </div>
+                      </div>
+                      <Badge status={e.faculty ? 'cleared' : 'pending'} />
+                   </label>
+                 ))}
+                 {subjects.filter(s => s.isElective).length === 0 && (
+                    <div className="p-8 text-center bg-offwhite rounded-xl border border-muted/30 italic text-xs text-muted-foreground">
+                       No elective components mapped to this class.
+                    </div>
+                 )}
+              </div>
+
+             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowManageElectives(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleManageElectivesSubmit} loading={submitting}>
+                Save Enrollments
+              </Button>
+            </div>
+           </div>
+        </Modal>
+      )}
+
       {showAddSubject && (
         <Modal isOpen={showAddSubject} title="Create Component Mapping" onClose={() => setShowAddSubject(false)}>
           <div className="space-y-6">
@@ -565,21 +840,26 @@ const ClassDetail = () => {
              </div>
              
              <div>
-                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Global Component</label>
-                <select 
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
-                  value={subjectFormData.subjectId}
-                  onChange={(e) => {
-                    const subj = globalSubjects.find(s => s._id === e.target.value);
-                    setSubjectFormData({...subjectFormData, subjectId: e.target.value, subjectCode: subj ? subj.code : ''});
-                  }}
-                >
-                  <option value="">-- Catalog Lookup --</option>
-                  {globalSubjects.map(s => (
-                     <option key={s._id} value={s._id}>{s.name} ({s.code}) - {s.isElective ? 'Elective' : 'Core'}</option>
-                  ))}
-                </select>
-             </div>
+                 <div className="flex justify-between items-center mb-2">
+                    <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground">Global Component</label>
+                    <button type="button" onClick={() => setShowQuickAddSubject(true)} className="text-[10px] uppercase tracking-widest font-black text-navy hover:underline">
+                       + Create New in Catalog
+                    </button>
+                 </div>
+                 <select 
+                   className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
+                   value={subjectFormData.subjectId}
+                   onChange={(e) => {
+                     const subj = globalSubjects.find(s => s._id === e.target.value);
+                     setSubjectFormData({...subjectFormData, subjectId: e.target.value, subjectCode: subj ? subj.code : ''});
+                   }}
+                 >
+                   <option value="">-- Catalog Lookup --</option>
+                   {globalSubjects.map(s => (
+                      <option key={s._id} value={s._id}>{s.name} ({s.code}) - {s.isElective ? 'Elective' : 'Core'}</option>
+                   ))}
+                 </select>
+              </div>
 
              <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Handling Faculty (Optional)</label>
@@ -609,6 +889,56 @@ const ClassDetail = () => {
               <Button variant="ghost" onClick={() => setShowAddSubject(false)}>Cancel</Button>
               <Button variant="primary" onClick={handleAddSubjectSubmit} loading={submitting}>
                 Establish Mapping
+              </Button>
+            </div>
+           </div>
+        </Modal>
+      )}
+
+      {showQuickAddSubject && (
+        <Modal isOpen={showQuickAddSubject} title="New Catalog Component" onClose={() => setShowQuickAddSubject(false)}>
+           <div className="space-y-6">
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-800 uppercase font-black tracking-widest leading-relaxed">
+                 Warning: This creates a permanent component in the Global Subject Catalog for {classData?.departmentName}.
+              </div>
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Comp. Code</label>
+                  <input 
+                    className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm font-mono font-bold focus:ring-2 focus:ring-navy/5"
+                    placeholder="e.g. 20CSE101"
+                    value={quickSubjectForm.code}
+                    onChange={(e) => setQuickSubjectForm({...quickSubjectForm, code: e.target.value.toUpperCase()})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Comp. Name</label>
+                  <input 
+                    className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:ring-2 focus:ring-navy/5 font-bold"
+                    placeholder="e.g. Data Structures"
+                    value={quickSubjectForm.name}
+                    onChange={(e) => setQuickSubjectForm({...quickSubjectForm, name: e.target.value})}
+                  />
+                </div>
+              </div>
+              
+              <label className="flex items-center gap-3 p-4 rounded-xl border border-muted/30 cursor-pointer hover:bg-offwhite/30 transition-all">
+                <input 
+                  type="checkbox"
+                  className="w-5 h-5 rounded border-muted text-navy focus:ring-navy"
+                  checked={quickSubjectForm.isElective}
+                  onChange={(e) => setQuickSubjectForm({...quickSubjectForm, isElective: e.target.checked})}
+                />
+                <div>
+                   <p className="text-xs font-black text-navy uppercase tracking-tight">Elective Component</p>
+                   <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest">Enable for student-specific enrollment</p>
+                </div>
+              </label>
+
+             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowQuickAddSubject(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleQuickSubjectSubmit} loading={submitting}>
+                Create Catalog Entry
               </Button>
             </div>
            </div>

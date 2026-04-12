@@ -96,6 +96,7 @@ export const createDepartment = async (req, res, next) => {
       actor: req.user.userId,
       action: 'CREATE_DEPARTMENT',
       resource_id: dept._id.toString(),
+      details: { name: dept.name, hodId: dept.hodId }
     });
 
     invalidateDeptCache(dept._id.toString());
@@ -198,6 +199,7 @@ export const updateDepartment = async (req, res, next) => {
       actor: req.user.userId,
       action: 'UPDATE_DEPARTMENT',
       resource_id: id,
+      details: { updatedFields: Object.keys(req.body) }
     });
 
     invalidateDeptCache(id);

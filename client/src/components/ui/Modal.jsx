@@ -96,13 +96,13 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
       <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
-        className={`relative w-full ${sizes[size]} overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_24px_80px_rgba(30,41,59,0.22)] fade-up`}
+        className={`relative w-full ${sizes[size]} max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_24px_80px_rgba(30,41,59,0.22)] fade-up`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleDomId}
       >
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-gradient-to-r from-white to-indigo-50/40">
+          <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-gradient-to-r from-white to-indigo-50/40">
             <h3 id={titleDomId} className="text-lg font-black tracking-tight text-navy">
               {title}
             </h3>
@@ -116,7 +116,9 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
             </button>
           </div>
         )}
-        <div className="p-8 space-y-6">{children}</div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+          {children}
+        </div>
       </div>
     </div>,
     document.body
