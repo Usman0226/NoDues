@@ -34,6 +34,9 @@ export const AuthProvider = ({ children }) => {
       const response = await authService.login(credentials);
       // Guide: Response success envelope contains user info in 'data'
       if (response.success) {
+        if (response.token) {
+          localStorage.setItem('nds_token', response.token);
+        }
         setUser(response.data);
         toast.success(`Welcome back, ${response.data.name}`);
       }
@@ -48,6 +51,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authService.studentLogin(rollNo);
       if (response.success) {
+        if (response.token) {
+          localStorage.setItem('nds_token', response.token);
+        }
         setUser(response.data);
         toast.success(`Logged in as Roll No: ${rollNo}`);
       }
@@ -64,6 +70,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.warn('Logout request failed, clearing local state anyway',error);
     } finally {
+      localStorage.removeItem('nds_token');
       setUser(null);
       toast.success('Logged out successfully');
     }

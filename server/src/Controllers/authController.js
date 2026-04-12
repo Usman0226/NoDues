@@ -87,7 +87,7 @@ export const login = async (req, res, next) => {
       payload.departmentId = user.departmentId?.toString() ?? null;
     }
 
-    signAndSetCookie(payload, res);
+    const token = signAndSetCookie(payload, res);
 
     let departmentName = null;
     if (user.departmentId) {
@@ -110,6 +110,7 @@ export const login = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
+      token, // Return token specifically for mobile clients unable to use cookies
       data: {
         userId:            user._id,
         name:              user.name,
@@ -161,12 +162,13 @@ export const studentLogin = async (req, res, next) => {
       rollNo: student.rollNo,
     };
 
-    signAndSetCookie(payload, res);
+    const token = signAndSetCookie(payload, res);
 
     auditLog('STUDENT_LOGIN', student._id.toString());
 
     return res.status(200).json({
       success: true,
+      token, // Return token specifically for mobile clients unable to use cookies
       data: {
         userId:         student._id,
         name:           student.name,

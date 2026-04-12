@@ -3,13 +3,15 @@ import logger from '../utils/logger.js';
 import ErrorResponse from '../utils/errorResponse.js';
 
 export const protect = async (req, res, next) => {
-  const token = req.cookies?.nds_token;
+  let token;
+
+  if (req.cookies?.nds_token) {
+    token = req.cookies.nds_token;
+  } else if (req.headers.authorization?.startsWith('Bearer ')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
 
   if (!token) {
-    logger.warn('Auth missing: nds_token cookie not found', {
-      path: req.path,
-      cookiesFound: Object.keys(req.cookies || {}),
-    });
     return next(
       new ErrorResponse('Not authorized, please log in', 401, 'AUTH_REQUIRED')
     );
