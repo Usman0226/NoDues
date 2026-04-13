@@ -191,3 +191,35 @@ export const deleteSubject = async (req, res, next) => {
     next(err);
   }
 };
+
+// ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
+
+export const bulkDeleteSubjects = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return next(new ErrorResponse('IDs array is required', 400));
+    }
+
+    const result = await Subject.updateMany(
+      { _id: { $in: ids }, isActive: true },
+      { isActive: false }
+    );
+
+    ids.forEach(id => cache.del(`subject:${id}`));
+
+    logger.info('subjects_bulk_deleted', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_DELETE_SUBJECT',
+      details: { count: result.modifiedCount, requested: ids.length }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (err) {
+    next(err);
+  }
+};

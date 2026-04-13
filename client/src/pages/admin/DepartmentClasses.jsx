@@ -8,7 +8,8 @@ import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
-import { getClasses, createClass, updateClass, deleteClass } from '../../api/classes';
+import { getClasses, createClass, updateClass, deleteClass, updateClassTeacher } from '../../api/classes';
+import { getFaculty } from '../../api/faculty';
 import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import BackHeader from '../../components/ui/BackHeader';
@@ -54,16 +55,23 @@ const DepartmentClasses = () => {
   const classes = response?.data || [];
   const total = response?.total || 0;
 
+  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty);
+  const facultyList = facultyResponse?.data || [];
+
   useEffect(() => {
     const params = { departmentId: deptId, page, limit, includeInactive };
     fetchClasses(params);
-  }, [fetchClasses, deptId, page, limit, includeInactive]);
+    if (deptId) {
+      fetchFaculty({ departmentId: deptId });
+    }
+  }, [fetchClasses, fetchFaculty, deptId, page, limit, includeInactive]);
 
   const [formData, setFormData] = useState({
     name: '',
     semester: 1,
     academicYear: '2025-26',
-    departmentId: deptId
+    departmentId: deptId,
+    classTeacherId: ''
   });
 
   // Re-sync form deptId if user context loads later
@@ -88,8 +96,8 @@ const DepartmentClasses = () => {
       await createClass(formData);
       toast.success('New academic group established');
       setShowCreate(false);
-      fetchClasses();
-      setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId });
+      fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+      setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId, classTeacherId: '' });
     } catch (err) {
       toast.error(err?.message || 'Failed to create group');
     } finally {
@@ -107,7 +115,8 @@ const DepartmentClasses = () => {
       name: cls.name,
       semester: cls.semester,
       academicYear: cls.academicYear,
-      departmentId: deptId
+      departmentId: deptId,
+      classTeacherId: cls.classTeacher?._id || ''
     });
     setShowEdit(true);
   };
@@ -117,9 +126,12 @@ const DepartmentClasses = () => {
     setSubmitting(true);
     try {
       await updateClass(selectedClass._id, formData);
+      if (formData.classTeacherId !== (selectedClass.classTeacher?._id || '')) {
+        await updateClassTeacher(selectedClass._id, formData.classTeacherId || null);
+      }
       toast.success('Academic group updated');
       setShowEdit(false);
-      fetchClasses();
+      fetchClasses({ departmentId: deptId, page, limit, includeInactive });
     } catch (err) {
       toast.error(err?.message || 'Failed to update group');
     } finally {
@@ -165,9 +177,9 @@ const DepartmentClasses = () => {
        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex flex-wrap gap-3">
             <Button variant="primary" size="sm" onClick={() => {
-                setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId });
+                setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId, classTeacherId: '' });
                 setShowCreate(true);
-            }}><Plus size={14} /> New Group</Button>
+            }}><Plus size={14} /> New Class</Button>
             <Button variant="ghost" size="sm" onClick={() => fetchClasses({ departmentId: deptId, page, limit, includeInactive })} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
         </div>
 
@@ -353,6 +365,19 @@ const DepartmentClasses = () => {
                 />
               </div>
             </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Class Teacher (Optional)</label>
+              <select 
+                value={formData.classTeacherId || ''}
+                onChange={e => setFormData({...formData, classTeacherId: e.target.value})}
+                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
+              >
+                <option value="">-- Select Faculty --</option>
+                {facultyList.map(f => (
+                  <option key={f._id} value={f._id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowCreate(false)}>Abort</Button>
               <Button variant="primary" onClick={handleCreate} loading={submitting}>Establish Class</Button>
@@ -395,6 +420,19 @@ const DepartmentClasses = () => {
                   placeholder="2025-26" 
                 />
               </div>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Class Teacher (Optional)</label>
+              <select 
+                value={formData.classTeacherId || ''}
+                onChange={e => setFormData({...formData, classTeacherId: e.target.value})}
+                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
+              >
+                <option value="">-- Select Faculty --</option>
+                {facultyList.map(f => (
+                  <option key={f._id} value={f._id}>{f.name}</option>
+                ))}
+              </select>
             </div>
             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowEdit(false)}>Cancel</Button>

@@ -9,6 +9,8 @@ import {
   addElective,
   updateElective,
   removeElective,
+  bulkDeactivateStudents,
+  bulkAssignMentor,
 } from '../Controllers/studentController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -35,5 +37,8 @@ router.route('/:id/electives')
 router.route('/:id/electives/:assignmentId')
   .patch(updateElective)
   .delete(removeElective);
+
+router.post('/bulk-deactivate', bulkDeactivateStudents);
+router.post('/bulk-assign-mentor', bulkAssignMentor);
 
 export default router;

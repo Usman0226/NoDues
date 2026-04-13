@@ -5,8 +5,10 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
-import { getBatches } from '../../api/batch';
-import { Eye, RefreshCw, AlertCircle } from 'lucide-react';
+import { getBatches, bulkCloseBatches } from '../../api/batch';
+import { Eye, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import ConfirmModal from '../../components/ui/ConfirmModal';
+import { toast } from 'react-hot-toast';
 import Button from '../../components/ui/Button';
 
 const Batches = () => {
@@ -14,6 +16,9 @@ const Batches = () => {
   const { user } = useAuth();
   const basePath = user?.role === 'hod' ? '/hod' : '/admin';
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkClose, setShowBulkClose] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const { data: response, loading, error, request: fetchBatches } = useApi(getBatches);
   const batches = response?.data || [];
 
@@ -38,6 +43,21 @@ const Batches = () => {
     const closed = batches.filter((b) => b.status === 'closed').length;
     return { total: batches.length, active, closed, visible: filtered.length };
   }, [batches, filtered]);
+
+  const handleBulkCloseConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await bulkCloseBatches(selectedIds);
+      toast.success(`${selectedIds.length} batches closed`);
+      setShowBulkClose(false);
+      setSelectedIds([]);
+      fetchBatches();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to close batches');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const columns = [
     { key: 'className', label: 'Identity', render: (v) => <span className="font-black text-navy">{v}</span> },
@@ -115,8 +135,29 @@ const Batches = () => {
           loading={loading && !response}
           searchable
           searchPlaceholder="Search by class name..."
+          selectable
+          selection={selectedIds}
+          onSelectionChange={setSelectedIds}
+          bulkActions={[
+            { 
+              label: 'Close Selected', 
+              icon: CheckCircle, 
+              onClick: () => setShowBulkClose(true) 
+            }
+          ]}
         />
       )}
+
+      <ConfirmModal
+        isOpen={showBulkClose}
+        onClose={() => setShowBulkClose(false)}
+        onConfirm={handleBulkCloseConfirm}
+        title="Close Multiple Batches"
+        description={`Are you sure you want to close ${selectedIds.length} academic clearance batches? This will finalize all approvals and notify students.`}
+        confirmText="Close All"
+        isDestructive={false}
+        loading={submitting}
+      />
     </PageWrapper>
   );
 };

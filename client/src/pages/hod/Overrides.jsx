@@ -116,7 +116,8 @@ const Overrides = () => {
         columns={COLUMNS} 
         data={filteredData}
         loading={loading}
-        searchable={false} // Managed externally for custom styling
+        searchable={false}
+        showCount={true}
       />
 
       {!loading && filteredData.length === 0 && (

@@ -9,6 +9,6 @@ export const deleteClass = (id) => api.delete(`/classes/${id}`);
 export const addSubjectToClass = (id, data) => api.post(`/classes/${id}/subjects`, data);
 export const updateClassSubject = (classId, subjectId, data) => api.patch(`/classes/${classId}/subjects/${subjectId}`, data);
 export const removeClassSubject = (classId, subjectId) => api.delete(`/classes/${classId}/subjects/${subjectId}`);
-export const updateClassTeacher = (id, facultyId) => api.patch(`/classes/${id}/class-teacher`, { facultyId });
+export const updateClassTeacher = (id, facultyId) => api.patch(`/classes/${id}/class-teacher`, { classTeacherId: facultyId });
 export const cloneSubjects = (id, sourceClassId) => api.post(`/classes/${id}/clone-subjects`, { sourceClassId });
 export const initiateBatch = (id, sourceClassId) => api.post(`/classes/${id}/initiate-batch`, { sourceClassId });

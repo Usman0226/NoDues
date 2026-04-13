@@ -7,3 +7,5 @@ export const getBatchStudentDetail = (batchId, studentId) => api.get(`/batch/${b
 export const closeBatch = (id) => api.patch(`/batch/${id}/close`);
 export const addStudentToBatch = (batchId, data) => api.post(`/batch/${batchId}/students`, data);
 export const removeFacultyFromBatch = (batchId, facultyId) => api.delete(`/batch/${batchId}/faculty/${facultyId}`);
+
+export const bulkCloseBatches = (ids) => api.post('/batch/bulk-close', { ids });

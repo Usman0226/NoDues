@@ -277,3 +277,88 @@ export const overrideDues = async (req, res, next) => {
     next(err);
   }
 };
+
+// ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
+
+export const bulkOverrideDues = async (req, res, next) => {
+  try {
+    const { requestIds, overrideRemark } = req.body;
+    if (!Array.isArray(requestIds) || !requestIds.length || !overrideRemark?.trim()) {
+      return next(new ErrorResponse('requestIds array and overrideRemark are required', 400, 'VALIDATION_ERROR'));
+    }
+
+    const deptId = hodDept(req);
+    const now = new Date();
+    const remark = overrideRemark.trim();
+
+    // 1. Fetch valid requests
+    const requests = await NodueRequest.find({
+      _id: { $in: requestIds },
+      status: 'has_dues'
+    });
+
+    if (!requests.length) {
+      return next(new ErrorResponse('No applicable requests found with dues', 404, 'NOT_FOUND'));
+    }
+
+    const batchIds = [...new Set(requests.map(r => r.batchId.toString()))];
+    const activeBatches = await NodueBatch.find({
+      _id: { $in: batchIds },
+      departmentId: deptId,
+      status: 'active'
+    }).select('_id').lean();
+
+    const activeBatchIdSet = new Set(activeBatches.map(b => b._id.toString()));
+    const eligibleRequests = requests.filter(r => activeBatchIdSet.has(r.batchId.toString()));
+
+    if (!eligibleRequests.length) {
+      return next(new ErrorResponse('All specified batches are closed or inaccessible', 400, 'BATCH_CLOSED'));
+    }
+
+    // 2. Perform batch update
+    const finalIds = eligibleRequests.map(r => r._id);
+    await NodueRequest.updateMany(
+      { _id: { $in: finalIds } },
+      {
+        status: 'hod_override',
+        overriddenBy: req.user.userId,
+        overrideRemark: remark,
+        overriddenAt: now,
+        updatedAt: now
+      }
+    );
+
+    // 3. Side effects: Notifications & Invalidation
+    const studentIds = eligibleRequests.map(r => r.studentId.toString());
+    const affectedBatchIds = [...new Set(eligibleRequests.map(r => r.batchId.toString()))];
+
+    pushEvent(studentIds, 'HOD_OVERRIDE', {
+      status: 'hod_override',
+      bulk: true,
+      overrideRemark: remark,
+      timestamp: now
+    });
+
+    // Invalidate caches
+    invalidateKeys([`hod_overview:${deptId}`]);
+    affectedBatchIds.forEach(bid => invalidateKeys([`batch_status:${bid}`]));
+    studentIds.forEach(sid => invalidateKeys([`student_status:${sid}`]));
+
+    logger.info('hod_bulk_override', {
+      timestamp: now.toISOString(),
+      actor: req.user.userId,
+      count: finalIds.length,
+      action: 'BULK_HOD_OVERRIDE'
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        processed: finalIds.length,
+        skipped: requestIds.length - finalIds.length
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};

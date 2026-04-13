@@ -6,7 +6,7 @@ import Modal from '../../components/ui/Modal';
 import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { useApi } from '../../hooks/useApi';
-import { getSubjects, createSubject, updateSubject, deleteSubject } from '../../api/subjects';
+import { getSubjects, createSubject, updateSubject, deleteSubject, bulkDeleteSubjects } from '../../api/subjects';
 import { Plus, Filter, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -20,6 +20,8 @@ const Subjects = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [submitting, setSubmitting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   const { data: response, loading, error, request: fetchSubjects } = useApi(getSubjects, { immediate: true });
   const subjects = response?.data || [];
@@ -103,6 +105,21 @@ const Subjects = () => {
     }
   };
 
+  const handleBulkDeleteConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await bulkDeleteSubjects(selectedIds);
+      toast.success(`${selectedIds.length} subjects deactivated`);
+      setShowBulkDelete(false);
+      setSelectedIds([]);
+      fetchSubjects();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to deactivate subjects');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const columns = [
     { key: 'code', label: 'Identity', render: (v) => <span className="font-mono text-[10px] font-black uppercase text-navy bg-offwhite px-2 py-0.5 rounded border border-muted/50">{v}</span> },
     { key: 'name', label: 'Component Name', render: (v) => <span className="font-bold text-navy/80">{v}</span> },
@@ -169,6 +186,17 @@ const Subjects = () => {
           loading={loading && !response}
           searchable
           searchPlaceholder="Filter by code or identifier..."
+          selectable
+          selection={selectedIds}
+          onSelectionChange={setSelectedIds}
+          bulkActions={[
+            { 
+              label: 'Delete Subjects', 
+              icon: Trash2, 
+              onClick: () => setShowBulkDelete(true),
+              variant: 'danger'
+            }
+          ]}
         />
       )}
 
@@ -310,13 +338,15 @@ const Subjects = () => {
         </Modal>
       )}
 
+   
+
       <ConfirmModal
-        isOpen={showDelete}
-        onClose={() => setShowDelete(false)}
-        onConfirm={handleDeleteConfirm}
-        title="Deactivate Subject"
-        description={`Are you sure you want to deactivate ${selectedSubject?.name} (${selectedSubject?.code})? Active class mappings will be preserved but no new classes can map to it.`}
-        confirmText="Deactivate Component"
+        isOpen={showBulkDelete}
+        onClose={() => setShowBulkDelete(false)}
+        onConfirm={handleBulkDeleteConfirm}
+        title="Deactivate Multiple Subjects"
+        description={`You are about to deactivate ${selectedIds.length} subjects. This will prevent them from being assigned to new classes.`}
+        confirmText="Deactivate All"
         isDestructive={true}
         loading={submitting}
       />

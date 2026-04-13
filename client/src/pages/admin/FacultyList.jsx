@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState,useEffect } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { Plus, Upload, Mail, UserPlus, RefreshCw, AlertCircle, Edit, Trash2, Eye } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
-import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getFacultyClasses, resendCredentials } from '../../api/faculty';
+import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getFacultyClasses, resendCredentials, bulkDeactivateFaculty, bulkResendCredentials } from '../../api/faculty';
 import { getDepartments } from '../../api/departments';
 import ImportStepper from '../../components/import/ImportStepper';
 import ActionMenu from '../../components/ui/ActionMenu';
@@ -30,6 +30,8 @@ const FacultyList = () => {
   const [facultyClasses, setFacultyClasses] = useState([]);
   const [classesLoading, setClassesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
   
   // Pagination State
   const [page, setPage] = useState(1);
@@ -198,6 +200,32 @@ const FacultyList = () => {
     }
   };
 
+  const handleBulkResendCreds = async () => {
+    const toastId = toast.loading(`Regenerating credentials for ${selectedIds.length} faculty members...`);
+    try {
+      await bulkResendCredentials(selectedIds);
+      toast.success('Batch regeneration complete! Emails dispatched.', { id: toastId });
+      setSelectedIds([]);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to resend credentials', { id: toastId });
+    }
+  };
+
+  const handleBulkDeactivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await bulkDeactivateFaculty(selectedIds);
+      toast.success(`${selectedIds.length} faculty accounts deactivated`);
+      setShowBulkDelete(false);
+      setSelectedIds([]);
+      fetchFaculty();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to deactivate accounts');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <PageWrapper title="Faculty Directory" subtitle="Manage academic staff and department roles">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
@@ -237,6 +265,22 @@ const FacultyList = () => {
           }}
           searchable
           searchPlaceholder="Search staff by name or ID..."
+          selectable
+          selection={selectedIds}
+          onSelectionChange={setSelectedIds}
+          bulkActions={[
+            { 
+              label: 'Resend Credentials', 
+              icon: RefreshCw, 
+              onClick: handleBulkResendCreds 
+            },
+            { 
+              label: 'Archive Selected', 
+              icon: Trash2, 
+              onClick: () => setShowBulkDelete(true),
+              variant: 'danger'
+            }
+          ]}
         />
       )}
 
@@ -405,8 +449,19 @@ const FacultyList = () => {
         onClose={() => setShowDelete(false)}
         onConfirm={handleDeleteConfirm}
         title="Deactivate Faculty"
-        description={`Are you sure you want to deactivate ${selectedFaculty?.name}? They will lose access to the system.`}
+        description={`You are about to deactivate the account for ${selectedFaculty?.name}. This action will revoke their access to the system immediately.`}
         confirmText="Deactivate"
+        isDestructive={true}
+        loading={submitting}
+      />
+
+      <ConfirmModal
+        isOpen={showBulkDelete}
+        onClose={() => setShowBulkDelete(false)}
+        onConfirm={handleBulkDeactivateConfirm}
+        title="Deactivate Multiple Faculty"
+        description={`You are about to deactivate ${selectedIds.length} faculty accounts. This action will revoke their access to the system immediately.`}
+        confirmText="Deactivate All"
         isDestructive={true}
         loading={submitting}
       />

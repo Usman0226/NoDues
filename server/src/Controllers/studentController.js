@@ -451,3 +451,86 @@ export const removeElective = async (req, res, next) => {
     next(err);
   }
 };
+
+// ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
+
+export const bulkDeactivateStudents = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return next(new ErrorResponse('IDs array is required', 400));
+    }
+
+    const query = { _id: { $in: ids }, isActive: true };
+    if (req.user.role === 'hod') {
+      query.departmentId = req.user.departmentId;
+    }
+
+    const students = await Student.find(query).select('_id classId departmentId');
+    const result = await Student.updateMany(query, { isActive: false });
+
+    // Handle side effects: invalidate cache and class student lists
+    for (const student of students) {
+      invalidateStudentCache(student._id.toString());
+      if (student.classId) {
+        invalidateClassCache(student.classId, student.departmentId);
+      }
+    }
+
+    logger.info('students_bulk_deactivated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_DELETE_STUDENT',
+      details: { count: result.modifiedCount, requested: ids.length }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const bulkAssignMentor = async (req, res, next) => {
+  try {
+    const { ids, mentorId } = req.body;
+    if (!ids || !Array.isArray(ids) || !mentorId) {
+      return next(new ErrorResponse('ids array and mentorId are required', 400));
+    }
+
+    const mentor = await Faculty.findOne({ _id: mentorId, isActive: true }).lean();
+    if (!mentor) return next(new ErrorResponse('Mentor not found', 404));
+
+    const query = { _id: { $in: ids }, isActive: true };
+    if (req.user.role === 'hod') {
+      query.departmentId = req.user.departmentId;
+    }
+
+    const result = await Student.updateMany(query, { mentorId: mentor._id });
+
+    // Side effects
+    const students = await Student.find(query).select('_id classId departmentId');
+    for (const student of students) {
+      invalidateStudentCache(student._id.toString());
+      if (student.classId) {
+        invalidateClassCache(student.classId, student.departmentId);
+      }
+    }
+
+    logger.info('students_bulk_mentor_assigned', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_ASSIGN_MENTOR',
+      details: { count: result.modifiedCount, mentorId }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (err) {
+    next(err);
+  }
+};

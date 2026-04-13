@@ -5,3 +5,5 @@ export const createSubject = (data) => api.post('/subjects', data);
 export const getSubject = (id) => api.get(`/subjects/${id}`);
 export const updateSubject = (id, data) => api.patch(`/subjects/${id}`, data);
 export const deleteSubject = (id) => api.delete(`/subjects/${id}`);
+
+export const bulkDeleteSubjects = (ids) => api.post('/subjects/bulk-delete', { ids });

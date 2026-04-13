@@ -103,53 +103,76 @@ export const initiateBatch = async (req, res, next) => {
       totalStudents:   students.length,
     });
 
-    const buildFacultySnapshot = (student, classData) => {
-      const snapshot = [];
+    const [hodAccount, ctInfo] = await Promise.all([
+      Faculty.findOne({ departmentId: cls.departmentId._id, roleTags: 'hod', isActive: true }).select('name').lean(),
+      cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').lean() : null
+    ]);
 
-      // Core subject faculty
-      for (const a of classData.subjectAssignments ?? []) {
-        if (!a.facultyId || a.isElective) continue;
-        snapshot.push({
-          facultyId:    a.facultyId,
-          facultyName:  a.facultyName,
-          subjectId:    a.subjectId,
-          subjectName:  a.subjectName,
-          subjectCode:  a.subjectCode,
+    const allMentorIds = [...new Set(students.map(s => s.mentorId).filter(Boolean))];
+    const mentors = await Faculty.find({ _id: { $in: allMentorIds } }).select('name').lean();
+    const mentorMap = new Map(mentors.map(m => [m._id.toString(), m.name]));
+    const facultyMap = new Map((cls.subjectAssignments ?? []).map(a => [a.facultyId.toString(), a.facultyName]));
+
+    const buildFacultySnapshot = (student, classData) => {
+      const snapshot = {};
+
+      // 1. Department HoD
+      if (hodAccount) {
+        snapshot['hod'] = {
+          facultyId:    hodAccount._id,
+          facultyName:  hodAccount.name,
+          roleTag:      'hod',
+          approvalType: 'office',
+        };
+      }
+
+      // Regular subjects
+      for (const s of classData.subjectAssignments ?? []) {
+        if (!s.facultyId || s.isElective) continue;
+        const key = s.subjectId.toString();
+        snapshot[key] = {
+          facultyId:    s.facultyId,
+          facultyName:  s.facultyName,
+          subjectId:    s.subjectId,
+          subjectName:  s.subjectName,
+          subjectCode:  s.subjectCode,
           roleTag:      'faculty',
           approvalType: 'subject',
-        });
+        };
       }
 
       // Class teacher
       if (classData.classTeacherId) {
-        snapshot.push({
+        snapshot['classTeacher'] = {
           facultyId:    classData.classTeacherId,
-          facultyName:  null,
+          facultyName:  ctInfo?.name ?? null,
           subjectId:    null,
-          subjectName:  null,
+          subjectName:  'Academic Advisor (Class Teacher)',
           subjectCode:  null,
           roleTag:      'classTeacher',
           approvalType: 'classTeacher',
-        });
+        };
       }
 
       // Mentor
       if (student.mentorId) {
-        snapshot.push({
+        const mentorName = mentorMap.get(student.mentorId.toString());
+        snapshot['mentor'] = {
           facultyId:    student.mentorId,
-          facultyName:  null,
+          facultyName:  mentorName ?? null,
           subjectId:    null,
-          subjectName:  null,
+          subjectName:  'Institutional Mentor',
           subjectCode:  null,
           roleTag:      'mentor',
           approvalType: 'mentor',
-        });
+        };
       }
 
       // Elective subjects (student-specific)
       for (const e of student.electiveSubjects ?? []) {
         if (!e.facultyId) continue;
-        snapshot.push({
+        const key = e.subjectId.toString();
+        snapshot[key] = {
           facultyId:    e.facultyId,
           facultyName:  e.facultyName,
           subjectId:    e.subjectId,
@@ -157,7 +180,7 @@ export const initiateBatch = async (req, res, next) => {
           subjectCode:  e.subjectCode,
           roleTag:      'faculty',
           approvalType: 'subject',
-        });
+        };
       }
 
       return snapshot;
@@ -192,7 +215,7 @@ export const initiateBatch = async (req, res, next) => {
         },
       });
 
-      for (const f of facultySnapshot) {
+      for (const f of Object.values(facultySnapshot)) {
         if (!f.facultyId) continue;
         approvalOps.push({
           insertOne: {
@@ -217,19 +240,22 @@ export const initiateBatch = async (req, res, next) => {
 
     // Two bulkWrites — one per collection. ordered:false means a single doc
     // failure doesn't abort the rest of the batch.
-    const db = mongoose.connection.db;
+    // ── Execute Bulk Operations ──────────────────────────────────────────────
     const [requestResult, approvalResult] = await Promise.all([
-      db.collection('noduerequests').bulkWrite(requestOps,  { ordered: false }),
-      db.collection('nodueapprovals').bulkWrite(approvalOps, { ordered: false }),
+      NodueRequest.bulkWrite(requestOps,  { ordered: false }),
+      NodueApproval.bulkWrite(approvalOps, { ordered: false }),
     ]);
 
     const requestsCreated  = requestResult.insertedCount;
     const approvalsCreated = approvalResult.insertedCount;
 
-    // Prime batch summary cache so the first admin page load is a hit
+    // Prime batch summary cache
     cache.set(`batch_summary:${batch._id}`, {
       cleared: 0, pending: students.length, hasDues: 0, hodOverride: 0,
     }, 30);
+
+    // Invalidate student status caches for this class
+    students.forEach(s => cache.del(`student_status:${s._id}`));
 
     logger.info('batch_initiated', {
       timestamp: new Date().toISOString(),
@@ -563,6 +589,51 @@ export const removeFacultyFromBatch = async (req, res, next) => {
         pendingApprovalsRemoved: result.deletedCount,
         message: 'Pending approvals removed. Actioned approvals retained.',
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
+
+export const bulkCloseBatches = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return next(new ErrorResponse('IDs array is required', 400));
+    }
+
+    const query = { _id: { $in: ids }, status: 'active' };
+    if (req.user.role === 'hod') {
+      query.departmentId = req.user.departmentId;
+    }
+
+    const batches = await NodueBatch.find(query).select('_id').lean();
+    const result = await NodueBatch.updateMany(query, { status: 'closed' });
+
+    for (const batch of batches) {
+      const bid = batch._id.toString();
+      invalidateKeys([`batch_status:${bid}`, `batch_summary:${bid}`]);
+      
+      // Notify students of each batch
+      const batchRequests = await NodueRequest.find({ batchId: bid }, 'studentId').lean();
+      const studentIds = batchRequests.map(r => r.studentId.toString());
+      if (studentIds.length) {
+        pushEvent(studentIds, 'BATCH_CLOSED', { batchId: bid });
+      }
+    }
+
+    logger.info('batches_bulk_closed', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_CLOSE_BATCH',
+      details: { count: result.modifiedCount, requested: ids.length }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { modifiedCount: result.modifiedCount }
     });
   } catch (err) {
     next(err);
