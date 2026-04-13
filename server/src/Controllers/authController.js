@@ -47,8 +47,6 @@ export const login = async (req, res, next) => {
 
     const sanitizedEmail = email.trim().toLowerCase();
 
-    // ✅ Parallelize Admin and Faculty lookups for faster response
-    // Fetch only necessary fields for verification (+password is explicitly selected)
     const [admin, faculty] = await Promise.all([
       Admin.findOne({ email: sanitizedEmail }).select('+password').lean(),
       Faculty.findOne({
@@ -69,7 +67,20 @@ export const login = async (req, res, next) => {
       );
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const [isMatch, departmentName] = await Promise.all([
+      bcrypt.compare(password, user.password),
+      (async () => {
+        if (!user.departmentId) return null;
+        const cacheKey = `dept:${user.departmentId}`;
+        let name = cache.get(cacheKey);
+        if (!name) {
+          const dept = await mongoose.model('Department').findById(user.departmentId).select('name').lean();
+          name = dept?.name ?? null;
+          if (name) cache.set(cacheKey, name, 3600);
+        }
+        return name;
+      })(),
+    ]);
 
     if (!isMatch) {
       logger.warn('Login failure: Password mismatch', { email: sanitizedEmail });
@@ -92,17 +103,6 @@ export const login = async (req, res, next) => {
     }
 
     const token = signAndSetCookie(payload, res);
-
-    let departmentName = null;
-    if (user.departmentId) {
-      const cacheKey = `dept:${user.departmentId}`;
-      departmentName = cache.get(cacheKey);
-      if (!departmentName) {
-        const dept = await Department.findById(user.departmentId).select('name').lean();
-        departmentName = dept?.name ?? null;
-        if (departmentName) cache.set(cacheKey, departmentName, 3600);
-      }
-    }
 
     if (role !== 'admin') {
       // ✅ Non-blocking update: Last login time
@@ -282,7 +282,6 @@ export const changePassword = async (req, res, next) => {
       ...(user.departmentId && { departmentId: user.departmentId.toString() }),
     };
     signAndSetCookie(newPayload, res);
-
     // Invalidate any cached user data
     cache.del(`user:${userId}`);
 
