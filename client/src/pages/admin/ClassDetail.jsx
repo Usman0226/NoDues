@@ -13,7 +13,7 @@ import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, 
 import { createStudent, updateStudent, deleteStudent, assignMentor, addElective, removeElective, bulkDeactivateStudents, bulkAssignMentor } from '../../api/students';
 import { getFaculty } from '../../api/faculty';
 import { getSubjects, createSubject } from '../../api/subjects';
-import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2, Search, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
@@ -68,6 +68,8 @@ const ClassDetail = () => {
   const [showBulkAssignMentor, setShowBulkAssignMentor] = useState(false);
   const [showBulkRemoveSubjects, setShowBulkRemoveSubjects] = useState(false);
   const [bulkMentorId, setBulkMentorId] = useState('');
+  const [studentsList, setStudentsList] = useState([]);
+  const [loadingStudentId, setLoadingStudentId] = useState(null);
 
   const { user } = useAuth();
   const isHod = user?.role === 'hod';
@@ -89,7 +91,21 @@ const ClassDetail = () => {
   const activeBatch = classData?.activeBatch;
   const facultyList = facultyResponse?.data || [];
   
+  useEffect(() => {
+    if (response?.data?.students) {
+      setStudentsList(response.data.students);
+    }
+  }, [response]);
+
   const departmentId = classData?.departmentId || classData?.department;
+
+  const filteredFaculty = useMemo(() => {
+    if (!facultyList || !departmentId) return [];
+    return facultyList.filter(f => 
+      f.departmentId === departmentId && 
+      (f.roleTags?.includes('mentor') || f.roleTags?.includes('faculty'))
+    );
+  }, [facultyList, departmentId]);
 
   const [otherClasses, setOtherClasses] = useState([]);
   useEffect(() => {
@@ -106,12 +122,21 @@ const ClassDetail = () => {
     if (showAddSubject) setSubjectFormData({ subjectId: '', facultyId: '', subjectCode: '' });
   }, [showAddSubject]);
 
-  const preflight = useMemo(() => [
-    { label: 'Roster Loaded', ok: students.length > 0, detail: `${students.length} students enrolled` },
-    { label: 'Subject Load', ok: subjects.length > 0, detail: `${subjects.length} assignments` },
-    { label: 'Class Teacher', ok: !!classData?.classTeacher, detail: classData?.classTeacherName || 'Not Assigned' },
-    { label: 'Mentor Mapping', ok: students.every(s => s.mentorName !== 'Not Assigned'), detail: `${students.filter(s => s.mentorName !== 'Not Assigned').length}/${students.length} mapped` },
-  ], [students, subjects, classData]);
+  const preflight = useMemo(() => {
+    const missingMentors = studentsList.filter(s => !s.mentorId).length;
+    return [
+      { label: 'Roster Loaded', ok: studentsList.length > 0, detail: `${studentsList.length} students enrolled` },
+      { label: 'Subject Load', ok: subjects.length > 0, detail: `${subjects.length} assignments` },
+      { label: 'Class Teacher', ok: !!classData?.classTeacher, detail: classData?.classTeacherName || 'Not Assigned' },
+      { 
+        label: 'Mentor Mapping', 
+        ok: missingMentors === 0, 
+        detail: missingMentors > 0 ? `${missingMentors} missing` : 'All mapped',
+        isCritical: true,
+        missingCount: missingMentors
+      },
+    ];
+  }, [studentsList, subjects, classData]);
 
   const canInitiate = preflight.every(p => p.ok);
 
@@ -303,24 +328,129 @@ const ClassDetail = () => {
     setShowMapElective(true);
   };
 
-  const handleAssignMentorClick = (student) => {
-    setSelectedStudent(student);
-    setStudentFormData({ ...student, mentorId: student.mentorId || '' });
-    setShowAssignMentor(true);
+  const handleMentorChange = async (studentId, newMentorId) => {
+    const oldStudent = studentsList.find(s => s._id === studentId);
+    const newMentor = filteredFaculty.find(f => f._id === newMentorId);
+    
+    setStudentsList(prev => prev.map(s => 
+      s._id === studentId ? { ...s, mentorId: newMentorId, mentorName: newMentor?.name || 'Not Assigned', _isUpdating: true } : s
+    ));
+    setLoadingStudentId(studentId);
+
+    try {
+      await assignMentor(studentId, newMentorId);
+      toast.success(`Mentor assigned to ${oldStudent.name}`);
+      setTimeout(() => {
+        setStudentsList(prev => prev.map(s => s._id === studentId ? { ...s, _isUpdating: false } : s));
+      }, 1000);
+    } catch (err) {
+      setStudentsList(prev => prev.map(s => 
+        s._id === studentId ? { ...s, mentorId: oldStudent.mentorId, mentorName: oldStudent.mentorName, _isUpdating: false } : s
+      ));
+      toast.error(err?.message || 'Failed to update mentor');
+    } finally {
+      setLoadingStudentId(null);
+    }
   };
 
-  const handleAssignMentorSubmit = async () => {
-    setSubmitting(true);
-    try {
-      await assignMentor(selectedStudent._id, studentFormData.mentorId);
-      toast.success('Mentor assigned successfully');
-      setShowAssignMentor(false);
-      fetchClass();
-    } catch (err) {
-      toast.error(err?.message || 'Failed to assign mentor');
-    } finally {
-      setSubmitting(false);
+  const SearchableMentorSelect = ({ student }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const isLoading = loadingStudentId === student._id;
+
+    const options = useMemo(() => {
+      if (!search) return filteredFaculty;
+      const s = search.toLowerCase();
+      return filteredFaculty.filter(f => 
+        f.name.toLowerCase().includes(s) || 
+        f.employeeId.toLowerCase().includes(s)
+      );
+    }, [search]);
+
+    const currentMentor = filteredFaculty.find(f => f._id === student.mentorId);
+
+    if (filteredFaculty.length === 0) {
+      return (
+        <div className="text-[10px] font-bold text-red-400 italic bg-red-50/50 px-2 py-1 rounded-lg border border-red-100">
+          No eligible mentors found
+        </div>
+      );
     }
+
+    return (
+      <div className="relative w-full max-w-[200px]">
+        <button
+          onClick={() => !isLoading && setIsOpen(!isOpen)}
+          disabled={isLoading}
+          className={`
+            w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl border transition-all duration-300 group
+            ${isOpen ? 'border-navy ring-4 ring-navy/5 bg-white' : 'border-muted/40 bg-offwhite hover:bg-white hover:border-navy/20'}
+            ${!student.mentorId ? 'border-amber-200 bg-amber-50/30' : ''}
+            ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+          `}
+        >
+          <div className="flex flex-col items-start overflow-hidden">
+            {isLoading ? (
+              <span className="text-[10px] font-black text-navy uppercase tracking-widest animate-pulse">Assigning...</span>
+            ) : student.mentorId ? (
+              <>
+                <span className="text-[11px] font-black text-navy truncate w-full">{currentMentor?.name}</span>
+                <span className="text-[9px] font-bold text-muted-foreground/60 tracking-tight uppercase">{currentMentor?.employeeId}</span>
+              </>
+            ) : (
+              <span className="text-[10px] font-black text-amber-600/60 uppercase tracking-widest">Assign</span>
+            )}
+          </div>
+          <div className="shrink-0 text-muted-foreground/40 group-hover:text-navy/40 transition-colors">
+            {isLoading ? <RefreshCw size={12} className="animate-spin" /> : <ChevronDown size={14} className={isOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />}
+          </div>
+        </button>
+
+        {isOpen && (
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={() => setIsOpen(false)} />
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-navy/10 shadow-2xl shadow-navy/20 z-[70] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="p-2 border-b border-muted/30 sticky top-0 bg-white/80 backdrop-blur-md">
+                <div className="relative">
+                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
+                  <input
+                    autoFocus
+                    className="w-full pl-8 pr-4 py-2 bg-offwhite/50 rounded-xl text-[11px] font-bold border-none focus:ring-2 focus:ring-navy/10"
+                    placeholder="Search by name or id..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="max-h-[200px] overflow-y-auto p-1 custom-scrollbar">
+                {options.length > 0 ? options.map(f => (
+                  <button
+                    key={f._id}
+                    onClick={() => {
+                      handleMentorChange(student._id, f._id);
+                      setIsOpen(false);
+                    }}
+                    className={`
+                      w-full text-left p-2.5 rounded-xl flex flex-col transition-all duration-200
+                      ${student.mentorId === f._id ? 'bg-navy text-white' : 'hover:bg-offwhite text-navy'}
+                    `}
+                  >
+                    <span className="text-[11px] font-black">{f.name}</span>
+                    <span className={`text-[9px] font-bold uppercase tracking-tight ${student.mentorId === f._id ? 'text-white/60' : 'text-muted-foreground/60'}`}>
+                      {f.employeeId} · {f.departmentName || 'Dept'}
+                    </span>
+                  </button>
+                )) : (
+                  <div className="p-4 text-center">
+                    <p className="text-[10px] font-bold text-muted-foreground italic">No faculty found</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
   };
 
   const [studentElectiveSelections, setStudentElectiveSelections] = useState({});
@@ -402,7 +532,7 @@ const ClassDetail = () => {
     { key: 'rollNo', label: 'Roll No', render: (v) => <span className="font-mono text-xs font-black text-navy">{v}</span> },
     { key: 'name', label: 'Candidate Name', render: (v) => <span className="font-bold">{v}</span> },
     { key: 'email', label: 'Email', render: (v) => <span className="text-muted-foreground/60">{v}</span> },
-    { key: 'mentorName', label: 'Mentor' },
+    { key: 'mentor', label: 'Mentor Mapping', render: (_, row) => <SearchableMentorSelect student={row} /> },
     { key: 'status', label: 'Last Cycle', render: (v) => <Badge status={v || 'pending'} /> },
     { key: 'actions', label: '', sortable: false, render: (_, row) => (
        <div className="flex justify-end">
@@ -410,7 +540,6 @@ const ClassDetail = () => {
             actions={[
               { label: 'Edit Identity', icon: Edit, onClick: () => handleEditStudentClick(row) },
               { label: 'Manage Electives', icon: BookOpen, onClick: () => handleManageElectivesClick(row) },
-              { label: 'Assign Mentor', icon: Users, onClick: () => handleAssignMentorClick(row) },
               { label: 'Unenroll Student', icon: Trash2, onClick: () => handleDeleteStudentClick(row), variant: 'danger' },
             ]}
           />
@@ -568,8 +697,8 @@ const SUBJECT_COLS = [
             <Button variant="ghost" size="sm" onClick={() => setShowImport('students')} className="text-navy border border-muted hover:bg-offwhite">
               <Upload size={14} /> Import students
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowImport('mentors')} className="text-navy border border-muted hover:bg-offwhite">
-              <Users size={14} /> Map mentors
+            <Button variant="ghost" size="sm" onClick={() => setShowImport('mentors')} className="text-navy border border-navy/20 bg-navy/5 hover:bg-navy/10 flex items-center gap-2">
+              <Users size={14} /> Bulk Assign Mentors
             </Button>
           </div>
         )}
@@ -590,7 +719,12 @@ const SUBJECT_COLS = [
       <div className={tab === 'students' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
           <Table 
             columns={STUDENT_COLS} 
-            data={students} 
+            data={studentsList} 
+            rowClassName={(row) => `
+              transition-all duration-500
+              ${!row.mentorId ? 'border-l-4 border-amber-400 bg-amber-50/20' : ''}
+              ${row._isUpdating ? 'bg-emerald-50/30' : ''}
+            `}
             searchable 
             searchPlaceholder="Search by roll no or name..." 
             showCount={true} 
@@ -702,14 +836,39 @@ const SUBJECT_COLS = [
               <h4 className="text-[9px] uppercase tracking-[0.2em] font-black text-muted-foreground mb-4">Integrity Preflight Checklist</h4>
               <div className="grid grid-cols-1 gap-2.5">
                 {preflight.map((p, i) => (
-                  <div key={i} className={`flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300 hover:scale-[1.01] hover:shadow-sm ${p.ok ? 'bg-emerald-50/50 border-emerald-100/80 hover:bg-emerald-50' : 'bg-red-50/50 border-red-100/80 hover:bg-red-50'}`}>
+                  <div 
+                    key={i} 
+                    onClick={() => {
+                       if (p.isCritical && p.missingCount > 0) {
+                         setTab('students');
+                         setTimeout(() => {
+                           const firstMissing = studentsList.find(s => !s.mentorId);
+                           if (firstMissing) {
+                             const el = document.getElementById(`row-${firstMissing._id}`);
+                             el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                             setShowInitiate(false);
+                           }
+                         }, 100);
+                       }
+                    }}
+                    className={`
+                      flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300 group
+                      ${p.ok ? 'bg-emerald-50/50 border-emerald-100/80 hover:bg-emerald-50' : 'bg-red-50/50 border-red-100/80 hover:bg-red-50'}
+                      ${p.isCritical && p.missingCount > 0 ? 'cursor-pointer hover:scale-[1.02] shadow-sm active:scale-95' : ''}
+                    `}
+                  >
                     <div className={p.ok ? 'text-emerald-500' : 'text-red-500'}>
                       {p.ok ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="text-xs font-black text-navy uppercase tracking-tight">{p.label}</p>
                       <p className="text-[10px] font-bold text-muted-foreground/60">{p.detail}</p>
                     </div>
+                    {!p.ok && p.isCritical && (
+                       <div className="bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase animate-pulse">
+                         Action Required
+                       </div>
+                    )}
                   </div>
                 ))}
               </div>

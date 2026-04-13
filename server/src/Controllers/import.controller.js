@@ -353,10 +353,12 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
   const rows = parseBuffer(req.file.buffer);
   const results = { valid: [], errors: [], summary: { total: rows.length, valid: 0, errors: 0 } };
 
+  const seenRolls = new Set();
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rollNo = (row['Roll No'] || row['rollNo'])?.toString().trim();
-    const empId = (row['Faculty Employee ID'] || row['employeeId'])?.toString().trim();
+    const rollNo = (row['Roll No'] || row['rollNo'])?.toString().trim().toUpperCase();
+    const empId = (row['Faculty Employee ID'] || row['employeeId'])?.toString().trim().toUpperCase();
     
     if (!rollNo || !empId) {
       results.errors.push({ row: i+1, data: row, reason: 'Missing required columns (Roll No, Faculty Employee ID)' });
@@ -364,17 +366,33 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const student = await Student.findOne({ rollNo: rollNo.toUpperCase() });
-    const faculty = await Faculty.findOne({ employeeId: empId.toUpperCase() });
+    if (seenRolls.has(rollNo)) {
+      results.errors.push({ row: i+1, data: row, reason: `Duplicate Roll No ${rollNo} in file` });
+      results.summary.errors++;
+      continue;
+    }
+    seenRolls.add(rollNo);
 
-    if (!student || !faculty) {
-      if (!student) {
-        results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} not found` });
-      } else if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
-        results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} does not belong to your department` });
-      } else {
-        results.errors.push({ row: i+1, data: row, reason: `Faculty ${empId} not found` });
-      }
+    const [student, faculty] = await Promise.all([
+      Student.findOne({ rollNo, isActive: true }),
+      Faculty.findOne({ employeeId: empId, isActive: true }).lean()
+    ]);
+
+    let reason = null;
+    if (!student) {
+      reason = `Student ${rollNo} not found or inactive`;
+    } else if (!faculty) {
+      reason = `Faculty ${empId} not found or inactive`;
+    } else if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      reason = `Student ${rollNo} does not belong to your department`;
+    } else if (student.departmentId?.toString() !== faculty.departmentId?.toString()) {
+      reason = `Cross-department mapping rejected: Student ${rollNo} (${student.departmentId}) vs Faculty ${empId} (${faculty.departmentId})`;
+    } else if (!faculty.roleTags?.includes('mentor') && !faculty.roleTags?.includes('faculty')) {
+      reason = `Faculty ${empId} is not eligible for mentor role (missing role tags)`;
+    }
+
+    if (reason) {
+      results.errors.push({ row: i+1, data: row, reason });
       results.summary.errors++;
     } else {
       results.valid.push({ 
