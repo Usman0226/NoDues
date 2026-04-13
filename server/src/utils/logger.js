@@ -20,7 +20,6 @@ const format = winston.format.combine(
 
 const transports = [
   new winston.transports.Console(),
-  // For production, we would log to files as well
   ...(process.env.NODE_ENV === 'production' 
     ? [
         new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),

@@ -2,6 +2,7 @@ import api from './axiosInstance';
 
 export const getBatches = (params) => api.get('/batch', { params });
 export const initiateBatch = (data) => api.post('/batch/initiate', data);
+export const initiateDepartmentBatch = (data) => api.post('/batch/initiate-department', data);
 export const getBatch = (id) => api.get(`/batch/${id}`);
 export const getBatchStudentDetail = (batchId, studentId) => api.get(`/batch/${batchId}/students/${studentId}`);
 export const closeBatch = (id) => api.patch(`/batch/${id}/close`);

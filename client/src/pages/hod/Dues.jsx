@@ -20,11 +20,30 @@ const Dues = () => {
   const [showBulkOverride, setShowBulkOverride] = useState(false);
   const [bulkRemark, setBulkRemark] = useState('');
 
-  const { data: response, loading, error, request: fetchDues } = useApi(getHodDues, { immediate: true });
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [searchValue, setSearchValue] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  const { data: response, loading, error, request: fetchDues } = useApi(getHodDues);
+  const total = response?.pagination?.total || 0;
   
+  // Debounce search input
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchValue);
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  React.useEffect(() => {
+    fetchDues({ page, limit, search: debouncedSearch });
+  }, [fetchDues, page, limit, debouncedSearch]);
+
   useSSE(user?.departmentId ? getDepartmentSSEUrl(user.departmentId) : null, (event) => {
     if (event.type === 'APPROVAL_UPDATED' || event.type === 'HOD_OVERRIDE') {
-      fetchDues();
+      fetchDues({ page, limit, search: debouncedSearch });
     }
   });
   
@@ -117,7 +136,16 @@ const Dues = () => {
         columns={COLUMNS} 
         data={flattenedDues} 
         loading={loading}
+        pagination={{
+          total,
+          page,
+          limit,
+          onPageChange: (p) => setPage(p),
+          onLimitChange: (l) => { setLimit(l); setPage(1); }
+        }}
         searchable 
+        searchValue={searchValue}
+        onSearchChange={setSearchValue}
         searchPlaceholder="Search by roll no or name..." 
         showCount={true}
         selectable

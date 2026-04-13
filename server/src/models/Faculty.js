@@ -46,10 +46,6 @@ const facultySchema = new mongoose.Schema(
       enum: ['faculty', 'classTeacher', 'mentor', 'hod'],
       default: ['faculty'],
     },
-    /**
-     * Primary role derived from roleTags.
-     * If 'hod' is in roleTags → role = 'hod', otherwise 'faculty'.
-     */
     role: {
       type: String,
       enum: ['faculty', 'hod'],
@@ -72,17 +68,13 @@ const facultySchema = new mongoose.Schema(
   }
 );
 
-// M0-safe indexes (email & employeeId unique:true create their indexes automatically)
 facultySchema.index({ departmentId: 1, isActive: 1 });
 
-// HoD scoped faculty list by role
 facultySchema.index({ departmentId: 1, roleTags: 1 });
 
-// ── Pre-save: process user data ──────────────────────────────────────────────
 facultySchema.pre('save', async function () {
-  // Hash password if modified
   if (this.isModified('password')) {
-    const salt = await bcrypt.genSalt(12);
+    const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
 

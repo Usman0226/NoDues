@@ -135,7 +135,7 @@ export const getActivity = async (req, res, next) => {
 export const getDues = async (req, res, next) => {
   try {
     const deptId = hodDept(req);
-    const { page = 1, limit = 20, status = 'has_dues' } = req.query;
+    const { page = 1, limit = 20, status = 'has_dues', search = '' } = req.query;
 
     const batchFilter = { departmentId: deptId };
     if (status !== 'hod_override') batchFilter.status = 'active';
@@ -145,14 +145,23 @@ export const getDues = async (req, res, next) => {
     const batchIdSet   = deptBatches.map((b) => b._id);
 
     const skip = (Number(page) - 1) * Number(limit);
+    const query = { batchId: { $in: batchIdSet }, status };
+
+    if (search) {
+      query.$or = [
+        { 'studentSnapshot.name': { $regex: search, $options: 'i' } },
+        { 'studentSnapshot.rollNo': { $regex: search, $options: 'i' } },
+      ];
+    }
+
     const [requests, total] = await Promise.all([
-      NodueRequest.find({ batchId: { $in: batchIdSet }, status })
+      NodueRequest.find(query)
         .select('_id studentId studentSnapshot batchId overriddenAt overrideRemark')
         .skip(skip)
         .limit(Number(limit))
         .populate('batchId', 'className semester academicYear')
         .lean(),
-      NodueRequest.countDocuments({ batchId: { $in: batchIdSet }, status }),
+      NodueRequest.countDocuments(query),
     ]);
 
     if (!requests.length) {

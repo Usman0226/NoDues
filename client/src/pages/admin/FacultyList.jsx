@@ -33,9 +33,11 @@ const FacultyList = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   
-  // Pagination State
+  // Pagination & Search State
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
+  const [searchValue, setSearchValue] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [includeInactive, setIncludeInactive] = useState(false);
 
   const { user } = useAuth();
@@ -43,17 +45,26 @@ const FacultyList = () => {
 
   const { data: response, loading, error, request: fetchFaculty } = useApi(getFaculty);
   const faculty = response?.data || [];
-  const total = response?.total || 0;
+  const total = response?.pagination?.total || 0;
   
   const { data: deptResponse } = useApi(getDepartments, { immediate: true });
   const allDepts = deptResponse?.data || [];
   const depts = isHod ? allDepts.filter(d => d._id === user.departmentId) : allDepts;
 
+  // Debounce search input
   useEffect(() => {
-    const params = { page, limit, includeInactive };
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchValue);
+      setPage(1); // Reset to first page on new search
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  useEffect(() => {
+    const params = { page, limit, includeInactive, search: debouncedSearch };
     if (isHod) params.departmentId = user.departmentId;
     fetchFaculty(params);
-  }, [fetchFaculty, isHod, user?.departmentId, page, limit, includeInactive]);
+  }, [fetchFaculty, isHod, user?.departmentId, page, limit, includeInactive, debouncedSearch]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -264,6 +275,8 @@ const FacultyList = () => {
             onLimitChange: (l) => { setLimit(l); setPage(1); }
           }}
           searchable
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
           searchPlaceholder="Search staff by name or ID..."
           selectable
           selection={selectedIds}

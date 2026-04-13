@@ -21,9 +21,8 @@ const invalidateApprovalCaches = (approval) => {
 export const getPendingApprovals = async (req, res, next) => {
   try {
     const { userId } = req.user;
+    const { page = 1, limit = 20, search = '' } = req.query;
 
-    // Single indexed query: batchId+facultyId+action compound index covers this.
-    // Fetch active batch IDs first (small result set), then approvals in one shot.
     const activeBatchIds = await NodueBatch.find(
       { status: 'active' },
       '_id'
@@ -35,15 +34,29 @@ export const getPendingApprovals = async (req, res, next) => {
 
     const batchIdSet = activeBatchIds.map((b) => b._id);
 
-    // Index: { batchId: 1, facultyId: 1, action: 1 } — O(log n) lookup
-    const approvals = await NodueApproval.find({
+    const query = {
       facultyId: userId,
       action:    'pending',
       batchId:   { $in: batchIdSet },
-    })
-      .select('_id batchId studentId studentRollNo studentName subjectName subjectId approvalType roleTag action createdAt')
-      .sort({ createdAt: 1 })
-      .lean();
+    };
+
+    if (search) {
+      query.$or = [
+        { studentName: { $regex: search, $options: 'i' } },
+        { studentRollNo: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [approvals, total] = await Promise.all([
+      NodueApproval.find(query)
+        .select('_id batchId studentId studentRollNo studentName subjectName subjectId approvalType roleTag action createdAt')
+        .sort({ createdAt: 1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      NodueApproval.countDocuments(query),
+    ]);
 
     // Build a batch className lookup map — single query, O(1) per approval
     const batchMap = {};
@@ -71,6 +84,12 @@ export const getPendingApprovals = async (req, res, next) => {
         roleTag:       a.roleTag,
         action:        a.action,
       })),
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        pages: Math.ceil(total / Number(limit)),
+      },
     });
   } catch (err) {
     next(err);
@@ -81,9 +100,16 @@ export const getPendingApprovals = async (req, res, next) => {
 export const getApprovalHistory = async (req, res, next) => {
   try {
     const { userId } = req.user;
-    const { semester, page = 1, limit = 20 } = req.query;
+    const { semester, page = 1, limit = 20, search = '' } = req.query;
 
     const query = { facultyId: userId, action: { $ne: 'pending' } };
+
+    if (search) {
+      query.$or = [
+        { studentName: { $regex: search, $options: 'i' } },
+        { studentRollNo: { $regex: search, $options: 'i' } },
+      ];
+    }
 
     if (semester) {
       // Filter by semester via batch — two queries but both indexed

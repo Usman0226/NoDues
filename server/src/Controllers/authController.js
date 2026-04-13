@@ -47,16 +47,18 @@ export const login = async (req, res, next) => {
 
     const sanitizedEmail = email.trim().toLowerCase();
 
-    let user = await Admin.findOne({ email: sanitizedEmail }).select('+password');
-    let userType = 'admin';
+    const [admin, faculty] = await Promise.all([
+      Admin.findOne({ email: sanitizedEmail }).select('+password').lean(),
+      Faculty.findOne({
+        $or: [{ email: sanitizedEmail }, { employeeId: email.trim() }],
+        isActive: true,
+      })
+        .select('+password departmentId roleTags name email mustChangePassword role')
+        .lean(),
+    ]);
 
-    if (!user) {
-      user = await Faculty.findOne({ 
-        $or: [{ email: sanitizedEmail }, { employeeId: email.trim() }], 
-        isActive: true 
-      }).select('+password');
-      userType = 'faculty';
-    }
+    let user = admin || faculty;
+    let userType = admin ? 'admin' : (faculty ? 'faculty' : null);
 
     if (!user) {
       logger.warn('Login failure: User not found', { email: sanitizedEmail });
@@ -65,7 +67,20 @@ export const login = async (req, res, next) => {
       );
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const [isMatch, departmentName] = await Promise.all([
+      bcrypt.compare(password, user.password),
+      (async () => {
+        if (!user.departmentId) return null;
+        const cacheKey = `dept:${user.departmentId}`;
+        let name = cache.get(cacheKey);
+        if (!name) {
+          const dept = await mongoose.model('Department').findById(user.departmentId).select('name').lean();
+          name = dept?.name ?? null;
+          if (name) cache.set(cacheKey, name, 3600);
+        }
+        return name;
+      })(),
+    ]);
 
     if (!isMatch) {
       logger.warn('Login failure: Password mismatch', { email: sanitizedEmail });
@@ -89,19 +104,11 @@ export const login = async (req, res, next) => {
 
     const token = signAndSetCookie(payload, res);
 
-    let departmentName = null;
-    if (user.departmentId) {
-      const cacheKey = `dept:${user.departmentId}`;
-      departmentName = cache.get(cacheKey);
-      if (!departmentName) {
-        const dept = await Department.findById(user.departmentId).select('name').lean();
-        departmentName = dept?.name ?? null;
-        if (departmentName) cache.set(cacheKey, departmentName, 3600);
-      }
-    }
-
     if (role !== 'admin') {
-      Faculty.findByIdAndUpdate(user._id, { lastLoginAt: new Date() }).catch((e) =>
+      // ✅ Non-blocking update: Last login time
+      mongoose.model('Faculty').findByIdAndUpdate(user._id, { 
+        $set: { lastLoginAt: new Date() } 
+      }).select('_id').lean().catch((e) =>
         logger.error('lastLoginAt update failed', { error: e.message })
       );
     }
@@ -138,12 +145,12 @@ export const studentLogin = async (req, res, next) => {
       );
     }
 
+    // ✅ Optimization: Fetch student with lean and use caching for metadata to avoid heavy populates
     const student = await Student.findOne({
       rollNo: rollNo.trim().toUpperCase(),
       isActive: true,
     })
-      .populate('classId', 'name semester')
-      .populate('departmentId', 'name')
+      .select('name rollNo classId departmentId semester')
       .lean();
 
     if (!student) {
@@ -155,6 +162,32 @@ export const studentLogin = async (req, res, next) => {
         )
       );
     }
+
+    // ✅ Parallel Meta Data Fetch (Department & Class) from Cache/DB
+    const [deptName, classMeta] = await Promise.all([
+      (async () => {
+        const cacheKey = `dept:${student.departmentId}`;
+        let name = cache.get(cacheKey);
+        if (!name) {
+          const dept = await Department.findById(student.departmentId).select('name').lean();
+          name = dept?.name ?? null;
+          if (name) cache.set(cacheKey, name, 3600);
+        }
+        return name;
+      })(),
+      (async () => {
+        const cacheKey = `class:${student.classId}`;
+        let meta = cache.get(cacheKey);
+        if (!meta) {
+          // Use dynamic import to avoid circular dependency if any, but since it's a model it's fine
+          const Class = mongoose.model('Class');
+          const cls = await Class.findById(student.classId).select('name semester').lean();
+          meta = cls ? { name: cls.name, semester: cls.semester } : null;
+          if (meta) cache.set(cacheKey, meta, 3600);
+        }
+        return meta;
+      })(),
+    ]);
 
     const payload = {
       userId: student._id.toString(),
@@ -168,16 +201,16 @@ export const studentLogin = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      token, // Return token specifically for mobile clients unable to use cookies
+      token,
       data: {
         userId:         student._id,
         name:           student.name,
         rollNo:         student.rollNo,
         role:           'student',
-        classId:        student.classId?._id,
-        className:      student.classId?.name ?? null,
-        departmentName: student.departmentId?.name ?? null,
-        semester:       student.classId?.semester ?? student.semester,
+        classId:        student.classId,
+        className:      classMeta?.name ?? null,
+        departmentName: deptName ?? null,
+        semester:       classMeta?.semester ?? student.semester,
       },
     });
   } catch (err) {
@@ -249,7 +282,6 @@ export const changePassword = async (req, res, next) => {
       ...(user.departmentId && { departmentId: user.departmentId.toString() }),
     };
     signAndSetCookie(newPayload, res);
-
     // Invalidate any cached user data
     cache.del(`user:${userId}`);
 
@@ -308,30 +340,56 @@ export const getMe = async (req, res, next) => {
         mustChangePassword: admin.mustChangePassword,
       };
     } else if (role === 'student') {
-      const student = await Student.findById(userId)
-        .populate('classId', 'name semester')
-        .populate('departmentId', 'name')
-        .lean();
-
+      const student = await Student.findById(userId).select('name rollNo classId departmentId semester').lean();
       if (!student) return next(new ErrorResponse('User not found', 404, 'NOT_FOUND'));
+
+      const [deptName, classMeta] = await Promise.all([
+        (async () => {
+          const cacheKey = `dept:${student.departmentId}`;
+          let name = cache.get(cacheKey);
+          if (!name) {
+            const dept = await Department.findById(student.departmentId).select('name').lean();
+            name = dept?.name ?? null;
+            if (name) cache.set(cacheKey, name, 3600);
+          }
+          return name;
+        })(),
+        (async () => {
+          const cacheKey = `class:${student.classId}`;
+          let meta = cache.get(cacheKey);
+          if (!meta) {
+            const Class = mongoose.model('Class');
+            const cls = await Class.findById(student.classId).select('name semester').lean();
+            meta = cls ? { name: cls.name, semester: cls.semester } : null;
+            if (meta) cache.set(cacheKey, meta, 3600);
+          }
+          return meta;
+        })(),
+      ]);
 
       profile = {
         userId:         student._id,
         name:           student.name,
         rollNo:         student.rollNo,
         role:           'student',
-        classId:        student.classId?._id,
-        className:      student.classId?.name ?? null,
-        departmentName: student.departmentId?.name ?? null,
-        semester:       student.classId?.semester ?? student.semester,
+        classId:        student.classId,
+        className:      classMeta?.name ?? null,
+        departmentName: deptName ?? null,
+        semester:       classMeta?.semester ?? student.semester,
       };
     } else {
-      const faculty = await Faculty.findById(userId)
-        .populate('departmentId', 'name')
-        .lean();
+      const faculty = await Faculty.findById(userId).select('name email role roleTags departmentId mustChangePassword lastLoginAt isActive').lean();
 
       if (!faculty || !faculty.isActive) {
         return next(new ErrorResponse('User not found', 404, 'NOT_FOUND'));
+      }
+
+      const cacheKeyDept = `dept:${faculty.departmentId}`;
+      let departmentName = cache.get(cacheKeyDept);
+      if (!departmentName && faculty.departmentId) {
+        const dept = await Department.findById(faculty.departmentId).select('name').lean();
+        departmentName = dept?.name ?? null;
+        if (departmentName) cache.set(cacheKeyDept, departmentName, 3600);
       }
 
       profile = {
@@ -340,8 +398,8 @@ export const getMe = async (req, res, next) => {
         email:             faculty.email,
         role:              faculty.role,
         roleTags:          faculty.roleTags,
-        departmentId:      faculty.departmentId?._id,
-        departmentName:    faculty.departmentId?.name ?? null,
+        departmentId:      faculty.departmentId,
+        departmentName:    departmentName ?? null,
         mustChangePassword: faculty.mustChangePassword,
         lastLoginAt:       faculty.lastLoginAt,
       };

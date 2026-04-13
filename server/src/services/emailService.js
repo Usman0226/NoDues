@@ -1,17 +1,35 @@
 import nodemailer from 'nodemailer';
 import logger from '../utils/logger.js';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
+let _transporter = null;
+
+const getTransporter = () => {
+  if (!_transporter) {
+    if (!process.env.SMTP_HOST) {
+      logger.warn('SMTP_HOST not set, emails will fail to dispatch');
+    }
+    _transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      pool: true, // Enable connection pooling
+      maxConnections: 5,
+      maxMessages: 100,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      },
+      // Increase timeout for better stability
+      connectionTimeout: 10000,
+      greetingTimeout: 5000,
+      socketTimeout: 30000
+    });
   }
-});
+  return _transporter;
+};
 
 export const sendCredentialEmail = async (to, name, identifier, password, role) => {
   try {
+    if (role === 'student') return true;
     const loginUrl = process.env.CLIENT_URL || 'http://localhost:5173';
     
     const mailOptions = {
@@ -41,6 +59,7 @@ export const sendCredentialEmail = async (to, name, identifier, password, role) 
       `
     };
 
+    const transporter = getTransporter();
     const info = await transporter.sendMail(mailOptions);
     logger.info(`Email sent to ${to}: ${info.messageId}`, {
       actor: 'SYSTEM',

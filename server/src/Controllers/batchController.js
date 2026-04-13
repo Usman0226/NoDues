@@ -14,7 +14,7 @@ import { pushEvent } from './sseController.js';
 // ── GET /api/batch ────────────────────────────────────────────────────────────
 export const getBatches = async (req, res, next) => {
   try {
-    const { classId, departmentId, semester, academicYear, status, page = 1, limit = 20 } = req.query;
+    const { classId, departmentId, semester, academicYear, status, search, page = 1, limit = 20 } = req.query;
 
     const query = {};
     if (req.user.role === 'hod') query.departmentId = req.user.departmentId;
@@ -24,6 +24,10 @@ export const getBatches = async (req, res, next) => {
     if (semester)     query.semester     = Number(semester);
     if (academicYear) query.academicYear = academicYear;
     if (status)       query.status       = status;
+
+    if (search) {
+      query.className = { $regex: search, $options: 'i' };
+    }
 
     const skip = (Number(page) - 1) * Number(limit);
     const [batches, total] = await Promise.all([
@@ -49,246 +53,315 @@ export const getBatches = async (req, res, next) => {
   }
 };
 
-// ── POST /api/batch/initiate ──────────────────────────────────────────────────
-// Uses bulkWrite — 1 round trip instead of N per-student inserts.
-// Sequential inserts (old): ~2,600ms for 65 students × 8 faculty
-// bulkWrite (new): ~80ms
+// ── Helper: Internal Batch Initiation Logic ──────────────────────────────────
+/**
+ * @param {Object} cls - Class document (lean)
+ * @param {Date|null} deadline 
+ * @param {Object} initiator - { userId, role }
+ * @returns {Promise<Object>} initiation result summary
+ */
+const _executeInitiation = async (cls, deadline, initiator) => {
+  const classId = cls._id;
+
+  // 1. Fetch active students 
+  const students = await Student.find({ classId, isActive: true })
+    .select('_id rollNo name mentorId electiveSubjects')
+    .lean();
+  
+  if (!students.length) {
+    throw new Error(`No active students found in class ${cls.name}`);
+  }
+
+  // 2. Build Batch Record
+  const batch = await NodueBatch.create({
+    classId,
+    className:       cls.name,
+    departmentId:    cls.departmentId._id || cls.departmentId,
+    semester:        cls.semester,
+    academicYear:    cls.academicYear,
+    initiatedBy:     initiator.userId,
+    initiatedByRole: initiator.role,
+    deadline:        deadline ? new Date(deadline) : null,
+    status:          'active',
+    totalStudents:   students.length,
+  });
+
+  // 3. Fetch necessary faculty info
+  const [hodAccount, ctInfo] = await Promise.all([
+    Faculty.findOne({ 
+      departmentId: cls.departmentId._id || cls.departmentId, 
+      roleTags: 'hod', 
+      isActive: true 
+    }).select('name').lean(),
+    cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').lean() : null
+  ]);
+
+  const allMentorIds = [...new Set(students.map(s => s.mentorId).filter(Boolean))];
+  const mentors = await Faculty.find({ _id: { $in: allMentorIds } }).select('name').lean();
+  const mentorMap = new Map(mentors.map(m => [m._id.toString(), m.name]));
+
+  // 4. Operation Builder
+  const requestOps  = [];
+  const approvalOps = [];
+  const now         = new Date();
+  const departmentName = cls.departmentId?.name ?? null;
+
+  for (const student of students) {
+    const requestId = new mongoose.Types.ObjectId();
+    
+    // Build Faculty Snapshot for this student
+    const snapshot = {};
+    if (hodAccount) {
+      snapshot['hod'] = {
+        facultyId:    hodAccount._id,
+        facultyName:  hodAccount.name,
+        roleTag:      'hod',
+        approvalType: 'office',
+      };
+    }
+
+    // Regular subjects
+    for (const s of cls.subjectAssignments ?? []) {
+      if (!s.facultyId || s.isElective) continue;
+      snapshot[s.subjectId.toString()] = {
+        facultyId:    s.facultyId,
+        facultyName:  s.facultyName,
+        subjectId:    s.subjectId,
+        subjectName:  s.subjectName,
+        subjectCode:  s.subjectCode,
+        roleTag:      'faculty',
+        approvalType: 'subject',
+      };
+    }
+
+    // Class teacher
+    if (cls.classTeacherId) {
+      snapshot['classTeacher'] = {
+        facultyId:    cls.classTeacherId,
+        facultyName:  ctInfo?.name ?? null,
+        subjectId:    null,
+        subjectName:  'Academic Advisor (Class Teacher)',
+        subjectCode:  null,
+        roleTag:      'classTeacher',
+        approvalType: 'classTeacher',
+      };
+    }
+
+    // Mentor
+    if (student.mentorId) {
+      const mentorName = mentorMap.get(student.mentorId.toString());
+      snapshot['mentor'] = {
+        facultyId:    student.mentorId,
+        facultyName:  mentorName ?? null,
+        subjectId:    null,
+        subjectName:  'Institutional Mentor',
+        subjectCode:  null,
+        roleTag:      'mentor',
+        approvalType: 'mentor',
+      };
+    }
+
+    // Elective subjects (student-specific)
+    for (const e of student.electiveSubjects ?? []) {
+      if (!e.facultyId) continue;
+      snapshot[e.subjectId.toString()] = {
+        facultyId:    e.facultyId,
+        facultyName:  e.facultyName,
+        subjectId:    e.subjectId,
+        subjectName:  e.subjectName,
+        subjectCode:  e.subjectCode,
+        roleTag:      'faculty',
+        approvalType: 'subject',
+      };
+    }
+
+    requestOps.push({
+      insertOne: {
+        document: {
+          _id:     requestId,
+          batchId: batch._id,
+          studentId: student._id,
+          studentSnapshot: {
+            rollNo: student.rollNo,
+            name:   student.name,
+            departmentName,
+          },
+          facultySnapshot: snapshot,
+          status:     'pending',
+          createdAt:  now,
+          updatedAt:  now,
+        },
+      },
+    });
+
+    for (const f of Object.values(snapshot)) {
+      if (!f.facultyId) continue;
+      approvalOps.push({
+        insertOne: {
+          document: {
+            requestId,
+            batchId:      batch._id,
+            studentId:    student._id,
+            studentRollNo: student.rollNo,
+            studentName:  student.name,
+            facultyId:    f.facultyId,
+            subjectId:    f.subjectId    ?? null,
+            subjectName:  f.subjectName  ?? null,
+            approvalType: f.approvalType,
+            roleTag:      f.roleTag,
+            action:       'pending',
+            createdAt:    now,
+          },
+        },
+      });
+    }
+  }
+
+  // 5. Execute Bulk Writes
+  const [requestResult, approvalResult] = await Promise.all([
+    NodueRequest.bulkWrite(requestOps,  { ordered: false }),
+    NodueApproval.bulkWrite(approvalOps, { ordered: false }),
+  ]);
+
+  // 6. Cache & Logs
+  cache.set(`batch_summary:${batch._id}`, {
+    cleared: 0, pending: students.length, hasDues: 0, hodOverride: 0,
+  }, 30);
+  students.forEach(s => cache.del(`student_status:${s._id}`));
+
+  logger.info('batch_initiated', {
+    timestamp: new Date().toISOString(),
+    actor: initiator.userId,
+    action: 'INITIATE_BATCH',
+    resource_id: batch._id.toString(),
+    classId,
+    requestsCreated: requestResult.insertedCount,
+  });
+
+  // SSE Notification
+  const studentIdList = students.map((s) => s._id.toString());
+  pushEvent(studentIdList, 'BATCH_INITIATED', {
+    batchId:      batch._id,
+    className:    cls.name,
+    semester:     cls.semester,
+    academicYear: cls.academicYear,
+  });
+
+  return {
+    batchId: batch._id,
+    className: cls.name,
+    totalStudents: students.length,
+    requestsCreated: requestResult.insertedCount
+  };
+};
+
 export const initiateBatch = async (req, res, next) => {
   try {
     const { classId, deadline } = req.body;
-    if (!classId) {
-      return next(new ErrorResponse('classId is required', 400, 'VALIDATION_ERROR'));
-    }
+    if (!classId) return next(new ErrorResponse('classId is required', 400));
 
     const cls = await Class.findOne({ _id: classId, isActive: true })
       .populate('departmentId', 'name')
       .lean();
-    if (!cls) return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+    if (!cls) return next(new ErrorResponse('Class not found', 404));
 
     if (req.user.role === 'hod' && cls.departmentId?._id?.toString() !== req.user.departmentId) {
-      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+      return next(new ErrorResponse('Access denied', 403));
     }
 
-    // Prevent duplicate active batch for this class
     const existing = await NodueBatch.findOne({ classId, status: 'active' }).lean();
-    if (existing) {
-      return next(
-        new ErrorResponse(
-          `An active batch already exists for ${cls.name}`,
-          409,
-          'BATCH_ALREADY_EXISTS'
-        )
-      );
-    }
+    if (existing) return next(new ErrorResponse(`Active session already exists for ${cls.name}`, 409));
 
-    // Fetch active students — projection limits data transfer
-    const students = await Student.find({ classId, isActive: true })
-      .select('_id rollNo name mentorId electiveSubjects')
-      .lean();
-    if (!students.length) {
-      return next(new ErrorResponse('No active students found in this class', 400, 'BATCH_NO_STUDENTS'));
-    }
+    const result = await _executeInitiation(cls, deadline, { userId: req.user.userId, role: req.user.role });
 
-    // Create batch record
-    const batch = await NodueBatch.create({
-      classId,
-      className:       cls.name,
-      departmentId:    cls.departmentId._id,
-      semester:        cls.semester,
-      academicYear:    cls.academicYear,
-      initiatedBy:     req.user.userId,
-      initiatedByRole: req.user.role,
-      deadline:        deadline ? new Date(deadline) : null,
-      status:          'active',
-      totalStudents:   students.length,
+    return res.status(201).json({
+      success: true,
+      data: { ...result, initiatedAt: new Date() },
     });
+  } catch (err) {
+    if (err.message.includes('No active students')) {
+      return next(new ErrorResponse(err.message, 400));
+    }
+    next(err);
+  }
+};
 
-    const [hodAccount, ctInfo] = await Promise.all([
-      Faculty.findOne({ departmentId: cls.departmentId._id, roleTags: 'hod', isActive: true }).select('name').lean(),
-      cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').lean() : null
-    ]);
+export const initiateDepartmentWide = async (req, res, next) => {
+  try {
+    const { deadline } = req.body;
+    const departmentId = req.user.departmentId;
 
-    const allMentorIds = [...new Set(students.map(s => s.mentorId).filter(Boolean))];
-    const mentors = await Faculty.find({ _id: { $in: allMentorIds } }).select('name').lean();
-    const mentorMap = new Map(mentors.map(m => [m._id.toString(), m.name]));
-    const facultyMap = new Map((cls.subjectAssignments ?? []).map(a => [a.facultyId.toString(), a.facultyName]));
+    if (!departmentId) {
+      return next(new ErrorResponse('Department context missing from session', 400));
+    }
 
-    const buildFacultySnapshot = (student, classData) => {
-      const snapshot = {};
+    // 1. Fetch all active classes for the department
+    const classes = await Class.find({ departmentId, isActive: true })
+      .populate('departmentId', 'name')
+      .lean();
 
-      // 1. Department HoD
-      if (hodAccount) {
-        snapshot['hod'] = {
-          facultyId:    hodAccount._id,
-          facultyName:  hodAccount.name,
-          roleTag:      'hod',
-          approvalType: 'office',
-        };
-      }
+    if (!classes.length) {
+      return next(new ErrorResponse('No active classes found for this department', 404));
+    }
 
-      // Regular subjects
-      for (const s of classData.subjectAssignments ?? []) {
-        if (!s.facultyId || s.isElective) continue;
-        const key = s.subjectId.toString();
-        snapshot[key] = {
-          facultyId:    s.facultyId,
-          facultyName:  s.facultyName,
-          subjectId:    s.subjectId,
-          subjectName:  s.subjectName,
-          subjectCode:  s.subjectCode,
-          roleTag:      'faculty',
-          approvalType: 'subject',
-        };
-      }
+    // 2. Identify which classes already have active batches
+    const activeBatches = await NodueBatch.find({
+      departmentId,
+      status: 'active'
+    }).select('classId').lean();
 
-      // Class teacher
-      if (classData.classTeacherId) {
-        snapshot['classTeacher'] = {
-          facultyId:    classData.classTeacherId,
-          facultyName:  ctInfo?.name ?? null,
-          subjectId:    null,
-          subjectName:  'Academic Advisor (Class Teacher)',
-          subjectCode:  null,
-          roleTag:      'classTeacher',
-          approvalType: 'classTeacher',
-        };
-      }
+    const activeClassIds = new Set(activeBatches.map(b => b.classId.toString()));
+    
+    // 3. Filter eligible classes
+    const eligibleClasses = classes.filter(c => !activeClassIds.has(c._id.toString()));
 
-      // Mentor
-      if (student.mentorId) {
-        const mentorName = mentorMap.get(student.mentorId.toString());
-        snapshot['mentor'] = {
-          facultyId:    student.mentorId,
-          facultyName:  mentorName ?? null,
-          subjectId:    null,
-          subjectName:  'Institutional Mentor',
-          subjectCode:  null,
-          roleTag:      'mentor',
-          approvalType: 'mentor',
-        };
-      }
+    if (!eligibleClasses.length) {
+      return res.status(200).json({
+        success: true,
+        message: 'All classes already have active clearance sessions',
+        summary: { total: classes.length, initiated: 0, skipped: classes.length }
+      });
+    }
 
-      // Elective subjects (student-specific)
-      for (const e of student.electiveSubjects ?? []) {
-        if (!e.facultyId) continue;
-        const key = e.subjectId.toString();
-        snapshot[key] = {
-          facultyId:    e.facultyId,
-          facultyName:  e.facultyName,
-          subjectId:    e.subjectId,
-          subjectName:  e.subjectName,
-          subjectCode:  e.subjectCode,
-          roleTag:      'faculty',
-          approvalType: 'subject',
-        };
-      }
-
-      return snapshot;
+    const results = {
+      initiated: [],
+      failed: [],
+      skippedCount: activeClassIds.size
     };
 
-    // ── Build all ops in memory, then single bulkWrite round trip ─────────────
-    const requestOps  = [];
-    const approvalOps = [];
-    const now         = new Date();
-    const departmentName = cls.departmentId?.name ?? null;
-
-    for (const student of students) {
-      const requestId      = new mongoose.Types.ObjectId();
-      const facultySnapshot = buildFacultySnapshot(student, cls);
-
-      requestOps.push({
-        insertOne: {
-          document: {
-            _id:     requestId,
-            batchId: batch._id,
-            studentId: student._id,
-            studentSnapshot: {
-              rollNo:         student.rollNo,
-              name:           student.name,
-              departmentName,
-            },
-            facultySnapshot,
-            status:     'pending',
-            createdAt:  now,
-            updatedAt:  now,
-          },
-        },
-      });
-
-      for (const f of Object.values(facultySnapshot)) {
-        if (!f.facultyId) continue;
-        approvalOps.push({
-          insertOne: {
-            document: {
-              requestId,
-              batchId:      batch._id,
-              studentId:    student._id,
-              studentRollNo: student.rollNo,
-              studentName:  student.name,
-              facultyId:    f.facultyId,
-              subjectId:    f.subjectId    ?? null,
-              subjectName:  f.subjectName  ?? null,
-              approvalType: f.approvalType,
-              roleTag:      f.roleTag,
-              action:       'pending',
-              createdAt:    now,
-            },
-          },
+    for (const cls of eligibleClasses) {
+      try {
+        const res = await _executeInitiation(cls, deadline, { 
+          userId: req.user.userId, 
+          role: req.user.role 
+        });
+        results.initiated.push(res);
+      } catch (err) {
+        logger.error('bulk_initiate_single_failure', { 
+          class: cls.name, 
+          error: err.message 
+        });
+        results.failed.push({ 
+          className: cls.name, 
+          reason: err.message 
         });
       }
     }
 
-    // Two bulkWrites — one per collection. ordered:false means a single doc
-    // failure doesn't abort the rest of the batch.
-    // ── Execute Bulk Operations ──────────────────────────────────────────────
-    const [requestResult, approvalResult] = await Promise.all([
-      NodueRequest.bulkWrite(requestOps,  { ordered: false }),
-      NodueApproval.bulkWrite(approvalOps, { ordered: false }),
-    ]);
-
-    const requestsCreated  = requestResult.insertedCount;
-    const approvalsCreated = approvalResult.insertedCount;
-
-    // Prime batch summary cache
-    cache.set(`batch_summary:${batch._id}`, {
-      cleared: 0, pending: students.length, hasDues: 0, hodOverride: 0,
-    }, 30);
-
-    // Invalidate student status caches for this class
-    students.forEach(s => cache.del(`student_status:${s._id}`));
-
-    logger.info('batch_initiated', {
-      timestamp: new Date().toISOString(),
-      actor: req.user.userId,
-      action: 'INITIATE_BATCH',
-      resource_id: batch._id.toString(),
-      classId, requestsCreated, approvalsCreated,
-    });
-
-    // Notify all students via SSE
-    const studentIdList = students.map((s) => s._id.toString());
-    pushEvent(studentIdList, 'BATCH_INITIATED', {
-      batchId:      batch._id,
-      className:    cls.name,
-      semester:     cls.semester,
-      academicYear: cls.academicYear,
-    });
-
     return res.status(201).json({
       success: true,
       data: {
-        batchId:         batch._id,
-        classId:         cls._id,
-        className:       cls.name,
-        semester:        cls.semester,
-        academicYear:    cls.academicYear,
-        status:          'active',
-        totalStudents:   students.length,
-        requestsCreated,
-        approvalsCreated,
-        initiatedAt:     batch.initiatedAt,
-      },
+        summary: {
+          total: classes.length,
+          initiated: results.initiated.length,
+          failed: results.failed.length,
+          skipped: results.skippedCount
+        },
+        details: results.initiated,
+        errors: results.failed.length > 0 ? results.failed : undefined
+      }
     });
+
   } catch (err) {
     next(err);
   }

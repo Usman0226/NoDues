@@ -174,9 +174,10 @@ export const createFaculty = async (req, res, next) => {
       details: { email: faculty.email, employeeId: faculty.employeeId }
     });
 
-    sendCredentialEmail(email, name, email, tempPassword, 'faculty').catch(err => {
-      logger.error('Background email dispatch failed for new faculty:', err);
-    });
+    const emailResult = await sendCredentialEmail(email, name, email, tempPassword, 'faculty');
+    if (!emailResult) {
+      logger.warn('Email dispatch failed for new faculty:', { email });
+    }
 
     invalidateFacultyCache(faculty._id.toString());
 
@@ -191,7 +192,7 @@ export const createFaculty = async (req, res, next) => {
         departmentName:     dept.name,
         roleTags:           faculty.roleTags,
         mustChangePassword: true,
-        credentialEmailSent: false, // true once email service is wired
+        credentialEmailSent: emailResult,
         isActive:           true,
         createdAt:          faculty.createdAt,
       },
@@ -432,13 +433,15 @@ export const resendCredentials = async (req, res, next) => {
       details: { email: faculty.email }
     });
 
-    sendCredentialEmail(faculty.email, faculty.name, faculty.email, tempPassword, 'faculty').catch(err => {
-      logger.error('Background email dispatch failed for resending faculty creds:', err);
-    });
+    const emailResult = await sendCredentialEmail(faculty.email, faculty.name, faculty.email, tempPassword, 'faculty');
+    if (!emailResult) {
+      logger.warn('Email dispatch failed for faculty credential resend:', { email: faculty.email });
+    }
 
     return res.status(200).json({
       success: true,
-      message: 'Credentials regenerated and email dispatched',
+      message: emailResult ? 'Credentials regenerated and email dispatched' : 'Credentials regenerated but email dispatch failed',
+      credentialEmailSent: emailResult
     });
   } catch (err) {
     next(err);
@@ -497,26 +500,22 @@ export const bulkResendCredentials = async (req, res, next) => {
     // We do this in a loop because we need to send individual emails and update passwords
     // For large numbers, this might be slow, but usually batch size is small (<50)
     for (const faculty of faculties) {
-      const tempPassword = crypto.randomBytes(4).toString('hex');
-      faculty.password = tempPassword;
-      faculty.mustChangePassword = true;
-      await faculty.save();
-
-      sendCredentialEmail(faculty.email, faculty.name, faculty.email, tempPassword, 'faculty').catch(err => {
-        logger.error(`Bulk cred resend failed for ${faculty.email}:`, err);
-      });
+      emailPromises.push(sendCredentialEmail(faculty.email, faculty.name, faculty.email, tempPassword, 'faculty'));
     }
+
+    const emailResults = await Promise.all(emailPromises);
+    const successCount = emailResults.filter(Boolean).length;
 
     logger.info('faculty_bulk_creds_resent', {
       timestamp: new Date().toISOString(),
       actor: req.user.userId,
       action: 'BULK_RESEND_CREDS',
-      details: { count: faculties.length }
+      details: { count: faculties.length, successCount }
     });
 
     return res.status(200).json({
       success: true,
-      message: `Emails dispatched for ${faculties.length} faculty members`
+      message: `Emails dispatched for ${successCount}/${faculties.length} faculty members`
     });
   } catch (err) {
     next(err);

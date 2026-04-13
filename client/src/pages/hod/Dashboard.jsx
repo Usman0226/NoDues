@@ -21,6 +21,10 @@ import {
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import Modal from '../../components/ui/Modal';
+import { initiateDepartmentBatch } from '../../api/batch';
+
 
 const ACTIVITY_ICONS = {
   CLEARANCE: { icon: CheckCircle2, cls: 'text-emerald-500 bg-emerald-50' },
@@ -34,6 +38,37 @@ const HodDashboard = () => {
   
   const { data: overview, loading, error, request: fetchOverview } = useApi(getHodOverview, { immediate: true });
   const { data: activity, request: fetchActivity } = useApi(getHodActivity, { immediate: true });
+
+  const [isBulkModalOpen, setIsBulkModalOpen] = React.useState(false);
+  const [deadline, setDeadline] = React.useState('');
+  const [isInitiating, setIsInitiating] = React.useState(false);
+
+  const handleBulkInitiate = async (e) => {
+    e.preventDefault();
+    if (isInitiating) return;
+
+    try {
+      setIsInitiating(true);
+      const res = await initiateDepartmentBatch({ deadline: deadline || null });
+      
+      if (res.success) {
+        const { summary } = res.data;
+        if (summary.failed > 0) {
+          toast.error(`Initiated ${summary.initiated} cycles, but ${summary.failed} failed.`);
+        } else {
+          toast.success(`Successfully initiated ${summary.initiated} clearance cycles.`);
+        }
+        setIsBulkModalOpen(false);
+        setDeadline('');
+        fetchOverview();
+        fetchActivity();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Department initiation failed');
+    } finally {
+      setIsInitiating(false);
+    }
+  };
 
   // Real-time awareness (§9)
   useSSE(user?.departmentId ? getDepartmentSSEUrl(user.departmentId) : null, (event) => {
@@ -111,7 +146,13 @@ const HodDashboard = () => {
           <div className="px-1 flex items-center justify-between">
             <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/40">Active Academic Cycles</h2>
             <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-              <span className="flex items-center gap-1.5"><TrendingUp size={12} strokeWidth={3} className="text-emerald-500" /> {avgCompletion}% Completion</span>
+              <button 
+                onClick={() => setIsBulkModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy text-white hover:bg-navy/90 transition-all shadow-sm shadow-navy/20"
+              >
+                <Layers size={12} /> Bulk Initiate
+              </button>
+              <span className="flex items-center gap-1.5 border-l border-muted pl-4"><TrendingUp size={12} strokeWidth={3} className="text-emerald-500" /> {avgCompletion}% Completion</span>
             </div>
           </div>
 
@@ -212,6 +253,58 @@ const HodDashboard = () => {
           </div>
         </div>
       </div>
+      {/* Bulk Initiation Modal */}
+      <Modal 
+        isOpen={isBulkModalOpen} 
+        onClose={() => !isInitiating && setIsBulkModalOpen(false)}
+        title="Department-Wide Initiation"
+      >
+        <form onSubmit={handleBulkInitiate} className="space-y-6">
+          <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex gap-3">
+            <AlertCircle className="text-amber-600 shrink-0" size={20} />
+            <div className="space-y-1">
+              <p className="text-xs font-black text-amber-900 uppercase tracking-tight">Important Notice</p>
+              <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                This will trigger No-Dues clearance for <strong>all eligible classes</strong> in your department. 
+                Classes with existing active sessions or no students will be skipped automatically.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+              Submission Deadline (Optional)
+            </label>
+            <input 
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 focus:bg-white focus:ring-2 focus:ring-navy/5 outline-none transition-all text-sm font-medium"
+              min={new Date().toISOString().split('T')[0]}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button 
+              type="button"
+              variant="secondary" 
+              className="flex-1" 
+              onClick={() => setIsBulkModalOpen(false)}
+              disabled={isInitiating}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit"
+              variant="primary" 
+              className="flex-1"
+              isLoading={isInitiating}
+            >
+              Confirm Initiation
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </PageWrapper>
   );
 };
