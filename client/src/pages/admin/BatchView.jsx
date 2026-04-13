@@ -14,6 +14,7 @@ import { ArrowLeft, X, ChevronRight, Info, AlertTriangle, RefreshCw } from 'luci
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
+
 const ICON_MAP = {
   [STATUSES.APPROVED]: { icon: '✅', cls: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
   [STATUSES.PENDING]: { icon: '⏳', cls: 'bg-amber-50 text-amber-700 border-amber-100' },
@@ -97,10 +98,12 @@ const BatchView = () => {
   if (!batch) return null;
 
   return (
-    <PageWrapper title="Batch Clearance Matrix" subtitle={`${batch.batch?.className} · Cycle ${batch.batch?.academicYear}`}>
-      <Link to={`${basePath}/batches`} className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy mb-8 -mt-6 transition-colors font-sans">
-        <ArrowLeft size={12} strokeWidth={3} /> Return to History
-      </Link>
+    <PageWrapper 
+      title="Batch Clearance Matrix" 
+      subtitle={`${batch.batch?.className} · Cycle ${batch.batch?.academicYear}`}
+      backTitle="Return to History"
+      backFallback={`${basePath}/batches`}
+    >
 
       <BatchSummaryChips counts={summary} />
 

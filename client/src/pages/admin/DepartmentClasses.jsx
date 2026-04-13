@@ -12,6 +12,7 @@ import { getClasses, createClass, updateClass, deleteClass, updateClassTeacher }
 import { getFaculty } from '../../api/faculty';
 import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import BackHeader from '../../components/ui/BackHeader';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -163,7 +164,16 @@ const DepartmentClasses = () => {
 
 
   return (
-    <PageWrapper title="Academic Groups" subtitle="Manage classes, semesters and department structure">
+    <PageWrapper 
+      title="Academic Groups" 
+      subtitle="Manage classes, semesters and department structure"
+    >
+       {!isHod && (
+          <BackHeader 
+            title="Return to Departments" 
+            fallback="/admin/departments" 
+          />
+       )}
        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex flex-wrap gap-3">
             <Button variant="primary" size="sm" onClick={() => {

@@ -17,6 +17,7 @@ import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
+
 const TABS = [
   { key: 'students', label: 'Students', icon: Users },
   { key: 'subjects', label: 'Subjects', icon: BookOpen },
@@ -539,11 +540,8 @@ const SUBJECT_COLS = [
     <PageWrapper 
       title={classData?.name} 
       subtitle={`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}
-      backLink={
-        <Link to={isHod ? '/hod/classes' : '/admin/departments'} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy transition-colors">
-          <ArrowLeft size={12} strokeWidth={3} /> Return to Directory
-        </Link>
-      }
+      backTitle="Return to Directory"
+      backFallback={isHod ? '/hod/classes' : (departmentId ? `/admin/departments/${departmentId}/classes` : '/admin/departments')}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-full p-1.5 w-fit">
