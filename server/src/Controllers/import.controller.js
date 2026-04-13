@@ -13,9 +13,6 @@ import { invalidateStudentCache } from './studentController.js';
 import { invalidateFacultyCache } from './facultyController.js';
 import { invalidateDeptCache } from './departmentController.js';
 
-/**
- * Helper: Parse Excel/CSV from Buffer
- */
 const parseBuffer = (buffer) => {
   const workbook = xlsx.read(buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
@@ -115,9 +112,9 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
       semester: targetClass.semester,
       academicYear: targetClass.academicYear,
       password: tempPassword 
+      
     });
-
-    sendCredentialEmail(student.email, student.name, student.rollNo, tempPassword, 'student');
+    // sendCredentialEmail(student.email, student.name, student.rollNo, tempPassword, 'student');
     createdStudents.push(student._id);
   }
 
@@ -223,14 +220,19 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
       password: tempPassword
     });
 
-    sendCredentialEmail(facultyMember.email, facultyMember.name, facultyMember.email, tempPassword, 'faculty');
-    createdFaculty.push(facultyMember);
+    const emailPromise = sendCredentialEmail(facultyMember.email, facultyMember.name, facultyMember.email, tempPassword, 'faculty');
+    createdFaculty.push({ member: facultyMember, emailPromise });
     createdCount++;
+  }
+
+  // Await all emails in parallel before completing
+  if (createdFaculty.length > 0) {
+    await Promise.allSettled(createdFaculty.map(f => f.emailPromise));
   }
 
   invalidateFacultyCache();
   if (createdFaculty.length > 0) {
-    const depts = [...new Set(createdFaculty.map(f => f.departmentId.toString()))];
+    const depts = [...new Set(createdFaculty.map(f => f.member.departmentId.toString()))];
     depts.forEach(d => invalidateDeptCache(d));
   }
 
@@ -424,10 +426,6 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
   res.status(200).json({ success: true, data: { message: `Successfully updated ${updated} mentor assignments` } });
 });
 
-/**
- * @desc    Get template
- * @route   GET /api/import/template/:type
- */
 export const getTemplate = asyncHandler(async (req, res, next) => {
   const { type } = req.params;
   let headers = [];

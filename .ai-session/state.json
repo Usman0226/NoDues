@@ -1,27 +1,19 @@
 {
-  "last_updated": "2026-04-12T20:43:00Z",
+  "last_updated": "2026-04-13T10:19:00Z",
   "completed": [
-    "Integrated bulk selection in FacultyList, StudentList, Subjects, Batches, Dues, and ClassDetail",
-    "Implemented HOD bulkOverrideDues in backend",
-    "Implemented bulkCloseBatches in backend",
-    "Implemented bulkDeactivateFaculty and bulkResendCredentials in backend",
-    "Implemented bulkDeactivateStudents and bulkAssignMentor in backend",
-    "Implemented bulkDeactivateSubjects in backend",
-    "Updated client API wrappers for all administrative modules",
-    "Updated api.md with documentation for all new bulk endpoints",
-    "Fixed student clearance data visibility issue in Student Portal",
-    "Refactored facultySnapshot to Object-based indexing for O(1) lookups",
-    "Corrected frontend property mapping in Status.jsx (accessed payload instead of envelope)"
+    "Disabled student email notifications",
+    "Implemented SMTP pooling in emailService.js",
+    "Refactored emailService for lazy initialization (resolved race condition)",
+    "Optimized faculty import for parallel email dispatch",
+    "Updated facultyController to await email results and provide feedback in API response"
   ],
   "in_progress": [],
-  "pending": [
-    "Final end-to-end user verification of student dashboard visibility"
-  ],
+  "pending": [],
   "decisions": [
     {
-      "context": "Student clearance data missing from portal despite backend returning data",
-      "decision": "Identified property access mismatch in Status.jsx (component was reading from response envelope instead of nested data object). Also refactored backend snapshot to Object type to prevent flaky array indexing.",
-      "trade_offs": "Snapshot schema change required a Mixed type in Mongoose, which reduces some schema-enforced structure but provides massive efficiency for student-side lookups."
+      "context": "Bulk operations were taking 5+ minutes",
+      "decision": "Enabled SMTP connection pooling and parallelized Promise.all for email dispatch",
+      "trade_offs": "Improved performance drastically at the cost of slightly higher memory usage for the connection pool"
     }
   ],
   "blockers": []
