@@ -1,13 +1,19 @@
 import React from 'react';
+import BackHeader from '../ui/BackHeader';
 
-const PageWrapper = ({ children, title, subtitle, backLink }) => {
+/**
+ * PageWrapper - Consistent layout container for all pages.
+ * @param {string} title - Page title
+ * @param {string} subtitle - Optional page subtitle
+ * @param {string} backTitle - Label for the back button
+ * @param {string} backFallback - Fallback route for the back button
+ */
+const PageWrapper = ({ children, title, subtitle, backTitle, backFallback }) => {
   return (
     <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-10 fade-up">
       <div className="max-w-7xl mx-auto relative">
-        {backLink && (
-          <div className="mb-4">
-            {backLink}
-          </div>
+        {backFallback && (
+          <BackHeader title={backTitle || 'Back'} fallback={backFallback} />
         )}
         <header className="mb-6 sm:mb-7 lg:mb-8">
           <p className="page-kicker mb-2">NoDues overview</p>

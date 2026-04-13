@@ -3,7 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../context/AuthContext';
 import { getBatchStudentDetail } from '../../api/batch';
+
 import { 
   ArrowLeft, BookOpen, User, GraduationCap, 
   AlertTriangle, CheckCircle, Clock, Shield,
@@ -19,6 +21,10 @@ const getApprovalLabel = (item) => {
 
 const BatchStudentDetail = () => {
   const { batchId, studentId } = useParams();
+  const { user } = useAuth();
+  const isHod = user?.role === 'hod';
+  const basePath = isHod ? '/hod' : '/admin';
+
   const { data: detail, loading, error, request: fetchDetail } = useApi(() => getBatchStudentDetail(batchId, studentId), { immediate: true });
 
   if (loading && !detail) {
@@ -50,10 +56,12 @@ const BatchStudentDetail = () => {
   const approvals = detail?.approvals || [];
 
   return (
-    <PageWrapper title="Candidate Progress Audit" subtitle={`Clearance trajectory for ${student.name}`}>
-      <Link to={`/admin/batch/${batchId}`} className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-navy mb-8 -mt-6 transition-colors font-sans">
-        <ArrowLeft size={12} strokeWidth={3} /> Return to Progress Matrix
-      </Link>
+    <PageWrapper 
+      title="Candidate Progress Audit" 
+      subtitle={`Clearance trajectory for ${student.name}`}
+      backTitle="Return to Progress Matrix"
+      backFallback={`${basePath}/batch/${batchId}`}
+    >
 
       {/* Candidate Header */}
       <div className="bg-white rounded-2xl border border-muted p-8 mb-10 shadow-sm relative overflow-hidden">
