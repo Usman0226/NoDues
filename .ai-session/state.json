@@ -1,21 +1,19 @@
 {
-  "last_updated": "2026-04-13T15:21:00Z",
+  "last_updated": "2026-04-13T22:04:40+05:30",
   "completed": [
-    "Platform attribution (Built by ARC Club)",
-    "Comprehensive terminology simplification (Removed jargon: Node, Trajectory, Ops Console)",
-    "Standardized Professional English across all dashboards (Admin, HOD, Student, Login)",
-    "Email System UI refinement (Sender accounts, Connectivity tests, Email History)"
+    "Memoized useApi hook functions (request, setData) to prevent infinite loops",
+    "Memoized FacultyList queryKeys to stabilize React Query dependencies",
+    "Stabilized Navbar imports by removing legacy icons causing Vite 500 errors"
   ],
   "in_progress": [],
   "pending": [
-    "Final pass on less-frequent components (Subjects, Departments pages)",
-    "Backend terminology alignment (Ensuring DB models match UI labels eventually)"
+    "Final validation of bulk operations in FacultyList"
   ],
   "decisions": [
     {
-      "context": "Terminology cleanup",
-      "decision": "Replaced 'Trajectory' with 'Progress' and 'Node' with 'Status Item'",
-      "trade_offs": "Sacrificed 'cool' technical names for clarity and professional accessibility."
+      "context": "Infinite rendering loops in FacultyList",
+      "decision": "Memoize both the 'request' function in useApi and the 'queryKey' object in FacultyList",
+      "trade_offs": "Slightly more boilerplate in components but ensures production-grade stability and prevents memory leaks/CPU thrashes."
     }
   ],
   "blockers": []

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { User, LogOut, Bell, Menu, Radar, ShieldCheck } from 'lucide-react';
+import { User, LogOut, Bell, Menu, ShieldCheck } from 'lucide-react';
 
 const Navbar = ({ onMenuToggle }) => {
   const { user, logout } = useAuth();
@@ -38,7 +38,7 @@ const Navbar = ({ onMenuToggle }) => {
               <User size={18} />
             </button>
 
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-zinc-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right scale-95 group-hover:scale-100 overflow-hidden z-50">
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-zinc-200 opacity-0 invisible group-hover:opacity-100 group-active:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right scale-95 group-hover:scale-100 overflow-hidden z-50">
               <div className="p-4 border-b border-zinc-200 bg-zinc-50/70">
                 <p className="text-xs font-black text-navy truncate">{user?.email}</p>
                 <p className="text-[9px] text-zinc-500 uppercase tracking-[0.2em] mt-1 sm:hidden">{user?.role}</p>
@@ -49,7 +49,7 @@ const Navbar = ({ onMenuToggle }) => {
                   className="w-full text-left px-4 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 flex items-center gap-2 transition-colors"
                 >
                   <ShieldCheck size={16} />
-                  <span>Security Settings</span>
+                  <span>Change Password</span>
                 </Link>
                 <button
                   onClick={logout}

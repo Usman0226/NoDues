@@ -183,6 +183,7 @@ export const getClassById = async (req, res, next) => {
         rollNo: s.rollNo,
         name: s.name,
         email: s.email,
+        mentorId: s.mentorId?._id || s.mentorId || null,
         mentorName: s.mentorId?.name || 'Not Assigned',
         electiveSubjects: s.electiveSubjects || [],
         status: s.isActive ? 'active' : 'inactive'

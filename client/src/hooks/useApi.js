@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 
@@ -46,7 +46,7 @@ export const useApi = (apiFunc, options = {}) => {
     ...options.queryOptions // Allow passing extra react-query options
   });
 
-  const request = async (...args) => {
+  const request = useCallback(async (...args) => {
     // If we have arguments, we bypass the query cache for this specific call 
     // or we could refactor more aggressively. For now, let's support it:
     if (args.length > 0) {
@@ -70,11 +70,11 @@ export const useApi = (apiFunc, options = {}) => {
     // Otherwise just refetch the query
     const { data: refetchedData } = await refetch();
     return refetchedData;
-  };
+  }, [apiFunc, queryKey, queryClient, refetch, options.onSuccess, options.onError, options.silent]);
 
-  const setData = (newData) => {
+  const setData = useCallback((newData) => {
     queryClient.setQueryData(queryKey, newData);
-  };
+  }, [queryClient, queryKey]);
 
   return { 
     data, 

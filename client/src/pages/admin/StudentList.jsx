@@ -27,7 +27,6 @@ const StudentList = () => {
   const [showBulkMentor, setShowBulkMentor] = useState(false);
   const [bulkMentorId, setBulkMentorId] = useState('');
   
-  // Pagination State
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [includeInactive, setIncludeInactive] = useState(false);

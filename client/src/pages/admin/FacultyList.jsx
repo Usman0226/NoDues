@@ -43,16 +43,23 @@ const FacultyList = () => {
   const { user } = useAuth();
   const isHod = user?.role === 'hod';
 
+  const facultyQueryKey = useMemo(() => 
+    ['faculty', { page, limit, includeInactive, search: debouncedSearch, departmentId: isHod ? user?.departmentId : undefined }],
+    [page, limit, includeInactive, debouncedSearch, isHod, user?.departmentId]
+  );
+
   const { data: response, loading, error, request: fetchFaculty } = useApi(getFaculty, {
-    queryKey: ['faculty', { page, limit, includeInactive, search: debouncedSearch, departmentId: isHod ? user?.departmentId : undefined }],
+    queryKey: facultyQueryKey,
     immediate: false
   });
   const faculty = response?.data || [];
   const total = response?.pagination?.total || 0;
   
+  const deptQueryKey = useMemo(() => ['departments'], []);
+
   const { data: deptResponse } = useApi(getDepartments, { 
     immediate: true,
-    queryKey: ['departments']
+    queryKey: deptQueryKey
   });
   const allDepts = deptResponse?.data || [];
   const depts = isHod ? allDepts.filter(d => d._id === user.departmentId) : allDepts;
