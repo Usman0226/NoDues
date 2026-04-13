@@ -55,6 +55,34 @@ const Checkbox = ({ checked, indeterminate, onChange, disabled }) => {
   );
 };
 
+const PaginationNav = ({ pagination, loading, canPrev, canNext, totalPages, compact = false }) => {
+  if (!pagination || pagination.total === 0) return null;
+
+  return (
+    <div className={`flex items-center gap-2 ${compact ? 'scale-90 origin-right' : ''}`}>
+      <button
+        onClick={() => pagination.onPageChange?.(pagination.page - 1)}
+        disabled={!canPrev || loading}
+        className="p-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-30 disabled:hover:bg-white transition-all text-navy"
+      >
+        <ChevronLeft size={16} />
+      </button>
+      <div className="flex items-center gap-1 px-2">
+         <span className="text-xs font-black text-navy">{pagination.page}</span>
+         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mx-1">/</span>
+         <span className="text-xs font-bold text-zinc-400">{totalPages}</span>
+      </div>
+      <button
+        onClick={() => pagination.onPageChange?.(pagination.page + 1)}
+        disabled={!canNext || loading}
+        className="p-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-30 disabled:hover:bg-white transition-all text-navy"
+      >
+        <ChevronRight size={16} />
+      </button>
+    </div>
+  );
+};
+
 const Table = ({
   columns,
   data,
@@ -72,7 +100,11 @@ const Table = ({
   bulkActions = [], // New reusable actions array: [{ label, icon, onClick, variant }]
   showCount = true,
   // Pagination Props
+  // Pagination Props
   pagination = null, // { total, page, limit, onPageChange, onLimitChange }
+  // Controlled Search Props
+  searchValue = '',
+  onSearchChange = null,
 }) => {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -86,7 +118,8 @@ const Table = ({
 
   const processed = useMemo(() => {
     let rows = [...(data || [])];
-    if (filter) {
+    // Only perform local filtering if we are NOT using controlled search
+    if (filter && !onSearchChange) {
       const q = filter.toLowerCase();
       rows = rows.filter((row) =>
         columns.some((col) => String(row[col.key] ?? '').toLowerCase().includes(q))
@@ -140,8 +173,8 @@ const Table = ({
             <div className="relative w-full sm:max-w-md">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
               <input
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
+                value={onSearchChange ? searchValue : filter}
+                onChange={(e) => onSearchChange ? onSearchChange(e.target.value) : setFilter(e.target.value)}
                 placeholder={searchPlaceholder}
                 className="w-full pl-9 pr-4 py-2.5 text-xs sm:text-sm rounded-full border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all font-semibold" 
               />
@@ -149,16 +182,31 @@ const Table = ({
           )}
           
           {showCount && !loading && (
-            <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-zinc-400">
-              {filter ? (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-zinc-400">
+                {(filter || (onSearchChange && searchValue)) ? (
+                  <>
+                    <span className="text-zinc-600">Showing {processed.length}</span>
+                    <span className="opacity-50">of</span>
+                    <span>{pagination ? pagination.total : data?.length || 0} Records</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-zinc-600">{pagination ? pagination.total : data?.length || 0} Total Records</span>
+                  </>
+                )}
+              </div>
+              {pagination && (
                 <>
-                  <span className="text-zinc-600">Showing {processed.length}</span>
-                  <span className="opacity-50">of</span>
-                  <span>{pagination ? pagination.total : data?.length || 0} Records</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-zinc-600">{pagination ? pagination.total : data?.length || 0} Total Records</span>
+                  <div className="h-4 w-px bg-zinc-200" />
+                  <PaginationNav 
+                    pagination={pagination} 
+                    loading={loading} 
+                    canPrev={canPrev} 
+                    canNext={canNext} 
+                    totalPages={totalPages} 
+                    compact 
+                  />
                 </>
               )}
             </div>
@@ -316,27 +364,13 @@ const Table = ({
              </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => pagination.onPageChange?.(pagination.page - 1)}
-              disabled={!canPrev || loading}
-              className="p-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-30 disabled:hover:bg-white transition-all text-navy"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <div className="flex items-center gap-1 px-2">
-               <span className="text-xs font-black text-navy">{pagination.page}</span>
-               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mx-1">/</span>
-               <span className="text-xs font-bold text-zinc-400">{totalPages}</span>
-            </div>
-            <button
-              onClick={() => pagination.onPageChange?.(pagination.page + 1)}
-              disabled={!canNext || loading}
-              className="p-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-30 disabled:hover:bg-white transition-all text-navy"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          <PaginationNav 
+            pagination={pagination} 
+            loading={loading} 
+            canPrev={canPrev} 
+            canNext={canNext} 
+            totalPages={totalPages} 
+          />
         </div>
       )}
     </div>

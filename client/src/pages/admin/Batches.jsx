@@ -19,30 +19,43 @@ const Batches = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkClose, setShowBulkClose] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Pagination & Search State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [searchValue, setSearchValue] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   const { data: response, loading, error, request: fetchBatches } = useApi(getBatches);
   const batches = response?.data || [];
+  const total = response?.pagination?.total || 0;
+
+  // Debounce search input
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchValue);
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchValue]);
 
   React.useEffect(() => {
-    const params = {};
+    const params = { 
+      page, 
+      limit, 
+      search: debouncedSearch,
+      status: statusFilter === 'all' ? undefined : statusFilter
+    };
     if (user?.role === 'hod') params.departmentId = user.departmentId;
     fetchBatches(params);
-  }, [fetchBatches, user?.role, user?.departmentId]);
+  }, [fetchBatches, user?.role, user?.departmentId, page, limit, debouncedSearch, statusFilter]);
 
-
-  const filtered = useMemo(() => {
-    if (!batches) return [];
-    if (statusFilter === 'all') return batches;
-    return batches.filter((b) => {
-      if (statusFilter === 'active') return b.status === 'active';
-      return b.status === 'closed';
-    });
-  }, [batches, statusFilter]);
 
   const batchStats = useMemo(() => {
-    const active = batches.filter((b) => b.status === 'active').length;
-    const closed = batches.filter((b) => b.status === 'closed').length;
-    return { total: batches.length, active, closed, visible: filtered.length };
-  }, [batches, filtered]);
+    // Note: Stats now reflect current page/filter if server provides them, 
+    // but for now we'll just show what's in the current batch list or total count if available.
+    return { total: total, visible: batches.length };
+  }, [total, batches]);
 
   const handleBulkCloseConfirm = async () => {
     setSubmitting(true);
@@ -93,13 +106,7 @@ const Batches = () => {
     <PageWrapper title="Batches" subtitle="All academic clearance batches across departments">
       <div className="flex flex-wrap items-center gap-3 mb-6 text-[10px] font-black uppercase tracking-widest text-navy">
         <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-muted shadow-sm">
-          {batchStats.total} total
-        </span>
-        <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-800">
-          {batchStats.active} active
-        </span>
-        <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-50 border border-muted text-muted-foreground">
-          {batchStats.closed} closed
+          {total} total records
         </span>
         <span className="text-[11px] font-semibold normal-case tracking-normal text-muted-foreground">
           Table shows {batchStats.visible} row{batchStats.visible === 1 ? '' : 's'} with the current filter.
@@ -110,11 +117,11 @@ const Batches = () => {
         <div className="flex items-center gap-4">
            <div className="flex items-center gap-3 bg-white p-1 rounded-3xl border border-muted shadow-sm">
              {['all', 'active', 'closed'].map((f) => (
-               <button key={f} onClick={() => setStatusFilter(f)}
-                 className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all
-                   ${statusFilter === f ? 'bg-navy text-white shadow-md' : 'text-muted-foreground hover:bg-offwhite'}`}>
-                 {f}
-               </button>
+                <button key={f} onClick={() => { setStatusFilter(f); setPage(1); }}
+                  className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all
+                    ${statusFilter === f ? 'bg-navy text-white shadow-md' : 'text-muted-foreground hover:bg-offwhite'}`}>
+                  {f}
+                </button>
              ))}
            </div>
         </div>
@@ -131,9 +138,18 @@ const Batches = () => {
       ) : (
         <Table
           columns={columns}
-          data={filtered}
+          data={batches}
           loading={loading && !response}
+          pagination={{
+            total,
+            page,
+            limit,
+            onPageChange: (p) => setPage(p),
+            onLimitChange: (l) => { setLimit(l); setPage(1); }
+          }}
           searchable
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
           searchPlaceholder="Search by class name..."
           selectable
           selection={selectedIds}

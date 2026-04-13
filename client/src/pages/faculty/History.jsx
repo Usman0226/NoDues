@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
@@ -79,28 +79,34 @@ const COLUMNS = [
 
 const FacultyHistory = () => {
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [semesterFilter, setSemesterFilter] = useState('all');
+  const [searchValue, setSearchValue] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const { data: response, loading, error, request: refetch } = useApi(
-    () => getApprovalHistory({
+  const { data: response, loading, error, request: fetchHistory } = useApi(getApprovalHistory);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchValue);
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  useEffect(() => {
+    fetchHistory({
       semester: semesterFilter !== 'all' ? semesterFilter : undefined,
       page,
-      limit: PAGE_SIZE,
-    }),
-    { immediate: false }
-  );
+      limit,
+      search: debouncedSearch
+    });
+  }, [fetchHistory, semesterFilter, page, limit, debouncedSearch]);
 
-  // Re-fetch whenever filter or page changes (including on mount via initial state)
-  React.useEffect(() => {
-    refetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesterFilter, page]);
+  const rows = response?.data || [];
+  const total = response?.pagination?.total || 0;
 
-  const rows       = response?.data        || [];
-  const pagination = response?.pagination  || {};
-  const totalPages = pagination.pages      || 1;
-
-  // Derive unique semesters from loaded data for dynamic filter options
   const semesterOptions = useMemo(() => {
     const sems = [...new Set(rows.map((r) => r.semester).filter(Boolean))].sort((a, b) => b - a);
     return sems;
@@ -152,11 +158,11 @@ const FacultyHistory = () => {
         <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-muted shadow-sm">
           <Layers size={14} className="text-muted-foreground" />
           <span className="text-xs font-medium text-muted-foreground shrink-0">
-            {pagination.total != null ? `${pagination.total} total records` : 'Loading…'}
+            {total != null ? `${total} total records` : 'Loading…'}
           </span>
         </div>
 
-        <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={loading} className="ml-auto">
+        <Button variant="ghost" size="sm" onClick={() => fetchHistory({ semester: semesterFilter !== 'all' ? semesterFilter : undefined, page, limit, search: debouncedSearch })} disabled={loading} className="ml-auto">
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </Button>
       </div>
@@ -166,7 +172,16 @@ const FacultyHistory = () => {
         columns={COLUMNS}
         data={rows}
         loading={loading}
+        pagination={{
+          total,
+          page,
+          limit,
+          onPageChange: (p) => setPage(p),
+          onLimitChange: (l) => { setLimit(l); setPage(1); }
+        }}
         searchable
+        searchValue={searchValue}
+        onSearchChange={setSearchValue}
         searchPlaceholder="Search by student or roll no..."
       />
 
@@ -186,32 +201,6 @@ const FacultyHistory = () => {
         </div>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-muted/30">
-          <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">
-            Page {page} of {totalPages}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1 || loading}
-            >
-              <ChevronLeft size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || loading}
-            >
-              <ChevronRight size={14} />
-            </Button>
-          </div>
-        </div>
-      )}
     </PageWrapper>
   );
 };

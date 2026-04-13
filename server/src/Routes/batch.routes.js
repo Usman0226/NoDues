@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getBatches,
   initiateBatch,
+  initiateDepartmentWide,
   getBatchStatus,
   getBatchStudentDetail,
   closeBatch,
@@ -19,6 +20,7 @@ router.use(RoleGuard(['admin', 'hod']));
 
 router.route('/').get(getBatches);
 router.post('/initiate', initiateBatch);
+router.post('/initiate-department', initiateDepartmentWide);
 router.post('/bulk-close', bulkCloseBatches);
 
 router.route('/:batchId').get(getBatchStatus);

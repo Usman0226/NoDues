@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -48,8 +48,15 @@ const Pending = () => {
   const [actionLoading, setActionLoading] = useState(null); // 'bulk' or approvalId
   const [dueModal, setDueModal]           = useState(null); // { id, ... }
 
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [searchValue, setSearchValue] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   const { data: response, loading, error, request: fetchApprovals, setData: setResponse } =
-    useApi(getPendingApprovals, { immediate: true });
+    useApi(getPendingApprovals);
+  
+  const total = response?.pagination?.total || 0;
 
   const approvals = useMemo(() => {
     if (Array.isArray(response)) return response;
@@ -59,28 +66,28 @@ const Pending = () => {
   const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
   const sseUrl  = `${apiBase}/api/sse/connect`;
   
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchValue);
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  useEffect(() => {
+    fetchApprovals({ page, limit, search: debouncedSearch });
+  }, [fetchApprovals, page, limit, debouncedSearch]);
+
   useSSE(
     sseUrl,
     useCallback(
       (event) => {
         if (event?.type !== 'APPROVAL_UPDATED') return;
-        const { approvalId, action, dueType, remarks, bulk } = event;
-        
-        setResponse((prev) => {
-          const updateArray = (arr) => arr.map((a) => {
-            if (bulk && action === 'approved') return { ...a, action: 'approved' };
-            if (a._id === approvalId) {
-               return { ...a, action: action ?? a.action, dueType: dueType ?? a.dueType, remarks: remarks ?? a.remarks };
-            }
-            return a;
-          });
-
-          if (Array.isArray(prev)) return updateArray(prev);
-          if (prev?.data) return { ...prev, data: updateArray(prev.data) };
-          return prev;
-        });
+        // For simplicity and correctness with pagination, refetch is best
+        fetchApprovals({ page, limit, search: debouncedSearch });
       },
-      [setResponse]
+      [fetchApprovals, page, limit, debouncedSearch]
     )
   );
 
@@ -210,12 +217,10 @@ const Pending = () => {
   });
 
   const filtered = useMemo(() => {
-    return approvals.filter((a) => {
-      if (selectedBatch !== 'all' && a.batchId !== selectedBatch) return false;
-      if (filter !== 'all' && a.action !== filter) return false;
-      return true;
-    });
-  }, [approvals, selectedBatch, filter]);
+    // Backend only returns pending for this view. 
+    // If user changes filter to something else, it might be empty on refetch.
+    return approvals;
+  }, [approvals]);
 
   const bulkActions = (
     <Button
@@ -326,9 +331,18 @@ const Pending = () => {
       ) : (
         <Table
           columns={columns}
-          data={filtered}
+          data={approvals}
           loading={loading}
+          pagination={{
+            total,
+            page,
+            limit,
+            onPageChange: (p) => setPage(p),
+            onLimitChange: (l) => { setLimit(l); setPage(1); }
+          }}
           searchable
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
           searchPlaceholder="Search by roll number or name..."
           selectable={filter === 'pending'} // Only allow selection in pending view
           selection={selection}

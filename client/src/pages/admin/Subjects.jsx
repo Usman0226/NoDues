@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Button from '../../components/ui/Button';
@@ -20,11 +20,15 @@ const Subjects = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [submitting, setSubmitting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  // Pagination & Search State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [searchValue, setSearchValue] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const { data: response, loading, error, request: fetchSubjects } = useApi(getSubjects, { immediate: true });
+  const { data: response, loading, error, request: fetchSubjects } = useApi(getSubjects);
   const subjects = response?.data || [];
+  const total = response?.pagination?.total || 0;
 
   const [formData, setFormData] = useState({
     code: '',
@@ -34,11 +38,24 @@ const Subjects = () => {
   });
 
 
-  const filtered = useMemo(() => {
-    if (!subjects) return [];
-    if (semesterFilter === 'all') return subjects;
-    return subjects.filter((s) => s.semester === Number(semesterFilter));
-  }, [subjects, semesterFilter]);
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchValue);
+      setPage(1); // Reset to first page
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  useEffect(() => {
+    const params = { 
+      page, 
+      limit, 
+      search: debouncedSearch,
+      semester: semesterFilter === 'all' ? undefined : semesterFilter 
+    };
+    fetchSubjects(params);
+  }, [fetchSubjects, page, limit, debouncedSearch, semesterFilter]);
 
   const handleCreate = async () => {
     if (!formData.code || !formData.name) {
@@ -145,6 +162,9 @@ const Subjects = () => {
     }] : [])
   ];
 
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+
   return (
     <PageWrapper title="Subjects" subtitle="Centralized academic component catalog for institution-wide mapping">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
@@ -161,7 +181,10 @@ const Subjects = () => {
              <Filter size={12} className="ml-2 text-muted-foreground" />
              <select 
                 value={semesterFilter} 
-                onChange={(e) => setSemesterFilter(e.target.value)}
+                onChange={(e) => {
+                  setSemesterFilter(e.target.value);
+                  setPage(1);
+                }}
                 className="pr-8 pl-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-navy bg-transparent border-none focus:ring-0 cursor-pointer"
              >
                <option value="all">All Sessions</option>
@@ -182,9 +205,18 @@ const Subjects = () => {
       ) : (
         <Table
           columns={columns}
-          data={filtered}
+          data={subjects}
           loading={loading && !response}
+          pagination={{
+            total,
+            page,
+            limit,
+            onPageChange: (p) => setPage(p),
+            onLimitChange: (l) => { setLimit(l); setPage(1); }
+          }}
           searchable
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
           searchPlaceholder="Filter by code or identifier..."
           selectable
           selection={selectedIds}

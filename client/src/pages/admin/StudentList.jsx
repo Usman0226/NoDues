@@ -31,13 +31,25 @@ const StudentList = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setPage(1); // Reset to first page on search
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const { user } = useAuth();
   const isHod = user?.role === 'hod';
   
   const { data: response, loading, error, request: fetchStudents } = useApi(getStudents);
   const students = response?.data || [];
-  const total = response?.total || 0;
+  const total = response?.pagination?.total || 0;
 
   const { data: classResponse, request: fetchClasses } = useApi(getClasses);
   const classes = classResponse?.data || [];
@@ -46,10 +58,10 @@ const StudentList = () => {
   const faculty = facultyResponse?.data || [];
 
   useEffect(() => {
-    const params = { page, limit, includeInactive };
+    const params = { page, limit, includeInactive, search: debouncedSearchTerm };
     if (isHod) params.departmentId = user.departmentId;
     fetchStudents(params);
-  }, [fetchStudents, isHod, user?.departmentId, page, limit, includeInactive]);
+  }, [fetchStudents, isHod, user?.departmentId, page, limit, includeInactive, debouncedSearchTerm]);
 
   useEffect(() => {
     const params = {};
@@ -89,7 +101,7 @@ const StudentList = () => {
       await createStudent(formData);
       toast.success('Student added successfully');
       setShowAdd(false);
-      fetchStudents({ page, limit, includeInactive, ...(isHod ? { departmentId: user.departmentId } : {}) });
+      fetchStudents({ page, limit, includeInactive, search: debouncedSearchTerm, ...(isHod ? { departmentId: user.departmentId } : {}) });
     } catch (err) {
       toast.error(err?.message || 'Failed to add student');
     } finally {
@@ -104,7 +116,7 @@ const StudentList = () => {
       await updateStudent(selectedStudent._id, formData);
       toast.success('Student updated successfully');
       setShowEdit(false);
-      fetchStudents({ page, limit, includeInactive, ...(isHod ? { departmentId: user.departmentId } : {}) });
+      fetchStudents({ page, limit, includeInactive, search: debouncedSearchTerm, ...(isHod ? { departmentId: user.departmentId } : {}) });
     } catch (err) {
       toast.error(err?.message || 'Failed to update student');
     } finally {
@@ -118,7 +130,7 @@ const StudentList = () => {
       await deleteStudent(selectedStudent._id);
       toast.success('Student deactivated');
       setShowDelete(false);
-      fetchStudents({ page, limit, includeInactive, ...(isHod ? { departmentId: user.departmentId } : {}) });
+      fetchStudents({ page, limit, includeInactive, search: debouncedSearchTerm, ...(isHod ? { departmentId: user.departmentId } : {}) });
     } catch (err) {
       toast.error(err?.message || 'Failed to deactivate student');
     } finally {
@@ -198,7 +210,7 @@ const StudentList = () => {
           <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
             <Upload size={14} /> Import list
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => fetchStudents({ page, limit, includeInactive })} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
+          <Button variant="ghost" size="sm" onClick={() => fetchStudents({ page, limit, includeInactive, search: debouncedSearchTerm })} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
         </div>
 
         <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
@@ -228,6 +240,8 @@ const StudentList = () => {
             onLimitChange: (l) => { setLimit(l); setPage(1); }
           }}
           searchable
+          searchValue={searchTerm}
+          onSearchChange={setSearchTerm}
           searchPlaceholder="Filter by roll no, name, or group..."
           selectable
           selection={selectedIds}
