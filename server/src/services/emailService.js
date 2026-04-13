@@ -5,23 +5,35 @@ let _transporter = null;
 
 const getTransporter = () => {
   if (!_transporter) {
-    if (!process.env.SMTP_HOST) {
-      logger.warn('SMTP_HOST not set, emails will fail to dispatch');
+    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      logger.error('SMTP configuration missing. Emails cannot be sent.');
+      return null;
     }
     _transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      pool: true, // Enable connection pooling
+      port: parseInt(process.env.SMTP_PORT) || 587,
+      secure: parseInt(process.env.SMTP_PORT) === 465, // Use SSL for 465, STARTTLS for others
+      pool: true, 
       maxConnections: 5,
       maxMessages: 100,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
       },
-      // Increase timeout for better stability
       connectionTimeout: 10000,
       greetingTimeout: 5000,
-      socketTimeout: 30000
+      socketTimeout: 30000,
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+    
+    _transporter.verify((error) => {
+      if (error) {
+        logger.error('SMTP Transporter verification failed:', error);
+      } else {
+        logger.info('SMTP Transporter ready for messages');
+      }
     });
   }
   return _transporter;
@@ -29,11 +41,11 @@ const getTransporter = () => {
 
 export const sendCredentialEmail = async (to, name, identifier, password, role) => {
   try {
-    if (role === 'student') return true;
-    const loginUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    if (role === 'student' && !process.env.ENABLE_STUDENT_EMAILS) return true;
+    const loginUrl = 'https://no-dues-psi.vercel.app/';
     
     const mailOptions = {
-      from: process.env.SMTP_FROM || 'No-Due Portal <noreply@mits.ac.in>',
+      from: process.env.SMTP_FROM || 'No-Due Portal Dept. Of Data Science <projects.clg.mits@gmail.com>',
       to,
       subject: `Your Credentials for ${role === 'student' ? 'Student Portal' : 'Faculty Portal'} - NDS`,
       html: `
@@ -60,6 +72,10 @@ export const sendCredentialEmail = async (to, name, identifier, password, role) 
     };
 
     const transporter = getTransporter();
+    if (!transporter) {
+      logger.error('Unable to send email: Transporter not initialized');
+      return false;
+    }
     const info = await transporter.sendMail(mailOptions);
     logger.info(`Email sent to ${to}: ${info.messageId}`, {
       actor: 'SYSTEM',

@@ -78,11 +78,6 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
   res.status(200).json({ success: true, data: results });
 });
 
-/**
- * @desc    Commit student import
- * @route   POST /api/import/students/commit
- * @access  Admin, HoD
- */
 export const commitStudents = asyncHandler(async (req, res, next) => {
   const { students, classId } = req.body;
 
@@ -95,7 +90,6 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Target class not found', 404));
   }
 
-  // HoD Scope Check
   if (req.user.role === 'hod' && targetClass.departmentId?.toString() !== req.user.departmentId) {
     return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
   }

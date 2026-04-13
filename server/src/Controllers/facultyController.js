@@ -497,13 +497,24 @@ export const bulkResendCredentials = async (req, res, next) => {
 
     const faculties = await Faculty.find(query);
     
-    // We do this in a loop because we need to send individual emails and update passwords
-    // For large numbers, this might be slow, but usually batch size is small (<50)
+    const emailPromises = [];
+    const savePromises = [];
+
     for (const faculty of faculties) {
+      const tempPassword = crypto.randomBytes(4).toString('hex');
+      faculty.password = tempPassword;
+      faculty.mustChangePassword = true;
+      
+      savePromises.push(faculty.save());
       emailPromises.push(sendCredentialEmail(faculty.email, faculty.name, faculty.email, tempPassword, 'faculty'));
     }
 
-    const emailResults = await Promise.all(emailPromises);
+    // Await all operations in parallel
+    const [emailResults] = await Promise.all([
+      Promise.all(emailPromises),
+      Promise.all(savePromises)
+    ]);
+    
     const successCount = emailResults.filter(Boolean).length;
 
     logger.info('faculty_bulk_creds_resent', {

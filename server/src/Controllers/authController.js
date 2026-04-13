@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import Admin from '../models/Admin.js';
 import Faculty from '../models/Faculty.js';
 import Student from '../models/Student.js';
