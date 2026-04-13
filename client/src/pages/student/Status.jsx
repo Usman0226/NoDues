@@ -68,7 +68,7 @@ const CircularProgress = ({ cleared, total }) => {
             <span className="text-2xl font-black text-navy leading-none">{cleared}</span>
             <span className="text-xs font-bold text-navy/20 ml-0.5">/{total}</span>
           </div>
-          <p className="text-[7px] font-black text-navy/40 uppercase tracking-[0.2em] mt-1">Status</p>
+          <p className="text-[7px] font-black text-navy/40 uppercase tracking-[0.2em] mt-1">Overall Status</p>
         </div>
 
         {/* Outer Glow Effect (Subtle) */}
@@ -86,11 +86,11 @@ const CircularProgress = ({ cleared, total }) => {
         
         <div className="flex flex-col gap-0.5">
           <p className="text-[9px] font-bold text-navy/40 uppercase tracking-widest truncate">
-            Trajectory Profile
+            Progress Overview
           </p>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black text-navy/70 italic">
-              {total - cleared > 0 ? `${total - cleared} nodes pending` : 'All nodes verified'}
+              {total - cleared > 0 ? `${total - cleared} items pending` : 'All items verified'}
             </span>
           </div>
         </div>
@@ -123,7 +123,7 @@ const StudentStatus = () => {
 
   if (error) {
     return (
-      <PageWrapper title="Dashboard" subtitle="System Interruption">
+      <PageWrapper title="Dashboard" subtitle="Connection Error">
         <div className="text-center py-20 px-6 bg-white rounded-2xl border border-red-100 shadow-sm border-b-4 border-b-red-500">
           <div className="h-16 w-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
              <AlertTriangle className="text-red-500" size={32} />
@@ -134,7 +134,7 @@ const StudentStatus = () => {
             onClick={() => fetchStatus()}
             className="px-6 py-2.5 bg-navy text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-navy/90 transition-all flex items-center gap-2 mx-auto"
           >
-            <RefreshCw size={12} strokeWidth={3} /> Re-establish Link
+            <RefreshCw size={12} strokeWidth={3} /> Retry
           </button>
         </div>
       </PageWrapper>
@@ -170,7 +170,7 @@ const StudentStatus = () => {
         {/* Action List Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
-             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/30">Detailed Trajectory</h3>
+             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/30">Detailed Progress</h3>
              <div className="h-1 w-12 bg-zinc-100 rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-400 w-1/3 animate-pulse"></div>
              </div>
@@ -234,6 +234,14 @@ const StudentStatus = () => {
               </div>
             )}
           </div>
+        </div>
+        <div className="mt-12 pt-8 border-t border-zinc-100/60 text-center pb-8">
+          <p className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-300">
+            Platform built by
+          </p>
+          <p className="text-[11px] font-brand text-navy mt-1 opacity-50">
+            ARC Club <span className="text-gold">-</span> Community
+          </p>
         </div>
       </div>
     </PageWrapper>

@@ -1,4 +1,3 @@
-import React, { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
@@ -29,7 +28,7 @@ const BatchStudentDetail = () => {
 
   if (loading && !detail) {
     return (
-      <PageWrapper title="Loading Metadata..." subtitle="Fetching candidate audit trail">
+      <PageWrapper title="Loading Data..." subtitle="Fetching student clearance history">
          <div className="animate-pulse space-y-6">
             <div className="h-24 bg-muted/5 rounded-xl border border-muted"></div>
             <div className="space-y-3">
@@ -42,7 +41,7 @@ const BatchStudentDetail = () => {
 
   if (error) {
     return (
-      <PageWrapper title="Audit Fetch Error" subtitle="Record retrieval failed">
+      <PageWrapper title="Error" subtitle="Record retrieval failed">
         <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
            <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
            <p className="text-muted-foreground font-medium mb-6">{error}</p>
@@ -62,6 +61,7 @@ const BatchStudentDetail = () => {
       backTitle="Return to Progress Matrix"
       backFallback={`${basePath}/batch/${batchId}`}
     >
+   
 
       {/* Candidate Header */}
       <div className="bg-white rounded-2xl border border-muted p-8 mb-10 shadow-sm relative overflow-hidden">
@@ -86,13 +86,13 @@ const BatchStudentDetail = () => {
           </div>
           <div className="flex flex-col items-end gap-2">
              <Badge status={student.overallStatus || 'pending'} className="text-xs uppercase font-black tracking-widest px-4 py-1.5 shadow-sm" />
-             <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest">{student.overallStatus === 'cleared' ? 'Academic Eligibility Confirmed' : 'Clearance Sequence Active'}</p>
+             <p className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest">{student.overallStatus === 'cleared' ? 'Clearance Approved' : 'Clearance In Progress'}</p>
           </div>
         </div>
       </div>
 
       {/* Progress Stakeholders */}
-      <h3 className="text-[10px] uppercase font-black tracking-[0.2em] text-navy/40 mb-6 px-1">Institutional Audit Trail</h3>
+      <h3 className="text-[10px] uppercase font-black tracking-[0.2em] text-navy/40 mb-6 px-1">Clearance History</h3>
       <div className="grid grid-cols-1 gap-4">
         {approvals.map((item, i) => (
           <div key={i} className="bg-white rounded-2xl border border-muted shadow-sm p-6 hover:shadow-md transition-all group">
@@ -105,7 +105,7 @@ const BatchStudentDetail = () => {
                 </div>
                 <div>
                   <p className="text-xs font-black text-navy uppercase tracking-tight">{getApprovalLabel(item)}</p>
-                  <p className="text-[10px] font-black text-muted-foreground/50 mt-1 uppercase tracking-widest">Stakeholder: <span className="text-navy/70">{item.facultyName}</span></p>
+                  <p className="text-[10px] font-black text-muted-foreground/50 mt-1 uppercase tracking-widest">Faculty: <span className="text-navy/70">{item.facultyName}</span></p>
                   {item.updatedAt && (
                     <div className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mt-2 flex items-center gap-2 opacity-60">
                       <Clock size={12} strokeWidth={2.5} /> Updated {new Date(item.updatedAt).toLocaleString()}
@@ -124,7 +124,7 @@ const BatchStudentDetail = () => {
                 </div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[9px] font-black uppercase tracking-[0.15em] text-red-600">
-                    Deficiency Identified: {item.dueType || 'Overage'}
+                    Due Found: {item.dueType || 'Overage'}
                   </span>
                 </div>
                 <p className="text-xs text-red-900 font-bold italic leading-relaxed">"{item.remarks || 'No specific remarks registered.'}"</p>

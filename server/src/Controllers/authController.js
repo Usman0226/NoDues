@@ -5,9 +5,12 @@ import Admin from '../models/Admin.js';
 import Faculty from '../models/Faculty.js';
 import Student from '../models/Student.js';
 import Department from '../models/Department.js';
+import EmailLog from '../models/EmailLog.js';
+import EmailQuota from '../models/EmailQuota.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
+import { testConnection } from '../services/emailService.js';
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -410,6 +413,98 @@ export const getMe = async (req, res, next) => {
     cache.set(cacheKey, profile, 900);
 
     return res.status(200).json({ success: true, data: profile });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── Email Diagnostics (Admin Only) ──────────────────────────────────────────
+
+/**
+ * GET /api/auth/diag/status
+ * Get usage stats for all SMTP accounts
+ */
+export const getEmailStats = async (req, res, next) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const quota = await EmailQuota.findOne({ date: today }).lean();
+    
+    // Discover accounts on the fly to get current count
+    const ACCOUNT_LIMIT = parseInt(process.env.SMTP_DAILY_LIMIT) || 300;
+    
+    // Construct masked account info
+    const accounts = [];
+    let i = 1;
+    while (process.env[`SMTP_USER${i === 1 ? '' : `_${i}`}`]) {
+      const user = process.env[`SMTP_USER${i === 1 ? '' : `_${i}`}`];
+      accounts.push({
+        index: i - 1,
+        user: user.replace(/(.{2}).+(.{2})@/, "$1***$2@"),
+        sent: quota?.usage?.[i - 1] || 0,
+        limit: ACCOUNT_LIMIT
+      });
+      i++;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        today,
+        accounts,
+        totalSent: accounts.reduce((sum, acc) => sum + acc.sent, 0)
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /api/auth/diag/logs
+ * Get delivery history
+ */
+export const getEmailLogs = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const query = {};
+    if (status) query.status = status;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [logs, total] = await Promise.all([
+      EmailLog.find(query)
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      EmailLog.countDocuments(query)
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: logs,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        pages: Math.ceil(total / Number(limit))
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/auth/diag/test
+ * Run connectivity test for all accounts
+ */
+export const runEmailDiag = async (req, res, next) => {
+  try {
+    const results = await testConnection();
+    return res.status(200).json({
+      success: true,
+      data: results
+    });
   } catch (err) {
     next(err);
   }

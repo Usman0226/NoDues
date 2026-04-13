@@ -178,11 +178,11 @@ const StudentList = () => {
     },
     { key: 'name', label: 'Full Name', render: (v) => <span className="font-bold text-navy/80">{v}</span> },
     { key: 'departmentName', label: 'Department' },
-    { key: 'className', label: 'Academic Group', render: (v, row) => <span>{v || row.class}</span> },
+    { key: 'className', label: 'Class', render: (v, row) => <span>{v || row.class}</span> },
     { key: 'mentorName', label: 'Mentor' },
     { 
       key: 'status', 
-      label: 'Onboarding', 
+      label: 'Status', 
       render: (v, row) => <Badge status={row.isActive ? (v || 'pending') : 'rejected'} className="scale-90 origin-left" /> 
     },
     {
@@ -200,7 +200,7 @@ const StudentList = () => {
   ];
 
   return (
-    <PageWrapper title="Students" subtitle="Global roster of all registered academic candidates">
+    <PageWrapper title="Students" subtitle="List of all registered students">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex flex-wrap gap-3">
           <Button variant="primary" size="sm" onClick={() => {
@@ -262,7 +262,6 @@ const StudentList = () => {
         />
       )}
 
-      {/* Import Overlay */}
       <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Bulk Student Import">
          <ImportStepper 
             type="students" 
@@ -274,8 +273,7 @@ const StudentList = () => {
          />
       </Modal>
 
-      {/* Modals */}
-      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Register Student">
+      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Student">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -339,9 +337,9 @@ const StudentList = () => {
         isOpen={showDelete}
         onClose={() => setShowDelete(false)}
         onConfirm={handleDeleteConfirm}
-        title="Deactivate Student"
-        description={`You are about to deactivate the account for ${selectedStudent?.name}. They will be removed from all future clearance operations.`}
-        confirmText="Deactivate"
+        title="Student Clearance Details"
+        description={`You are about to archive the account for ${selectedStudent?.name}. They will be removed from all future clearance operations.`}
+        confirmText="Archive"
         isDestructive={true}
         loading={submitting}
       />

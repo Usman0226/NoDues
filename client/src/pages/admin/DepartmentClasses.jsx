@@ -51,11 +51,17 @@ const DepartmentClasses = () => {
   const [limit, setLimit] = useState(50);
   const [includeInactive, setIncludeInactive] = useState(false);
   
-  const { data: response, loading, error, request: fetchClasses } = useApi(getClasses);
+  const { data: response, loading, error, request: fetchClasses } = useApi(getClasses, {
+    queryKey: ['classes', { departmentId: deptId, page, limit, includeInactive }],
+    immediate: false
+  });
   const classes = response?.data || [];
   const total = response?.total || 0;
 
-  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty);
+  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, {
+    queryKey: ['faculty', { departmentId: deptId }],
+    immediate: false
+  });
   const facultyList = facultyResponse?.data || [];
 
   useEffect(() => {

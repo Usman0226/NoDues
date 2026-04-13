@@ -17,11 +17,16 @@ export const invalidateDeptCache = (id) => {
 // ── GET /api/departments ──────────────────────────────────────────────────────
 export const getDepartments = async (req, res, next) => {
   try {
-    const cacheKey = 'departments:all';
+    const cacheKey = req.user.role === 'hod' ? `departments:hod:${req.user.departmentId}` : 'departments:all';
     const cached   = cache.get(cacheKey);
     if (cached) return res.status(200).json({ success: true, data: cached });
 
-    const departments = await Department.find()
+    const query = {};
+    if (req.user.role === 'hod') {
+      query._id = req.user.departmentId;
+    }
+
+    const departments = await Department.find(query)
       .populate('hodId', 'name email employeeId')
       .sort({ name: 1 })
       .lean();

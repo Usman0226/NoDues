@@ -10,7 +10,10 @@ import Modal from '../../components/ui/Modal';
 import { toast } from 'react-hot-toast';
 
 const Departments = () => {
-  const { data: response, loading, error, request: fetchDepts } = useApi(getDepartments, { immediate: true });
+  const { data: response, loading, error, request: fetchDepts } = useApi(getDepartments, { 
+    immediate: true,
+    queryKey: ['departments'] 
+  });
   const depts = response?.data || [];
   
   const [showModal, setShowModal] = useState(false);

@@ -6,7 +6,7 @@ import { ROLES } from '../../utils/constants';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardCheck,
   Shield, History, ChevronLeft, ChevronRight,
-  Building2, AlertTriangle, Layers, X, GraduationCap
+  Building2, AlertTriangle, Layers, X, GraduationCap,Inbox
 } from 'lucide-react';
 
 const NAV_CONFIG = {
@@ -17,6 +17,7 @@ const NAV_CONFIG = {
     { label: 'Faculty', path: '/admin/faculty', icon: Users },
     { label: 'Subjects', path: '/admin/subjects', icon: BookOpen },
     { label: 'Batches', path: '/admin/batches', icon: Layers },
+    { label: 'Email Monitor', path: '/admin/email-monitor', icon: Inbox },
   ],
   [ROLES.HOD]: [
     { label: 'Dashboard', path: '/hod', icon: LayoutDashboard },
@@ -61,7 +62,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
             <h2 className="text-white font-brand text-2xl tracking-tight leading-none">
               No<span className="text-gold">Dues</span>
             </h2>
-            <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-200/50 mt-1">Ops Console</p>
+            <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-200/50 mt-1">Admin Portal</p>
           </div>
         )}
         {collapsed && <span className="text-gold font-brand text-2xl mx-auto">N</span>}
@@ -115,10 +116,18 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
       <div className="p-6 border-t border-white/10 shrink-0">
         {!collapsed && (
           <div className="rounded-xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
-            <span className="block text-[8px] text-indigo-100/45 uppercase tracking-[0.3em] font-black mb-1">Access Layer</span>
+            <span className="block text-[8px] text-indigo-100/45 uppercase tracking-[0.3em] font-black mb-1">Account Role</span>
             <span className="text-[10px] text-gold uppercase tracking-[0.2em] font-black">
               {user?.role}
             </span>
+          </div>
+        )}
+        {!collapsed && (
+          <div className="mt-6 text-center">
+            <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-100/20 mb-1">Crafted by</p>
+            <p className="text-[10px] font-brand text-indigo-100/60 flex items-center justify-center gap-1.5">
+              ARC Club <span className="h-0.5 w-0.5 rounded-full bg-gold/50" /> Community
+            </p>
           </div>
         )}
       </div>

@@ -60,8 +60,8 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
         ? { students: previewData.valid, classId }
         : { [type]: previewData.valid };
 
-      await commitImport(type, payload);
-      toast.success('Records committed successfully');
+      const res = await commitImport(type, payload);
+      toast.success(res.data?.message || 'Records committed successfully');
       onComplete?.();
     } catch (err) {
       toast.error(err?.message || 'Commit failed. Try again.');

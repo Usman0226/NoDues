@@ -94,7 +94,7 @@ const HodDashboard = () => {
 
   if (loading && !overview) {
     return (
-      <PageWrapper title="Department Control" subtitle="Loading metrics...">
+      <PageWrapper title="HOD Dashboard" subtitle="Loading metrics...">
         <div className="animate-pulse space-y-8">
            <div className="h-20 w-full bg-red-50/20 rounded-xl"></div>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -107,13 +107,13 @@ const HodDashboard = () => {
 
   if (error) {
     return (
-      <PageWrapper title="Department Control" subtitle="Sync interrupted">
+      <PageWrapper title="HOD Dashboard" subtitle="Connection Error">
         <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
-          <h2 className="text-xl font-black text-navy mb-2">Metrics Sync Failed</h2>
+          <h2 className="text-xl font-black text-navy mb-2">Data Load Failed</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
           <Button variant="primary" onClick={() => fetchOverview()}>
-             <RefreshCw size={14} className="mr-2" /> Retry Connection
+             <RefreshCw size={14} className="mr-2" /> Retry
           </Button>
         </div>
       </PageWrapper>
@@ -121,7 +121,7 @@ const HodDashboard = () => {
   }
 
   return (
-    <PageWrapper title="Department Control" subtitle={`Oversight for ${user?.department || 'Your Department'}`}>
+    <PageWrapper title="HOD Dashboard" subtitle={`Overview for ${user?.department || 'Your Department'}`}>
       {/* Alert Banner - Blocks Visibility (§6.4) */}
       {totalDues > 0 && (
         <div className="mb-8 sm:mb-10 p-5 rounded-xl bg-red-50/40 border border-red-100 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm shadow-red-100/20">
@@ -130,7 +130,7 @@ const HodDashboard = () => {
                <AlertCircle size={22} />
             </div>
             <div>
-              <h2 className="text-red-950 font-black text-xs sm:text-sm uppercase tracking-tight">Blocked Candidates Identified</h2>
+              <h2 className="text-red-950 font-black text-xs sm:text-sm uppercase tracking-tight">Active Dues Found</h2>
               <p className="text-red-700 text-[10px] sm:text-xs font-medium">{totalDues} students have dues flagged requiring review.</p>
             </div>
           </div>
@@ -144,7 +144,7 @@ const HodDashboard = () => {
         {/* Main Content: Batches (§6.4) */}
         <div className="lg:col-span-8 space-y-8">
           <div className="px-1 flex items-center justify-between">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/40">Active Academic Cycles</h2>
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/40">Active Clearance Cycles</h2>
             <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
               <button 
                 onClick={() => setIsBulkModalOpen(true)}
@@ -169,7 +169,7 @@ const HodDashboard = () => {
                   <div className="space-y-6">
                     <div>
                       <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
-                        <span>Clearance Stage</span>
+                        <span>Progress</span>
                         <span className="text-navy">{progress}%</span>
                       </div>
                       <div className="h-1.5 bg-offwhite rounded-full overflow-hidden">
@@ -257,7 +257,7 @@ const HodDashboard = () => {
       <Modal 
         isOpen={isBulkModalOpen} 
         onClose={() => !isInitiating && setIsBulkModalOpen(false)}
-        title="Department-Wide Initiation"
+        title="Start Department Clearance"
       >
         <form onSubmit={handleBulkInitiate} className="space-y-6">
           <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex gap-3">

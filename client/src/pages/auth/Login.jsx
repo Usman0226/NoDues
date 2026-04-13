@@ -103,7 +103,7 @@ const Login = () => {
           <h1 className="text-4xl sm:text-5xl font-brand text-navy leading-none tracking-tight">
             No<span className="text-gold">Dues</span>
           </h1>
-          <p className="text-[9px] uppercase tracking-[0.28em] font-black text-zinc-500 mt-4">Access Control</p>
+          <p className="text-[9px] uppercase tracking-[0.28em] font-black text-zinc-500 mt-4">User Login</p>
         </div>
 
         <div className="relative grid grid-cols-2 bg-zinc-100 p-1 rounded-full mb-5 h-12">
@@ -171,7 +171,7 @@ const Login = () => {
               >
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-[9px] uppercase tracking-[0.24em] font-black text-zinc-500 mb-2">Institutional Email</label>
+                    <label className="block text-[9px] uppercase tracking-[0.24em] font-black text-zinc-500 mb-2">Email Address</label>
                     <input
                       type="email"
                       value={email}
@@ -181,7 +181,7 @@ const Login = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[9px] uppercase tracking-[0.24em] font-black text-zinc-500 mb-2">Authentication Key</label>
+                    <label className="block text-[9px] uppercase tracking-[0.24em] font-black text-zinc-500 mb-2">Password</label>
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
@@ -201,7 +201,7 @@ const Login = () => {
                     </div>
                   </div>
                   <Button type="submit" className="w-full rounded-full py-3" loading={loading}>
-                    Authorize Access
+                    Sign In
                   </Button>
                 </div>
               </MotionForm>
@@ -217,7 +217,7 @@ const Login = () => {
               >
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-[9px] uppercase tracking-[0.24em] font-black text-zinc-500 mb-2">Academic Roll Number</label>
+                    <label className="block text-[9px] uppercase tracking-[0.24em] font-black text-zinc-500 mb-2">Roll Number</label>
                     <input
                       type="text"
                       value={rollNo}
@@ -230,7 +230,7 @@ const Login = () => {
                     No password required. Use your roll number.
                   </div>
                   <Button type="submit" className="w-full rounded-full py-3" loading={loading}>
-                    Retrieve Status
+                    Check Status
                   </Button>
                 </div>
               </MotionForm>
@@ -239,6 +239,14 @@ const Login = () => {
         </div>
 
 
+        <div className="mt-8 pt-6 border-t border-zinc-100 text-center">
+          <p className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400">
+            Platform built by
+          </p>
+          <p className="text-[11px] font-brand text-navy mt-1 opacity-70">
+            ARC Club <span className="text-gold">-</span> Community
+          </p>
+        </div>
       </MotionDiv>
     </div>
   );

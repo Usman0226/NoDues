@@ -59,8 +59,8 @@ const AdminDashboard = () => {
   }, [batches]);
 
   const columns = [
-    { key: 'className', label: 'Academic Group', render: (v) => <span className="font-black text-navy">{v}</span> },
-    { key: 'academicYear', label: 'Session', render: (v, row) => <span className="text-muted-foreground/60 font-semibold">{v} · Sem {row.semester}</span> },
+    { key: 'className', label: 'Class', render: (v) => <span className="font-black text-navy">{v}</span> },
+    { key: 'academicYear', label: 'Academic Year', render: (v, row) => <span className="text-muted-foreground/60 font-semibold">{v} · Sem {row.semester}</span> },
     { 
       key: 'progress', 
       label: 'Clearance Status', 
@@ -81,7 +81,7 @@ const AdminDashboard = () => {
     },
     { 
       key: 'status', 
-      label: 'Condition', 
+      label: 'Status', 
       render: (v) => <Badge status={v === 'active' ? 'pending' : 'cleared'}>{v.toUpperCase()}</Badge> 
     },
     {
@@ -103,7 +103,7 @@ const AdminDashboard = () => {
 
   if (error) {
     return (
-      <PageWrapper title="Institutional Control" subtitle="System connectivity issue">
+      <PageWrapper title="Admin Dashboard" subtitle="Connection Error">
         <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Metrics Unavailable</h2>
@@ -117,7 +117,7 @@ const AdminDashboard = () => {
   }
 
   return (
-    <PageWrapper title={isHod ? "Departmental Control" : "Institutional Control"} subtitle={isHod ? "Department-specific clearance health and metrics" : "System-wide clearance health and batch metrics"}>
+    <PageWrapper title={isHod ? "Department Dashboard" : "Admin Dashboard"} subtitle={isHod ? "Overview of department clearance metrics" : "System-wide overview of active clearance cycles"}>
       {/* Stats Grid */}
       <div className={`grid grid-cols-2 lg:grid-cols-5 gap-6 mb-12 ${loading && !response ? 'animate-pulse' : ''}`}>
         {stats.map((stat, i) => (

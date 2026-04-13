@@ -75,8 +75,13 @@ const ClassDetail = () => {
   const isHod = user?.role === 'hod';
   const basePath = isHod ? '/hod' : '/admin';
 
-  const { data: response, loading, error, request: fetchClass } = useApi(() => getClass(classId), { immediate: true });
-  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty);
+  const { data: response, loading, error, request: fetchClass } = useApi(() => getClass(classId), { 
+    immediate: true,
+    queryKey: ['class', classId]
+  });
+  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, {
+    queryKey: ['faculty', isHod ? user?.departmentId : 'all']
+  });
 
   useEffect(() => {
     const params = {};

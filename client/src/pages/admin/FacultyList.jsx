@@ -43,11 +43,17 @@ const FacultyList = () => {
   const { user } = useAuth();
   const isHod = user?.role === 'hod';
 
-  const { data: response, loading, error, request: fetchFaculty } = useApi(getFaculty);
+  const { data: response, loading, error, request: fetchFaculty } = useApi(getFaculty, {
+    queryKey: ['faculty', { page, limit, includeInactive, search: debouncedSearch, departmentId: isHod ? user?.departmentId : undefined }],
+    immediate: false
+  });
   const faculty = response?.data || [];
   const total = response?.pagination?.total || 0;
   
-  const { data: deptResponse } = useApi(getDepartments, { immediate: true });
+  const { data: deptResponse } = useApi(getDepartments, { 
+    immediate: true,
+    queryKey: ['departments']
+  });
   const allDepts = deptResponse?.data || [];
   const depts = isHod ? allDepts.filter(d => d._id === user.departmentId) : allDepts;
 
@@ -175,7 +181,7 @@ const FacultyList = () => {
     { key: 'email', label: 'Email', render: (v) => <span className="text-muted-foreground/60">{v}</span> },
     { key: 'departmentName', label: 'Dept' },
     {
-      key: 'roles', label: 'Stakeholder Roles', sortable: false, render: (tags, row) => (
+      key: 'roles', label: 'Roles', sortable: false, render: (tags, row) => (
         <div className="flex flex-wrap gap-1.5">
           {(tags || row.roleTags || ['faculty']).map((tag) => (
             <span key={tag} className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${ROLE_TAG_COLORS[tag] || ROLE_TAG_COLORS.faculty}`}>
@@ -192,7 +198,7 @@ const FacultyList = () => {
             actions={[
               { label: 'View Classes', icon: Eye, onClick: () => handleViewClasses(row) },
               { label: 'Edit Account', icon: Edit, onClick: () => handleEditClick(row) },
-              { label: 'Resend Creds', icon: Mail, onClick: () => handleResendCreds(row) },
+              { label: 'Resend Login', icon: Mail, onClick: () => handleResendCreds(row) },
               { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(row), variant: 'danger' },
             ]}
           />
@@ -238,15 +244,15 @@ const FacultyList = () => {
   };
 
   return (
-    <PageWrapper title="Faculty Directory" subtitle="Manage academic staff and department roles">
+    <PageWrapper title="Faculty" subtitle="Manage faculty members and roles">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex flex-wrap gap-3">
           <Button variant="primary" size="sm" onClick={() => {
             setFormData({ name: '', employeeId: '', email: '', departmentId: isHod ? user.departmentId : '', roleTags: ['faculty'] });
             setSelectedFaculty(null);
             setShowCreate(true);
-          }}><Plus size={14} /> Register Staff</Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite"><Upload size={14} /> Batch Import</Button>
+          }}><Plus size={14} /> Add Faculty</Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite"><Upload size={14} /> Import List</Button>
         </div>
 
         <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
@@ -254,7 +260,7 @@ const FacultyList = () => {
            <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
               <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
            </div>
-           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Inactivated</span>
+           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Archived</span>
         </div>
       </div>
       {error ? (
@@ -304,7 +310,7 @@ const FacultyList = () => {
       )}
 
       {showCreate && (
-        <Modal isOpen={showCreate} title="Provision Faculty Account" onClose={() => setShowCreate(false)}>
+        <Modal isOpen={showCreate} title="Add Faculty Account" onClose={() => setShowCreate(false)}>
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-5">
               <div>

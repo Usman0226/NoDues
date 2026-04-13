@@ -15,7 +15,7 @@ router.use(protect);
 
 router
   .route('/')
-  .get(RoleGuard(['admin']),           getDepartments)
+  .get(RoleGuard(['admin', 'hod']),    getDepartments)
   .post(RoleGuard(['admin']),          createDepartment);
 
 router

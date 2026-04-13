@@ -3,6 +3,7 @@ import Student from '../models/Student.js';
 import Faculty from '../models/Faculty.js';
 import Subject from '../models/Subject.js';
 import Class from '../models/Class.js';
+import Department from '../models/Department.js';
 import { sendCredentialEmail } from '../services/emailService.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import ErrorResponse from '../utils/errorResponse.js';
@@ -155,6 +156,21 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
       continue;
     }
 
+    // Check if department exists
+    const dept = await Department.findOne({ name: deptName.toUpperCase() });
+    if (!dept) {
+      results.errors.push({ row: i + 1, data: row, reason: `Department '${deptName}' not found` });
+      results.summary.errors++;
+      continue;
+    }
+
+    // HoD Scope Check in Preview
+    if (req.user.role === 'hod' && dept._id.toString() !== req.user.departmentId) {
+      results.errors.push({ row: i + 1, data: row, reason: `Access denied: Department '${deptName}' is outside your scope` });
+      results.summary.errors++;
+      continue;
+    }
+
     const existingId = await Faculty.findOne({ employeeId: employeeId.toUpperCase() });
     const existingEmail = await Faculty.findOne({ email: email.toLowerCase() });
 
@@ -170,7 +186,13 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    results.valid.push({ employeeId: employeeId.toUpperCase(), name, email: email.toLowerCase(), departmentName: deptName });
+    results.valid.push({ 
+      employeeId: employeeId.toUpperCase(), 
+      name, 
+      email: email.toLowerCase(), 
+      departmentName: deptName,
+      departmentId: dept._id 
+    });
     results.summary.valid++;
   }
 
@@ -186,40 +208,52 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
 
   let createdCount = 0;
   const createdFaculty = [];
-  const Department = (await import('../models/Department.js')).default;
 
   for (const fac of faculty) {
     let departmentId = fac.departmentId;
+    
+    // Fallback lookup if ID is missing but name is present (should be handled by preview but adding safety)
     if (!departmentId && fac.departmentName) {
-      const dept = await Department.findOne({ name: fac.departmentName });
+      const dept = await Department.findOne({ name: fac.departmentName.toUpperCase() });
       if (dept) departmentId = dept._id;
     }
 
-    if (!departmentId) continue;
+    if (!departmentId) {
+      logger.warn('Skipping faculty import row: Department not found', { faculty: fac.employeeId });
+      continue;
+    }
 
     // HoD Scope Check
     if (req.user.role === 'hod' && departmentId.toString() !== req.user.departmentId) {
-      continue; // Skip faculty members not in HoD's department
+      logger.warn('Skipping faculty import row: HoD scope violation', { faculty: fac.employeeId, dept: departmentId });
+      continue;
     }
 
     const tempPassword = crypto.randomBytes(4).toString('hex');
     
-    const facultyMember = await Faculty.create({
-      employeeId: fac.employeeId,
-      name: fac.name,
-      email: fac.email,
-      phone: fac.phone || '',
-      departmentId,
-      roleTags: fac.roleTags || ['faculty'],
-      password: tempPassword
-    });
+    try {
+      const facultyMember = await Faculty.create({
+        employeeId: fac.employeeId,
+        name: fac.name,
+        email: fac.email,
+        phone: fac.phone || '',
+        departmentId,
+        roleTags: fac.roleTags || ['faculty'],
+        password: tempPassword
+      });
 
-    const emailPromise = sendCredentialEmail(facultyMember.email, facultyMember.name, facultyMember.email, tempPassword, 'faculty');
-    createdFaculty.push({ member: facultyMember, emailPromise });
-    createdCount++;
+      const emailPromise = sendCredentialEmail(facultyMember.email, facultyMember.name, facultyMember.email, tempPassword, 'faculty')
+        .catch(err => logger.error('Credential email failed in batch import', { email: facultyMember.email, error: err.message }));
+        
+      createdFaculty.push({ member: facultyMember, emailPromise });
+      createdCount++;
+    } catch (err) {
+      logger.error('Failed to create faculty member in batch import', { employeeId: fac.employeeId, error: err.message });
+      // We continue with other members if one fails
+    }
   }
 
-  // Await all emails in parallel before completing
+  // Await all emails in parallel before completing (settled prevents one failure from blocking others)
   if (createdFaculty.length > 0) {
     await Promise.allSettled(createdFaculty.map(f => f.emailPromise));
   }

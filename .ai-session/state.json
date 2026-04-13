@@ -1,19 +1,21 @@
 {
-  "last_updated": "2026-04-13T10:19:00Z",
+  "last_updated": "2026-04-13T15:21:00Z",
   "completed": [
-    "Disabled student email notifications",
-    "Implemented SMTP pooling in emailService.js",
-    "Refactored emailService for lazy initialization (resolved race condition)",
-    "Optimized faculty import for parallel email dispatch",
-    "Updated facultyController to await email results and provide feedback in API response"
+    "Platform attribution (Built by ARC Club)",
+    "Comprehensive terminology simplification (Removed jargon: Node, Trajectory, Ops Console)",
+    "Standardized Professional English across all dashboards (Admin, HOD, Student, Login)",
+    "Email System UI refinement (Sender accounts, Connectivity tests, Email History)"
   ],
   "in_progress": [],
-  "pending": [],
+  "pending": [
+    "Final pass on less-frequent components (Subjects, Departments pages)",
+    "Backend terminology alignment (Ensuring DB models match UI labels eventually)"
+  ],
   "decisions": [
     {
-      "context": "Bulk operations were taking 5+ minutes",
-      "decision": "Enabled SMTP connection pooling and parallelized Promise.all for email dispatch",
-      "trade_offs": "Improved performance drastically at the cost of slightly higher memory usage for the connection pool"
+      "context": "Terminology cleanup",
+      "decision": "Replaced 'Trajectory' with 'Progress' and 'Node' with 'Status Item'",
+      "trade_offs": "Sacrificed 'cool' technical names for clarity and professional accessibility."
     }
   ],
   "blockers": []

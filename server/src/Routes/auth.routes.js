@@ -5,6 +5,9 @@ import {
   changePassword,
   logout,
   getMe,
+  getEmailStats,
+  getEmailLogs,
+  runEmailDiag,
 } from '../Controllers/authController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -32,5 +35,10 @@ router.post('/logout', protect, logout);
 
 // GET  /api/auth/me  — any authenticated user
 router.get('/me', protect, getMe);
+
+// ── Email Diagnostics (Admin Only) ──────────────────────────────────────────
+router.get('/diag/status', protect, RoleGuard(['admin']), getEmailStats);
+router.get('/diag/logs', protect, RoleGuard(['admin']), getEmailLogs);
+router.post('/diag/test', protect, RoleGuard(['admin']), runEmailDiag);
 
 export default router;

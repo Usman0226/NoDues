@@ -32,7 +32,10 @@ const BatchView = () => {
   const [filter, setFilter] = useState('all');
   const [popover, setPopover] = useState(null);
 
-  const { data: batch, loading, error, request: fetchBatch } = useApi(() => getBatch(batchId), { immediate: true });
+  const { data: batch, loading, error, request: fetchBatch } = useApi(() => getBatch(batchId), { 
+    immediate: true,
+    queryKey: ['batch', batchId]
+  });
 
   // Real-time updates via SSE
   useSSE(batchId ? getBatchSSEUrl(batchId) : null, (event) => {
@@ -71,7 +74,7 @@ const BatchView = () => {
 
   if (loading && !batch) {
     return (
-      <PageWrapper title="Batch Clearance Matrix" subtitle="Fetching institutional grid...">
+      <PageWrapper title="Clearance Overview" subtitle="Fetching status list...">
         <div className="animate-pulse">
            <div className="h-24 w-full bg-muted/5 rounded-xl mb-10"></div>
            <div className="h-96 w-full bg-muted/5 rounded-xl border border-muted"></div>
@@ -99,7 +102,7 @@ const BatchView = () => {
 
   return (
     <PageWrapper 
-      title="Batch Clearance Matrix" 
+      title="Clearance Overview" 
       subtitle={`${batch.batch?.className} · Cycle ${batch.batch?.academicYear}`}
       backTitle="Return to History"
       backFallback={`${basePath}/batches`}
@@ -120,7 +123,7 @@ const BatchView = () => {
         </div>
         <div className="flex items-center gap-3">
           <Badge status={batch.batch?.status === 'active' ? 'pending' : 'cleared'} className="bg-navy/5 text-navy/70 border-none px-4">
-            Cycle State: {batch.batch?.status?.toUpperCase()}
+            Batch Status: {batch.batch?.status?.toUpperCase()}
           </Badge>
           {batch.batch?.status === 'active' && (
             <Button variant="danger" size="sm" className="h-9" onClick={handleCloseBatch}><X size={14} /> Close Cycle</Button>
@@ -130,7 +133,7 @@ const BatchView = () => {
 
       <p className="text-xs text-muted-foreground font-semibold mb-4 -mt-2">
         Showing <span className="text-navy font-black tabular-nums">{filtered.length}</span> of{' '}
-        <span className="text-navy font-black tabular-nums">{batch.students?.length ?? 0}</span> candidates
+        <span className="text-navy font-black tabular-nums">{batch.students?.length ?? 0}</span> students
         {filter !== 'all' ? (
           <span className="text-muted-foreground/80">
             {' '}
@@ -145,7 +148,7 @@ const BatchView = () => {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-offwhite/40 border-b border-muted/60">
-              <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground sticky left-0 bg-offwhite z-10 min-w-[220px]">Candidate Details</th>
+              <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground sticky left-0 bg-offwhite z-10 min-w-[220px]">Student Details</th>
               <th className="text-center px-4 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l border-muted/30">Result</th>
               {batch.faculty?.map((f) => (
                 <th key={f._id} className="text-center px-4 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l border-muted/30">
@@ -202,7 +205,7 @@ const BatchView = () => {
       <Modal
         isOpen={!!popover}
         onClose={() => setPopover(null)}
-        title="Status Insight"
+        title="Status Details"
         size="sm"
       >
         {popover && (
@@ -222,11 +225,11 @@ const BatchView = () => {
             </div>
             <div className="space-y-4">
               <div>
-                <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 mb-1 leading-none">Stakeholder</p>
+                <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 mb-1 leading-none">Assigned Faculty</p>
                 <p className="text-sm font-bold text-navy">{popover.subject} · {popover.faculty}</p>
               </div>
               <div>
-                <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 mb-1 leading-none">Decision State</p>
+                <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 mb-1 leading-none">Approval Status</p>
                 <Badge status={popover.action} />
               </div>
               {popover.action === STATUSES.DUE_MARKED && (
@@ -241,7 +244,7 @@ const BatchView = () => {
               )}
             </div>
             <Button variant="secondary" className="w-full" onClick={() => setPopover(null)}>
-              Dismiss Insight
+              Close
             </Button>
           </>
         )}

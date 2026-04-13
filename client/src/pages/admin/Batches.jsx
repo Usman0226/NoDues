@@ -26,7 +26,16 @@ const Batches = () => {
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches);
+  const { data: response, loading, error, request: fetchBatches } = useApi(getBatches, {
+    queryKey: ['batches', { 
+      page, 
+      limit, 
+      search: debouncedSearch, 
+      status: statusFilter,
+      departmentId: user?.role === 'hod' ? user.departmentId : undefined
+    }],
+    immediate: false
+  });
   const batches = response?.data || [];
   const total = response?.pagination?.total || 0;
 
@@ -73,10 +82,10 @@ const Batches = () => {
   };
 
   const columns = [
-    { key: 'className', label: 'Identity', render: (v) => <span className="font-black text-navy">{v}</span> },
+    { key: 'className', label: 'Class Name', render: (v) => <span className="font-black text-navy">{v}</span> },
     { key: 'departmentName', label: 'Department' },
     { key: 'academicYear', label: 'Year', render: (v, row) => <span className="font-semibold text-muted-foreground/60">{v} · S{row.semester}</span> },
-    { key: 'initiatorName', label: 'Originator' },
+    { key: 'initiatorName', label: 'Started By' },
     { 
       key: 'clearedCount', 
       label: 'Clearance Status', 
@@ -89,17 +98,15 @@ const Batches = () => {
     },
     { 
       key: 'duesCount', 
-      label: 'Flags', 
+      label: 'Dues', 
       render: (v) => <span className={`font-black tabular-nums ${v > 0 ? 'text-status-due' : 'text-muted-foreground/20'}`}>{v}</span> 
     },
-    { key: 'status', label: 'State', render: (v) => <Badge status={v} /> },
-    {
-      key: '_id', label: 'Oversight', sortable: false, render: (v) => (
+    { key: 'status', label: 'Status', render: (v) => <Badge status={v} /> },
         <button onClick={() => navigate(`${basePath}/batch/${v}`)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] bg-navy text-white hover:bg-navy/90 font-black uppercase tracking-widest transition-all shadow-sm shadow-navy/10">
-          <Eye size={12} strokeWidth={3} /> Analyze
+          <Eye size={12} strokeWidth={3} /> View
         </button>
-      )
-    },
+      
+  
   ];
 
   return (
