@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import logger from '../utils/logger.js';
 import EmailLog from '../models/EmailLog.js';
 import EmailQuota from '../models/EmailQuota.js';
+import brevoConfig from '../config/brevo.js';
 
 const ACCOUNT_LIMIT = parseInt(process.env.SMTP_DAILY_LIMIT) || 300;
 let _transporters = [];
@@ -90,6 +91,34 @@ const selectAccountIndex = async () => {
   return -1; // All quotas exhausted
 };
 
+const sendViaBrevo = async (mailOptions) => {
+  try {
+    const response = await fetch(brevoConfig.apiUrl, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': brevoConfig.apiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: mailOptions.sender || brevoConfig.sender,
+        to: Array.isArray(mailOptions.to) ? mailOptions.to : [{ email: mailOptions.to }],
+        subject: mailOptions.subject,
+        htmlContent: mailOptions.html
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || `Brevo API Error: ${response.status}`);
+    }
+    return { success: true, messageId: data.messageId };
+  } catch (error) {
+    logger.error('Brevo API Dispatch Failed:', error);
+    throw error;
+  }
+};
+
 /**
  * Log email status to database (Fire and forget)
  */
@@ -116,6 +145,23 @@ export const testConnection = async () => {
   discoverAccounts();
   const results = [];
   
+  // Test Brevo API if configured
+  if (brevoConfig.apiKey) {
+    try {
+      // Small dummy request to check key validity (account info endpoint is better but smtp check is fine)
+      const resp = await fetch('https://api.brevo.com/v3/account', {
+        headers: { 'api-key': brevoConfig.apiKey }
+      });
+      if (resp.ok) {
+        results.push({ index: 'api', user: brevoConfig.sender.email, status: 'connected', type: 'BREVO_API' });
+      } else {
+        results.push({ index: 'api', user: brevoConfig.sender.email, status: 'error', error: 'Invalid API Key', type: 'BREVO_API' });
+      }
+    } catch (err) {
+      results.push({ index: 'api', user: brevoConfig.sender.email, status: 'error', error: err.message, type: 'BREVO_API' });
+    }
+  }
+
   for (let i = 0; i < _accounts.length; i++) {
     const transporter = getTransporter(i);
     try {
@@ -130,8 +176,54 @@ export const testConnection = async () => {
 };
 
 export const sendCredentialEmail = async (to, name, identifier, password, role) => {
-  const accountIndex = await selectAccountIndex();
+  if (role === 'student' && !process.env.ENABLE_STUDENT_EMAILS) return true;
   
+  const loginUrl = process.env.FRONTEND_URL || 'https://no-dues-psi.vercel.app/';
+  const subject = `Your Credentials for ${role === 'student' ? 'Student Portal' : 'Faculty Portal'} - NDS`;
+  const html = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+      <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Welcome to No-Due System (NDS)</h2>
+      <p>Hello <strong>${name}</strong>,</p>
+      <p>Your account has been created on the No-Due Clearance System. Please use the following credentials to log in:</p>
+      
+      <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 5px 0;"><strong>${role === 'student' ? 'Roll Number' : 'Email'}:</strong> ${identifier}</p>
+        <p style="margin: 5px 0;"><strong>Temporary Password:</strong> ${password}</p>
+      </div>
+      
+      <p>You can access the portal here: <a href="${loginUrl}" style="color: #3498db;">${loginUrl}</a></p>
+      
+      <p style="background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; border-left: 5px solid #ffeeba;">
+        <strong>Note:</strong> You will be required to change your password upon your first login for security reasons.
+      </p>
+      
+      <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+      <p style="font-size: 12px; color: #7f8c8d;">This is an automated message. Please do not reply to this email.</p>
+    </div>
+  `;
+
+  // --- Method 1: Brevo API (Preferred for Production/Render) ---
+  if (brevoConfig.apiKey) {
+    try {
+      await sendViaBrevo({ to, subject, html });
+      
+      writeEmailLog({
+        recipient: to,
+        subject,
+        role: role || 'system',
+        status: 'success',
+        accountIndex: -1, // -1 denotes API delivery
+        triggeredBy: 'SYSTEM'
+      });
+      return true;
+    } catch (error) {
+      logger.error(`Brevo API fallback in effect for ${to}. Error: ${error.message}`);
+      // Fall through to SMTP if API fails
+    }
+  }
+
+  // --- Method 2: SMTP Rotation (Fallback for Local/Legacy) ---
+  const accountIndex = await selectAccountIndex();
   if (accountIndex === -1) {
     logger.error('Email aborted: Daily quota exhausted across all accounts.');
     return false;
@@ -141,43 +233,12 @@ export const sendCredentialEmail = async (to, name, identifier, password, role) 
   const transporter = getTransporter(accountIndex);
 
   try {
-    if (role === 'student' && !process.env.ENABLE_STUDENT_EMAILS) return true;
-    
-    // Fallback URL if not set
-    const loginUrl = process.env.FRONTEND_URL || 'https://no-dues-psi.vercel.app/';
-    
-    const mailOptions = {
-      from: acc.from,
-      to,
-      subject: `Your Credentials for ${role === 'student' ? 'Student Portal' : 'Faculty Portal'} - NDS`,
-      html: `
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
-          <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Welcome to No-Due System (NDS)</h2>
-          <p>Hello <strong>${name}</strong>,</p>
-          <p>Your account has been created on the No-Due Clearance System. Please use the following credentials to log in:</p>
-          
-          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p style="margin: 5px 0;"><strong>${role === 'student' ? 'Roll Number' : 'Email'}:</strong> ${identifier}</p>
-            <p style="margin: 5px 0;"><strong>Temporary Password:</strong> ${password}</p>
-          </div>
-          
-          <p>You can access the portal here: <a href="${loginUrl}" style="color: #3498db;">${loginUrl}</a></p>
-          
-          <p style="background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; border-left: 5px solid #ffeeba;">
-            <strong>Note:</strong> You will be required to change your password upon your first login for security reasons.
-          </p>
-          
-          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #7f8c8d;">This is an automated message. Please do not reply to this email.</p>
-        </div>
-      `
-    };
-
-    const info = await transporter.sendMail(mailOptions);
+    const mailOptions = { from: acc.from, to, subject, html };
+    await transporter.sendMail(mailOptions);
     
     writeEmailLog({
       recipient: to,
-      subject: mailOptions.subject,
+      subject,
       role: role || 'system',
       status: 'success',
       accountIndex,
@@ -186,11 +247,11 @@ export const sendCredentialEmail = async (to, name, identifier, password, role) 
 
     return true;
   } catch (error) {
-    logger.error(`Failed to send email to ${to} using Account ${accountIndex + 1}:`, error);
+    logger.error(`Failed to send email to ${to} using SMTP Account ${accountIndex + 1}:`, error);
     
     writeEmailLog({
       recipient: to,
-      subject: `Your Credentials - NDS`,
+      subject,
       role: role || 'system',
       status: 'failure',
       accountIndex,

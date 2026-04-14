@@ -101,10 +101,14 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md', preventClose = f
 
   return createPortal(
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={handleBackdropClick} aria-hidden />
+      <div 
+        className={`absolute inset-0 bg-slate-950/${preventClose ? '80' : '60'} backdrop-blur-${preventClose ? 'md' : 'sm'} transition-all duration-300`} 
+        onClick={handleBackdropClick} 
+        aria-hidden 
+      />
       <div
         ref={panelRef}
-        className={`relative w-full ${sizes[size]} max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_24px_80px_rgba(30,41,59,0.22)] fade-up`}
+        className={`relative w-full ${sizes[size]} max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_24px_80px_rgba(30,41,59,0.22)] ${preventClose ? 'scale-100' : 'fade-up'}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleDomId}

@@ -42,6 +42,9 @@ import StudentStatus from './pages/student/Status';
 
 const AppLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user } = useAuth();
+  const isLocked = user?.mustChangePassword;
+
   return (
     <div className="flex h-screen overflow-hidden bg-offwhite">
       <ForcedChangePasswordModal />
@@ -50,7 +53,18 @@ const AppLayout = () => {
         <div className="absolute inset-0 pointer-events-none grid-overlay opacity-[0.32] -z-10" />
         <Navbar onMenuToggle={() => setMobileOpen(true)} />
         <div className="flex-1 overflow-y-auto relative z-10">
-          <Outlet />
+          {!isLocked ? (
+            <Outlet />
+          ) : (
+            <div className="h-full w-full flex items-center justify-center p-8 select-none pointer-events-none">
+              <div className="text-center space-y-4 opacity-10">
+                <h1 className="text-8xl font-brand text-navy tracking-tighter">NoDues</h1>
+                <p className="text-[10px] uppercase tracking-[0.4em] font-black text-navy leading-none">
+                  Security Clearance Required
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
