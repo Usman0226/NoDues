@@ -61,6 +61,7 @@ export const getStudents = async (req, res, next) => {
         mentor:         s.mentorId
           ? { _id: s.mentorId._id, name: s.mentorId.name }
           : null,
+        mentorName:     s.mentorId?.name ?? null,
         isActive:       s.isActive,
       })),
       pagination: {

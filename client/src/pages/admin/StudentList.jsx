@@ -45,6 +45,13 @@ const StudentList = () => {
 
   const { user } = useAuth();
   const isHod = user?.role === 'hod';
+  const studentQueryParams = useMemo(() => ({
+    page,
+    limit,
+    includeInactive,
+    search: debouncedSearchTerm,
+    ...(isHod ? { departmentId: user?.departmentId } : {}),
+  }), [page, limit, includeInactive, debouncedSearchTerm, isHod, user?.departmentId]);
   
   const { data: response, loading, error, request: fetchStudents } = useApi(getStudents);
   const students = response?.data || [];
@@ -57,10 +64,8 @@ const StudentList = () => {
   const faculty = facultyResponse?.data || [];
 
   useEffect(() => {
-    const params = { page, limit, includeInactive, search: debouncedSearchTerm };
-    if (isHod) params.departmentId = user.departmentId;
-    fetchStudents(params);
-  }, [fetchStudents, isHod, user?.departmentId, page, limit, includeInactive, debouncedSearchTerm]);
+    fetchStudents(studentQueryParams);
+  }, [fetchStudents, studentQueryParams]);
 
   useEffect(() => {
     const params = {};
@@ -100,7 +105,7 @@ const StudentList = () => {
       await createStudent(formData);
       toast.success('Student added successfully');
       setShowAdd(false);
-      fetchStudents({ page, limit, includeInactive, search: debouncedSearchTerm, ...(isHod ? { departmentId: user.departmentId } : {}) });
+      fetchStudents(studentQueryParams);
     } catch (err) {
       toast.error(err?.message || 'Failed to add student');
     } finally {
@@ -115,7 +120,7 @@ const StudentList = () => {
       await updateStudent(selectedStudent._id, formData);
       toast.success('Student updated successfully');
       setShowEdit(false);
-      fetchStudents({ page, limit, includeInactive, search: debouncedSearchTerm, ...(isHod ? { departmentId: user.departmentId } : {}) });
+      fetchStudents(studentQueryParams);
     } catch (err) {
       toast.error(err?.message || 'Failed to update student');
     } finally {
@@ -129,7 +134,7 @@ const StudentList = () => {
       await deleteStudent(selectedStudent._id);
       toast.success('Student deactivated');
       setShowDelete(false);
-      fetchStudents({ page, limit, includeInactive, search: debouncedSearchTerm, ...(isHod ? { departmentId: user.departmentId } : {}) });
+      fetchStudents(studentQueryParams);
     } catch (err) {
       toast.error(err?.message || 'Failed to deactivate student');
     } finally {
@@ -144,7 +149,7 @@ const StudentList = () => {
       toast.success(`${selectedIds.length} students deactivated`);
       setShowBulkDelete(false);
       setSelectedIds([]);
-      fetchStudents();
+      fetchStudents(studentQueryParams);
     } catch (err) {
       toast.error(err?.message || 'Failed to deactivate students');
     } finally {
@@ -161,7 +166,7 @@ const StudentList = () => {
       setShowBulkMentor(false);
       setSelectedIds([]);
       setBulkMentorId('');
-      fetchStudents();
+      fetchStudents(studentQueryParams);
     } catch (err) {
       toast.error(err?.message || 'Failed to assign mentor');
     } finally {
@@ -178,7 +183,11 @@ const StudentList = () => {
     { key: 'name', label: 'Full Name', render: (v) => <span className="font-bold text-navy/80">{v}</span> },
     { key: 'departmentName', label: 'Department' },
     { key: 'className', label: 'Class', render: (v, row) => <span>{v || row.class}</span> },
-    { key: 'mentorName', label: 'Mentor' },
+    {
+      key: 'mentor',
+      label: 'Mentor',
+      render: (_, row) => row.mentor?.name || row.mentorName || 'Not Assigned'
+    },
     { 
       key: 'status', 
       label: 'Status', 
@@ -209,7 +218,7 @@ const StudentList = () => {
           <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
             <Upload size={14} /> Import list
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => fetchStudents({ page, limit, includeInactive, search: debouncedSearchTerm })} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
+          <Button variant="ghost" size="sm" onClick={() => fetchStudents(studentQueryParams)} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
         </div>
 
         <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
@@ -267,7 +276,7 @@ const StudentList = () => {
             contextLabel="Student Directory Sync" 
             onComplete={() => {
               setShowImport(false);
-              fetchStudents();
+              fetchStudents(studentQueryParams);
             }} 
          />
       </Modal>
