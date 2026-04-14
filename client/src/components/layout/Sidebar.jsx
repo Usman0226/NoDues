@@ -22,6 +22,7 @@ const NAV_CONFIG = {
   [ROLES.HOD]: [
     { label: 'Dashboard', path: '/hod', icon: LayoutDashboard },
     { label: 'Classes', path: '/hod/classes', icon: GraduationCap },
+    { label: 'My Classes', path: '/hod/my-classes', icon: GraduationCap },
     { label: 'Students', path: '/hod/students', icon: Users },
     { label: 'Faculty', path: '/hod/faculty', icon: Users },
     { label: 'Subjects', path: '/hod/subjects', icon: BookOpen },
@@ -78,11 +79,20 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
 
       <nav className="flex-1 py-7 px-4 space-y-2 overflow-y-auto no-scrollbar">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path ||
-            (item.path.endsWith('/batches') && location.pathname.includes('/batch/')) ||
-            (item.path.endsWith('/classes') && location.pathname.includes('/class/')) ||
-            (item.path.endsWith('/departments') && location.pathname.includes('/class/')) ||
-            (item.path !== '/' && !['/admin', '/hod', '/faculty'].includes(item.path) && location.pathname.startsWith(item.path + '/'));
+          // Explicit matching rules for HoD portal to avoid path overlap
+          const getIsActive = () => {
+            if (item.path === '/hod/classes') {
+              return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
+            }
+            if (item.path === '/hod/my-classes') {
+              return location.pathname.startsWith('/hod/my-classes');
+            }
+            return location.pathname === item.path ||
+              (item.path.endsWith('/batches') && location.pathname.includes('/batch/')) ||
+              (item.path !== '/' && !['/admin', '/hod', '/faculty'].includes(item.path) && location.pathname.startsWith(item.path + '/'));
+          };
+
+          const isActive = getIsActive();
           const Icon = item.icon;
 
           return (

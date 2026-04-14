@@ -39,6 +39,7 @@ import Overrides from './pages/hod/Overrides';
 
 import FacultyDashboard from './pages/faculty/Dashboard';
 import MyClasses from './pages/faculty/MyClasses';
+import HodMyClasses from './pages/hod/MyClasses';
 import Pending from './pages/faculty/Pending';
 import FacultyHistory from './pages/faculty/History';
 
@@ -182,6 +183,7 @@ const AppContent = () => {
 
             <Route path="/hod" element={<HodDashboard />} />
             <Route path="/hod/classes" element={<DepartmentClasses />} />
+            <Route path="/hod/my-classes" element={<HodMyClasses />} />
             <Route path="/hod/class/:classId" element={<ClassDetail />} />
             <Route path="/hod/students" element={<StudentList />} />
             <Route path="/hod/faculty" element={<FacultyList />} />

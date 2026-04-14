@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -12,7 +13,10 @@ import {
   updateApproval,
   bulkApproveRecords 
 } from '../../api/approvals';
+import { getMyClasses } from '../../api/faculty';
 import Modal from '../../components/ui/Modal';
+import SearchableSelect from '../../components/ui/SearchableSelect';
+import BackHeader from '../../components/ui/BackHeader';
 import {
   Check,
   X,
@@ -42,7 +46,8 @@ const getApprovalLabel = (item) => {
 // Since the table is more structured, I'll keep the DueForm as a standalone component if needed.
 
 const Pending = () => {
-  const [selectedBatch, setSelectedBatch] = useState('all');
+  const location = useLocation();
+  const [selectedBatch, setSelectedBatch] = useState(location.state?.classId || 'all');
   const [filter, setFilter]               = useState('pending');
   const [selection, setSelection]         = useState([]);
   const [actionLoading, setActionLoading] = useState(null); // 'bulk' or approvalId
@@ -57,6 +62,8 @@ const Pending = () => {
 
   const { data: response, loading, error, request: fetchApprovals, setData: setResponse } =
     useApi(getPendingApprovals);
+
+  const { data: classesData, loading: classesLoading } = useApi(getMyClasses, { immediate: true });
   
   const total = response?.pagination?.total || 0;
 
@@ -78,8 +85,14 @@ const Pending = () => {
   }, [searchValue]);
 
   useEffect(() => {
-    fetchApprovals({ page, limit, search: debouncedSearch });
-  }, [fetchApprovals, page, limit, debouncedSearch]);
+    fetchApprovals({ 
+      page, 
+      limit, 
+      search: debouncedSearch,
+      batchId: selectedBatch !== 'all' ? selectedBatch : undefined,
+      action: filter
+    });
+  }, [fetchApprovals, page, limit, debouncedSearch, selectedBatch, filter]);
 
   useSSE(
     sseUrl,
@@ -87,9 +100,15 @@ const Pending = () => {
       (event) => {
         if (event?.type !== 'APPROVAL_UPDATED') return;
         // For simplicity and correctness with pagination, refetch is best
-        fetchApprovals({ page, limit, search: debouncedSearch });
+        fetchApprovals({ 
+          page, 
+          limit, 
+          search: debouncedSearch,
+          batchId: selectedBatch !== 'all' ? selectedBatch : undefined,
+          action: filter
+        });
       },
-      [fetchApprovals, page, limit, debouncedSearch]
+      [fetchApprovals, page, limit, debouncedSearch, selectedBatch, filter]
     )
   );
 
@@ -214,11 +233,11 @@ const Pending = () => {
   ];
 
   const batches = useMemo(() => {
-    return Array.from(new Set(approvals.map((a) => a.batchId))).map((batchId) => {
-      const record = approvals.find((a) => a.batchId === batchId);
-      return { id: batchId, name: record?.className || `Batch ${batchId}` };
-    });
-  }, [approvals]);
+    return (classesData?.data || []).map((c) => ({
+      id: c._id,
+      name: c.name
+    }));
+  }, [classesData]);
 
 
 
@@ -239,8 +258,17 @@ const Pending = () => {
     </Button>
   );
 
+  const backConfig = useMemo(() => {
+    const from = location.state?.from;
+    if (from === 'hod-my-classes') return { title: 'Return to My Classes', fallback: '/hod/my-classes' };
+    if (from === 'faculty-my-classes') return { title: 'Return to My Classes', fallback: '/faculty/my-classes' };
+    return { title: 'Return to Dashboard', fallback: '/faculty' };
+  }, [location.state]);
+
   return (
     <PageWrapper title="Pending Approvals" subtitle="Efficiently manage clearance requests">
+      <BackHeader title={backConfig.title} fallback={backConfig.fallback} />
+      
       {/* Summary Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-white p-6 rounded-2xl border border-muted shadow-sm flex items-center gap-4">
@@ -335,6 +363,17 @@ const Pending = () => {
           <h2 className="text-xl font-black text-navy mb-2">Sync Interrupted</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
           <Button variant="primary" onClick={() => fetchApprovals()}>Retry Sync</Button>
+        </div>
+      ) : approvals.length === 0 && !loading ? (
+        <div className="bg-white border border-dashed border-zinc-200 rounded-3xl p-16 text-center">
+          <div className="bg-zinc-50 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Check className="text-zinc-300" size={40} />
+          </div>
+          <h3 className="text-navy font-brand text-xl mb-2">Queue Fully Processed</h3>
+          <p className="text-sm text-zinc-500 max-w-sm mx-auto">
+            No student clearance requests are pending for the selected {selectedBatch === 'all' ? 'active batches' : 'class'}. 
+            Check individual status or history for previously actioned records.
+          </p>
         </div>
       ) : (
         <Table
