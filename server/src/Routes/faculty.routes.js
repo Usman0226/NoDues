@@ -9,6 +9,7 @@ import {
   resendCredentials,
   bulkDeactivateFaculty,
   bulkResendCredentials,
+  bulkUpdateRoles,
 } from '../Controllers/facultyController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -37,5 +38,6 @@ router.post('/:id/resend-creds', resendCredentials);
 
 router.post('/bulk-deactivate', bulkDeactivateFaculty);
 router.post('/bulk-resend-creds', bulkResendCredentials);
+router.post('/bulk-update-roles', bulkUpdateRoles);
 
 export default router;

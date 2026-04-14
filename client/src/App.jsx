@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { UIProvider, useUI } from './context/UIContext';
+import { PageSpinner } from './components/ui/Spinner';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ROLES } from './utils/constants';
@@ -116,106 +118,119 @@ const queryClient = new QueryClient({
   },
 });
 
+const AppContent = () => {
+  const { isGlobalLoading, loadingMessage } = useUI();
+
+  return (
+    <>
+      {isGlobalLoading && <PageSpinner message={loadingMessage} />}
+      <ScrollToTop />
+      <Toaster 
+        position="top-right"
+        containerStyle={{ top: 40, right: 40 }}
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#FFFFFF',
+            color: '#312e81',
+            borderRadius: '16px',
+            border: '1px solid #e4e4e7',
+            fontWeight: '700',
+            fontSize: '12px',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            padding: '14px 20px',
+            boxShadow: '0 14px 30px rgba(15, 23, 42, 0.14)',
+            fontFamily: 'Geist, Outfit, sans-serif',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10B981',
+              secondary: '#FFFFFF',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#EF4444',
+              secondary: '#FFFFFF',
+            },
+          },
+        }}
+      />
+      <AuthProvider>
+        <Routes>
+          {/* Existing Routes ... */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<RoleRedirect />} />
+
+          {/* Staff Layout (sidebar) */}
+          <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.HOD, ROLES.FACULTY]}><AppLayout /></ProtectedRoute>}>
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/departments" element={<Departments />} />
+            <Route path="/admin/departments/:deptId/classes" element={<DepartmentClasses />} />
+            <Route path="/admin/class/:classId" element={<ClassDetail />} />
+            <Route path="/admin/faculty" element={<FacultyList />} />
+            <Route path="/admin/students" element={<StudentList />} />
+            <Route path="/admin/subjects" element={<Subjects />} />
+            <Route path="/admin/batches" element={<Batches />} />
+            <Route path="/admin/batch/:batchId" element={<BatchView />} />
+            <Route path="/admin/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
+            <Route path="/admin/email-monitor" element={<EmailMonitor />} />
+            <Route path="/change-password" element={<ChangePassword />} />
+
+            <Route path="/hod" element={<HodDashboard />} />
+            <Route path="/hod/classes" element={<DepartmentClasses />} />
+            <Route path="/hod/class/:classId" element={<ClassDetail />} />
+            <Route path="/hod/students" element={<StudentList />} />
+            <Route path="/hod/faculty" element={<FacultyList />} />
+            <Route path="/hod/subjects" element={<Subjects />} />
+            <Route path="/hod/batches" element={<Batches />} />
+            <Route path="/hod/dues" element={<Dues />} />
+            <Route path="/hod/overrides" element={<Overrides />} />
+            <Route path="/hod/batch/:batchId" element={<BatchView />} />
+            <Route path="/hod/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
+
+            <Route path="/faculty" element={<FacultyDashboard />} />
+            <Route path="/faculty/classes" element={<MyClasses />} />
+            <Route path="/faculty/pending" element={<Pending />} />
+            <Route path="/faculty/history" element={<FacultyHistory />} />
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={[ROLES.STUDENT]}><StudentLayout /></ProtectedRoute>}>
+            <Route path="/student" element={<StudentStatus />} />
+          </Route>
+
+          <Route path="/unauthorized" element={
+            <div className="min-h-screen flex items-center justify-center bg-offwhite">
+              <div className="text-center">
+                <h1 className="text-4xl font-brand text-navy mb-2">403</h1>
+                <p className="text-muted-foreground">You do not have permission to access this page.</p>
+              </div>
+            </div>
+          } />
+          <Route path="*" element={
+            <div className="min-h-screen flex items-center justify-center bg-offwhite">
+              <div className="text-center">
+                <h1 className="text-4xl font-brand text-navy mb-2">404</h1>
+                <p className="text-muted-foreground">Page not found.</p>
+              </div>
+            </div>
+          } />
+        </Routes>
+      </AuthProvider>
+    </>
+  );
+};
+
 const App = () => {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <ScrollToTop />
-          <Toaster 
-            position="top-right"
-            containerStyle={{ top: 40, right: 40 }}
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#FFFFFF',
-                color: '#312e81',
-                borderRadius: '16px',
-                border: '1px solid #e4e4e7',
-                fontWeight: '700',
-                fontSize: '12px',
-                letterSpacing: '0.05em',
-                textTransform: 'uppercase',
-                padding: '14px 20px',
-                boxShadow: '0 14px 30px rgba(15, 23, 42, 0.14)',
-                fontFamily: 'Geist, Outfit, sans-serif',
-              },
-              success: {
-                iconTheme: {
-                  primary: '#10B981',
-                  secondary: '#FFFFFF',
-                },
-              },
-              error: {
-                iconTheme: {
-                  primary: '#EF4444',
-                  secondary: '#FFFFFF',
-                },
-              },
-            }}
-          />
-          <AuthProvider>
-            <Routes>
-              {/* Existing Routes ... */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={<RoleRedirect />} />
-
-              {/* Staff Layout (sidebar) */}
-              <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.HOD, ROLES.FACULTY]}><AppLayout /></ProtectedRoute>}>
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/departments" element={<Departments />} />
-                <Route path="/admin/departments/:deptId/classes" element={<DepartmentClasses />} />
-                <Route path="/admin/class/:classId" element={<ClassDetail />} />
-                <Route path="/admin/faculty" element={<FacultyList />} />
-                <Route path="/admin/students" element={<StudentList />} />
-                <Route path="/admin/subjects" element={<Subjects />} />
-                <Route path="/admin/batches" element={<Batches />} />
-                <Route path="/admin/batch/:batchId" element={<BatchView />} />
-                <Route path="/admin/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
-                <Route path="/admin/email-monitor" element={<EmailMonitor />} />
-                <Route path="/change-password" element={<ChangePassword />} />
-
-                <Route path="/hod" element={<HodDashboard />} />
-                <Route path="/hod/classes" element={<DepartmentClasses />} />
-                <Route path="/hod/class/:classId" element={<ClassDetail />} />
-                <Route path="/hod/students" element={<StudentList />} />
-                <Route path="/hod/faculty" element={<FacultyList />} />
-                <Route path="/hod/subjects" element={<Subjects />} />
-                <Route path="/hod/batches" element={<Batches />} />
-                <Route path="/hod/dues" element={<Dues />} />
-                <Route path="/hod/overrides" element={<Overrides />} />
-                <Route path="/hod/batch/:batchId" element={<BatchView />} />
-                <Route path="/hod/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
-
-                <Route path="/faculty" element={<FacultyDashboard />} />
-                <Route path="/faculty/classes" element={<MyClasses />} />
-                <Route path="/faculty/pending" element={<Pending />} />
-                <Route path="/faculty/history" element={<FacultyHistory />} />
-              </Route>
-
-              <Route element={<ProtectedRoute allowedRoles={[ROLES.STUDENT]}><StudentLayout /></ProtectedRoute>}>
-                <Route path="/student" element={<StudentStatus />} />
-              </Route>
-
-              <Route path="/unauthorized" element={
-                <div className="min-h-screen flex items-center justify-center bg-offwhite">
-                  <div className="text-center">
-                    <h1 className="text-4xl font-brand text-navy mb-2">403</h1>
-                    <p className="text-muted-foreground">You do not have permission to access this page.</p>
-                  </div>
-                </div>
-              } />
-              <Route path="*" element={
-                <div className="min-h-screen flex items-center justify-center bg-offwhite">
-                  <div className="text-center">
-                    <h1 className="text-4xl font-brand text-navy mb-2">404</h1>
-                    <p className="text-muted-foreground">Page not found.</p>
-                  </div>
-                </div>
-              } />
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
+        <UIProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </UIProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

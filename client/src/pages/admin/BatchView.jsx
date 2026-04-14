@@ -13,6 +13,7 @@ import Modal from '../../components/ui/Modal';
 import { ArrowLeft, X, ChevronRight, Info, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import { useUI } from '../../context/UIContext';
 
 
 const ICON_MAP = {
@@ -26,6 +27,7 @@ const BatchView = () => {
   const { batchId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showGlobalLoader } = useUI();
   const isHod = user?.role === 'hod';
   const basePath = isHod ? '/hod' : '/admin';
 
@@ -90,7 +92,14 @@ const BatchView = () => {
           <AlertTriangle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Grid Sync Error</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
-          <Button variant="primary" onClick={() => fetchBatch()}>
+          <Button 
+            variant="primary" 
+            onClick={async () => {
+              const hide = showGlobalLoader('Syncing Grid Data...');
+              await fetchBatch();
+              hide();
+            }}
+          >
              <RefreshCw size={14} className="mr-2" /> Retry Fetch
           </Button>
         </div>

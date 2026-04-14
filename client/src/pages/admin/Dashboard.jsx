@@ -4,6 +4,7 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
 import { getBatches } from '../../api/batch';
+import { useUI } from '../../context/UIContext';
 import { 
   Users, 
   Layers, 
@@ -23,6 +24,7 @@ const AdminDashboard = () => {
   const { user } = useAuth();
   const isHod = user?.role === 'hod';
   const basePath = isHod ? '/hod' : '/admin';
+  const { showGlobalLoader } = useUI();
 
   const { data: response, loading, error, request: fetchBatches } = useApi(getBatches);
   const batches = response?.data || [];
@@ -108,7 +110,14 @@ const AdminDashboard = () => {
           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Metrics Unavailable</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
-          <Button variant="primary" onClick={() => fetchBatches()}>
+          <Button 
+            variant="primary" 
+            onClick={async () => {
+              const hide = showGlobalLoader('Refreshing Dashboard Metrics...');
+              await fetchBatches();
+              hide();
+            }}
+          >
              <RefreshCw size={14} className="mr-2" /> Refresh Data
           </Button>
         </div>

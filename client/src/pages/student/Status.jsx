@@ -15,6 +15,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useUI } from '../../context/UIContext';
 
 const STATUS_CONFIG = {
   cleared: { banner: 'bg-emerald-500', icon: CheckCircle, label: 'No Outstanding Dues', sub: 'Your clearance is verified for the current cycle.' },
@@ -100,6 +101,7 @@ const CircularProgress = ({ cleared, total }) => {
 };
 
 const StudentStatus = () => {
+  const { showGlobalLoader } = useUI();
   const { data, loading, error, request: fetchStatus } = useApi(getStudentStatus, { immediate: true });
 
   useSSE(data?.batchId ? getBatchSSEUrl(data.batchId) : null, (event) => {
@@ -131,7 +133,11 @@ const StudentStatus = () => {
           <h2 className="text-xl font-bold text-navy mb-2">Sync Error</h2>
           <p className="text-muted-foreground mb-8 text-xs font-medium max-w-[240px] mx-auto">{error}</p>
           <button 
-            onClick={() => fetchStatus()}
+            onClick={async () => {
+              const hide = showGlobalLoader('Syncing Your Records...');
+              await fetchStatus();
+              hide();
+            }}
             className="px-6 py-2.5 bg-navy text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-navy/90 transition-all flex items-center gap-2 mx-auto"
           >
             <RefreshCw size={12} strokeWidth={3} /> Retry

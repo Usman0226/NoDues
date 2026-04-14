@@ -25,6 +25,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useUI } from '../../context/UIContext';
 
 const FILTERS = ['all', 'pending', 'approved', 'due_marked'];
 
@@ -52,6 +53,8 @@ const Pending = () => {
   const [limit, setLimit] = useState(20);
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  const { showGlobalLoader } = useUI();
 
   const { data: response, loading, error, request: fetchApprovals, setData: setResponse } =
     useApi(getPendingApprovals);
@@ -317,7 +320,11 @@ const Pending = () => {
           </div>
 
           <button
-            onClick={() => fetchApprovals()}
+            onClick={async () => {
+              const hide = showGlobalLoader('Syncing Clearance Records...');
+              await fetchApprovals();
+              hide();
+            }}
             className={`p-3 rounded-xl bg-white border border-zinc-200 text-zinc-500 hover:text-indigo-600 hover:border-indigo-100 transition-all ${loading ? 'opacity-50' : ''}`}
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />

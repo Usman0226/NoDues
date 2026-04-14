@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
 import { getHodDues } from '../../api/hod';
+import { useUI } from '../../context/UIContext';
 
 const COLUMNS = [
   { key: 'rollNo', label: 'Roll No', render: (v) => <span className="font-mono text-[10px] font-black text-navy">{v}</span> },
@@ -45,6 +46,7 @@ const COLUMNS = [
 
 const Overrides = () => {
   const [search, setSearch] = useState('');
+  const { showGlobalLoader } = useUI();
 
   const { data: response, loading, error, request: fetchOverrides } = useApi(getHodDues, { immediate: true, params: { status: 'hod_override' } });
 
@@ -87,7 +89,17 @@ const Overrides = () => {
       {error && (
         <div className="mb-6 p-4 rounded-xl bg-red-50/50 border border-red-100 flex items-center justify-between">
           <p className="text-sm text-red-600 font-medium">{error}</p>
-          <Button variant="outline" size="sm" onClick={() => fetchOverrides()}><RefreshCw size={14} className="mr-2"/> Retry</Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={async () => {
+              const hide = showGlobalLoader('Refreshing Overrides Log...');
+              await fetchOverrides();
+              hide();
+            }}
+          >
+            <RefreshCw size={14} className="mr-2"/> Retry
+          </Button>
         </div>
       )}
 

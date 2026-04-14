@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-const Modal = ({ isOpen, onClose, title, children, size = 'md', preventClose = false }) => {
+const Modal = ({ isOpen, onClose, title, children, footer, size = 'sm', preventClose = false }) => {
   const sizes = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
   const panelRef = React.useRef(null);
   const titleId = React.useId();
@@ -102,7 +102,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md', preventClose = f
   return createPortal(
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
       <div 
-        className={`absolute inset-0 bg-slate-950/${preventClose ? '80' : '60'} backdrop-blur-${preventClose ? 'md' : 'sm'} transition-all duration-300`} 
+        className={`absolute inset-0 bg-slate-950/${preventClose ? '95' : '60'} backdrop-blur-${preventClose ? 'md' : 'sm'} transition-all duration-300`} 
         onClick={handleBackdropClick} 
         aria-hidden 
       />
@@ -130,9 +130,14 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md', preventClose = f
             )}
           </div>
         )}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           {children}
         </div>
+        {footer && (
+          <div className="flex-shrink-0 border-t border-zinc-100 bg-slate-50/50 p-4 sm:px-6 lg:px-8">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body

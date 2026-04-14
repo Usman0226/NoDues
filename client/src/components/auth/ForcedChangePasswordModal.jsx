@@ -4,7 +4,7 @@ import Button from '../ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import { changePassword } from '../../api/auth';
 import { toast } from 'react-hot-toast';
-import { ShieldAlert, KeyRound, LogOut, ArrowRight } from 'lucide-react';
+import { ShieldAlert, KeyRound, LogOut, ArrowRight, Lock } from 'lucide-react';
 
 const ForcedChangePasswordModal = () => {
   const { user, logout } = useAuth();
@@ -41,7 +41,7 @@ const ForcedChangePasswordModal = () => {
 
       toast.success('Security credentials updated. Logging out for security.', {
         duration: 5000,
-        icon: '🔒'
+        icon: <Lock size={16} className="text-amber-600" />
       });
       
       // Delay logout slightly so user sees the success message

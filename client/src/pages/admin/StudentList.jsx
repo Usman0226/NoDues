@@ -15,8 +15,10 @@ import ImportStepper from '../../components/import/ImportStepper';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import SearchableSelect from '../../components/ui/SearchableSelect';
+import { useUI } from '../../context/UIContext';
 
 const StudentList = () => {
+  const { showGlobalLoader } = useUI();
   const [showImport, setShowImport] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -219,7 +221,18 @@ const StudentList = () => {
           <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
             <Upload size={14} /> Import list
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => fetchStudents(studentQueryParams)} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={async () => {
+              const hide = showGlobalLoader('Reloading Student Directory...');
+              await fetchStudents(studentQueryParams);
+              hide();
+            }} 
+            className="text-muted-foreground"
+          >
+            <RefreshCw size={14} /> Reload
+          </Button>
         </div>
 
         <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"

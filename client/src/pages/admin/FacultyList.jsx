@@ -5,7 +5,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { Plus, Upload, Mail, UserPlus, RefreshCw, AlertCircle, Edit, Trash2, Eye } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
-import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getFacultyClasses, resendCredentials, bulkDeactivateFaculty, bulkResendCredentials } from '../../api/faculty';
+import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getFacultyClasses, resendCredentials, bulkDeactivateFaculty, bulkResendCredentials, bulkUpdateRoles } from '../../api/faculty';
 import { getDepartments } from '../../api/departments';
 import ImportStepper from '../../components/import/ImportStepper';
 import ActionMenu from '../../components/ui/ActionMenu';
@@ -13,6 +13,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import Spinner from '../../components/ui/Spinner';
 
 const ROLE_TAG_COLORS = {
   faculty: 'bg-navy/5 text-navy/70',
@@ -33,6 +34,8 @@ const FacultyList = () => {
   const [submitting, setSubmitting] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showBulkRoleModal, setShowBulkRoleModal] = useState(false);
+  const [bulkRoleData, setBulkRoleData] = useState({ targetRole: 'mentor', action: 'add' });
   
   // Pagination & Search State
   const [page, setPage] = useState(1);
@@ -251,6 +254,22 @@ const FacultyList = () => {
     }
   };
 
+  const handleBulkRoleUpdate = async () => {
+    setSubmitting(true);
+    const toastId = toast.loading('Updating academic roles...');
+    try {
+      await bulkUpdateRoles(selectedIds, bulkRoleData.targetRole, bulkRoleData.action);
+      toast.success('Batch update complete! HoD accounts were protected.', { id: toastId });
+      setShowBulkRoleModal(false);
+      setSelectedIds([]);
+      fetchFaculty();
+    } catch (err) {
+      toast.error(err?.message || 'Bulk update failed', { id: toastId });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <PageWrapper title="Faculty" subtitle="Manage faculty members and roles">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
@@ -296,6 +315,11 @@ const FacultyList = () => {
           selection={selectedIds}
           onSelectionChange={setSelectedIds}
           bulkActions={[
+            { 
+              label: 'Manage Roles', 
+              icon: UserPlus, 
+              onClick: () => setShowBulkRoleModal(true) 
+            },
             { 
               label: 'Resend Credentials', 
               icon: RefreshCw, 
@@ -497,6 +521,72 @@ const FacultyList = () => {
         loading={submitting}
       />
 
+      {showBulkRoleModal && (
+        <Modal 
+          isOpen={showBulkRoleModal} 
+          onClose={() => !submitting && setShowBulkRoleModal(false)}
+          title="Manage Academic Roles"
+        >
+          <div className="space-y-6">
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-100 flex items-start gap-3">
+               <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+               <div className="space-y-1">
+                 <p className="text-[10px] font-black uppercase tracking-tight text-amber-900">Safety Protection Active</p>
+                 <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                   Accounts with the <strong>HoD</strong> role will be automatically excluded from this operation. 
+                   Individual leadership assignments must be done via profile editing.
+                 </p>
+               </div>
+            </div>
+
+            <div className="space-y-4">
+               <div>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2 ml-1">Select Target Role</label>
+                  <SearchableSelect 
+                    options={[
+                      { value: 'faculty', label: 'FACULTY', subLabel: 'Base teaching role' },
+                      { value: 'classTeacher', label: 'CO-ORDINATOR', subLabel: 'Batch management' },
+                      { value: 'mentor', label: 'MENTOR', subLabel: 'Student counseling' }
+                    ]}
+                    value={bulkRoleData.targetRole}
+                    onChange={(val) => setBulkRoleData({ ...bulkRoleData, targetRole: val })}
+                  />
+               </div>
+
+               <div>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2 ml-1">Operation Type</label>
+                  <div className="grid grid-cols-2 gap-3">
+                     <button 
+                       onClick={() => setBulkRoleData({ ...bulkRoleData, action: 'add' })}
+                       className={`p-3 rounded-xl border text-background text-center transition-all ${bulkRoleData.action === 'add' ? 'bg-navy border-navy text-white shadow-lg shadow-navy/20' : 'bg-offwhite border-muted text-navy/40 hover:border-navy/20'}`}
+                     >
+                        <p className="text-[10px] font-black text-white uppercase tracking-widest">Assign to Selected</p>
+                     </button>
+                     <button 
+                       onClick={() => setBulkRoleData({ ...bulkRoleData, action: 'remove' })}
+                       className={`p-3 rounded-xl border text-center transition-all text-background ${bulkRoleData.action === 'remove' ? 'bg-red-600 border-red-600 text-white shadow-lg shadow-red-600/20' : 'bg-offwhite border-muted text-navy/40 hover:border-red-600/20'}`}
+                     >
+                        <p className="text-[10px] font-black uppercase tracking-widest">Revoke from Selected</p>
+                     </button>
+                  </div>
+               </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-muted/30">
+              <Button variant="ghost" onClick={() => setShowBulkRoleModal(false)} disabled={submitting}>Cancel</Button>
+              <Button 
+                variant="primary" 
+                onClick={handleBulkRoleUpdate} 
+                loading={submitting}
+                className="min-w-[120px]"
+              >
+                Execute Batch
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {showDetails && (
         <Modal isOpen={showDetails} title="Assigned Classes" onClose={() => setShowDetails(false)}>
            <div className="space-y-4">
@@ -511,7 +601,7 @@ const FacultyList = () => {
               </div>
               
               {classesLoading ? (
-                 <div className="py-10 text-center"><span className="animate-spin inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full" /></div>
+                 <div className="py-12"><Spinner size="lg" /></div>
               ) : facultyClasses.length === 0 ? (
                  <p className="text-sm font-semibold text-zinc-500 text-center py-6 block bg-white rounded-xl border border-zinc-100">No classes assigned to this faculty.</p>
               ) : (

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import toast from 'react-hot-toast';
+import { useUI } from '../../context/UIContext';
 
 const EmailMonitor = () => {
   const [logs, setLogs] = useState([]);
@@ -27,6 +28,7 @@ const EmailMonitor = () => {
   const [errorModal, setErrorModal] = useState(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const { showGlobalLoader } = useUI();
 
   const fetchStats = async () => {
     try {
@@ -201,7 +203,11 @@ const EmailMonitor = () => {
             <h2 className="text-base font-black text-navy tracking-tight">Email History</h2>
           </div>
           <button 
-            onClick={() => fetchLogs(1)}
+            onClick={async () => {
+              const hide = showGlobalLoader('Refreshing Email Logs...');
+              await fetchLogs(1);
+              hide();
+            }}
             className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-navy/40 hover:text-navy transition-colors"
           >
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh Logs

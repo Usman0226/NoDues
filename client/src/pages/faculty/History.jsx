@@ -4,6 +4,7 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import SearchableSelect from '../../components/ui/SearchableSelect';
+import { useUI } from '../../context/UIContext';
 import { useApi } from '../../hooks/useApi';
 import { getApprovalHistory } from '../../api/approvals';
 import {
@@ -85,6 +86,7 @@ const FacultyHistory = () => {
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
+  const { showGlobalLoader } = useUI();
   const { data: response, loading, error, request: fetchHistory } = useApi(getApprovalHistory);
 
   // Debounce search input
@@ -163,7 +165,17 @@ const FacultyHistory = () => {
           </span>
         </div>
 
-        <Button variant="ghost" size="sm" onClick={() => fetchHistory({ semester: semesterFilter !== 'all' ? semesterFilter : undefined, page, limit, search: debouncedSearch })} disabled={loading} className="ml-auto">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={async () => {
+             const hide = showGlobalLoader('Refreshing History Archive...');
+             await fetchHistory({ semester: semesterFilter !== 'all' ? semesterFilter : undefined, page, limit, search: debouncedSearch });
+             hide();
+          }} 
+          disabled={loading} 
+          className="ml-auto"
+        >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </Button>
       </div>

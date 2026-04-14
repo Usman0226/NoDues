@@ -10,9 +10,11 @@ import { getDepartmentSSEUrl } from '../../api/sse';
 import useSSE from '../../hooks/useSSE';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
+import { useUI } from '../../context/UIContext';
 
 const Dues = () => {
   const { user } = useAuth();
+  const { showGlobalLoader } = useUI();
   const [overrideTarget, setOverrideTarget] = useState(null);
   const [overrideRemark, setOverrideRemark] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -128,7 +130,17 @@ const Dues = () => {
       {error && (
         <div className="mb-6 p-4 rounded-xl bg-red-50/50 border border-red-100 flex items-center justify-between">
           <p className="text-sm text-red-600 font-medium">{error}</p>
-          <Button variant="outline" size="sm" onClick={() => fetchDues()}><RefreshCw size={14} className="mr-2"/> Retry</Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={async () => {
+              const hide = showGlobalLoader('Refreshing Dues Record...');
+              await fetchDues();
+              hide();
+            }}
+          >
+            <RefreshCw size={14} className="mr-2"/> Retry
+          </Button>
         </div>
       )}
 

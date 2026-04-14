@@ -14,9 +14,11 @@ import {
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import useSSE from '../../hooks/useSSE';
+import { useUI } from '../../context/UIContext';
 
 const FacultyDashboard = () => {
   const navigate = useNavigate();
+  const { showGlobalLoader } = useUI();
   const { data: response, loading, error, request: fetchApprovals } = useApi(getPendingApprovals, { immediate: true });
   
   // Real-time synchronization
@@ -83,7 +85,14 @@ const FacultyDashboard = () => {
           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Sync Error</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
-          <Button variant="primary" onClick={() => fetchApprovals()}>
+          <Button 
+            variant="primary" 
+            onClick={async () => {
+              const hide = showGlobalLoader('Refreshing Dashboard...');
+              await fetchApprovals();
+              hide();
+            }}
+          >
              <RefreshCw size={14} className="mr-2" /> Retry
           </Button>
         </div>

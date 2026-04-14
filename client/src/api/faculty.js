@@ -11,3 +11,4 @@ export const resendCredentials = (id) => api.post(`/faculty/${id}/resend-creds`)
 
 export const bulkDeactivateFaculty = (ids) => api.post('/faculty/bulk-deactivate', { ids });
 export const bulkResendCredentials = (ids) => api.post('/faculty/bulk-resend-creds', { ids });
+export const bulkUpdateRoles = (ids, targetRole, action) => api.post('/faculty/bulk-update-roles', { ids, targetRole, action });

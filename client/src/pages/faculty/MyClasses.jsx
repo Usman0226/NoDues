@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { useApi } from '../../hooks/useApi';
 import { getMyClasses } from '../../api/faculty';
-import { GraduationCap, BookOpen, UserCheck, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
+import { GraduationCap, BookOpen, UserCheck, ChevronRight, AlertCircle } from 'lucide-react';
 import Button from '../../components/ui/Button';
+import { PageSpinner } from '../../components/ui/Spinner';
 
 const MyClasses = () => {
   const navigate = useNavigate();
@@ -13,12 +14,7 @@ const MyClasses = () => {
   const classes = data?.data || [];
 
   if (loading) {
-    return (
-      <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="animate-spin text-navy" size={42} />
-        <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/60 animate-pulse">Syncing Academic Load...</p>
-      </div>
-    );
+    return <PageSpinner message="Syncing Academic Load..." />;
   }
 
   if (error) {

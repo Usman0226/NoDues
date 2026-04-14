@@ -10,6 +10,7 @@ import cache from '../config/cache.js';
 import { withCache, invalidateKeys } from '../utils/withCache.js';
 import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 // ── GET /api/batch ────────────────────────────────────────────────────────────
 export const getBatches = async (req, res, next) => {
@@ -249,6 +250,84 @@ const _executeInitiation = async (cls, deadline, initiator) => {
     totalStudents: students.length,
     requestsCreated: requestResult.insertedCount
   };
+};
+
+// ── GET /api/batch/initiate-preview ──────────────────────────────────────────
+export const getInitiationPreview = async (req, res, next) => {
+  try {
+    const departmentId = req.user.departmentId;
+    if (!departmentId) return next(new ErrorResponse('Department context missing from session', 400));
+
+    // 1. Fetch all active classes
+    const classes = await Class.find({ departmentId, isActive: true })
+      .select('name semester academicYear classTeacherId subjectAssignments')
+      .lean();
+
+    // 2. Fetch active batches to identify currently running sessions
+    const activeBatches = await NodueBatch.find({ departmentId, status: 'active' })
+      .select('classId initiatedAt')
+      .lean();
+    
+    const activeBatchMap = new Map(activeBatches.map(b => [b.classId.toString(), b.initiatedAt]));
+
+    // 3. Get student counts for all classes in one go
+    const studentCounts = await Student.aggregate([
+      { $match: { departmentId: new mongoose.Types.ObjectId(departmentId), isActive: true } },
+      { $group: { _id: '$classId', count: { $sum: 1 } } }
+    ]);
+    const studentCountMap = new Map(studentCounts.map(s => [s._id.toString(), s.count]));
+
+    // 4. Map and Analyze
+    const preview = classes.map(cls => {
+      const classIdStr = cls._id.toString();
+      const activeSince = activeBatchMap.get(classIdStr);
+      const studentCount = studentCountMap.get(classIdStr) || 0;
+      const hasCT = !!cls.classTeacherId;
+      const subjects = (cls.subjectAssignments || []).filter(s => !s.isElective);
+
+      let status = 'READY';
+      let reason = null;
+
+      if (activeSince) {
+        status = 'ACTIVE';
+        reason = `Active session since ${new Date(activeSince).toLocaleDateString()}`;
+      } else if (studentCount === 0) {
+        status = 'EMPTY';
+        reason = 'No active students found';
+      }
+
+      const warnings = [];
+      if (!hasCT) warnings.push('No Class Teacher assigned');
+      if (subjects.length === 0) warnings.push('No core subjects assigned');
+
+      return {
+        classId: cls._id,
+        className: cls.name,
+        semester: cls.semester,
+        academicYear: cls.academicYear,
+        status,
+        reason,
+        studentCount,
+        hasCT,
+        subjectCount: subjects.length,
+        warnings
+      };
+    });
+
+    // Sort: READY first, then warnings, then ineligibles
+    preview.sort((a, b) => {
+      const order = { READY: 0, ACTIVE: 1, EMPTY: 2 };
+      if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+      return a.className.localeCompare(b.className);
+    });
+
+    res.status(200).json({
+      success: true,
+      data: preview
+    });
+  } catch (err) {
+    next(err);
+  }
 };
 
 export const initiateBatch = async (req, res, next) => {

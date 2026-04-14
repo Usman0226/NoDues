@@ -10,10 +10,12 @@ import { Eye, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { toast } from 'react-hot-toast';
 import Button from '../../components/ui/Button';
+import { useUI } from '../../context/UIContext';
 
 const Batches = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showGlobalLoader } = useUI();
   const basePath = user?.role === 'hod' ? '/hod' : '/admin';
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState([]);
@@ -132,7 +134,16 @@ const Batches = () => {
              ))}
            </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => fetchBatches()} className="text-muted-foreground">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={async () => {
+            const hide = showGlobalLoader('Refetching Batch Data...');
+            await fetchBatches();
+            hide();
+          }} 
+          className="text-muted-foreground"
+        >
           <RefreshCw size={14} /> Refetch
         </Button>
       </div>

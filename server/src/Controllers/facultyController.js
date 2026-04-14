@@ -8,14 +8,9 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendCredentialEmail } from '../services/emailService.js';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-// Cache invalidation is now handled via Mongoose hooks in the model.
-
-/** Generates a temporary password: EMP<id>@Nds#<random4> */
 const generateTempPassword = (empId) =>
   `${empId}@Nds#${crypto.randomInt(1000, 9999)}`;
 
-// ── GET /api/faculty ──────────────────────────────────────────────────────────
 export const getFaculty = async (req, res, next) => {
   try {
     const { departmentId, roleTag, search, page = 1, limit = 50, includeInactive } = req.query;
@@ -26,7 +21,6 @@ export const getFaculty = async (req, res, next) => {
       query.isActive = true;
     }
 
-    // HoD is automatically scoped to their own department
     if (req.user.role === 'hod') {
       query.departmentId = req.user.departmentId;
     } else if (departmentId) {
@@ -526,6 +520,85 @@ export const bulkResendCredentials = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: `Emails dispatched for ${successCount}/${faculties.length} faculty members`
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const bulkUpdateRoles = async (req, res, next) => {
+  try {
+    const { ids, targetRole, action } = req.body; // action: 'add' | 'remove'
+    if (!ids || !Array.isArray(ids) || !targetRole || !action) {
+      return next(new ErrorResponse('IDs, targetRole and action are required', 400));
+    }
+
+    // Role safety logic
+    if (targetRole === 'hod') {
+      return next(new ErrorResponse('HoD role cannot be managed in bulk', 400));
+    }
+
+    const query = { _id: { $in: ids }, isActive: true };
+    if (req.user.role === 'hod') {
+      query.departmentId = req.user.departmentId;
+    }
+
+    const faculties = await Faculty.find(query);
+    
+    // Filter out HoDs from the batch (§ "avoid the HoD in bulk")
+    const targets = faculties.filter(f => !f.roleTags.includes('hod'));
+    
+    if (targets.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No eligible faculty members found for update (HoDs skipped).',
+        modifiedCount: 0
+      });
+    }
+
+    const savePromises = [];
+    for (const faculty of targets) {
+      let modified = false;
+      if (action === 'add') {
+        if (!faculty.roleTags.includes(targetRole)) {
+          faculty.roleTags.push(targetRole);
+          modified = true;
+        }
+      } else if (action === 'remove') {
+        if (faculty.roleTags.includes(targetRole)) {
+          faculty.roleTags = faculty.roleTags.filter(r => r !== targetRole);
+          // Safety: ensure 'faculty' tag is present if list would be empty
+          if (faculty.roleTags.length === 0) faculty.roleTags = ['faculty'];
+          modified = true;
+        }
+      }
+
+      if (modified) {
+        savePromises.push(faculty.save());
+      }
+    }
+
+    await Promise.all(savePromises);
+
+    logger.info('faculty_bulk_role_updated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_ROLE_UPDATE',
+      details: { 
+        targetRole, 
+        action, 
+        affectedCount: savePromises.length,
+        skippedCount: faculties.length - savePromises.length
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully ${action === 'add' ? 'assigned' : 'revoked'} ${targetRole === 'classTeacher' ? 'Co-ordinator' : targetRole.toUpperCase()} for ${savePromises.length} selected members.`,
+      details: {
+        affectedCount: savePromises.length,
+        skippedCount: faculties.length - savePromises.length
+      }
     });
   } catch (err) {
     next(err);

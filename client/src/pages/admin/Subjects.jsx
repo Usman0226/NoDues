@@ -11,8 +11,10 @@ import { getSubjects, createSubject, updateSubject, deleteSubject, bulkDeleteSub
 import { Plus, Filter, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import { useUI } from '../../context/UIContext';
 
 const Subjects = () => {
+  const { showGlobalLoader } = useUI();
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -181,8 +183,8 @@ const Subjects = () => {
           <div className="w-[180px]">
              <SearchableSelect 
                 options={[
-                  { value: 'all', label: 'All Sessions', subLabel: 'Entire Catalog' },
-                  ...[1, 2, 3, 4, 5, 6, 7, 8].map((s) => ({ value: s, label: `Semester ${s}`, subLabel: 'Academic Term' }))
+                  { value: 'all', label: 'All Sessions' },
+                  ...[1, 2, 3, 4, 5, 6, 7, 8].map((s) => ({ value: s, label: `Semester ${s}` }))
                 ]}
                 value={semesterFilter} 
                 onChange={(val) => {
@@ -193,7 +195,16 @@ const Subjects = () => {
              />
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => fetchSubjects()} className="text-muted-foreground">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={async () => {
+            const hide = showGlobalLoader('Refreshing Subject Catalog...');
+            await fetchSubjects();
+            hide();
+          }} 
+          className="text-muted-foreground"
+        >
           <RefreshCw size={14} /> Reload
         </Button>
       </div>
@@ -375,7 +386,16 @@ const Subjects = () => {
         </Modal>
       )}
 
-   
+      <ConfirmModal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Deactivate Subject"
+        description={`Are you sure you want to deactivate ${selectedSubject?.name}? This will prevent further assignments and mark it as archived.`}
+        confirmText="Deactivate"
+        isDestructive={true}
+        loading={submitting}
+      />
 
       <ConfirmModal
         isOpen={showBulkDelete}

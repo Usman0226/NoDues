@@ -17,13 +17,18 @@ import {
   Activity,
   CheckCircle2,
   XCircle,
-  ShieldCheck
+  ShieldCheck,
+  Users,
+  Check,
+  Info,
+  Archive
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../../components/ui/Modal';
-import { initiateDepartmentBatch } from '../../api/batch';
+import { initiateDepartmentBatch, getInitiationPreview } from '../../api/batch';
+import { useUI } from '../../context/UIContext';
 
 
 const ACTIVITY_ICONS = {
@@ -35,6 +40,7 @@ const ACTIVITY_ICONS = {
 const HodDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showGlobalLoader } = useUI();
   
   const { data: overview, loading, error, request: fetchOverview } = useApi(getHodOverview, { immediate: true });
   const { data: activity, request: fetchActivity } = useApi(getHodActivity, { immediate: true });
@@ -42,6 +48,19 @@ const HodDashboard = () => {
   const [isBulkModalOpen, setIsBulkModalOpen] = React.useState(false);
   const [deadline, setDeadline] = React.useState('');
   const [isInitiating, setIsInitiating] = React.useState(false);
+
+  const { data: previewResponse, loading: loadingPreview, request: fetchPreview } = useApi(getInitiationPreview);
+  const previewData = previewResponse?.data || [];
+
+  useEffect(() => {
+    if (isBulkModalOpen) {
+      fetchPreview();
+    }
+  }, [isBulkModalOpen, fetchPreview]);
+
+  const readyClassesCount = useMemo(() => {
+    return previewData.filter(c => c.status === 'READY').length;
+  }, [previewData]);
 
   const handleBulkInitiate = async (e) => {
     e.preventDefault();
@@ -112,7 +131,14 @@ const HodDashboard = () => {
           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Data Load Failed</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
-          <Button variant="primary" onClick={() => fetchOverview()}>
+          <Button 
+            variant="primary" 
+            onClick={async () => {
+              const hide = showGlobalLoader('Refreshing Dashboard...');
+              await fetchOverview();
+              hide();
+            }}
+          >
              <RefreshCw size={14} className="mr-2" /> Retry
           </Button>
         </div>
@@ -258,52 +284,155 @@ const HodDashboard = () => {
         isOpen={isBulkModalOpen} 
         onClose={() => !isInitiating && setIsBulkModalOpen(false)}
         title="Start Department Clearance"
-      >
-        <form onSubmit={handleBulkInitiate} className="space-y-6">
-          <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex gap-3">
-            <AlertCircle className="text-amber-600 shrink-0" size={20} />
-            <div className="space-y-1">
-              <p className="text-xs font-black text-amber-900 uppercase tracking-tight">Important Notice</p>
-              <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
-                This will trigger No-Dues clearance for <strong>all eligible classes</strong> in your department. 
-                Classes with existing active sessions or no students will be skipped automatically.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
-              Submission Deadline (Optional)
-            </label>
-            <input 
-              type="date"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 focus:bg-white focus:ring-2 focus:ring-navy/5 outline-none transition-all text-sm font-medium"
-              min={new Date().toISOString().split('T')[0]}
-            />
-          </div>
-
-          <div className="flex gap-3 pt-2">
+        size="xl"
+        footer={(
+          <div className="flex justify-end gap-3">
             <Button 
               type="button"
               variant="secondary" 
-              className="flex-1" 
+              className="px-8" 
               onClick={() => setIsBulkModalOpen(false)}
               disabled={isInitiating}
             >
               Cancel
             </Button>
             <Button 
+              form="bulk-initiate-form"
               type="submit"
               variant="primary" 
-              className="flex-1"
+              className="min-w-[240px]"
               isLoading={isInitiating}
+              disabled={loadingPreview || readyClassesCount === 0}
             >
-              Confirm Initiation
+              {readyClassesCount > 0 ? `Initiate ${readyClassesCount} Classes` : 'No Eligible Classes'}
             </Button>
           </div>
-        </form>
+        )}
+      >
+        <div className="lg:grid lg:grid-cols-12 lg:gap-10 h-full">
+          {/* Left Panel: Configuration & Context */}
+          <div className="lg:col-span-5 flex flex-col space-y-8">
+            <div className="p-5 bg-indigo-50/40 rounded-2xl border border-indigo-100 flex gap-4">
+              <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                <Info size={20} />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs font-black text-navy uppercase tracking-tight">Eligibility Overview</p>
+                <p className="text-[11px] text-navy/60 font-medium leading-relaxed">
+                  We've analyzed your department's classes. Only sessions with enrolled students and no existing active cycles can be initiated.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-1">
+              <form id="bulk-initiate-form" onSubmit={handleBulkInitiate} className="space-y-6">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      Global Submission Deadline
+                    </label>
+                    <span className="text-[9px] font-bold text-navy/30 uppercase">Optional</span>
+                  </div>
+                  <input 
+                    type="date"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className="w-full px-4 py-3.5 rounded-xl border border-zinc-200 bg-zinc-50/50 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-semibold text-navy"
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                  <p className="text-[10px] text-muted-foreground/60 italic ml-1">
+                    Set a target date for faculty to complete their dues clearance.
+                  </p>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          {/* Right Panel: Class Selection Preview */}
+          <div className="lg:col-span-7 flex flex-col border-l border-zinc-100 lg:pl-10 mt-8 lg:mt-0">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Class Scan Results</h4>
+              <div className="px-2 py-0.5 rounded-md bg-zinc-100 text-[9px] font-bold text-zinc-500 uppercase">
+                {previewData.length} Total
+              </div>
+            </div>
+
+            <div className="max-h-[420px] overflow-y-auto pr-4 custom-scrollbar space-y-3">
+              {loadingPreview ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="h-20 w-full bg-slate-50 animate-pulse rounded-2xl border border-zinc-100" />
+                  ))}
+                </div>
+              ) : previewData.length > 0 ? (
+                previewData.map((cls) => (
+                  <div key={cls.classId} className={`group p-4 rounded-2xl border transition-all duration-300 ${
+                    cls.status === 'READY' 
+                      ? 'bg-white border-zinc-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5' 
+                      : 'bg-zinc-50/50 border-dashed border-zinc-200 opacity-60'
+                  }`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex gap-4">
+                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-colors ${
+                          cls.status === 'READY' ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-200/50 text-zinc-400'
+                        }`}>
+                          {cls.status === 'READY' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-navy leading-none mb-1.5">{cls.className}</h4>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Sem {cls.semester}</span>
+                            <span className="h-1 w-1 rounded-full bg-zinc-300" />
+                            <span className="text-[10px] text-muted-foreground font-medium">{cls.academicYear}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {cls.status === 'READY' ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-[9px] font-black uppercase text-emerald-600 tracking-widest">Compatible</span>
+                          <div className="flex items-center gap-1.5">
+                            <Users size={12} className="text-neutral-400" />
+                            <span className="text-xs font-bold text-navy">{cls.studentCount}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-[9px] font-bold uppercase text-red-500 bg-red-50 px-2 py-1 rounded-md">
+                          {cls.reason}
+                        </span>
+                      )}
+                    </div>
+
+                    {cls.status === 'READY' && (
+                      <div className="mt-4 pt-3 border-t border-zinc-50">
+                        {cls.warnings.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                             {cls.warnings.map((w, idx) => (
+                               <div key={idx} className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-50 text-amber-700">
+                                 <AlertCircle size={10} />
+                                 <span className="text-[9px] font-black uppercase tracking-tight">{w}</span>
+                               </div>
+                             ))}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-emerald-600">
+                             <ShieldCheck size={12} />
+                             <span className="text-[9px] font-black uppercase tracking-tight">Verified & Ready</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-20 opacity-30">
+                  <Archive size={40} className="mx-auto mb-4" />
+                  <p className="text-xs font-black uppercase tracking-widest italic">No classes found</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </Modal>
     </PageWrapper>
   );

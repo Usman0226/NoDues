@@ -9,6 +9,7 @@ import {
   addStudentToBatch,
   removeFacultyFromBatch,
   bulkCloseBatches,
+  getInitiationPreview
 } from '../Controllers/batchController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -20,6 +21,7 @@ router.use(RoleGuard(['admin', 'hod']));
 
 router.route('/').get(getBatches);
 router.post('/initiate', initiateBatch);
+router.get('/initiate-preview', getInitiationPreview);
 router.post('/initiate-department', initiateDepartmentWide);
 router.post('/bulk-close', bulkCloseBatches);
 
