@@ -1,28 +1,28 @@
 {
-  "last_updated": "2026-04-14T10:05:30Z",
+  "last_updated": "2026-04-14T20:47:00+05:30",
   "completed": [
-    "Server Logging & Audit Stream integration",
-    "Authentication operation auditing",
-    "Batch lifecycle operation auditing",
-    "Import Engine hardening (Students, Faculty, Electives, Mentors)",
-    "Parallel settlement for batch creation",
-    "HoD scope enforcement in import controllers"
+    "HoD Portal: Integration of 'My Classes' section for personal faculty assignments",
+    "Refinement: Role-separated HoD/Faculty MyClasses pages",
+    "Refinement: Explicit sidebar matching logic (isActive)",
+    "Functionality: 'Manage Queue' filtering (Backend query updates)",
+    "Functionality: 'Manage Queue' filtering (Frontend state & dropdown sync)",
+    "Bugfix: Resolved missing SearchableSelect import in Pending.jsx"
   ],
   "in_progress": [],
   "pending": [
-    "Frontend data visualization for HoD analytics (next planned pass)",
+    "Frontend data visualization for HoD analytics",
     "Comprehensive e2e testing of hardened backend"
   ],
   "decisions": [
     {
-      "context": "Bulk operations were prone to stalls on high-volume imports.",
-      "decision": "Implemented Promise.allSettled with individualized error capturing in the import engine.",
-      "trade_offs": "Increases memory pressure slightly during the 'settling' phase but prevents redundant db connection overhead and ensures robustness."
+      "context": "Manage Queue from My Classes required filtering on the Pending page.",
+      "decision": "Implemented server-side filtering by batchId and action in getPendingApprovals controller and connected it to the UI dropdowns.",
+      "trade_offs": "Adds more requests during filter changes but ensures consistency with large student lists."
     },
     {
-      "context": "Admin logging was mixed with diagnostic logs.",
-      "decision": "Created a dedicated winston transport for 'audit' level logs saved to audit.log in JSON format.",
-      "trade_offs": "Slight increase in disk I/O for duplicate logs (audit + info), but critical for forensic discovery."
+      "context": "Batch dropdown in Pending page was deriving items from filtered data.",
+      "decision": "Added a separate call to getMyClasses in Pending.jsx to populate the batch dropdown independently of the visible queue data.",
+      "trade_offs": "One extra call on mount, but significantly improves UX by keeping all class options available."
     }
   ],
   "blockers": []

@@ -11,8 +11,9 @@ import { pushEvent } from './sseController.js';
 export const getPendingApprovals = async (req, res, next) => {
   try {
     const { userId } = req.user;
-    const { page = 1, limit = 20, search = '' } = req.query;
-
+    const { page = 1, limit = 20, search = '', batchId, action } = req.query;
+    
+    // Validate requested batch accessibility
     const activeBatchIds = await NodueBatch.find(
       { status: 'active' },
       '_id'
@@ -26,9 +27,19 @@ export const getPendingApprovals = async (req, res, next) => {
 
     const query = {
       facultyId: userId,
-      action:    'pending',
-      batchId:   { $in: batchIdSet },
     };
+
+    // Action filter: default to 'pending' unless 'all' is explicitly requested
+    if (action !== 'all') {
+      query.action = action || 'pending';
+    }
+
+    // Batch filter: scope to specified batch if valid active batch, otherwise all active batches
+    if (batchId && batchIdSet.some(id => id.toString() === batchId.toString())) {
+      query.batchId = batchId;
+    } else {
+      query.batchId = { $in: batchIdSet };
+    }
 
     if (search) {
       query.$or = [

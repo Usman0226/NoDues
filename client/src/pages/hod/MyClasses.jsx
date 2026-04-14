@@ -100,7 +100,7 @@ const MyClasses = () => {
                     onClick={() => navigate('/faculty/pending', { 
                       state: { 
                         classId: c._id,
-                        from: 'faculty-my-classes'
+                        from: 'hod-my-classes'
                       } 
                     })}
                     className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 transition-colors"
