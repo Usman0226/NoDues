@@ -49,11 +49,6 @@ const Login = () => {
       const response = await login({ email, password });
       const userData = response.data;
 
-      if (userData.mustChangePassword) {
-        await flashThenNavigate('/change-password');
-        return;
-      }
-
       await flashThenNavigate(getRoleRedirect(userData.role));
     } catch (err) {
       setError(err.message || 'Invalid credentials');
@@ -227,7 +222,7 @@ const Login = () => {
                     />
                   </div>
                   <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs font-semibold text-zinc-500">
-                    No password required. Use your roll number.
+                     Don't include @mits.ac.in. Just your Roll Number
                   </div>
                   <Button type="submit" className="w-full rounded-full py-3" loading={loading}>
                     Check Status

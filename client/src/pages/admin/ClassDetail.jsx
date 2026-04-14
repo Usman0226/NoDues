@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import ImportStepper from '../../components/import/ImportStepper';
 import { useApi } from '../../hooks/useApi';
 import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, updateClassSubject, removeClassSubject } from '../../api/classes';
@@ -358,105 +359,7 @@ const ClassDetail = () => {
     }
   };
 
-  const SearchableMentorSelect = ({ student }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [search, setSearch] = useState('');
-    const isLoading = loadingStudentId === student._id;
-
-    const options = useMemo(() => {
-      if (!search) return filteredFaculty;
-      const s = search.toLowerCase();
-      return filteredFaculty.filter(f => 
-        f.name.toLowerCase().includes(s) || 
-        f.employeeId.toLowerCase().includes(s)
-      );
-    }, [search]);
-
-    const currentMentor = filteredFaculty.find(f => f._id === student.mentorId);
-
-    if (filteredFaculty.length === 0) {
-      return (
-        <div className="text-[10px] font-bold text-red-400 italic bg-red-50/50 px-2 py-1 rounded-lg border border-red-100">
-          No eligible mentors found
-        </div>
-      );
-    }
-
-    return (
-      <div className="relative w-full max-w-[200px]">
-        <button
-          onClick={() => !isLoading && setIsOpen(!isOpen)}
-          disabled={isLoading}
-          className={`
-            w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl border transition-all duration-300 group
-            ${isOpen ? 'border-navy ring-4 ring-navy/5 bg-white' : 'border-muted/40 bg-offwhite hover:bg-white hover:border-navy/20'}
-            ${!student.mentorId ? 'border-amber-200 bg-amber-50/30' : ''}
-            ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-          `}
-        >
-          <div className="flex flex-col items-start overflow-hidden">
-            {isLoading ? (
-              <span className="text-[10px] font-black text-navy uppercase tracking-widest animate-pulse">Assigning...</span>
-            ) : student.mentorId ? (
-              <>
-                <span className="text-[11px] font-black text-navy truncate w-full">{currentMentor?.name}</span>
-                <span className="text-[9px] font-bold text-muted-foreground/60 tracking-tight uppercase">{currentMentor?.employeeId}</span>
-              </>
-            ) : (
-              <span className="text-[10px] font-black text-amber-600/60 uppercase tracking-widest">Assign</span>
-            )}
-          </div>
-          <div className="shrink-0 text-muted-foreground/40 group-hover:text-navy/40 transition-colors">
-            {isLoading ? <RefreshCw size={12} className="animate-spin" /> : <ChevronDown size={14} className={isOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />}
-          </div>
-        </button>
-
-        {isOpen && (
-          <>
-            <div className="fixed inset-0 z-[60]" onClick={() => setIsOpen(false)} />
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-navy/10 shadow-2xl shadow-navy/20 z-[70] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-              <div className="p-2 border-b border-muted/30 sticky top-0 bg-white/80 backdrop-blur-md">
-                <div className="relative">
-                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
-                  <input
-                    autoFocus
-                    className="w-full pl-8 pr-4 py-2 bg-offwhite/50 rounded-xl text-[11px] font-bold border-none focus:ring-2 focus:ring-navy/10"
-                    placeholder="Search by name or id..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="max-h-[200px] overflow-y-auto p-1 custom-scrollbar">
-                {options.length > 0 ? options.map(f => (
-                  <button
-                    key={f._id}
-                    onClick={() => {
-                      handleMentorChange(student._id, f._id);
-                      setIsOpen(false);
-                    }}
-                    className={`
-                      w-full text-left p-2.5 rounded-xl flex flex-col transition-all duration-200
-                      ${student.mentorId === f._id ? 'bg-navy text-white' : 'hover:bg-offwhite text-navy'}
-                    `}
-                  >
-                    <span className="text-[11px] font-black">{f.name}</span>
-                    <span className={`text-[9px] font-bold uppercase tracking-tight ${student.mentorId === f._id ? 'text-white/60' : 'text-muted-foreground/60'}`}>
-                      {f.employeeId} · {f.departmentName || 'Dept'}
-                    </span>
-                  </button>
-                )) : (
-                  <div className="p-4 text-center">
-                    <p className="text-[10px] font-bold text-muted-foreground italic">No faculty found</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  };
+  // Local SearchableMentorSelect removed in favor of global SearchableSelect
 
   const [studentElectiveSelections, setStudentElectiveSelections] = useState({});
   const handleManageElectivesClick = (student) => {
@@ -537,7 +440,23 @@ const ClassDetail = () => {
     { key: 'rollNo', label: 'Roll No', render: (v) => <span className="font-mono text-xs font-black text-navy">{v}</span> },
     { key: 'name', label: 'Candidate Name', render: (v) => <span className="font-bold">{v}</span> },
     { key: 'email', label: 'Email', render: (v) => <span className="text-muted-foreground/60">{v}</span> },
-    { key: 'mentor', label: 'Mentor Mapping', render: (_, row) => <SearchableMentorSelect student={row} /> },
+    { 
+      key: 'mentor', 
+      label: 'Mentor Mapping', 
+      render: (_, row) => (
+        <SearchableSelect
+          options={filteredFaculty.map(f => ({
+            value: f._id,
+            label: f.name,
+            subLabel: `${f.employeeId} · ${f.departmentName || 'Dept'}`
+          }))}
+          value={row.mentorId}
+          onChange={(val) => handleMentorChange(row._id, val)}
+          placeholder="Assign Mentor"
+          loading={loadingStudentId === row._id}
+        />
+      ) 
+    },
     { key: 'status', label: 'Last Cycle', render: (v) => <Badge status={v || 'pending'} /> },
     { key: 'actions', label: '', sortable: false, render: (_, row) => (
        <div className="flex justify-end">
@@ -758,6 +677,8 @@ const SUBJECT_COLS = [
             data={subjects} 
             showCount={true} 
             selectable
+            searchable
+            searchPlaceholder="Search components by code or name..."
             selection={selectedMappingIds}
             onSelectionChange={setSelectedMappingIds}
             bulkActions={[
@@ -963,16 +884,16 @@ const SUBJECT_COLS = [
              </div>
              <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Select Source Group</label>
-                <select 
-                  className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
-                  value={cloneSourceId}
-                  onChange={(e) => setCloneSourceId(e.target.value)}
-                >
-                  <option value="">-- Choose Academic Group --</option>
-                  {otherClasses.map(c => (
-                     <option key={c._id} value={c._id}>{c.name} (Semester {c.semester})</option>
-                  ))}
-                </select>
+                 <SearchableSelect 
+                    options={otherClasses.map(c => ({
+                      value: c._id,
+                      label: c.name,
+                      subLabel: `Semester ${c.semester} · ${c.academicYear}`
+                    }))}
+                    value={cloneSourceId}
+                    onChange={(val) => setCloneSourceId(val)}
+                    placeholder="Choose Academic Group"
+                  />
              </div>
              
              <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
@@ -1047,16 +968,16 @@ const SUBJECT_COLS = [
               </div>
               <div>
                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Select Faculty Mentor</label>
-                 <select 
-                   className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
-                   value={studentFormData.mentorId}
-                   onChange={(e) => setStudentFormData({...studentFormData, mentorId: e.target.value})}
-                 >
-                   <option value="">-- No Mentor Assigned --</option>
-                   {facultyList.map(f => (
-                      <option key={f._id} value={f._id}>{f.name} ({f.department})</option>
-                   ))}
-                 </select>
+                 <SearchableSelect 
+                    options={facultyList.map(f => ({
+                      value: f._id,
+                      label: f.name,
+                      subLabel: f.department
+                    }))}
+                    value={studentFormData.mentorId}
+                    onChange={(val) => setStudentFormData({...studentFormData, mentorId: val})}
+                    placeholder="No Mentor Assigned"
+                  />
               </div>
 
              <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
@@ -1123,43 +1044,43 @@ const SUBJECT_COLS = [
                  <div className="flex justify-between items-center mb-2">
                     <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground">Global Component</label>
                     <button type="button" onClick={() => setShowQuickAddSubject(true)} className="text-[10px] uppercase tracking-widest font-black text-navy hover:underline">
-                       + Create New in Catalog
+                       + Create New in Subjects
                     </button>
                  </div>
-                 <select 
-                   className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
-                   value={subjectFormData.subjectId}
-                   onChange={(e) => {
-                     const subj = globalSubjects.find(s => s._id === e.target.value);
-                     setSubjectFormData({...subjectFormData, subjectId: e.target.value, subjectCode: subj ? subj.code : ''});
-                   }}
-                 >
-                   <option value="">-- Catalog Lookup --</option>
-                   {globalSubjects.map(s => (
-                      <option key={s._id} value={s._id}>{s.name} ({s.code}) - {s.isElective ? 'Elective' : 'Core'}</option>
-                   ))}
-                 </select>
+                 <SearchableSelect 
+                    options={globalSubjects.map(s => ({
+                      value: s._id,
+                      label: s.name,
+                      subLabel: `${s.code} · ${s.isElective ? 'Elective' : 'Core'}`
+                    }))}
+                    value={subjectFormData.subjectId}
+                    onChange={(val) => {
+                      const subj = globalSubjects.find(s => s._id === val);
+                      setSubjectFormData({...subjectFormData, subjectId: val, subjectCode: subj ? subj.code : ''});
+                    }}
+                    placeholder="Subjects Lookup"
+                  />
               </div>
 
              <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Handling Faculty (Optional)</label>
-                <select 
-                  className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
-                  value={subjectFormData.facultyId}
-                  onChange={(e) => setSubjectFormData({...subjectFormData, facultyId: e.target.value})}
-                >
-                  <option value="">-- Assign Later --</option>
-                  {facultyList.map(f => (
-                     <option key={f._id} value={f._id}>{f.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect 
+                   options={facultyList.map(f => ({
+                     value: f._id,
+                     label: f.name,
+                     subLabel: f.department
+                   }))}
+                   value={subjectFormData.facultyId}
+                   onChange={(val) => setSubjectFormData({...subjectFormData, facultyId: val})}
+                   placeholder="Assign Later"
+                 />
              </div>
 
              <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Alias Subject Code (Optional)</label>
                 <input 
                   className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
-                  placeholder="Leave empty for catalog default"
+                  placeholder="Leave empty for Subject default"
                   value={subjectFormData.subjectCode}
                   onChange={(e) => setSubjectFormData({...subjectFormData, subjectCode: e.target.value})}
                 />
@@ -1176,10 +1097,10 @@ const SUBJECT_COLS = [
       )}
 
       {showQuickAddSubject && (
-        <Modal isOpen={showQuickAddSubject} title="New Catalog Component" onClose={() => setShowQuickAddSubject(false)}>
+        <Modal isOpen={showQuickAddSubject} title="New Subject Component" onClose={() => setShowQuickAddSubject(false)}>
            <div className="space-y-6">
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-800 uppercase font-black tracking-widest leading-relaxed">
-                 Warning: This creates a permanent component in the Global Subject Catalog for {classData?.departmentName}.
+                 Warning: This creates a permanent component in the Global Subject for {classData?.departmentName}.
               </div>
               <div className="grid grid-cols-2 gap-5">
                 <div>
@@ -1218,7 +1139,7 @@ const SUBJECT_COLS = [
              <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowQuickAddSubject(false)}>Cancel</Button>
               <Button variant="primary" onClick={handleQuickSubjectSubmit} loading={submitting}>
-                Create Catalog Entry
+                Create Subject Entry
               </Button>
             </div>
            </div>
@@ -1234,16 +1155,16 @@ const SUBJECT_COLS = [
 
              <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Handling Faculty</label>
-                <select 
-                  className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
-                  value={subjectFormData.facultyId}
-                  onChange={(e) => setSubjectFormData({...subjectFormData, facultyId: e.target.value})}
-                >
-                  <option value="">-- Unassigned --</option>
-                  {facultyList.map(f => (
-                     <option key={f._id} value={f._id}>{f.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect 
+                   options={facultyList.map(f => ({
+                     value: f._id,
+                     label: f.name,
+                     subLabel: f.department || f.employeeId
+                   }))}
+                   value={subjectFormData.facultyId}
+                   onChange={(val) => setSubjectFormData({...subjectFormData, facultyId: val})}
+                   placeholder="Unassigned"
+                 />
              </div>
 
              <div>
@@ -1351,16 +1272,16 @@ const SUBJECT_COLS = [
           <p className="text-sm text-muted-foreground">Mapping mentor for {selectedStudentIds.length} selected candidates.</p>
           <div>
             <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Select Faculty Mentor</label>
-            <select 
-              className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-navy/5 font-bold transition-all"
-              value={bulkMentorId}
-              onChange={(e) => setBulkMentorId(e.target.value)}
-            >
-              <option value="">-- No Mentor Assigned --</option>
-              {facultyList.filter(f => f.roleTags?.includes('mentor')).map(f => (
-                <option key={f._id} value={f._id}>{f.name} ({f.employeeId})</option>
-              ))}
-            </select>
+            <SearchableSelect 
+               options={facultyList.filter(f => f.roleTags?.includes('mentor')).map(f => ({
+                 value: f._id,
+                 label: f.name,
+                 subLabel: f.employeeId
+               }))}
+               value={bulkMentorId}
+               onChange={(val) => setBulkMentorId(val)}
+               placeholder="No Mentor Assigned"
+             />
           </div>
           <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
             <Button variant="ghost" onClick={() => setShowBulkAssignMentor(false)}>Cancel</Button>

@@ -8,11 +8,7 @@ import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-export const invalidateDeptCache = (id) => {
-  cache.del(`dept:${id}`);
-  cache.del(`dept:detail:${id}`);
-  cache.del('departments:all');
-};
+// Cache invalidation is now handled via Mongoose hooks in the model.
 
 // ── GET /api/departments ──────────────────────────────────────────────────────
 export const getDepartments = async (req, res, next) => {
@@ -72,6 +68,7 @@ export const getDepartments = async (req, res, next) => {
     }));
 
     cache.set(cacheKey, data, 300); // 5-min cache
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -104,7 +101,7 @@ export const createDepartment = async (req, res, next) => {
       details: { name: dept.name, hodId: dept.hodId }
     });
 
-    invalidateDeptCache(dept._id.toString());
+    // Cache invalidated automatically by Mongoose save hook
 
     return res.status(201).json({
       success: true,
@@ -168,6 +165,7 @@ export const getDepartmentById = async (req, res, next) => {
     };
 
     cache.set(cacheKey, data, 300);
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -207,7 +205,7 @@ export const updateDepartment = async (req, res, next) => {
       details: { updatedFields: Object.keys(req.body) }
     });
 
-    invalidateDeptCache(id);
+    // Cache invalidated automatically by Mongoose save hook
 
     return res.status(200).json({
       success: true,

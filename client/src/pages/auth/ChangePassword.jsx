@@ -12,7 +12,7 @@ const ChangePassword = () => {
   const [current, setCurrent] = useState('');
   const [newPwd, setNewPwd] = useState('');
   const [confirm, setConfirm] = useState('');
-  const { loading, request } = useApi(changePassword);
+  const { loading, request } = useApi(changePassword, { immediate: false });
 
   const handleSubmit = async (e) => {
     e.preventDefault();

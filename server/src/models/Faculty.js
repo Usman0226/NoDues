@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 const facultySchema = new mongoose.Schema(
   {
@@ -80,6 +81,17 @@ facultySchema.pre('save', async function () {
 
   // Derive primary role from roleTags
   this.role = this.roleTags.includes('hod') ? 'hod' : 'faculty';
+});
+
+// ── Cache Invalidation Hooks ──────────────────────────────────────────────────
+facultySchema.post('save', function(doc) {
+  invalidateEntityCache('faculty', doc._id);
+});
+
+facultySchema.post('findOneAndUpdate', async function() {
+  const query = this.getQuery();
+  const doc = await this.model.findOne(query);
+  if (doc) invalidateEntityCache('faculty', doc._id);
 });
 
 export default mongoose.model('Faculty', facultySchema);

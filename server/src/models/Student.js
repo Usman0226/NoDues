@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 const electiveSubjectSchema = new mongoose.Schema(
   {
@@ -97,5 +98,16 @@ studentSchema.index({ departmentId: 1, isActive: 1 });
 
 // Mentor's student list
 studentSchema.index({ mentorId: 1 });
+
+// ── Cache Invalidation Hooks ──────────────────────────────────────────────────
+studentSchema.post('save', function(doc) {
+  invalidateEntityCache('student', doc._id);
+});
+
+studentSchema.post('findOneAndUpdate', async function() {
+  const query = this.getQuery();
+  const doc = await this.model.findOne(query);
+  if (doc) invalidateEntityCache('student', doc._id);
+});
 
 export default mongoose.model('Student', studentSchema);

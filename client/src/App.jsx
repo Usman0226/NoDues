@@ -15,6 +15,7 @@ import ScrollToTop from './components/ui/ScrollToTop';
 
 import Login from './pages/auth/Login';
 import ChangePassword from './pages/auth/ChangePassword';
+import ForcedChangePasswordModal from './components/auth/ForcedChangePasswordModal';
 
 import AdminDashboard from './pages/admin/Dashboard';
 import Departments from './pages/admin/Departments';
@@ -43,6 +44,7 @@ const AppLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
     <div className="flex h-screen overflow-hidden bg-offwhite">
+      <ForcedChangePasswordModal />
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <div className="flex-1 min-w-0 relative h-full flex flex-col">
         <div className="absolute inset-0 pointer-events-none grid-overlay opacity-[0.32] -z-10" />

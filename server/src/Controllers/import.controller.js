@@ -9,10 +9,7 @@ import asyncHandler from '../utils/asyncHandler.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import crypto from 'crypto';
-import { invalidateClassCache } from './classController.js';
-import { invalidateStudentCache } from './studentController.js';
-import { invalidateFacultyCache } from './facultyController.js';
-import { invalidateDeptCache } from './departmentController.js';
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 const parseBuffer = (buffer) => {
   const workbook = xlsx.read(buffer, { type: 'buffer' });
@@ -115,7 +112,7 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
 
   await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: { $each: createdStudents } } });
 
-  invalidateClassCache(classId, targetClass.departmentId);
+  // Invalidation handled by Class.findByIdAndUpdate -> findOneAndUpdate hook
 
   logger.info('Student batch import completed', {
     timestamp: new Date().toISOString(),
@@ -258,10 +255,10 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
     await Promise.allSettled(createdFaculty.map(f => f.emailPromise));
   }
 
-  invalidateFacultyCache();
+  invalidateEntityCache('faculty', 'all');
   if (createdFaculty.length > 0) {
     const depts = [...new Set(createdFaculty.map(f => f.member.departmentId.toString()))];
-    depts.forEach(d => invalidateDeptCache(d));
+    depts.forEach(d => invalidateEntityCache('department', d));
   }
 
   logger.info('Faculty batch import completed', {
@@ -358,8 +355,7 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
       });
       
       await student.save();
-      invalidateStudentCache(student._id);
-      if (student.classId) invalidateClassCache(student.classId, student.departmentId);
+      // Invalidation handled by student.save() -> post('save') hook
       updated++;
     }
   }
@@ -456,8 +452,7 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
       }
       student.mentorId = item.mentorId;
       await student.save();
-      invalidateStudentCache(student._id);
-      if (student.classId) invalidateClassCache(student.classId, student.departmentId);
+      // Invalidation handled by student.save() -> post('save') hook
       updated++;
     }
   }

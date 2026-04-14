@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 const departmentSchema = new mongoose.Schema(
   {
@@ -21,5 +22,16 @@ const departmentSchema = new mongoose.Schema(
 );
 
 departmentSchema.index({ hodId: 1 });
+
+// ── Cache Invalidation Hooks ──────────────────────────────────────────────────
+departmentSchema.post('save', function(doc) {
+  invalidateEntityCache('department', doc._id);
+});
+
+departmentSchema.post('findOneAndUpdate', async function() {
+  const query = this.getQuery();
+  const doc = await this.model.findOne(query);
+  if (doc) invalidateEntityCache('department', doc._id);
+});
 
 export default mongoose.model('Department', departmentSchema);

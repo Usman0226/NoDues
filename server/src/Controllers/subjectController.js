@@ -31,6 +31,7 @@ export const getSubjects = async (req, res, next) => {
       Subject.countDocuments(query),
     ]);
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
       data: subjects.map((s) => ({
@@ -115,6 +116,7 @@ export const getSubjectById = async (req, res, next) => {
     };
 
     cache.set(cacheKey, data, SUBJECTS_TTL);
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -138,7 +140,7 @@ export const updateSubject = async (req, res, next) => {
 
     await subject.save();
 
-    cache.del(`subject:${id}`);
+    // Cache invalidated automatically by Mongoose subject save hook
 
     logger.info('subject_updated', {
       timestamp: new Date().toISOString(),
@@ -174,7 +176,7 @@ export const deleteSubject = async (req, res, next) => {
     subject.isActive = false;
     await subject.save();
 
-    cache.del(`subject:${id}`);
+    // Cache invalidated automatically by Mongoose subject save hook
 
     logger.info('subject_deleted', {
       timestamp: new Date().toISOString(),
@@ -206,7 +208,7 @@ export const bulkDeleteSubjects = async (req, res, next) => {
       { isActive: false }
     );
 
-    ids.forEach(id => cache.del(`subject:${id}`));
+    // Cache invalidated automatically by Mongoose subject hooks
 
     logger.info('subjects_bulk_deleted', {
       timestamp: new Date().toISOString(),

@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../context/AuthContext';
 import { getClasses, createClass, updateClass, deleteClass, updateClassTeacher } from '../../api/classes';
@@ -352,13 +353,16 @@ const DepartmentClasses = () => {
             <div className="grid grid-cols-2 gap-5">
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Semester</label>
-                <select 
-                   value={formData.semester}
-                   onChange={e => setFormData({...formData, semester: Number(e.target.value)})}
-                   className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                 <SearchableSelect 
+                    options={[1, 2, 3, 4, 5, 6, 7, 8].map(s => ({
+                      value: s,
+                      label: `Semester ${s}`,
+                      subLabel: 'Academic Term'
+                    }))}
+                    value={formData.semester}
+                    onChange={val => setFormData({...formData, semester: Number(val)})}
+                    placeholder="Select Term"
+                 />
               </div>
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Academic Session</label>
@@ -373,16 +377,16 @@ const DepartmentClasses = () => {
             </div>
             <div>
               <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Class Teacher (Optional)</label>
-              <select 
+              <SearchableSelect 
+                options={facultyList.map(f => ({
+                  value: f._id,
+                  label: f.name,
+                  subLabel: f.employeeId
+                }))}
                 value={formData.classTeacherId || ''}
-                onChange={e => setFormData({...formData, classTeacherId: e.target.value})}
-                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
-              >
-                <option value="">-- Select Faculty --</option>
-                {facultyList.map(f => (
-                  <option key={f._id} value={f._id}>{f.name}</option>
-                ))}
-              </select>
+                onChange={val => setFormData({...formData, classTeacherId: val})}
+                placeholder="Select Faculty"
+              />
             </div>
             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowCreate(false)}>Abort</Button>
@@ -408,13 +412,16 @@ const DepartmentClasses = () => {
             <div className="grid grid-cols-2 gap-5">
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Semester</label>
-                <select 
-                   value={formData.semester}
-                   onChange={e => setFormData({...formData, semester: Number(e.target.value)})}
-                   className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                 <SearchableSelect 
+                    options={[1, 2, 3, 4, 5, 6, 7, 8].map(s => ({
+                      value: s,
+                      label: `Semester ${s}`,
+                      subLabel: 'Academic Term'
+                    }))}
+                    value={formData.semester}
+                    onChange={val => setFormData({...formData, semester: Number(val)})}
+                    placeholder="Select Term"
+                 />
               </div>
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Academic Session</label>
@@ -429,16 +436,16 @@ const DepartmentClasses = () => {
             </div>
             <div>
               <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Class Teacher (Optional)</label>
-              <select 
+              <SearchableSelect 
+                options={facultyList.map(f => ({
+                  value: f._id,
+                  label: f.name,
+                  subLabel: f.employeeId
+                }))}
                 value={formData.classTeacherId || ''}
-                onChange={e => setFormData({...formData, classTeacherId: e.target.value})}
-                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
-              >
-                <option value="">-- Select Faculty --</option>
-                {facultyList.map(f => (
-                  <option key={f._id} value={f._id}>{f.name}</option>
-                ))}
-              </select>
+                onChange={val => setFormData({...formData, classTeacherId: val})}
+                placeholder="Select Faculty"
+              />
             </div>
             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowEdit(false)}>Cancel</Button>

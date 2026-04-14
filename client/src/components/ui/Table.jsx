@@ -118,7 +118,6 @@ const Table = ({
 
   const processed = useMemo(() => {
     let rows = [...(data || [])];
-    // Only perform local filtering if we are NOT using controlled search
     if (filter && !onSearchChange) {
       const q = filter.toLowerCase();
       rows = rows.filter((row) =>
@@ -134,7 +133,7 @@ const Table = ({
       });
     }
     return rows;
-  }, [data, filter, sortKey, sortDir, columns]);
+  }, [data, filter, sortKey, sortDir, columns, onSearchChange]);
 
   // Selection Logic
   const processedIds = useMemo(() => processed.map(r => r[primaryKey]), [processed, primaryKey]);

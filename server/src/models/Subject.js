@@ -33,8 +33,19 @@ const subjectSchema = new mongoose.Schema(
   }
 );
 
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
+
 // M0-safe indexes (code unique:true creates its index automatically)
 subjectSchema.index({ semester: 1, isElective: 1, isActive: 1 });
 subjectSchema.index({ name: 'text' }); // lightweight text search
+
+// ── Cache Invalidation Hooks ────────────────────────────────────────────────
+subjectSchema.post('save', async function (doc) {
+  invalidateEntityCache('subject', doc._id);
+});
+
+subjectSchema.post('findOneAndUpdate', async function (doc) {
+  if (doc) invalidateEntityCache('subject', doc._id);
+});
 
 export default mongoose.model('Subject', subjectSchema);

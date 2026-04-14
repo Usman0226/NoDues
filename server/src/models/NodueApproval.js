@@ -65,10 +65,21 @@ nodueApprovalSchema.index({ batchId: 1, action: 1 });
 // Student status page — most-hit endpoint at peak load
 nodueApprovalSchema.index({ studentId: 1, batchId: 1 });
 
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
+
 // Faculty dashboard: total pending count across all batches
 nodueApprovalSchema.index({ facultyId: 1, action: 1 });
 
 // requestId lookup (recalcRequestStatus) — kept minimal for write speed
 nodueApprovalSchema.index({ requestId: 1, action: 1 });
+
+// ── Cache Invalidation Hooks ────────────────────────────────────────────────
+nodueApprovalSchema.post('save', async function (doc) {
+  invalidateEntityCache('approval', doc.facultyId, doc.batchId);
+});
+
+nodueApprovalSchema.post('findOneAndUpdate', async function (doc) {
+  if (doc) invalidateEntityCache('approval', doc.facultyId, doc.batchId);
+});
 
 export default mongoose.model('NodueApproval', nodueApprovalSchema);

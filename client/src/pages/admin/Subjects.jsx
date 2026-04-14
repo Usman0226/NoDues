@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
 import { getSubjects, createSubject, updateSubject, deleteSubject, bulkDeleteSubjects } from '../../api/subjects';
 import { Plus, Filter, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
@@ -166,7 +167,7 @@ const Subjects = () => {
   const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   return (
-    <PageWrapper title="Subjects" subtitle="Centralized academic component catalog for institution-wide mapping">
+    <PageWrapper title="Subjects" subtitle="Centralized academic component subject for institution-wide mapping">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
           {isAdmin && (
@@ -177,19 +178,19 @@ const Subjects = () => {
               <Plus size={14} /> Register Subject
             </Button>
           )}
-          <div className="flex items-center gap-3 bg-white border border-muted/40 p-1 rounded-xl shadow-sm">
-             <Filter size={12} className="ml-2 text-muted-foreground" />
-             <select 
+          <div className="w-[180px]">
+             <SearchableSelect 
+                options={[
+                  { value: 'all', label: 'All Sessions', subLabel: 'Entire Catalog' },
+                  ...[1, 2, 3, 4, 5, 6, 7, 8].map((s) => ({ value: s, label: `Semester ${s}`, subLabel: 'Academic Term' }))
+                ]}
                 value={semesterFilter} 
-                onChange={(e) => {
-                  setSemesterFilter(e.target.value);
+                onChange={(val) => {
+                  setSemesterFilter(val);
                   setPage(1);
                 }}
-                className="pr-8 pl-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-navy bg-transparent border-none focus:ring-0 cursor-pointer"
-             >
-               <option value="all">All Sessions</option>
-               {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>Semester {s}</option>)}
-             </select>
+                placeholder="Filter by Session"
+             />
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={() => fetchSubjects()} className="text-muted-foreground">
@@ -248,13 +249,15 @@ const Subjects = () => {
               </div>
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Academic Semester</label>
-                <select 
+                <SearchableSelect 
+                  options={[1, 2, 3, 4, 5, 6, 7, 8].map((s) => ({
+                    value: s,
+                    label: `Semester ${s}`
+                  }))}
                   value={formData.semester}
-                  onChange={e => setFormData({...formData, semester: Number(e.target.value)})}
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                  onChange={val => setFormData({...formData, semester: Number(val)})}
+                  placeholder="Select Sem"
+                />
               </div>
             </div>
 
@@ -317,13 +320,15 @@ const Subjects = () => {
               </div>
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Academic Semester</label>
-                <select 
+                <SearchableSelect 
+                  options={[1, 2, 3, 4, 5, 6, 7, 8].map((s) => ({
+                    value: s,
+                    label: `Semester ${s}`
+                  }))}
                   value={formData.semester}
-                  onChange={e => setFormData({...formData, semester: Number(e.target.value)})}
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                  onChange={val => setFormData({...formData, semester: Number(val)})}
+                  placeholder="Select Sem"
+                />
               </div>
             </div>
 

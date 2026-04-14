@@ -1,4 +1,4 @@
-import React, { useState,useEffect } from 'react';
+import React, { useState,useEffect,useMemo } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Button from '../../components/ui/Button';
@@ -10,6 +10,7 @@ import { getDepartments } from '../../api/departments';
 import ImportStepper from '../../components/import/ImportStepper';
 import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
@@ -355,15 +356,17 @@ const FacultyList = () => {
               </div>
               <div>
                 <label className="block text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 mb-2">Primary Department</label>
-                <select 
+                <SearchableSelect 
+                  options={depts?.map(d => ({
+                    value: d._id,
+                    label: d.name,
+                    subLabel: d.school
+                  }))}
                   value={formData.departmentId}
-                  onChange={e => setFormData({...formData, departmentId: e.target.value})}
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all disabled:opacity-50"
+                  onChange={val => setFormData({...formData, departmentId: val})}
+                  placeholder="Select Dept"
                   disabled={isHod}
-                >
-                  {!isHod && <option value="">Select Dept</option>}
-                  {depts?.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
-                </select>
+                />
               </div>
             </div>
 
@@ -433,15 +436,17 @@ const FacultyList = () => {
               </div>
               <div>
                 <label className="block text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 mb-2">Primary Department</label>
-                <select 
+                <SearchableSelect 
+                  options={depts?.map(d => ({
+                    value: d._id,
+                    label: d.name,
+                    subLabel: d.school
+                  }))}
                   value={formData.departmentId}
-                  onChange={e => setFormData({...formData, departmentId: e.target.value})}
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all disabled:opacity-50"
+                  onChange={val => setFormData({...formData, departmentId: val})}
+                  placeholder="Select Dept"
                   disabled={isHod}
-                >
-                  {!isHod && <option value="">Select Dept</option>}
-                  {depts?.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
-                </select>
+                />
               </div>
             </div>
 

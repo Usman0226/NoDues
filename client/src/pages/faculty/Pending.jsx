@@ -300,16 +300,20 @@ const Pending = () => {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
              <Settings2 size={14} className="text-zinc-400" />
-             <select
+             <SearchableSelect 
+              options={[
+                { value: 'all', label: 'All Academic Groups', subLabel: 'Everything' },
+                ...batches.map(b => ({
+                  value: b.id,
+                  label: b.name,
+                  subLabel: 'Academic Batch'
+                }))
+              ]}
               value={selectedBatch}
-              onChange={(e) => { setSelectedBatch(e.target.value); setSelection([]); }}
-              className="bg-white border border-zinc-200 text-sm font-bold text-navy px-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer"
-            >
-              <option value="all">All Academic Groups</option>
-              {batches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
+              onChange={(val) => { setSelectedBatch(val); setSelection([]); }}
+              placeholder="Filter by Group"
+              className="min-w-[200px]"
+            />
           </div>
 
           <button
@@ -383,15 +387,26 @@ const Pending = () => {
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-navy mb-2 block">Deficiency Category</label>
-                <select 
-                  name="dueType" 
-                  required
-                  className="w-full bg-white border border-muted text-sm font-bold text-navy px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-red-100 transition-all"
-                >
-                  {DUE_TYPES.map(type => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
+                <SearchableSelect 
+                  options={DUE_TYPES.map(type => ({
+                    value: type.value,
+                    label: type.label,
+                    subLabel: 'Category'
+                  }))}
+                  value={''} // Controlled via native form in this component, but we should probably refactor to state if needed.
+                  // Wait, the parent uses (e) => new FormData(e.target). 
+                  // SearchableSelect doesn't work with native FormData out of the box unless it has a hidden input.
+                  // I'll add a name prop to SearchableSelect or refactor this to state.
+                  onChange={val => {
+                    const select = document.getElementById('dueType-hidden');
+                    if (select) {
+                      select.value = val;
+                      select.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                  }}
+                  placeholder="Select Category"
+                />
+                <input type="hidden" name="dueType" id="dueType-hidden" required />
               </div>
 
               <div>

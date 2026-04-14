@@ -6,9 +6,7 @@ import Department from '../models/Department.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
-import { invalidateClassCache } from './classController.js';
-
-export const invalidateStudentCache = (id) => cache.del(`student:${id}`);
+// Cache invalidation is now handled via Mongoose hooks in the model.
 
 // ── GET /api/students ─────────────────────────────────────────────────────────
 export const getStudents = async (req, res, next) => {
@@ -47,6 +45,7 @@ export const getStudents = async (req, res, next) => {
       .limit(Number(limit))
       .lean();
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
       data: students.map((s) => ({
@@ -99,8 +98,7 @@ export const createStudent = async (req, res, next) => {
     // Add student to class.studentIds
     await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student._id } });
     
-    // Invalidate class list cache for this department only
-    invalidateClassCache(classId, student.departmentId);
+    // Cache invalidated automatically by Mongoose student save hook
 
     logger.info('student_created', {
       timestamp: new Date().toISOString(),
@@ -170,6 +168,7 @@ export const getStudentById = async (req, res, next) => {
     };
 
     cache.set(cacheKey, data, 120);
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -214,9 +213,7 @@ export const updateStudent = async (req, res, next) => {
     }
 
     await student.save();
-    invalidateStudentCache(id);
-    if (oldClassId) invalidateClassCache(oldClassId, student.departmentId);
-    if (student.classId && student.classId !== oldClassId) invalidateClassCache(student.classId, student.departmentId);
+    // Cache invalidated automatically by Mongoose student save hook
 
     logger.info('student_updated', {
       timestamp: new Date().toISOString(),
@@ -248,8 +245,7 @@ export const deleteStudent = async (req, res, next) => {
 
     student.isActive = false;
     await student.save();
-    invalidateStudentCache(id);
-    if (student.classId) invalidateClassCache(student.classId, student.departmentId);
+    // Cache invalidated automatically by Mongoose student save hook
 
     logger.info('student_deactivated', {
       timestamp: new Date().toISOString(),
@@ -287,8 +283,7 @@ export const assignMentor = async (req, res, next) => {
 
     student.mentorId = mentor._id;
     await student.save();
-    invalidateStudentCache(id);
-    if (student.classId) invalidateClassCache(student.classId, student.departmentId);
+    // Cache invalidated automatically by Mongoose student save hook
 
     logger.info('mentor_assigned', {
       timestamp: new Date().toISOString(),
@@ -346,7 +341,7 @@ export const addElective = async (req, res, next) => {
       facultyId: faculty._id, facultyName: faculty.name,
     });
     await student.save();
-    invalidateStudentCache(id);
+    // Cache invalidated automatically by Mongoose student save hook
 
     logger.info('elective_added', {
       timestamp: new Date().toISOString(),
@@ -396,7 +391,7 @@ export const updateElective = async (req, res, next) => {
     elective.facultyId   = faculty._id;
     elective.facultyName = faculty.name;
     await student.save();
-    invalidateStudentCache(id);
+    // Cache invalidated automatically by Mongoose student save hook
 
     logger.info('elective_updated', {
       timestamp: new Date().toISOString(),
@@ -436,7 +431,7 @@ export const removeElective = async (req, res, next) => {
 
     elective.deleteOne();
     await student.save();
-    invalidateStudentCache(id);
+    // Cache invalidated automatically by Mongoose student save hook
 
     logger.info('elective_removed', {
       timestamp: new Date().toISOString(),
@@ -469,13 +464,7 @@ export const bulkDeactivateStudents = async (req, res, next) => {
     const students = await Student.find(query).select('_id classId departmentId');
     const result = await Student.updateMany(query, { isActive: false });
 
-    // Handle side effects: invalidate cache and class student lists
-    for (const student of students) {
-      invalidateStudentCache(student._id.toString());
-      if (student.classId) {
-        invalidateClassCache(student.classId, student.departmentId);
-      }
-    }
+    // Cache invalidated automatically by Mongoose student hooks
 
     logger.info('students_bulk_deactivated', {
       timestamp: new Date().toISOString(),
@@ -511,13 +500,7 @@ export const bulkAssignMentor = async (req, res, next) => {
     const result = await Student.updateMany(query, { mentorId: mentor._id });
 
     // Side effects
-    const students = await Student.find(query).select('_id classId departmentId');
-    for (const student of students) {
-      invalidateStudentCache(student._id.toString());
-      if (student.classId) {
-        invalidateClassCache(student.classId, student.departmentId);
-      }
-    }
+    // Cache invalidated automatically by Mongoose student hooks
 
     logger.info('students_bulk_mentor_assigned', {
       timestamp: new Date().toISOString(),

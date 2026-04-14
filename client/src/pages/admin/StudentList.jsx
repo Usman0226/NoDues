@@ -14,6 +14,7 @@ import { getClasses } from '../../api/classes';
 import ImportStepper from '../../components/import/ImportStepper';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 
 const StudentList = () => {
   const [showImport, setShowImport] = useState(false);
@@ -290,10 +291,16 @@ const StudentList = () => {
           </div>
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Academic Group</label>
-            <select value={formData.classId} onChange={e => setFormData({...formData, classId: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all">
-              <option value="">Select a class...</option>
-              {classes.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
-            </select>
+            <SearchableSelect 
+              options={classes.map(c => ({
+                value: c._id,
+                label: c.name,
+                subLabel: `Semester ${c.semester}`
+              }))}
+              value={formData.classId}
+              onChange={val => setFormData({...formData, classId: val})}
+              placeholder="Select a class..."
+            />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-muted/30">
             <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
@@ -320,10 +327,16 @@ const StudentList = () => {
           </div>
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Academic Group</label>
-            <select value={formData.classId} onChange={e => setFormData({...formData, classId: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all">
-              <option value="">Select a class...</option>
-              {classes.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
-            </select>
+            <SearchableSelect 
+              options={classes.map(c => ({
+                value: c._id,
+                label: c.name,
+                subLabel: `Semester ${c.semester}`
+              }))}
+              value={formData.classId}
+              onChange={val => setFormData({...formData, classId: val})}
+              placeholder="Select a class..."
+            />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-muted/30">
             <Button variant="ghost" onClick={() => setShowEdit(false)}>Cancel</Button>
@@ -359,16 +372,16 @@ const StudentList = () => {
           <p className="text-sm text-muted-foreground">Assign a mentor to the {selectedIds.length} selected students.</p>
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Select Mentor</label>
-            <select 
-              value={bulkMentorId} 
-              onChange={e => setBulkMentorId(e.target.value)} 
-              className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all"
-            >
-              <option value="">Select a faculty member...</option>
-              {faculty.filter(f => f.roleTags?.includes('mentor')).map(f => (
-                <option key={f._id} value={f._id}>{f.name} ({f.employeeId})</option>
-              ))}
-            </select>
+            <SearchableSelect 
+              options={faculty.filter(f => f.roleTags?.includes('mentor')).map(f => ({
+                value: f._id,
+                label: f.name,
+                subLabel: f.employeeId
+              }))}
+              value={bulkMentorId}
+              onChange={val => setBulkMentorId(val)}
+              placeholder="Select a faculty member..."
+            />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-muted/30">
             <Button variant="ghost" onClick={() => setShowBulkMentor(false)}>Cancel</Button>

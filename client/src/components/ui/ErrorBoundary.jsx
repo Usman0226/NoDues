@@ -1,4 +1,5 @@
 import React from 'react';
+import Button from "./Button"
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -29,6 +30,7 @@ class ErrorBoundary extends React.Component {
             >
               Refresh Application
             </button>
+            
           </div>
         </div>
       );

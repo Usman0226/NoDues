@@ -80,7 +80,7 @@ export const getStudentStatus = async (req, res, next) => {
       };
     });
 
-    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     
     if (process.env.NODE_ENV !== 'production' || userId === '69dbf9e4344fe25b6768d0e5') {
       console.log(`[Diagnostic] Student Status for ${userId}:`, {
@@ -145,6 +145,7 @@ export const getStudentHistory = async (req, res, next) => {
       };
     });
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
       data,

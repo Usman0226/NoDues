@@ -3,6 +3,7 @@ import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
 import { getApprovalHistory } from '../../api/approvals';
 import {
@@ -139,20 +140,20 @@ const FacultyHistory = () => {
         <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-muted shadow-sm">
           <Filter size={14} className="text-muted-foreground" />
           <span className="text-xs font-medium text-muted-foreground shrink-0">Semester</span>
-          <select
-            className="text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer"
+          <SearchableSelect 
+            options={[
+              { value: 'all', label: 'All Semesters', subLabel: 'Entire History' },
+              ...[8, 7, 6, 5, 4, 3, 2, 1].map((s) => ({
+                value: s,
+                label: `Semester ${s}`,
+                subLabel: 'Academic Term'
+              }))
+            ]}
             value={semesterFilter}
-            onChange={(e) => handleSemesterChange(e.target.value)}
-          >
-            <option value="all">All Semesters</option>
-            {semesterOptions.map((s) => (
-              <option key={s} value={s}>Semester {s}</option>
-            ))}
-            {/* Static fallback options so filter always works even before data loads */}
-            {![...semesterOptions].includes(5) && <option value="5">Semester 5</option>}
-            {![...semesterOptions].includes(4) && <option value="4">Semester 4</option>}
-            {![...semesterOptions].includes(3) && <option value="3">Semester 3</option>}
-          </select>
+            onChange={(val) => handleSemesterChange(val)}
+            placeholder="Select Sem"
+            className="w-[180px]"
+          />
         </div>
 
         <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-muted shadow-sm">

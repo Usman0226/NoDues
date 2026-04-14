@@ -9,10 +9,7 @@ import crypto from 'crypto';
 import { sendCredentialEmail } from '../services/emailService.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-export const invalidateFacultyCache = (id) => {
-  cache.del(`faculty:${id}`);
-  cache.del('faculty:all');
-};
+// Cache invalidation is now handled via Mongoose hooks in the model.
 
 /** Generates a temporary password: EMP<id>@Nds#<random4> */
 const generateTempPassword = (empId) =>
@@ -106,6 +103,7 @@ export const getFaculty = async (req, res, next) => {
       }
     }
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
       data: faculty.map((f) => ({
@@ -179,7 +177,7 @@ export const createFaculty = async (req, res, next) => {
       logger.warn('Email dispatch failed for new faculty:', { email });
     }
 
-    invalidateFacultyCache(faculty._id.toString());
+    // Cache invalidated automatically by Mongoose save hook
 
     return res.status(201).json({
       success: true,
@@ -243,6 +241,7 @@ export const getFacultyById = async (req, res, next) => {
     };
 
     cache.set(cacheKey, data, 300);
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -274,8 +273,7 @@ export const updateFaculty = async (req, res, next) => {
 
     await faculty.save();
 
-    invalidateFacultyCache(id);
-    cache.del(`user:${id}`); // clear auth/me cache too
+    // Invalidation now handled by model hooks
 
     logger.info('faculty_updated', {
       timestamp: new Date().toISOString(),
@@ -314,7 +312,7 @@ export const deleteFaculty = async (req, res, next) => {
     faculty.isActive = false;
     await faculty.save();
 
-    invalidateFacultyCache(id);
+    // Cache invalidated automatically by Mongoose save hook
 
     logger.info('faculty_deactivated', {
       timestamp: new Date().toISOString(),
@@ -395,6 +393,7 @@ export const getFacultyClasses = async (req, res, next) => {
       return rows;
     });
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -464,8 +463,8 @@ export const bulkDeactivateFaculty = async (req, res, next) => {
 
     const result = await Faculty.updateMany(query, { isActive: false });
 
-    ids.forEach(id => invalidateFacultyCache(id));
-    cache.del('faculty:all');
+    // Cache invalidated automatically by Mongoose save hook
+    // Faculty registration invalidates 'all' via model hooks
 
     logger.info('faculty_bulk_deactivated', {
       timestamp: new Date().toISOString(),

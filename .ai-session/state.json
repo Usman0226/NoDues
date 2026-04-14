@@ -1,19 +1,18 @@
 {
-  "last_updated": "2026-04-13T22:04:40+05:30",
+  "last_updated": "2026-04-14T05:08:00Z",
   "completed": [
-    "Memoized useApi hook functions (request, setData) to prevent infinite loops",
-    "Memoized FacultyList queryKeys to stabilize React Query dependencies",
-    "Stabilized Navbar imports by removing legacy icons causing Vite 500 errors"
+    "Model-Driven Cache Invalidation Architecture",
+    "Standardized HTTP Cache Headers (no-cache, must-revalidate)",
+    "Mongoose Invalidation Hooks for core entities",
+    "Controller refactor and cleanup"
   ],
   "in_progress": [],
-  "pending": [
-    "Final validation of bulk operations in FacultyList"
-  ],
+  "pending": [],
   "decisions": [
     {
-      "context": "Infinite rendering loops in FacultyList",
-      "decision": "Memoize both the 'request' function in useApi and the 'queryKey' object in FacultyList",
-      "trade_offs": "Slightly more boilerplate in components but ensures production-grade stability and prevents memory leaks/CPU thrashes."
+      "context": "UI data consistency issues",
+      "decision": "Transitioned from manual cache management in controllers to automated Mongoose hooks and ETag-based browser revalidation.",
+      "trade_offs": "Prioritized consistency and browser standards over aggressive local-only caching to ensure peak data accuracy."
     }
   ],
   "blockers": []

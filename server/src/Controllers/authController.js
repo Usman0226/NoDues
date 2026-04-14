@@ -41,7 +41,7 @@ const auditLog = (action, actor, resourceId = null) => {
 
 export const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
     if (!email || !password) {
       return next(
@@ -141,7 +141,7 @@ export const login = async (req, res, next) => {
 
 export const studentLogin = async (req, res, next) => {
   try {
-    const { rollNo } = req.body;
+    const { rollNo } = req.body || {};
 
     if (!rollNo) {
       return next(
@@ -224,7 +224,7 @@ export const studentLogin = async (req, res, next) => {
 
 export const changePassword = async (req, res, next) => {
   try {
-    const { oldPassword, newPassword, confirmPassword } = req.body;
+    const { oldPassword, newPassword, confirmPassword } = req.body || {};
     const { userId, role } = req.user;
 
     if (!oldPassword || !newPassword || !confirmPassword) {
@@ -412,6 +412,7 @@ export const getMe = async (req, res, next) => {
     // Cache for 15 minutes
     cache.set(cacheKey, profile, 900);
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data: profile });
   } catch (err) {
     next(err);

@@ -7,6 +7,7 @@ import { getDepartments, createDepartment, updateDepartment } from '../../api/de
 import { getFaculty } from '../../api/faculty';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { toast } from 'react-hot-toast';
 
 const Departments = () => {
@@ -204,16 +205,16 @@ const Departments = () => {
           </div>
           <div>
             <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Assign HoD (Optional)</label>
-            <select 
+            <SearchableSelect 
+              options={facultyList.map(f => ({
+                value: f._id,
+                label: f.name,
+                subLabel: f.employeeId
+              }))}
               value={formData.hodId}
-              onChange={e => setFormData({...formData, hodId: e.target.value})}
-              className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"
-            >
-              <option value="">-- No HoD Assigned --</option>
-              {facultyList.map(f => (
-                <option key={f._id} value={f._id}>{f.name} ({f.employeeId})</option>
-              ))}
-            </select>
+              onChange={val => setFormData({...formData, hodId: val})}
+              placeholder="No HoD Assigned"
+            />
           </div>
           <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
             <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>

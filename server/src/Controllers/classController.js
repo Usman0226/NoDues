@@ -8,15 +8,7 @@ import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
 
-export const invalidateClassCache = (classId, departmentId) => {
-  if (classId) cache.del(`class:${classId}`);
-  
-  // Invalidate list caches
-  const keys = cache.keys();
-  const listPrefix = departmentId ? `classes:list:dept_${departmentId}` : 'classes:list:';
-  const listKeys = keys.filter(k => k.startsWith(listPrefix));
-  if (listKeys.length > 0) cache.del(listKeys);
-};
+// Cache invalidation is now handled via Mongoose hooks in the model.
 
 // ── Scope helper — HoD auto-filters to own department ─────────────────────────
 const deptScope = (req) =>
@@ -88,6 +80,7 @@ export const getClasses = async (req, res, next) => {
     };
 
     cache.set(cacheKey, responseData, 300); // 5 min cache
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, ...responseData });
   } catch (err) {
     next(err);
@@ -114,6 +107,8 @@ export const createClass = async (req, res, next) => {
       timestamp: new Date().toISOString(), actor: req.user.userId,
       action: 'CREATE_CLASS', resource_id: cls._id.toString(),
     });
+
+    // Cache invalidated automatically by Mongoose save hook
 
     return res.status(201).json({
       success: true,
@@ -196,6 +191,7 @@ export const getClassById = async (req, res, next) => {
     };
 
     cache.set(cacheKey, data, 60);
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -219,7 +215,7 @@ export const updateClass = async (req, res, next) => {
     if (academicYear) cls.academicYear = academicYear;
     await cls.save();
 
-    invalidateClassCache(id, cls.departmentId);
+    // Invalidation handled by cls.save() -> post('save') hook
 
     return res.status(200).json({
       success: true,
@@ -243,7 +239,7 @@ export const deleteClass = async (req, res, next) => {
 
     cls.isActive = false;
     await cls.save();
-    invalidateClassCache(id);
+    // Invalidation handled by cls.save() -> post('save') hook
 
     logger.info('class_deleted', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -276,7 +272,7 @@ export const assignClassTeacher = async (req, res, next) => {
 
     cls.classTeacherId = classTeacherId || null;
     await cls.save();
-    invalidateClassCache(id, cls.departmentId);
+    // Invalidation handled by cls.save() -> post('save') hook
 
     return res.status(200).json({
       success: true,
@@ -333,7 +329,7 @@ export const addSubjectAssignment = async (req, res, next) => {
 
     cls.subjectAssignments.push(assignment);
     await cls.save();
-    invalidateClassCache(id);
+    // Invalidation handled by cls.save() -> post('save') hook
 
     const saved = cls.subjectAssignments[cls.subjectAssignments.length - 1];
 
@@ -386,7 +382,7 @@ export const updateSubjectAssignment = async (req, res, next) => {
     }
 
     await cls.save();
-    invalidateClassCache(id);
+    // Invalidation handled by cls.save() -> post('save') hook
 
     const faculty = assignment.facultyId
       ? await Faculty.findById(assignment.facultyId).select('name employeeId').lean()
@@ -427,7 +423,7 @@ export const removeSubjectAssignment = async (req, res, next) => {
 
     assignment.deleteOne();
     await cls.save();
-    invalidateClassCache(id);
+    // Invalidation handled by cls.save() -> post('save') hook
 
     return res.status(200).json({ success: true, data: { message: 'Subject assignment removed' } });
   } catch (err) {
@@ -476,7 +472,7 @@ export const cloneSubjects = async (req, res, next) => {
 
     cls.subjectAssignments = cloned;
     await cls.save();
-    invalidateClassCache(id);
+    // Invalidation handled by cls.save() -> post('save') hook
 
     logger.info('subjects_cloned', {
       timestamp: new Date().toISOString(), actor: req.user.userId,

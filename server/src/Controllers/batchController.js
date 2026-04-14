@@ -40,6 +40,7 @@ export const getBatches = async (req, res, next) => {
       NodueBatch.countDocuments(query),
     ]);
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
       data: batches,
@@ -53,13 +54,7 @@ export const getBatches = async (req, res, next) => {
   }
 };
 
-// ── Helper: Internal Batch Initiation Logic ──────────────────────────────────
-/**
- * @param {Object} cls - Class document (lean)
- * @param {Date|null} deadline 
- * @param {Object} initiator - { userId, role }
- * @returns {Promise<Object>} initiation result summary
- */
+
 const _executeInitiation = async (cls, deadline, initiator) => {
   const classId = cls._id;
 
@@ -227,7 +222,8 @@ const _executeInitiation = async (cls, deadline, initiator) => {
   cache.set(`batch_summary:${batch._id}`, {
     cleared: 0, pending: students.length, hasDues: 0, hodOverride: 0,
   }, 30);
-  students.forEach(s => cache.del(`student_status:${s._id}`));
+  // Invalidating all student statuses for this class is more reliable for bulk writes
+  invalidateEntityCache('student', 'all');
 
   logger.info('batch_initiated', {
     timestamp: new Date().toISOString(),
@@ -437,6 +433,7 @@ export const getBatchStatus = async (req, res, next) => {
     const gridPayload = { students, faculty };
     cache.set(cacheKey, gridPayload, 60);
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
       data: {
@@ -528,8 +525,7 @@ export const closeBatch = async (req, res, next) => {
     batch.status = 'closed';
     await batch.save();
 
-    // Invalidate batch-level cache keys
-    invalidateKeys([`batch_status:${batchId}`, `batch_summary:${batchId}`]);
+    // Cache invalidated automatically by Mongoose batch save hook
 
     logger.info('batch_closed', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -602,8 +598,7 @@ export const addStudentToBatch = async (req, res, next) => {
 
     await NodueBatch.findByIdAndUpdate(batchId, { $inc: { totalStudents: 1 } });
 
-    // Invalidate batch grid cache
-    invalidateKeys([`batch_status:${batchId}`, `batch_summary:${batchId}`]);
+    // Cache invalidated automatically by Mongoose batch hooks
 
     logger.info('student_added_to_batch', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -645,8 +640,8 @@ export const removeFacultyFromBatch = async (req, res, next) => {
       action: 'pending',
     });
 
-    // Invalidate batch grid so it reflects the removed pending approvals
-    invalidateKeys([`batch_status:${batchId}`, `faculty_pending:${facultyId}:${batchId}`]);
+    // Manual invalidation redundant with batch hooks for batch_status
+    // Cache invalidated automatically by Mongoose approval hooks
 
     logger.info('faculty_removed_from_batch', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -687,7 +682,7 @@ export const bulkCloseBatches = async (req, res, next) => {
 
     for (const batch of batches) {
       const bid = batch._id.toString();
-      invalidateKeys([`batch_status:${bid}`, `batch_summary:${bid}`]);
+      // Cache invalidated automatically by Mongoose batch hooks
       
       // Notify students of each batch
       const batchRequests = await NodueRequest.find({ batchId: bid }, 'studentId').lean();

@@ -39,9 +39,20 @@ const nodueBatchSchema = new mongoose.Schema({
   }
 });
 
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
+
 // Optimization indexes
 nodueBatchSchema.index({ classId: 1, status: 1 });
 nodueBatchSchema.index({ departmentId: 1, status: 1 });
 nodueBatchSchema.index({ status: 1 });
+
+// ── Cache Invalidation Hooks ────────────────────────────────────────────────
+nodueBatchSchema.post('save', async function (doc) {
+  invalidateEntityCache('batch', doc._id, doc.departmentId);
+});
+
+nodueBatchSchema.post('findOneAndUpdate', async function (doc) {
+  if (doc) invalidateEntityCache('batch', doc._id, doc.departmentId);
+});
 
 export default mongoose.model('NodueBatch', nodueBatchSchema);

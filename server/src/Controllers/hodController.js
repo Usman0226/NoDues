@@ -66,6 +66,7 @@ export const getOverview = async (req, res, next) => {
       });
     });
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -125,6 +126,7 @@ export const getActivity = async (req, res, next) => {
       }))
     ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data: feed.slice(0, 10) });
   } catch (err) {
     next(err);
@@ -208,6 +210,7 @@ export const getDues = async (req, res, next) => {
       dues:           dueMap[r._id.toString()] ?? [],
     }));
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true, data,
       pagination: {
@@ -252,12 +255,7 @@ export const overrideDues = async (req, res, next) => {
     request.overriddenAt   = new Date();
     await request.save();
 
-    // Surgical cache invalidation — student sees updated status, HoD overview refreshes
-    invalidateKeys([
-      `student_status:${request.studentId}`,
-      `batch_status:${request.batchId}`,
-      `hod_overview:${hodDept(req)}`,
-    ]);
+    // Cache invalidated automatically by Mongoose request save hook
 
     logger.info('hod_override', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -348,10 +346,7 @@ export const bulkOverrideDues = async (req, res, next) => {
       timestamp: now
     });
 
-    // Invalidate caches
-    invalidateKeys([`hod_overview:${deptId}`]);
-    affectedBatchIds.forEach(bid => invalidateKeys([`batch_status:${bid}`]));
-    studentIds.forEach(sid => invalidateKeys([`student_status:${sid}`]));
+    // Cache invalidated automatically by Mongoose request hooks
 
     logger.info('hod_bulk_override', {
       timestamp: now.toISOString(),

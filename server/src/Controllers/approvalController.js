@@ -5,17 +5,7 @@ import NodueBatch from '../models/NodueBatch.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
-import { invalidateKeys } from '../utils/withCache.js';
-
-// ── Shared: invalidate all cache keys affected by an approval action ───────────
-const invalidateApprovalCaches = (approval) => {
-  invalidateKeys([
-    `student_status:${approval.studentId}`,
-    `batch_status:${approval.batchId}`,
-    `faculty_pending:${approval.facultyId}:${approval.batchId}`,
-    `batch_summary:${approval.batchId}`,
-  ]);
-};
+// Cache invalidation is now handled via Mongoose hooks in the model.
 
 // ── GET /api/approvals/pending ────────────────────────────────────────────────
 export const getPendingApprovals = async (req, res, next) => {
@@ -69,6 +59,7 @@ export const getPendingApprovals = async (req, res, next) => {
     ).lean();
     batchesWithName.forEach((b) => { batchMap[b._id.toString()] = b.className || null; });
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
       data: approvals.map((a) => ({
@@ -139,6 +130,7 @@ export const getApprovalHistory = async (req, res, next) => {
     const batchMap = {};
     batches.forEach((b) => { batchMap[b._id.toString()] = b; });
 
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
       data: approvals.map((a) => {
@@ -196,7 +188,7 @@ export const approveRequest = async (req, res, next) => {
 
     await Promise.all([recalcRequestStatus(approval.requestId)]);
 
-    invalidateApprovalCaches(approval);
+    // Invalidation handled by hooks
 
     logger.info('approval_actioned', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -260,7 +252,7 @@ export const bulkApproveRequests = async (req, res, next) => {
       studentIdsToNotify.add(approval.studentId.toString());
       results.push(approval._id);
 
-      invalidateApprovalCaches(approval);
+      // Invalidation handled by hooks
     }
 
     await Promise.all([...requestIdsToRecalc].map(id => recalcRequestStatus(id)));
@@ -326,7 +318,7 @@ export const markDue = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId);
 
-    invalidateApprovalCaches(approval);
+    // Invalidation handled by hooks
 
     logger.info('due_marked', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -381,7 +373,7 @@ export const updateApproval = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId);
 
-    invalidateApprovalCaches(approval);
+    // Invalidation handled by hooks
 
     logger.info('approval_updated', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
