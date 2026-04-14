@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 
 const FILTERS = ['all', 'pending', 'approved', 'due_marked'];
 

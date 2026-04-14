@@ -34,7 +34,7 @@ const CircularProgress = ({ cleared, total }) => {
 
   return (
     <div className="flex items-center gap-6">
-      {/* Circular SVG Container */}
+      {/* Circular SVG Containr */}
       <div className="relative h-24 w-24 flex items-center justify-center shrink-0">
         <svg className="h-full w-full -rotate-90 transform overflow-visible">
           {/* Background Track */}
@@ -64,20 +64,17 @@ const CircularProgress = ({ cleared, total }) => {
           />
         </svg>
         
-        {/* Center Metric Label */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pt-0.5">
           <div className="flex items-baseline">
             <span className="text-2xl font-black text-navy leading-none">{cleared}</span>
             <span className="text-xs font-bold text-navy/20 ml-0.5">/{total}</span>
           </div>
-          <p className="text-[7px] font-black text-navy/40 uppercase tracking-[0.2em] mt-1">Overall Status</p>
+          <p className="text-[7px] font-black text-navy/40 uppercase tracking-[0.2em] mt-1">Status</p>
         </div>
 
-        {/* Outer Glow Effect (Subtle) */}
         <div className="absolute inset-0 rounded-full shadow-[inset_0_0_15px_rgba(244,244,245,0.8)] pointer-events-none"></div>
       </div>
 
-      {/* Trajectory Details */}
       <div className="flex flex-col gap-1.5 min-w-0">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-black text-navy truncate tracking-tight">

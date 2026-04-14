@@ -124,7 +124,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
         )}
         {!collapsed && (
           <div className="mt-6 text-center">
-            <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-100/20 mb-1">Crafted by</p>
+            <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-100/20 mb-1">Built by</p>
             <p className="text-[10px] font-brand text-indigo-100/60 flex items-center justify-center gap-1.5">
               ARC Club <span className="h-0.5 w-0.5 rounded-full bg-gold/50" /> Community
             </p>
