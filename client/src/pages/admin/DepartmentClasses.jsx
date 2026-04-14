@@ -8,7 +8,7 @@ import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { getClasses, createClass, updateClass, deleteClass, updateClassTeacher } from '../../api/classes';
 import { getFaculty } from '../../api/faculty';
 import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
@@ -49,21 +49,21 @@ const DepartmentClasses = () => {
 
   // Pagination State
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(50);
+  const [limit] = useState(50);
   const [includeInactive, setIncludeInactive] = useState(false);
   
   const { data: response, loading, error, request: fetchClasses } = useApi(getClasses, {
     queryKey: ['classes', { departmentId: deptId, page, limit, includeInactive }],
     immediate: false
   });
-  const classes = response?.data || [];
+  const classes = useMemo(() => response?.data || [], [response?.data]);
   const total = response?.total || 0;
 
   const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, {
     queryKey: ['faculty', { departmentId: deptId }],
     immediate: false
   });
-  const facultyList = facultyResponse?.data || [];
+  const facultyList = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
 
   useEffect(() => {
     const params = { departmentId: deptId, page, limit, includeInactive };
@@ -86,7 +86,7 @@ const DepartmentClasses = () => {
     if (deptId && formData.departmentId !== deptId) {
       setFormData(prev => ({ ...prev, departmentId: deptId }));
     }
-  }, [deptId]);
+  }, [deptId, formData.departmentId]);
 
   const grouped = useMemo(() => {
     if (!classes) return {};

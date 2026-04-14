@@ -15,7 +15,7 @@ const Departments = () => {
     immediate: true,
     queryKey: ['departments'] 
   });
-  const depts = response?.data || [];
+  const depts = useMemo(() => response?.data || [], [response?.data]);
   
   const [showModal, setShowModal] = useState(false);
   const [editingDept, setEditingDept] = useState(null);

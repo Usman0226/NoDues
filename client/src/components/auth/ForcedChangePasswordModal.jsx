@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { changePassword } from '../../api/auth';
 import { toast } from 'react-hot-toast';
 import { ShieldAlert, KeyRound, LogOut, ArrowRight, Lock } from 'lucide-react';

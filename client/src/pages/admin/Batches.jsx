@@ -4,13 +4,13 @@ import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { getBatches, bulkCloseBatches } from '../../api/batch';
 import { Eye, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { toast } from 'react-hot-toast';
 import Button from '../../components/ui/Button';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 const Batches = () => {
   const navigate = useNavigate();
@@ -38,7 +38,7 @@ const Batches = () => {
     }],
     immediate: false
   });
-  const batches = response?.data || [];
+  const batches = useMemo(() => response?.data || [], [response?.data]);
   const total = response?.pagination?.total || 0;
 
   // Debounce search input
@@ -85,12 +85,13 @@ const Batches = () => {
 
   const columns = [
     { key: 'className', label: 'Class Name', render: (v) => <span className="font-black text-navy">{v}</span> },
-    { key: 'departmentName', label: 'Department' },
-    { key: 'academicYear', label: 'Year', render: (v, row) => <span className="font-semibold text-muted-foreground/60">{v} · S{row.semester}</span> },
-    { key: 'initiatorName', label: 'Started By' },
+    { key: 'departmentName', label: 'Department', width: '120px' },
+    { key: 'academicYear', label: 'Year', width: '100px', render: (v, row) => <span className="font-semibold text-muted-foreground/60">{v} · S{row.semester}</span> },
+    { key: 'initiatorName', label: 'Started By', width: '120px' },
     { 
       key: 'clearedCount', 
-      label: 'Clearance Status', 
+      label: 'Status', 
+      width: '130px',
       render: (v, row) => (
         <div className="flex flex-col">
            <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">{v} Cleared</span>
@@ -101,14 +102,21 @@ const Batches = () => {
     { 
       key: 'duesCount', 
       label: 'Dues', 
+      width: '60px',
       render: (v) => <span className={`font-black tabular-nums ${v > 0 ? 'text-status-due' : 'text-muted-foreground/20'}`}>{v}</span> 
     },
-    { key: 'status', label: 'Status', render: (v) => <Badge status={v} /> },
-        <button onClick={() => navigate(`${basePath}/batch/${v}`)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] bg-navy text-white hover:bg-navy/90 font-black uppercase tracking-widest transition-all shadow-sm shadow-navy/10">
+    { key: 'status', label: 'Badge', width: '100px', render: (v) => <Badge status={v} /> },
+    {
+      key: 'actions',
+      label: '',
+      width: '80px',
+      align: 'right',
+      render: (_, row) => (
+        <button onClick={() => navigate(`${basePath}/batch/${row._id}`)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] bg-navy text-white hover:bg-navy/90 font-black uppercase tracking-widest transition-all shadow-sm shadow-navy/10">
           <Eye size={12} strokeWidth={3} /> View
         </button>
-      
-  
+      )
+    }
   ];
 
   return (

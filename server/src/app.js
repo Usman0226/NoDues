@@ -21,6 +21,7 @@ import hodRoutes           from './Routes/hod.routes.js';
 import studentPortalRoutes from './Routes/studentPortal.routes.js';
 import sseRoutes           from './Routes/sse.routes.js';
 import importRoutes        from './Routes/import.routes.js';
+import taskRoutes          from './Routes/task.routes.js';
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.use('/api/hod',         hodRoutes);
 app.use('/api/student',     studentPortalRoutes);
 app.use('/api/sse',         sseRoutes);
 app.use('/api/import',      importRoutes);
+app.use('/api/tasks',       taskRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({

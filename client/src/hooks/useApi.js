@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 
@@ -70,7 +70,7 @@ export const useApi = (apiFunc, options = {}) => {
     // Otherwise just refetch the query
     const { data: refetchedData } = await refetch();
     return refetchedData;
-  }, [apiFunc, queryKey, queryClient, refetch, options.onSuccess, options.onError, options.silent]);
+  }, [apiFunc, queryKey, queryClient, refetch, options]);
 
   const setData = useCallback((newData) => {
     queryClient.setQueryData(queryKey, newData);

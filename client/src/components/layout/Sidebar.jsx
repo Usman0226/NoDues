@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { ROLES } from '../../utils/constants';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardCheck,
@@ -41,7 +41,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuth();
   const location = useLocation();
-  const navItems = NAV_CONFIG[user?.role] || [];
+  const navItems = React.useMemo(() => NAV_CONFIG[user?.role] || [], [user?.role]);
 
   const lastPath = React.useRef(location.pathname);
   

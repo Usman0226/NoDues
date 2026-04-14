@@ -12,10 +12,10 @@ import { getStudents, createStudent, updateStudent, deleteStudent, bulkDeactivat
 import { getFaculty } from '../../api/faculty';
 import { getClasses } from '../../api/classes';
 import ImportStepper from '../../components/import/ImportStepper';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import SearchableSelect from '../../components/ui/SearchableSelect';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 const StudentList = () => {
   const { showGlobalLoader } = useUI();
@@ -57,14 +57,14 @@ const StudentList = () => {
   }), [page, limit, includeInactive, debouncedSearchTerm, isHod, user?.departmentId]);
   
   const { data: response, loading, error, request: fetchStudents } = useApi(getStudents);
-  const students = response?.data || [];
+  const students = useMemo(() => response?.data || [], [response?.data]);
   const total = response?.pagination?.total || 0;
 
   const { data: classResponse, request: fetchClasses } = useApi(getClasses);
-  const classes = classResponse?.data || [];
+  const classes = useMemo(() => classResponse?.data || [], [classResponse?.data]);
 
   const { data: facultyResponse } = useApi(getFaculty, { immediate: true });
-  const faculty = facultyResponse?.data || [];
+  const faculty = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
 
   useEffect(() => {
     fetchStudents(studentQueryParams);
@@ -181,24 +181,29 @@ const StudentList = () => {
     { 
       key: 'rollNo', 
       label: 'Roll No', 
+      width: '90px',
       render: (v) => <span className="font-mono text-xs font-black tracking-tight text-navy">{v}</span> 
     },
     { key: 'name', label: 'Full Name', render: (v) => <span className="font-bold text-navy/80">{v}</span> },
-    { key: 'departmentName', label: 'Department' },
-    { key: 'className', label: 'Class', render: (v, row) => <span>{v || row.class}</span> },
+    { key: 'departmentName', label: 'Department', width: '120px' },
+    { key: 'className', label: 'Class', width: '100px', render: (v, row) => <span>{v || row.class}</span> },
     {
       key: 'mentor',
       label: 'Mentor',
+      width: '180px',
       render: (_, row) => row.mentor?.name || row.mentorName || 'Not Assigned'
     },
     { 
       key: 'status', 
       label: 'Status', 
+      width: '100px',
       render: (v, row) => <Badge status={row.isActive ? (v || 'pending') : 'rejected'} className="scale-90 origin-left" /> 
     },
     {
       key: 'actions',
       label: '',
+      width: '50px',
+      align: 'right',
       render: (_, row) => (
         <ActionMenu 
           actions={[

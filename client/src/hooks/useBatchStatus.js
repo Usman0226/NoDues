@@ -4,7 +4,6 @@ const useBatchStatus = (initialStudents = [], initialSubjects = [], initialMap =
   const [students] = useState(initialStudents);
   const [subjects] = useState(initialSubjects);
   const [statusMap, setStatusMap] = useState(initialMap);
-  const [loading, setLoading] = useState(false);
 
   const updateStatus = useCallback((studentId, subjectId, newStatus) => {
     setStatusMap((prev) => ({ ...prev, [`${studentId}-${subjectId}`]: newStatus }));
@@ -20,7 +19,7 @@ const useBatchStatus = (initialStudents = [], initialSubjects = [], initialMap =
     };
   }, [statusMap]);
 
-  return { students, subjects, statusMap, loading, updateStatus, getCounts };
+  return { students, subjects, statusMap, updateStatus, getCounts };
 };
 
 export default useBatchStatus;

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import toast from 'react-hot-toast';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 const EmailMonitor = () => {
   const [logs, setLogs] = useState([]);
@@ -80,7 +80,7 @@ const EmailMonitor = () => {
     fetchLogs();
   }, []);
 
-  const columns = [
+  const columns = React.useMemo(() => [
     { 
       key: 'recipient', 
       label: 'Recipient', 
@@ -129,7 +129,7 @@ const EmailMonitor = () => {
         </span>
       )
     }
-  ];
+  ], []);
 
   return (
     <PageWrapper 

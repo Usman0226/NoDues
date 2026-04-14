@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
 import { getHodDues } from '../../api/hod';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 const COLUMNS = [
   { key: 'rollNo', label: 'Roll No', render: (v) => <span className="font-mono text-[10px] font-black text-navy">{v}</span> },

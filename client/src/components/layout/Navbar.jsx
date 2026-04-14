@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { User, LogOut, Bell, Menu, ShieldCheck } from 'lucide-react';
+import Inbox from './Inbox';
 
 const Navbar = ({ onMenuToggle }) => {
   const { user, logout } = useAuth();
@@ -15,10 +16,7 @@ const Navbar = ({ onMenuToggle }) => {
       </div>
 
       <div className="flex items-center gap-3 lg:gap-6 pointer-events-auto">
-        <button className="p-2.5 rounded-full border border-zinc-200 text-muted-foreground hover:text-navy hover:border-indigo-200 transition-colors relative bg-white">
-          <Bell size={18} />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-status-due rounded-full border-2 border-white"></span>
-        </button>
+        <Inbox />
 
         <div className="h-6 w-px bg-zinc-200 hidden sm:block"></div>
 

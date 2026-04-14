@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import SearchableSelect from '../../components/ui/SearchableSelect';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 import { useApi } from '../../hooks/useApi';
 import { getApprovalHistory } from '../../api/approvals';
 import {
@@ -107,13 +107,8 @@ const FacultyHistory = () => {
     });
   }, [fetchHistory, semesterFilter, page, limit, debouncedSearch]);
 
-  const rows = response?.data || [];
+  const rows = React.useMemo(() => response?.data || [], [response?.data]);
   const total = response?.pagination?.total || 0;
-
-  const semesterOptions = useMemo(() => {
-    const sems = [...new Set(rows.map((r) => r.semester).filter(Boolean))].sort((a, b) => b - a);
-    return sems;
-  }, [rows]);
 
   const handleSemesterChange = (val) => {
     setSemesterFilter(val);
@@ -127,7 +122,7 @@ const FacultyHistory = () => {
           <AlertTriangle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Sync Error</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto text-sm">{error}</p>
-          <Button variant="primary" onClick={() => refetch()}>
+          <Button variant="primary" onClick={() => fetchHistory()}>
             <RefreshCw size={14} className="mr-2" /> Retry
           </Button>
         </div>

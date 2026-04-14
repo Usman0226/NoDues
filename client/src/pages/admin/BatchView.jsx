@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
 import BatchSummaryChips from '../../components/batch/BatchSummaryChips';
@@ -11,9 +11,9 @@ import { getBatchSSEUrl } from '../../api/sse';
 import { STATUSES } from '../../utils/constants';
 import Modal from '../../components/ui/Modal';
 import { ArrowLeft, X, ChevronRight, Info, AlertTriangle, RefreshCw } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 
 const ICON_MAP = {
@@ -25,7 +25,6 @@ const ICON_MAP = {
 
 const BatchView = () => {
   const { batchId } = useParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { showGlobalLoader } = useUI();
   const isHod = user?.role === 'hod';
@@ -52,7 +51,7 @@ const BatchView = () => {
       await closeBatch(batchId);
       toast.success('Batch cycle closed successfully');
       fetchBatch();
-    } catch (err) {
+    } catch {
       // toast handled
     }
   };
@@ -157,10 +156,10 @@ const BatchView = () => {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-offwhite/40 border-b border-muted/60">
-              <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground sticky left-0 bg-offwhite z-10 min-w-[220px]">Student Details</th>
-              <th className="text-center px-4 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l border-muted/30">Result</th>
+              <th className="text-left px-4 py-3.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground sticky left-0 bg-offwhite z-10 min-w-[180px]">Student Details</th>
+              <th className="text-center px-3 py-3.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l border-muted/30">Result</th>
               {batch.faculty?.map((f) => (
-                <th key={f._id} className="text-center px-4 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l border-muted/30">
+                <th key={f._id} className="text-center px-3 py-3.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l border-muted/30">
                   <span className="block">{f.name}</span>
                   <span className="text-[8px] font-bold text-navy/40 mt-0.5">{f.subjectName || f.type.toUpperCase()}</span>
                 </th>
@@ -170,7 +169,7 @@ const BatchView = () => {
           <tbody className="divide-y divide-muted/30">
             {filtered.map((row) => (
               <tr key={row._id} className="hover:bg-offwhite/30 transition-colors group">
-                <td className="px-6 py-4 sticky left-0 bg-white z-10 border-r border-muted/30">
+                <td className="px-4 py-3 sticky left-0 bg-white z-10 border-r border-muted/30">
                   <Link to={`${basePath}/batch/${batchId}/students/${row._id}`} className="flex items-center justify-between group/link">
                     <div className="flex flex-col">
                       <span className="font-mono text-xs font-black tracking-tight text-navy">{row.rollNo}</span>
@@ -179,7 +178,7 @@ const BatchView = () => {
                     <ChevronRight size={14} className="text-muted-foreground/30 group-hover/link:text-gold group-hover/link:translate-x-1 transition-all" />
                   </Link>
                 </td>
-                <td className="px-4 py-4 text-center border-l border-muted/30">
+                <td className="px-3 py-3 text-center border-l border-muted/30">
                   <Badge status={row.status} className="scale-90" />
                 </td>
                 {batch.faculty?.map((fac) => {
@@ -188,12 +187,12 @@ const BatchView = () => {
                   const config = ICON_MAP[action] || ICON_MAP[STATUSES.PENDING];
                   
                   return (
-                    <td key={fac._id} className="px-4 py-4 border-l border-muted/30 text-center">
+                    <td key={fac._id} className="px-3 py-3 border-l border-muted/30 text-center">
                       <button
                         type="button"
                         onClick={() => setPopover({ ...data, faculty: fac.name, student: row.name, subject: fac.subjectName || fac.type, action })}
                         className={`
-                          min-h-11 min-w-11 sm:min-h-8 sm:min-w-8 rounded-full inline-flex items-center justify-center text-xs font-black border transition-all
+                          min-h-10 min-w-10 sm:min-h-7 sm:min-w-7 rounded-full inline-flex items-center justify-center text-xs font-black border transition-all
                           hover:scale-110 shadow-sm mx-auto touch-manipulation
                           ${config.cls}
                         `}

@@ -17,6 +17,7 @@ import Table from '../ui/Table';
 import Badge from '../ui/Badge';
 import { previewImport, commitImport, getTemplate } from '../../api/import';
 import { toast } from 'react-hot-toast';
+import { useUI } from '../../hooks/useUI';
 
 const STEPS = [
   { label: 'Upload', icon: Upload },
@@ -25,8 +26,8 @@ const STEPS = [
 ];
 
 const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete }) => {
+  const { addBackgroundTask, updateBackgroundTask } = useUI();
   const [currentStep, setCurrentStep] = useState(0);
-  const [file, setFile] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -35,7 +36,6 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
   const handleFileUpload = useCallback(async (uploadedFile) => {
     setLoading(true);
     setError(null);
-    setFile(uploadedFile);
 
     const formData = new FormData();
     formData.append('file', uploadedFile);
@@ -51,24 +51,55 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
     } finally {
       setLoading(false);
     }
-  }, [type]);
+  }, [type, classId]);
 
   const handleCommit = useCallback(async () => {
-    setLoading(true);
+    const validCount = previewData?.valid?.length || 0;
+    const taskLabel = `Importing ${validCount} ${type}`;
+    
+    // Create background task
+    const taskId = addBackgroundTask({
+      label: taskLabel,
+      type: `import_${type}`,
+      message: 'Initializing background sync...'
+    });
+
+    // Close modal immediately
+    onComplete?.();
+    toast.success('Sync started in background');
+
     try {
       const payload = type === 'students' 
         ? { students: previewData.valid, classId }
         : { [type]: previewData.valid };
 
       const res = await commitImport(type, payload);
-      toast.success(res.data?.message || 'Records committed successfully');
-      onComplete?.();
+      const serverTaskId = res.data?.taskId;
+
+      if (serverTaskId) {
+        // Swap temp task for real backend-tracked task
+        updateBackgroundTask(taskId, { 
+          _id: serverTaskId,
+          status: 'success', 
+          message: res.data?.message || 'Started on server' 
+        });
+      } else {
+        updateBackgroundTask(taskId, { 
+          status: 'success', 
+          message: res.data?.message || 'Import completed successfully' 
+        });
+      }
+      
+      toast.success(`${type} sync finished`, { icon: '✅' });
     } catch (err) {
-      toast.error(err?.message || 'Commit failed. Try again.');
-    } finally {
-      setLoading(false);
+      const errorMsg = err?.message || 'Connection lost during sync';
+      updateBackgroundTask(taskId, { 
+        status: 'error', 
+        message: errorMsg 
+      });
+      toast.error(`${type} sync failed`, { icon: '❌' });
     }
-  }, [type, previewData, onComplete]);
+  }, [type, previewData, classId, onComplete, addBackgroundTask, updateBackgroundTask]);
 
   const handleDownloadTemplate = useCallback(async () => {
     setDownloading(true);
@@ -90,12 +121,44 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
     }
   }, [type]);
 
-  const dataRows = [
+  const dataRows = React.useMemo(() => [
     ...(previewData?.valid?.map(item => ({ ...item, isValid: true })) || []),
     ...(previewData?.errors?.map(err => ({ ...err.data, isValid: false, errors: [err.reason] })) || [])
-  ];
+  ], [previewData]);
   const validCount = previewData?.summary?.valid || 0;
   const errorCount = previewData?.summary?.errors || 0;
+
+  const tableColumns = React.useMemo(() => {
+    const baseCols = [
+      { key: 'identity', label: 'Identity', render: (_, row) => (
+        <div className="flex items-center gap-3">
+          <div className={`w-1 h-1 rounded-full ${row.isValid ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          <span className={`font-mono text-xs font-bold tracking-tight ${row.isValid ? 'text-navy' : 'text-red-400 line-through'}`}>
+            {row.rollNo || row.employeeId || row.identity}
+          </span>
+        </div>
+      )},
+    ];
+
+    if (type === 'students' || type === 'faculty') {
+      baseCols.push({ key: 'name', label: 'Name' });
+    } else if (type === 'electives') {
+      baseCols.push({ key: 'studentName', label: 'Student' });
+      baseCols.push({ key: 'subjectCode', label: 'Subject' });
+      baseCols.push({ key: 'facultyName', label: 'Faculty' });
+    } else if (type === 'mentors') {
+      baseCols.push({ key: 'studentName', label: 'Student' });
+      baseCols.push({ key: 'facultyName', label: 'Mentor' });
+    }
+
+    baseCols.push({ key: 'status', label: 'Analysis', render: (_, row) => row.isValid ? (
+      <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Compliant</span>
+    ) : (
+      <span className="text-[9px] font-black text-red-600 uppercase italic opacity-80">{row.errors?.[0] || 'Format Error'}</span>
+    )});
+
+    return baseCols;
+  }, [type]);
 
   return (
     <div className="w-full">
@@ -202,37 +265,7 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
 
             <div className="rounded-xl border border-muted/40 overflow-y-auto max-h-[400px] mb-6 bg-white shadow-sm no-scrollbar">
               <Table 
-                columns={(() => {
-                  const baseCols = [
-                    { key: 'identity', label: 'Identity', render: (_, row) => (
-                      <div className="flex items-center gap-3">
-                        <div className={`w-1 h-1 rounded-full ${row.isValid ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        <span className={`font-mono text-xs font-bold tracking-tight ${row.isValid ? 'text-navy' : 'text-red-400 line-through'}`}>
-                          {row.rollNo || row.employeeId || row.identity}
-                        </span>
-                      </div>
-                    )},
-                  ];
-
-                  if (type === 'students' || type === 'faculty') {
-                    baseCols.push({ key: 'name', label: 'Name' });
-                  } else if (type === 'electives') {
-                    baseCols.push({ key: 'studentName', label: 'Student' });
-                    baseCols.push({ key: 'subjectCode', label: 'Subject' });
-                    baseCols.push({ key: 'facultyName', label: 'Faculty' });
-                  } else if (type === 'mentors') {
-                    baseCols.push({ key: 'studentName', label: 'Student' });
-                    baseCols.push({ key: 'facultyName', label: 'Mentor' });
-                  }
-
-                  baseCols.push({ key: 'status', label: 'Analysis', render: (_, row) => row.isValid ? (
-                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Compliant</span>
-                  ) : (
-                    <span className="text-[9px] font-black text-red-600 uppercase italic opacity-80">{row.errors?.[0] || 'Format Error'}</span>
-                  )});
-
-                  return baseCols;
-                })()} 
+                columns={tableColumns} 
                 data={dataRows}
                 searchable={false}
               />

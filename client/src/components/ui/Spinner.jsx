@@ -69,8 +69,8 @@ export const PageSpinner = ({ message = "Syncing Academic Records..." }) => {
       </div>
 
       {/* Footer Branding */}
-      <div className="absolute bottom-12 flex flex-col items-center opacity-30 select-none">
-        <p className="text-[8px] uppercase tracking-[0.3em] font-black text-navy mb-1">Architecture by</p>
+      <div className="absolute bottom-12 flex flex-col items-center opacity-65 select-none">
+        <p className="text-[8px] uppercase tracking-[0.3em] font-black text-navy mb-1">Crafted by</p>
         <p className="text-[10px] font-brand text-navy flex items-center gap-1.5 font-bold">
           ARC Club <span className="h-0.5 w-0.5 rounded-full bg-gold" /> Community
         </p>

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { UIProvider, useUI } from './context/UIContext';
+import { AuthProvider, AuthContext } from './context/AuthContext';
+import { useAuth } from './hooks/useAuth';
+import { UIProvider, UIContext } from './context/UIContext';
+import { useUI } from './hooks/useUI';
 import { PageSpinner } from './components/ui/Spinner';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import ProtectedRoute from './components/auth/ProtectedRoute';

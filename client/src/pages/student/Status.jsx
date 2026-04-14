@@ -1,3 +1,4 @@
+import React from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
@@ -15,7 +16,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 const STATUS_CONFIG = {
   cleared: { banner: 'bg-emerald-500', icon: CheckCircle, label: 'No Outstanding Dues', sub: 'Your clearance is verified for the current cycle.' },
@@ -110,6 +111,21 @@ const StudentStatus = () => {
     }
   });
 
+  const clearanceData = data?.data || {};
+
+  const approvals = React.useMemo(() => clearanceData.approvals || [], [clearanceData.approvals]);
+
+  const clearedCount = React.useMemo(() => approvals.filter(a => ['approved', 'hod_override'].includes(a.action)).length, [approvals]);
+
+  const sortedApprovals = React.useMemo(() => {
+    return [...approvals].sort((a, b) => {
+      const order = { due_marked: 0, pending: 1, approved: 2, hod_override: 3 };
+      return (order[a.action] ?? 99) - (order[b.action] ?? 99);
+    });
+  }, [approvals]);
+
+  const totalCount = approvals.length;
+
   if (loading && !data) {
     return (
       <PageWrapper title="Dashboard" subtitle="Syncing clearance data...">
@@ -148,18 +164,6 @@ const StudentStatus = () => {
   }
 
   if (!data) return null;
-  const clearanceData = data.data || {};
-  const status = clearanceData.status || 'pending';
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-
-  const approvals = clearanceData.approvals || [];
-  const totalCount = approvals.length;
-  const clearedCount = approvals.filter(a => ['approved', 'hod_override'].includes(a.action)).length;
-
-  const sortedApprovals = [...approvals].sort((a, b) => {
-    const order = { due_marked: 0, pending: 1, approved: 2, hod_override: 3 };
-    return (order[a.action] ?? 99) - (order[b.action] ?? 99);
-  });
 
   return (
     <PageWrapper 

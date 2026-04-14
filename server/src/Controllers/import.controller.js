@@ -10,6 +10,7 @@ import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import crypto from 'crypto';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
+import Task from '../models/Task.js';
 
 const parseBuffer = (buffer) => {
   const workbook = xlsx.read(buffer, { type: 'buffer' });
@@ -18,43 +19,47 @@ const parseBuffer = (buffer) => {
   return xlsx.utils.sheet_to_json(sheet);
 };
 
-export const previewStudents = asyncHandler(async (req, res, next) => {
-  if (!req.file) {
-    return next(new ErrorResponse('Please upload a file', 400));
+// ── Shared Helpers for Complexity Reduction ───────────────────────────────────
+
+const validateEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
+
+const checkDeptScope = (user, deptId) => {
+  if (user.role === 'hod' && deptId.toString() !== user.departmentId) {
+    throw new ErrorResponse('Access denied: Department outside your scope', 403, 'AUTH_DEPARTMENT_SCOPE');
   }
+};
+
+const getRowValue = (row, keys) => {
+  for (const key of keys) {
+    if (row[key] !== undefined) return row[key]?.toString().trim();
+  }
+  return null;
+};
+
+export const previewStudents = asyncHandler(async (req, res, next) => {
+  if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
 
   const { classId } = req.query;
-  if (!classId) {
-    return next(new ErrorResponse('classId query param is required', 400));
-  }
-
-  const rows = parseBuffer(req.file.buffer);
-  const results = {
-    valid: [],
-    errors: [],
-    summary: { total: rows.length, valid: 0, errors: 0 }
-  };
+  if (!classId) return next(new ErrorResponse('classId is required', 400));
 
   const targetClass = await Class.findById(classId);
-  if (req.user.role === 'hod' && targetClass?.departmentId?.toString() !== req.user.departmentId) {
-    return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
-  }
+  if (!targetClass) return next(new ErrorResponse('Target class not found', 404));
+  checkDeptScope(req.user, targetClass.departmentId);
 
-  if (!targetClass) {
-    return next(new ErrorResponse('Target class not found', 404));
-  }
+  const rows = parseBuffer(req.file.buffer);
+  const results = { valid: [], errors: [], summary: { total: rows.length, valid: 0, errors: 0 } };
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rollNo = (row['Roll No'] || row['rollNo'])?.toString().trim();
-    const name = (row['Name'] || row['name'])?.toString().trim();
-    const email = (row['Email'] || row['email'])?.toString().trim();
+    const rollNo = getRowValue(row, ['Roll No', 'rollNo']);
+    const name = getRowValue(row, ['Name', 'name']);
+    const email = getRowValue(row, ['Email', 'email']);
 
     const errors = [];
     if (!rollNo) errors.push('Roll number is required');
     if (!name) errors.push('Name is required');
     if (!email) errors.push('Email is required');
-    else if (!/^\S+@\S+\.\S+$/.test(email)) errors.push('Invalid email format');
+    else if (!validateEmail(email)) errors.push('Invalid email format');
 
     if (errors.length > 0) {
       results.errors.push({ row: i + 1, data: row, reason: errors.join(', ') });
@@ -62,14 +67,14 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const existing = await Student.findOne({ rollNo });
+    const existing = await Student.findOne({ rollNo }).select('_id').lean();
     if (existing) {
       results.errors.push({ row: i + 1, data: row, reason: `Roll number ${rollNo} already exists` });
       results.summary.errors++;
       continue;
     }
 
-    results.valid.push({ rollNo, name, email });
+    results.valid.push({ rollNo: rollNo.toUpperCase(), name, email: email.toLowerCase() });
     results.summary.valid++;
   }
 
@@ -78,53 +83,80 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
 
 export const commitStudents = asyncHandler(async (req, res, next) => {
   const { students, classId } = req.body;
-
-  if (!students || !Array.isArray(students) || students.length === 0) {
-    return next(new ErrorResponse('No valid student data provided', 400));
-  }
+  if (!students?.length) return next(new ErrorResponse('No valid student data provided', 400));
 
   const targetClass = await Class.findById(classId);
-  if (!targetClass) {
-    return next(new ErrorResponse('Target class not found', 404));
-  }
+  if (!targetClass) return next(new ErrorResponse('Target class not found', 404));
+  checkDeptScope(req.user, targetClass.departmentId);
 
-  if (req.user.role === 'hod' && targetClass.departmentId?.toString() !== req.user.departmentId) {
-    return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
-  }
-
-  const createdStudents = [];
-  
-  for (const stud of students) {
-    const tempPassword = crypto.randomBytes(4).toString('hex');
-    
-    const student = await Student.create({
-      ...stud,
-      classId: targetClass._id,
-      departmentId: targetClass.departmentId,
-      semester: targetClass.semester,
-      academicYear: targetClass.academicYear,
-      password: tempPassword 
-      
-    });
-    // sendCredentialEmail(student.email, student.name, student.rollNo, tempPassword, 'student');
-    createdStudents.push(student._id);
-  }
-
-  await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: { $each: createdStudents } } });
-
-  // Invalidation handled by Class.findByIdAndUpdate -> findOneAndUpdate hook
-
-  logger.info('Student batch import completed', {
-    timestamp: new Date().toISOString(),
+  // Initialize persistent background task
+  const task = await Task.create({
+    type: 'import_students',
+    label: `Importing ${students.length} students to ${targetClass.name}`,
+    status: 'processing',
     actor: req.user.userId,
-    action: 'IMPORT_STUDENTS',
+    meta: { requested: students.length }
+  });
+
+  // Execute processing
+  const creationTasks = students.map(async (stud) => {
+    try {
+      const student = await Student.create({
+        ...stud,
+        classId: targetClass._id,
+        departmentId: targetClass.departmentId,
+        semester: targetClass.semester,
+        academicYear: targetClass.academicYear
+      });
+      return student._id;
+    } catch (err) {
+      throw new Error(`${stud.rollNo}: ${err.message}`);
+    }
+  });
+
+  const settleResults = await Promise.allSettled(creationTasks);
+  const createdIds = settleResults
+    .filter(r => r.status === 'fulfilled')
+    .map(r => r.value);
+  const errors = settleResults
+    .filter(r => r.status === 'rejected')
+    .map(r => r.reason.message);
+
+  if (createdIds.length > 0) {
+    await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: { $each: createdIds } } });
+    invalidateEntityCache('student', 'all');
+  }
+
+  // Update task final status
+  const finalStatus = createdIds.length === students.length ? 'success' : (createdIds.length > 0 ? 'success' : 'error');
+  await Task.findByIdAndUpdate(task._id, {
+    status: finalStatus,
+    message: `Completed: ${createdIds.length} succeeded, ${errors.length} failed.`,
+    meta: { 
+      requested: students.length, 
+      success: createdIds.length, 
+      failed: errors.length,
+      errors: errors.slice(0, 10) // Store first 10 errors for feedback
+    }
+  });
+
+  logger.audit('STUDENT_IMPORT_COMMIT', {
+    actor: req.user.userId,
     resource_id: classId,
-    meta: { count: createdStudents.length }
+    meta: { 
+      taskId: task._id,
+      requested: students.length, 
+      success: createdIds.length,
+      failed: errors.length
+    }
   });
 
   res.status(201).json({
     success: true,
-    data: { message: `Successfully imported ${createdStudents.length} students` }
+    data: { 
+      message: `Successfully imported ${createdIds.length} students`,
+      taskId: task._id
+    }
   });
 });
 
@@ -136,15 +168,16 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const employeeId = (row['Employee ID'] || row['employeeId'])?.toString().trim();
-    const name = (row['Name'] || row['name'])?.toString().trim();
-    const email = (row['Email'] || row['email'])?.toString().trim();
-    const deptName = (row['Department'] || row['department'])?.toString().trim();
+    const employeeId = getRowValue(row, ['Employee ID', 'employeeId']);
+    const name = getRowValue(row, ['Name', 'name']);
+    const email = getRowValue(row, ['Email', 'email']);
+    const deptName = getRowValue(row, ['Department', 'department']);
 
     const errors = [];
     if (!employeeId) errors.push('Employee ID is required');
     if (!name) errors.push('Name is required');
     if (!email) errors.push('Email is required');
+    else if (!validateEmail(email)) errors.push('Invalid email format');
     if (!deptName) errors.push('Department name is required');
 
     if (errors.length > 0) {
@@ -153,23 +186,25 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    // Check if department exists
-    const dept = await Department.findOne({ name: deptName.toUpperCase() });
+    const dept = await Department.findOne({ name: deptName.toUpperCase() }).select('_id').lean();
     if (!dept) {
       results.errors.push({ row: i + 1, data: row, reason: `Department '${deptName}' not found` });
       results.summary.errors++;
       continue;
     }
 
-    // HoD Scope Check in Preview
-    if (req.user.role === 'hod' && dept._id.toString() !== req.user.departmentId) {
-      results.errors.push({ row: i + 1, data: row, reason: `Access denied: Department '${deptName}' is outside your scope` });
+    try {
+      checkDeptScope(req.user, dept._id);
+    } catch (e) {
+      results.errors.push({ row: i + 1, data: row, reason: e.message });
       results.summary.errors++;
       continue;
     }
 
-    const existingId = await Faculty.findOne({ employeeId: employeeId.toUpperCase() });
-    const existingEmail = await Faculty.findOne({ email: email.toLowerCase() });
+    const [existingId, existingEmail] = await Promise.all([
+      Faculty.findOne({ employeeId: employeeId.toUpperCase() }).select('_id').lean(),
+      Faculty.findOne({ email: email.toLowerCase() }).select('_id').lean()
+    ]);
 
     if (existingId) {
       results.errors.push({ row: i + 1, data: row, reason: `Employee ID ${employeeId} already exists` });
@@ -198,38 +233,26 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
 
 export const commitFaculty = asyncHandler(async (req, res, next) => {
   const { faculty } = req.body;
+  if (!faculty?.length) return next(new ErrorResponse('No valid faculty data provided', 400));
 
-  if (!faculty || !Array.isArray(faculty) || faculty.length === 0) {
-    return next(new ErrorResponse('No valid faculty data provided', 400));
-  }
+  // Initialize persistent background task
+  const task = await Task.create({
+    type: 'import_faculty',
+    label: `Importing ${faculty.length} faculty members`,
+    status: 'processing',
+    actor: req.user.userId,
+    meta: { requested: faculty.length }
+  });
 
-  let createdCount = 0;
-  const createdFaculty = [];
-
-  for (const fac of faculty) {
-    let departmentId = fac.departmentId;
-    
-    // Fallback lookup if ID is missing but name is present (should be handled by preview but adding safety)
-    if (!departmentId && fac.departmentName) {
-      const dept = await Department.findOne({ name: fac.departmentName.toUpperCase() });
-      if (dept) departmentId = dept._id;
-    }
-
-    if (!departmentId) {
-      logger.warn('Skipping faculty import row: Department not found', { faculty: fac.employeeId });
-      continue;
-    }
-
-    // HoD Scope Check
-    if (req.user.role === 'hod' && departmentId.toString() !== req.user.departmentId) {
-      logger.warn('Skipping faculty import row: HoD scope violation', { faculty: fac.employeeId, dept: departmentId });
-      continue;
-    }
-
-    const tempPassword = crypto.randomBytes(4).toString('hex');
-    
+  const creationTasks = faculty.map(async (fac) => {
     try {
-      const facultyMember = await Faculty.create({
+      const tempPassword = crypto.randomBytes(4).toString('hex');
+      const departmentId = fac.departmentId;
+
+      if (!departmentId) throw new Error(`Department ID missing for ${fac.employeeId}`);
+      checkDeptScope(req.user, departmentId);
+
+      const member = await Faculty.create({
         employeeId: fac.employeeId,
         name: fac.name,
         email: fac.email,
@@ -239,38 +262,57 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
         password: tempPassword
       });
 
-      const emailPromise = sendCredentialEmail(facultyMember.email, facultyMember.name, facultyMember.email, tempPassword, 'faculty')
-        .catch(err => logger.error('Credential email failed in batch import', { email: facultyMember.email, error: err.message }));
-        
-      createdFaculty.push({ member: facultyMember, emailPromise });
-      createdCount++;
+      // Fire-and-forget email dispatch
+      sendCredentialEmail(member.email, member.name, member.email, tempPassword, 'faculty')
+        .catch(err => logger.error('Credential email failed in batch import', { email: member.email, error: err.message }));
+
+      return member._id;
     } catch (err) {
-      logger.error('Failed to create faculty member in batch import', { employeeId: fac.employeeId, error: err.message });
-      // We continue with other members if one fails
+      throw new Error(`${fac.employeeId}: ${err.message}`);
     }
+  });
+
+  const settleResults = await Promise.allSettled(creationTasks);
+  const createdIds = settleResults
+    .filter(r => r.status === 'fulfilled')
+    .map(r => r.value);
+  const errors = settleResults
+    .filter(r => r.status === 'rejected')
+    .map(r => r.reason.message);
+
+  if (createdIds.length > 0) {
+    invalidateEntityCache('faculty', 'all');
   }
 
-  // Await all emails in parallel before completing (settled prevents one failure from blocking others)
-  if (createdFaculty.length > 0) {
-    await Promise.allSettled(createdFaculty.map(f => f.emailPromise));
-  }
+  // Update task final status
+  const finalStatus = createdIds.length === faculty.length ? 'success' : (createdIds.length > 0 ? 'success' : 'error');
+  await Task.findByIdAndUpdate(task._id, {
+    status: finalStatus,
+    message: `Completed: ${createdIds.length} succeeded, ${errors.length} failed.`,
+    meta: { 
+      requested: faculty.length, 
+      success: createdIds.length, 
+      failed: errors.length,
+      errors: errors.slice(0, 10)
+    }
+  });
 
-  invalidateEntityCache('faculty', 'all');
-  if (createdFaculty.length > 0) {
-    const depts = [...new Set(createdFaculty.map(f => f.member.departmentId.toString()))];
-    depts.forEach(d => invalidateEntityCache('department', d));
-  }
-
-  logger.info('Faculty batch import completed', {
-    timestamp: new Date().toISOString(),
+  logger.audit('FACULTY_IMPORT_COMMIT', {
     actor: req.user.userId,
-    action: 'IMPORT_FACULTY',
-    meta: { count: createdCount }
+    meta: { 
+      taskId: task._id,
+      requested: faculty.length, 
+      success: createdIds.length,
+      failed: errors.length
+    }
   });
 
   res.status(201).json({
     success: true,
-    data: { message: `Successfully imported ${createdCount} faculty members` }
+    data: { 
+      message: `Successfully imported ${createdIds.length} faculty members`,
+      taskId: task._id
+    }
   });
 });
 
@@ -286,9 +328,9 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rollNo = (row['Roll No'] || row['rollNo'])?.toString().trim();
-    const subjectCode = (row['Subject Code'] || row['subjectCode'])?.toString().trim();
-    const empId = (row['Faculty Employee ID'] || row['employeeId'])?.toString().trim();
+    const rollNo = getRowValue(row, ['Roll No', 'rollNo']);
+    const subjectCode = getRowValue(row, ['Subject Code', 'subjectCode']);
+    const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
 
     if (!rollNo || !subjectCode || !empId) {
       results.errors.push({ row: i + 1, data: row, reason: 'Missing required columns (Roll No, Subject Code, Faculty Employee ID)' });
@@ -296,18 +338,30 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const student = await Student.findOne({ rollNo: rollNo.toUpperCase() });
-    const subject = await Subject.findOne({ code: subjectCode.toUpperCase() });
-    const faculty = await Faculty.findOne({ employeeId: empId.toUpperCase() });
+    const [student, subject, faculty] = await Promise.all([
+      Student.findOne({ rollNo: rollNo.toUpperCase(), isActive: true }).select('_id rollNo name departmentId').lean(),
+      Subject.findOne({ code: subjectCode.toUpperCase(), isElective: true, isActive: true }).select('_id code name').lean(),
+      Faculty.findOne({ employeeId: empId.toUpperCase(), isActive: true }).select('_id employeeId name').lean()
+    ]);
 
+    let reason = null;
     if (!student) {
-      results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} not found` });
-    } else if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
-      results.errors.push({ row: i+1, data: row, reason: `Student ${rollNo} does not belong to your department` });
+      reason = `Student ${rollNo} not found or inactive`;
     } else if (!subject) {
-      results.errors.push({ row: i+1, data: row, reason: `Subject ${subjectCode} not found` });
+      reason = `Subject ${subjectCode} not found or inactive`;
     } else if (!faculty) {
-      results.errors.push({ row: i+1, data: row, reason: `Faculty ${empId} not found` });
+      reason = `Faculty ${empId} not found or inactive`;
+    } else {
+      try {
+        checkDeptScope(req.user, student.departmentId);
+      } catch (e) {
+        reason = `Access denied for Student ${rollNo}: ${e.message}`;
+      }
+    }
+
+    if (reason) {
+      results.errors.push({ row: i+1, data: row, reason });
+      results.summary.errors++;
     } else {
       results.valid.push({ 
         studentId: student._id, 
@@ -318,12 +372,11 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
         subjectName: subject.name,
         facultyId: faculty._id, 
         employeeId: faculty.employeeId,
-        facultyName: faculty.name
+        facultyName: faculty.name,
+        studentDeptId: student.departmentId
       });
       results.summary.valid++;
-      continue;
     }
-    results.summary.errors++;
   }
   res.status(200).json({ success: true, data: results });
 });
@@ -333,18 +386,27 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
  */
 export const commitElectives = asyncHandler(async (req, res, next) => {
   const { electives } = req.body;
-  if (!electives || !Array.isArray(electives)) return next(new ErrorResponse('Invalid data', 400));
+  if (!electives?.length) return next(new ErrorResponse('Invalid data', 400));
 
-  let updated = 0;
-  for (const item of electives) {
-    const student = await Student.findById(item.studentId);
-    if (student) {
-      // HoD Scope Check
-      if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
-        continue;
-      }
-      // Remove existing assignment for this subject if any to prevent duplicates
-      student.electiveSubjects = student.electiveSubjects.filter(e => e.subjectId.toString() !== item.subjectId.toString());
+  // Initialize persistent background task
+  const task = await Task.create({
+    type: 'import_electives',
+    label: `Mapping ${electives.length} elective assignments`,
+    status: 'processing',
+    actor: req.user.userId,
+    meta: { requested: electives.length }
+  });
+
+  const updateTasks = electives.map(async (item) => {
+    try {
+      if (item.studentDeptId) checkDeptScope(req.user, item.studentDeptId);
+
+      const student = await Student.findById(item.studentId);
+      if (!student) throw new Error(`Student ${item.rollNo} not found`);
+
+      checkDeptScope(req.user, student.departmentId);
+      
+      student.electiveSubjects = student.electiveSubjects.filter(e => e.subjectCode !== item.subjectCode);
       
       student.electiveSubjects.push({
         subjectId: item.subjectId,
@@ -355,19 +417,50 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
       });
       
       await student.save();
-      // Invalidation handled by student.save() -> post('save') hook
-      updated++;
+      return student._id;
+    } catch (err) {
+      throw new Error(`${item.rollNo || item.studentId}: ${err.message}`);
     }
-  }
-
-  logger.info('Elective mapping import completed', {
-    timestamp: new Date().toISOString(),
-    actor: req.user.userId,
-    action: 'IMPORT_ELECTIVES',
-    meta: { count: updated }
   });
 
-  res.status(200).json({ success: true, data: { message: `Successfully updated ${updated} elective assignments` } });
+  const settleResults = await Promise.allSettled(updateTasks);
+  const updatedIds = settleResults
+    .filter(r => r.status === 'fulfilled')
+    .map(r => r.value);
+  const errors = settleResults
+    .filter(r => r.status === 'rejected')
+    .map(r => r.reason.message);
+
+  // Update task final status
+  const finalStatus = updatedIds.length === electives.length ? 'success' : (updatedIds.length > 0 ? 'success' : 'error');
+  await Task.findByIdAndUpdate(task._id, {
+    status: finalStatus,
+    message: `Completed: ${updatedIds.length} succeeded, ${errors.length} failed.`,
+    meta: { 
+      requested: electives.length, 
+      success: updatedIds.length, 
+      failed: errors.length,
+      errors: errors.slice(0, 10)
+    }
+  });
+
+  logger.audit('ELECTIVE_IMPORT_COMMIT', {
+    actor: req.user.userId,
+    meta: { 
+      taskId: task._id,
+      requested: electives.length, 
+      success: updatedIds.length,
+      failed: errors.length
+    }
+  });
+
+  res.status(200).json({ 
+    success: true, 
+    data: { 
+      message: `Successfully updated ${updatedIds.length} elective assignments`,
+      taskId: task._id
+    } 
+  });
 });
 
 /**
@@ -383,8 +476,8 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rollNo = (row['Roll No'] || row['rollNo'])?.toString().trim().toUpperCase();
-    const empId = (row['Faculty Employee ID'] || row['employeeId'])?.toString().trim().toUpperCase();
+    const rollNo = getRowValue(row, ['Roll No', 'rollNo']);
+    const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
     
     if (!rollNo || !empId) {
       results.errors.push({ row: i+1, data: row, reason: 'Missing required columns (Roll No, Faculty Employee ID)' });
@@ -392,16 +485,17 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    if (seenRolls.has(rollNo)) {
+    const upperRoll = rollNo.toUpperCase();
+    if (seenRolls.has(upperRoll)) {
       results.errors.push({ row: i+1, data: row, reason: `Duplicate Roll No ${rollNo} in file` });
       results.summary.errors++;
       continue;
     }
-    seenRolls.add(rollNo);
+    seenRolls.add(upperRoll);
 
     const [student, faculty] = await Promise.all([
-      Student.findOne({ rollNo, isActive: true }),
-      Faculty.findOne({ employeeId: empId, isActive: true }).lean()
+      Student.findOne({ rollNo: upperRoll, isActive: true }).select('_id rollNo name departmentId').lean(),
+      Faculty.findOne({ employeeId: empId.toUpperCase(), isActive: true }).select('_id employeeId name departmentId roleTags').lean()
     ]);
 
     let reason = null;
@@ -409,12 +503,15 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
       reason = `Student ${rollNo} not found or inactive`;
     } else if (!faculty) {
       reason = `Faculty ${empId} not found or inactive`;
-    } else if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
-      reason = `Student ${rollNo} does not belong to your department`;
-    } else if (student.departmentId?.toString() !== faculty.departmentId?.toString()) {
-      reason = `Cross-department mapping rejected: Student ${rollNo} (${student.departmentId}) vs Faculty ${empId} (${faculty.departmentId})`;
-    } else if (!faculty.roleTags?.includes('mentor') && !faculty.roleTags?.includes('faculty')) {
-      reason = `Faculty ${empId} is not eligible for mentor role (missing role tags)`;
+    } else {
+      try {
+        checkDeptScope(req.user, student.departmentId);
+        if (student.departmentId?.toString() !== faculty.departmentId?.toString()) {
+          reason = `Cross-department mapping rejected: Student ${rollNo} belongs to ${student.departmentId} but Faculty ${empId} is in ${faculty.departmentId}`;
+        }
+      } catch (e) {
+        reason = `Access denied for Student ${rollNo}: ${e.message}`;
+      }
     }
 
     if (reason) {
@@ -427,7 +524,8 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
         studentName: student.name,
         mentorId: faculty._id, 
         employeeId: faculty.employeeId,
-        facultyName: faculty.name
+        facultyName: faculty.name,
+        studentDeptId: student.departmentId
       });
       results.summary.valid++;
     }
@@ -440,31 +538,72 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
  */
 export const commitMentors = asyncHandler(async (req, res, next) => {
   const { mentors } = req.body;
-  if (!mentors || !Array.isArray(mentors)) return next(new ErrorResponse('Invalid data', 400));
+  if (!mentors?.length) return next(new ErrorResponse('Invalid data', 400));
 
-  let updated = 0;
-  for (const item of mentors) {
-    const student = await Student.findById(item.studentId);
-    if (student) {
-      // HoD Scope Check
-      if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
-        continue;
-      }
-      student.mentorId = item.mentorId;
-      await student.save();
-      // Invalidation handled by student.save() -> post('save') hook
-      updated++;
-    }
-  }
-
-  logger.info('Mentor mapping import completed', {
-    timestamp: new Date().toISOString(),
+  // Initialize persistent background task
+  const task = await Task.create({
+    type: 'import_mentors',
+    label: `Mapping ${mentors.length} students to mentors`,
+    status: 'processing',
     actor: req.user.userId,
-    action: 'IMPORT_MENTORS',
-    meta: { count: updated }
+    meta: { requested: mentors.length }
   });
 
-  res.status(200).json({ success: true, data: { message: `Successfully updated ${updated} mentor assignments` } });
+  const updateTasks = mentors.map(async (item) => {
+    try {
+      if (item.studentDeptId) checkDeptScope(req.user, item.studentDeptId);
+
+      const student = await Student.findById(item.studentId);
+      if (!student) throw new Error(`Student ${item.rollNo} not found`);
+
+      checkDeptScope(req.user, student.departmentId);
+      
+      student.mentorId = item.mentorId;
+      await student.save();
+      return student._id;
+    } catch (err) {
+      throw new Error(`${item.rollNo || item.studentId}: ${err.message}`);
+    }
+  });
+
+  const settleResults = await Promise.allSettled(updateTasks);
+  const updatedIds = settleResults
+    .filter(r => r.status === 'fulfilled')
+    .map(r => r.value);
+  const errors = settleResults
+    .filter(r => r.status === 'rejected')
+    .map(r => r.reason.message);
+
+  // Update task final status
+  const finalStatus = updatedIds.length === mentors.length ? 'success' : (updatedIds.length > 0 ? 'success' : 'error');
+  await Task.findByIdAndUpdate(task._id, {
+    status: finalStatus,
+    message: `Completed: ${updatedIds.length} succeeded, ${errors.length} failed.`,
+    meta: { 
+      requested: mentors.length, 
+      success: updatedIds.length, 
+      failed: errors.length,
+      errors: errors.slice(0, 10)
+    }
+  });
+
+  logger.audit('MENTOR_IMPORT_COMMIT', {
+    actor: req.user.userId,
+    meta: { 
+      taskId: task._id,
+      requested: mentors.length, 
+      success: updatedIds.length,
+      failed: errors.length
+    }
+  });
+
+  res.status(200).json({ 
+    success: true, 
+    data: { 
+      message: `Successfully updated ${updatedIds.length} mentor assignments`,
+      taskId: task._id
+    } 
+  });
 });
 
 export const getTemplate = asyncHandler(async (req, res, next) => {

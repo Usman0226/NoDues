@@ -14,7 +14,7 @@ import {
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import useSSE from '../../hooks/useSSE';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 const FacultyDashboard = () => {
   const navigate = useNavigate();
@@ -61,7 +61,7 @@ const FacultyDashboard = () => {
     return Object.values(groups);
   }, [approvals]);
 
-  const totalPending = approvals.filter(a => a.action === 'pending').length || 0;
+  const totalPending = useMemo(() => approvals.filter(a => a.action === 'pending').length || 0, [approvals]);
 
   if (loading && !response) {
     return (

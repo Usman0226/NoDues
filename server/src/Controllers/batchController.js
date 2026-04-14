@@ -226,10 +226,8 @@ const _executeInitiation = async (cls, deadline, initiator) => {
   // Invalidating all student statuses for this class is more reliable for bulk writes
   invalidateEntityCache('student', 'all');
 
-  logger.info('batch_initiated', {
-    timestamp: new Date().toISOString(),
+  logger.audit('BATCH_INITIATED', {
     actor: initiator.userId,
-    action: 'INITIATE_BATCH',
     resource_id: batch._id.toString(),
     classId,
     requestsCreated: requestResult.insertedCount,
@@ -606,9 +604,9 @@ export const closeBatch = async (req, res, next) => {
 
     // Cache invalidated automatically by Mongoose batch save hook
 
-    logger.info('batch_closed', {
-      timestamp: new Date().toISOString(), actor: req.user.userId,
-      action: 'CLOSE_BATCH', resource_id: batchId,
+    logger.audit('BATCH_CLOSED', {
+      actor: req.user.userId,
+      resource_id: batchId,
     });
 
     // Notify students via SSE
@@ -722,10 +720,10 @@ export const removeFacultyFromBatch = async (req, res, next) => {
     // Manual invalidation redundant with batch hooks for batch_status
     // Cache invalidated automatically by Mongoose approval hooks
 
-    logger.info('faculty_removed_from_batch', {
-      timestamp: new Date().toISOString(), actor: req.user.userId,
-      action: 'REMOVE_FACULTY_BATCH',
-      resource_id: batchId, facultyId,
+    logger.audit('FACULTY_REMOVED_BATCH', {
+      actor: req.user.userId,
+      resource_id: batchId, 
+      facultyId,
       pendingDeleted: result.deletedCount,
     });
 
@@ -771,10 +769,8 @@ export const bulkCloseBatches = async (req, res, next) => {
       }
     }
 
-    logger.info('batches_bulk_closed', {
-      timestamp: new Date().toISOString(),
+    logger.audit('BATCH_BULK_CLOSED', {
       actor: req.user.userId,
-      action: 'BULK_CLOSE_BATCH',
       details: { count: result.modifiedCount, requested: ids.length }
     });
 

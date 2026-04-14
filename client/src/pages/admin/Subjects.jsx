@@ -9,9 +9,9 @@ import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
 import { getSubjects, createSubject, updateSubject, deleteSubject, bulkDeleteSubjects } from '../../api/subjects';
 import { Plus, Filter, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 const Subjects = () => {
   const { showGlobalLoader } = useUI();
@@ -30,7 +30,7 @@ const Subjects = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const { data: response, loading, error, request: fetchSubjects } = useApi(getSubjects);
-  const subjects = response?.data || [];
+  const subjects = React.useMemo(() => response?.data || [], [response?.data]);
   const total = response?.pagination?.total || 0;
 
   const [formData, setFormData] = useState({
@@ -140,7 +140,7 @@ const Subjects = () => {
     }
   };
 
-  const columns = [
+  const columns = React.useMemo(() => [
     { key: 'code', label: 'Identity', render: (v) => <span className="font-mono text-[10px] font-black uppercase text-navy bg-offwhite px-2 py-0.5 rounded border border-muted/50">{v}</span> },
     { key: 'name', label: 'Component Name', render: (v) => <span className="font-bold text-navy/80">{v}</span> },
     { key: 'semester', label: 'Standard Sem', render: (v) => <span className="font-bold text-muted-foreground/60">{v}</span> },
@@ -163,7 +163,7 @@ const Subjects = () => {
         </div>
       )
     }] : [])
-  ];
+  ], [isAdmin]);
 
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkDelete, setShowBulkDelete] = useState(false);

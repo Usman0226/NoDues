@@ -93,7 +93,7 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'sm', preventC
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e) => {
+  const handleBackdropClick = () => {
     if (!preventClose && onClose) {
       onClose();
     }

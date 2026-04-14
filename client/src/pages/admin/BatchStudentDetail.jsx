@@ -1,8 +1,9 @@
+import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { getBatchStudentDetail } from '../../api/batch';
 
 import { 
@@ -25,6 +26,8 @@ const BatchStudentDetail = () => {
   const basePath = isHod ? '/hod' : '/admin';
 
   const { data: detail, loading, error, request: fetchDetail } = useApi(() => getBatchStudentDetail(batchId, studentId), { immediate: true });
+
+  const approvals = React.useMemo(() => detail?.approvals || [], [detail?.approvals]);
 
   if (loading && !detail) {
     return (
@@ -52,7 +55,6 @@ const BatchStudentDetail = () => {
   }
 
   const student = detail || {};
-  const approvals = detail?.approvals || [];
 
   return (
     <PageWrapper 

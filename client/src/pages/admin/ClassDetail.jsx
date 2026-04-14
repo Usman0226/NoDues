@@ -15,7 +15,7 @@ import { createStudent, updateStudent, deleteStudent, assignMentor, addElective,
 import { getFaculty } from '../../api/faculty';
 import { getSubjects, createSubject } from '../../api/subjects';
 import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2, Search, X, ChevronDown } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 
 
@@ -90,12 +90,12 @@ const ClassDetail = () => {
     fetchFaculty(params);
   }, [fetchFaculty, isHod, user?.departmentId]);
 
-  const classData = response?.data || {};
-  const students = classData?.students || [];
-  const subjects = classData?.subjects || classData?.subjectAssignments || [];
-  const pastBatches = classData?.batchHistory || [];
+  const classData = useMemo(() => response?.data || {}, [response?.data]);
+  const students = useMemo(() => classData?.students || [], [classData?.students]);
+  const subjects = useMemo(() => classData?.subjects || classData?.subjectAssignments || [], [classData?.subjects, classData?.subjectAssignments]);
+  const pastBatches = useMemo(() => classData?.batchHistory || [], [classData?.batchHistory]);
   const activeBatch = classData?.activeBatch;
-  const facultyList = facultyResponse?.data || [];
+  const facultyList = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
   
   useEffect(() => {
     if (response?.data?.students) {
@@ -121,8 +121,11 @@ const ClassDetail = () => {
       .catch(() => {}); // silent — non-critical
   }, [departmentId, classId]);
 
-  const { data: deptSubjectsRes } = useApi(() => getSubjects({ limit: 100 }), { immediate: true });
-  const globalSubjects = deptSubjectsRes?.data || [];
+  const { data: deptSubjectsRes, request: fetchGlobalSubjects } = useApi(() => getSubjects({ limit: 100 }), { 
+    immediate: true,
+    queryKey: ['global-subjects']
+  });
+  const globalSubjects = useMemo(() => deptSubjectsRes?.data || [], [deptSubjectsRes?.data]);
 
   useEffect(() => {
     if (showAddSubject) setSubjectFormData({ subjectId: '', facultyId: '', subjectCode: '' });
@@ -224,8 +227,7 @@ const ClassDetail = () => {
       const res = await createSubject({ ...quickSubjectForm, departmentId: parentDept });
       toast.success('Global component created');
       
-      const updatedGlobal = await getSubjects();
-      setGlobalSubjects(updatedGlobal);
+      await fetchGlobalSubjects();
       
       // Auto-select the new subject in the assignment form
       setSubjectFormData({ ...subjectFormData, subjectId: res.data._id || res.data.id, subjectCode: res.data.code });
@@ -404,6 +406,21 @@ const ClassDetail = () => {
     }
   };
 
+  const handleAssignMentorSubmit = async () => {
+    if (!studentFormData.mentorId) return toast.error('Select a mentor');
+    setSubmitting(true);
+    try {
+      await assignMentor(selectedStudent._id, studentFormData.mentorId);
+      toast.success('Mentor assigned successfully');
+      setShowAssignMentor(false);
+      fetchClass();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to assign mentor');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleMapElectiveSubmit = async () => {
     setSubmitting(true);
     let successCount = 0;
@@ -437,28 +454,34 @@ const ClassDetail = () => {
   };
 
   const STUDENT_COLS = [
-    { key: 'rollNo', label: 'Roll No', render: (v) => <span className="font-mono text-xs font-black text-navy">{v}</span> },
-    { key: 'name', label: 'Candidate Name', render: (v) => <span className="font-bold">{v}</span> },
-    { key: 'email', label: 'Email', render: (v) => <span className="text-muted-foreground/60">{v}</span> },
+    { key: 'rollNo', label: 'Roll No', width: '100px', render: (v) => <span className="font-mono text-xs font-black text-navy">{v}</span> },    { 
+      key: 'name', 
+      label: 'Candidate Name', 
+      render: (v) => <span className="font-bold truncate block" title={v}>{v}</span> 
+    },
+    { key: 'email', label: 'Email', width: '170px', render: (v) => <span className="text-muted-foreground/60 truncate block" title={v}>{v}</span> },
     { 
       key: 'mentor', 
       label: 'Mentor Mapping', 
+      width: '180px',
       render: (_, row) => (
         <SearchableSelect
+          size="sm"
+          variant="ghost"
           options={filteredFaculty.map(f => ({
             value: f._id,
             label: f.name,
-            subLabel: `${f.employeeId} · ${f.departmentName || 'Dept'}`
+            subLabel: f.employeeId
           }))}
           value={row.mentorId}
           onChange={(val) => handleMentorChange(row._id, val)}
-          placeholder="Assign Mentor"
+          placeholder="Unassigned"
           loading={loadingStudentId === row._id}
         />
       ) 
     },
-    { key: 'status', label: 'Last Cycle', render: (v) => <Badge status={v || 'pending'} /> },
-    { key: 'actions', label: '', sortable: false, render: (_, row) => (
+    { key: 'status', label: 'Last Cycle', width: '100px', align: 'center', render: (v) => <Badge status={v || 'pending'} /> },
+    { key: 'actions', label: '', width: '50px', sortable: false, align: 'right', render: (_, row) => (
        <div className="flex justify-end">
           <ActionMenu
             actions={[
@@ -473,13 +496,40 @@ const ClassDetail = () => {
 ];
 
 const SUBJECT_COLS = [
-    { key: 'subjectCode', label: 'Code', render: (v) => <span className="font-mono text-[10px] bg-offwhite px-1.5 py-0.5 rounded border border-muted/50">{v}</span> },
-    { key: 'subjectName', label: 'Component Name', render: (v) => <span className="font-bold text-navy">{v}</span> },
-    { key: 'faculty', label: 'Handling Faculty', render: (v) => v ? v.name : <span className="text-muted-foreground italic text-xs">Unassigned</span> },
-    { key: 'isElective', label: 'Category', render: (v) => (
+    { key: 'subjectCode', label: 'Code', width: '90px', render: (v) => <span className="font-mono text-[10px] bg-offwhite px-1.5 py-0.5 rounded border border-muted/50">{v}</span> },
+    { 
+      key: 'subjectName', 
+      label: 'Component Name', 
+      render: (v) => <span className="font-bold text-navy truncate block" title={v}>{v}</span> 
+    },
+    { 
+      key: 'faculty', 
+      label: 'Handling Faculty', 
+      width: '180px', 
+      render: (v, row) => (
+        <SearchableSelect
+          size="sm"
+          variant="ghost"
+          options={facultyList.map(f => ({
+            value: f._id,
+            label: f.name,
+            subLabel: f.employeeId
+          }))}
+          value={v?._id}
+          onChange={(val) => {
+            const assignmentId = row._id || row.assignmentId;
+            updateClassSubject(classId, assignmentId, { facultyId: val })
+              .then(() => { toast.success('Faculty updated'); fetchClass(); })
+              .catch(err => toast.error(err.message));
+          }}
+          placeholder="Unassigned"
+        />
+      )
+    },
+    { key: 'isElective', label: 'Category', width: '100px', align: 'center', render: (v) => (
       <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${!v ? 'bg-navy/5 text-navy/70' : 'bg-amber-50 text-amber-700'}`}>{!v ? 'Core' : 'Elective'}</span>
     )},
-    { key: 'actions', label: '', sortable: false, render: (_, row) => (
+    { key: 'actions', label: '', width: '50px', sortable: false, align: 'right', render: (_, row) => (
       <div className="flex justify-end">
         <ActionMenu
           actions={[
@@ -645,7 +695,7 @@ const SUBJECT_COLS = [
             columns={STUDENT_COLS} 
             data={studentsList} 
             rowClassName={(row) => `
-              transition-all duration-500
+              transition-colors duration-200
               ${!row.mentorId ? 'border-l-4 border-amber-400 bg-amber-50/20' : ''}
               ${row._isUpdating ? 'bg-emerald-50/30' : ''}
             `}

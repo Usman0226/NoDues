@@ -5,7 +5,7 @@ import { useApi } from '../../hooks/useApi';
 import { getHodOverview, getHodActivity } from '../../api/hod';
 import useSSE from '../../hooks/useSSE';
 import { getDepartmentSSEUrl } from '../../api/sse';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { 
   Building2, 
   AlertCircle, 
@@ -21,14 +21,33 @@ import {
   Users,
   Check,
   Info,
-  Archive
+  Archive,
+  GraduationCap,
+  FileCheck2,
+  AlertTriangle,
+  History
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../../components/ui/Modal';
 import { initiateDepartmentBatch, getInitiationPreview } from '../../api/batch';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  AreaChart,
+  Area
+} from 'recharts';
 
 
 const ACTIVITY_ICONS = {
@@ -50,7 +69,7 @@ const HodDashboard = () => {
   const [isInitiating, setIsInitiating] = React.useState(false);
 
   const { data: previewResponse, loading: loadingPreview, request: fetchPreview } = useApi(getInitiationPreview);
-  const previewData = previewResponse?.data || [];
+  const previewData = useMemo(() => previewResponse?.data || [], [previewResponse?.data]);
 
   useEffect(() => {
     if (isBulkModalOpen) {
@@ -90,25 +109,49 @@ const HodDashboard = () => {
   };
 
   // Real-time awareness (§9)
-  useSSE(user?.departmentId ? getDepartmentSSEUrl(user.departmentId) : null, (event) => {
-    // Refresh both stats and timeline on any departmental change
+  useSSE(user?.departmentId ? getDepartmentSSEUrl(user.departmentId) : null, () => {
     fetchOverview();
     fetchActivity();
   });
 
-  const avgCompletion = useMemo(() => {
+
+  const stats = useMemo(() => {
     const list = overview?.data || [];
-    if (!list.length) return 0;
-    const totalProgress = list.reduce((acc, b) => {
-      const pct = b.total > 0 ? (b.cleared / b.total) * 100 : 0;
-      return acc + pct;
-    }, 0);
-    return Math.round(totalProgress / list.length);
+    const total = list.reduce((acc, b) => acc + b.total, 0);
+    const cleared = list.reduce((acc, b) => acc + b.cleared + (b.overridden || 0), 0);
+    const dues = list.reduce((acc, b) => acc + b.hasDues, 0);
+    const pending = list.reduce((acc, b) => acc + b.pending, 0);
+    
+    return {
+      total,
+      cleared,
+      dues,
+      pending,
+      completionRate: total > 0 ? Math.round((cleared / total) * 100) : 0,
+      activeCycles: list.length
+    };
   }, [overview]);
 
-  const totalDues = useMemo(() => {
+  const chartData = useMemo(() => {
     const list = overview?.data || [];
-    return list.reduce((acc, b) => acc + (b.hasDues || 0), 0);
+    
+    // 1. Overall Status Distribution
+    const distribution = [
+      { name: 'Cleared', value: list.reduce((acc, b) => acc + b.cleared + (b.overridden || 0), 0), color: '#10b981' },
+      { name: 'Pending', value: list.reduce((acc, b) => acc + b.pending, 0), color: '#f59e0b' },
+      { name: 'Dues', value: list.reduce((acc, b) => acc + b.hasDues, 0), color: '#ef4444' }
+    ].filter(d => d.value > 0);
+
+    // 2. Class-wise Progress
+    const batches = list.map(b => ({
+      name: b.className,
+      cleared: b.cleared + (b.overridden || 0),
+      pending: b.pending,
+      dues: b.hasDues,
+      batchId: b.batchId
+    }));
+
+    return { distribution, batches };
   }, [overview]);
 
   if (loading && !overview) {
@@ -147,116 +190,231 @@ const HodDashboard = () => {
   }
 
   return (
-    <PageWrapper title="HOD Dashboard" subtitle={`Overview for ${user?.department || 'Your Department'}`}>
-      {/* Alert Banner - Blocks Visibility (§6.4) */}
-      {totalDues > 0 && (
-        <div className="mb-8 sm:mb-10 p-5 rounded-xl bg-red-50/40 border border-red-100 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm shadow-red-100/20">
-          <div className="flex items-center gap-4 w-full sm:w-auto">
-            <div className="h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center text-red-600 shrink-0">
-               <AlertCircle size={22} />
-            </div>
-            <div>
-              <h2 className="text-red-950 font-black text-xs sm:text-sm uppercase tracking-tight">Active Dues Found</h2>
-              <p className="text-red-700 text-[10px] sm:text-xs font-medium">{totalDues} students have dues flagged requiring review.</p>
-            </div>
+    <PageWrapper title="HOD Dashboard" subtitle={`Advanced Analytics — ${user?.department || 'Department'}`}>
+      
+      {/* Top row: High Impact Stats Card (§10.1) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white p-5 rounded-2xl border border-muted/60 shadow-sm flex items-center gap-4 hover-lift">
+          <div className="h-12 w-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <Users size={24} />
           </div>
-          <button onClick={() => navigate('/hod/dues')} className="w-full sm:w-auto px-5 py-2 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-colors shadow-sm shadow-red-600/20">
-            Review Dues
-          </button>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Total Enrollment</p>
+            <p className="text-xl font-black text-navy">{stats.total}</p>
+          </div>
         </div>
-      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Main Content: Batches (§6.4) */}
-        <div className="lg:col-span-8 space-y-8">
-          <div className="px-1 flex items-center justify-between">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/40">Active Clearance Cycles</h2>
-            <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+        <div className="bg-white p-5 rounded-2xl border border-muted/60 shadow-sm flex items-center gap-4 hover-lift">
+          <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Completion Rate</p>
+            <p className="text-xl font-black text-navy">{stats.completionRate}%</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-muted/60 shadow-sm flex items-center gap-4 hover-lift">
+          <div className="h-12 w-12 rounded-xl bg-red-50 flex items-center justify-center text-red-600">
+            <AlertTriangle size={24} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Active Dues</p>
+            <p className="text-xl font-black text-navy">{stats.dues}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-muted/60 shadow-sm flex items-center gap-4 hover-lift">
+          <div className="h-12 w-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+            <FileCheck2 size={24} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Active Cycles</p>
+            <p className="text-xl font-black text-navy">{stats.activeCycles}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10">
+        {/* Progress Chart: Main Visualized Form (§10.1) */}
+        <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-muted shadow-sm">
+           <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-sm font-black text-navy uppercase tracking-widest">Class-wise Performance</h3>
+                <p className="text-[10px] text-muted-foreground font-medium">Comparative clearance status across all batches</p>
+              </div>
               <button 
                 onClick={() => setIsBulkModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy text-white hover:bg-navy/90 transition-all shadow-sm shadow-navy/20"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-navy text-white text-[10px] font-black uppercase tracking-widest hover:bg-navy/90 transition-all shadow-sm shadow-navy/20"
               >
-                <Layers size={12} /> Bulk Initiate
+                <Layers size={14} /> NEW CYCLE
               </button>
-              <span className="flex items-center gap-1.5 border-l border-muted pl-4"><TrendingUp size={12} strokeWidth={3} className="text-emerald-500" /> {avgCompletion}% Completion</span>
-            </div>
+           </div>
+           
+           <div className="h-[320px] w-full relative">
+              {chartData.batches.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData.batches} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                    <XAxis 
+                      dataKey="name" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} 
+                      dy={10}
+                    />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
+                    <Tooltip 
+                      cursor={{ fill: '#f8fafc' }}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                    />
+                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px' }} />
+                    <Bar dataKey="cleared" type="monotone" fill="#10b981" radius={[4, 4, 0, 0]} barSize={32} />
+                    <Bar dataKey="pending" type="monotone" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={32} />
+                    <Bar dataKey="dues" type="monotone" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={32} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-50/50 rounded-xl border border-dashed border-zinc-200">
+                   <div className="h-12 w-12 rounded-full bg-white shadow-sm flex items-center justify-center text-zinc-300 mb-4">
+                      <Layers size={24} />
+                   </div>
+                   <h4 className="text-xs font-black text-navy/40 uppercase tracking-widest leading-none mb-2">No Active Records Found</h4>
+                   <p className="text-[10px] text-muted-foreground font-medium mb-6">Start your first clearance cycle to see analytics.</p>
+                   <button 
+                    onClick={() => setIsBulkModalOpen(true)}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-navy text-white text-[10px] font-black uppercase tracking-widest hover:bg-navy/90 transition-all shadow-lg shadow-navy/20"
+                   >
+                     <RefreshCw size={12} className="animate-spin-slow" /> Initiate Bulk Process
+                   </button>
+                </div>
+              )}
+           </div>
+        </div>
+
+        {/* Distribution Doughnut (§10.1) */}
+        <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-muted shadow-sm flex flex-col items-center">
+           <div className="w-full text-left mb-4">
+              <h3 className="text-sm font-black text-navy uppercase tracking-widest">Global Status</h3>
+              <p className="text-[10px] text-muted-foreground font-medium">Departmental aggregation</p>
+           </div>
+           
+           <div className="h-64 w-full relative">
+              {chartData.distribution.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartData.distribution}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={8}
+                        dataKey="value"
+                      >
+                        {chartData.distribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-2xl font-black text-navy leading-none">{stats.completionRate}%</span>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground mt-1">Cleared</span>
+                  </div>
+                </>
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20 grayscale scale-90 pointer-events-none">
+                   <Activity size={64} className="mb-2" />
+                   <p className="text-[9px] font-black uppercase tracking-widest">No Distribution</p>
+                </div>
+              )}
+           </div>
+
+           <div className="w-full space-y-2 mt-4">
+              {chartData.distribution.length > 0 ? chartData.distribution.map((item) => (
+                <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-offwhite hover:bg-white border border-transparent hover:border-muted transition-academic">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="text-[10px] font-black text-navy uppercase tracking-tight">{item.name}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-muted-foreground">{item.value} Students</span>
+                </div>
+              )) : (
+                <div className="p-4 text-center border border-dashed border-muted rounded-xl opacity-40">
+                   <p className="text-[9px] font-black uppercase tracking-widest">Awaiting Data Points</p>
+                </div>
+              )}
+           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Active Batches List (Simplified) */}
+        <div className="lg:col-span-8">
+          <div className="px-1 flex items-center justify-between mb-6">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/40">Active Department Batches</h2>
+            <button 
+              onClick={() => navigate('/hod/dues')}
+              className="text-[10px] font-black uppercase tracking-widest text-gold hover:underline"
+            >
+              Manage Overrides
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {(Array.isArray(overview?.data) ? overview.data : []).map((batch) => {
-              const progress = batch.total > 0 ? Math.round((batch.cleared / batch.total) * 100) : 0;
-              return (
-                <div key={batch.batchId} onClick={() => navigate(`/hod/batch/${batch.batchId}`)} className="bg-white rounded-xl border border-muted shadow-sm p-6 hover:shadow-md transition-academic group cursor-pointer">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-black text-navy tracking-tight group-hover:text-gold transition-colors">{batch.className}</h3>
-                    <ChevronRight size={18} className="text-muted-foreground/20 group-hover:text-gold group-hover:translate-x-1 transition-all" />
-                  </div>
-                  
-                  <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             {(Array.isArray(overview?.data) ? overview.data : []).map((batch) => (
+               <div key={batch.batchId} onClick={() => navigate(`/hod/batch/${batch.batchId}`)} className="bg-white p-4 rounded-xl border border-muted/60 hover:shadow-lg hover:shadow-navy/5 transition-all group cursor-pointer flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-lg bg-offwhite flex items-center justify-center text-navy/30 group-hover:text-navy transition-colors">
+                      <GraduationCap size={20} />
+                    </div>
                     <div>
-                      <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
-                        <span>Progress</span>
-                        <span className="text-navy">{progress}%</span>
-                      </div>
-                      <div className="h-1.5 bg-offwhite rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-navy rounded-full transition-all duration-1000" 
-                          style={{ width: `${progress}%` }} 
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-offwhite/50 rounded-xl border border-muted/50 text-center">
-                        <p className="text-sm font-black text-navy">{batch.total - batch.cleared}</p>
-                        <p className="text-[8px] uppercase tracking-widest text-muted-foreground font-bold">Pending</p>
-                      </div>
-                      <div className={`p-3 rounded-xl border text-center ${batch.hasDues > 0 ? 'bg-red-50 border-red-100' : 'bg-offwhite/50 border-muted/50'}`}>
-                        <p className={`text-sm font-black ${batch.hasDues > 0 ? 'text-red-700' : 'text-navy'}`}>{batch.hasDues}</p>
-                        <p className="text-[8px] uppercase tracking-widest text-muted-foreground font-bold">Dues</p>
-                      </div>
+                      <h4 className="text-sm font-bold text-navy leading-none mb-1 group-hover:text-gold transition-colors">{batch.className}</h4>
+                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Sem {batch.semester} • {Math.round((batch.cleared / batch.total) * 100)}% Done</p>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-
-            <div className="bg-offwhite/50 rounded-xl border border-dashed border-muted/80 flex flex-col items-center justify-center p-8 text-center hover:bg-white hover:border-navy/20 transition-all cursor-pointer group" onClick={() => navigate('/hod/dues')}>
-               <div className="h-12 w-12 rounded-full bg-white shadow-sm flex items-center justify-center text-navy/40 group-hover:text-gold transition-colors mb-4">
-                  <AlertCircle size={24} />
+                  <ChevronRight size={16} className="text-muted-foreground/20 group-hover:text-gold group-hover:translate-x-1 transition-all" />
                </div>
-               <h4 className="text-sm font-bold text-navy/60 group-hover:text-navy transition-colors uppercase tracking-widest">Override Center</h4>
-            </div>
+             ))}
           </div>
         </div>
 
-        {/* Sidebar Actions: Recent Activity (§6.4) */}
+        {/* Activity: Polished Bento-style sidebar (§10.1) */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-xl border border-muted shadow-sm p-6">
-            <div className="flex items-center gap-2 mb-6">
-              <Activity size={18} className="text-navy" />
-              <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy">Recent Activity</h2>
+           <div className="bg-white rounded-2xl border border-muted shadow-sm p-6 overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-[0.03] pointer-events-none">
+               <History size={80} />
             </div>
             
-            <div className="space-y-6">
+            <div className="flex items-center gap-2 mb-8">
+              <Activity size={18} className="text-navy" />
+              <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy">Live Activity</h2>
+            </div>
+            
+            <div className="space-y-6 relative z-10">
               {activity?.data?.length > 0 ? (
                 activity.data.map((item) => {
                   const Config = ACTIVITY_ICONS[item.type] || ACTIVITY_ICONS.CLEARANCE;
                   const Icon = Config.icon;
                   return (
-                    <div key={item.id} className="relative pl-6 pb-6 border-l border-muted last:pb-0 last:border-0">
-                      <div className={`absolute -left-3 top-0 h-6 w-6 rounded-full border-4 border-white flex items-center justify-center ${Config.cls}`}>
-                        <Icon size={10} strokeWidth={3} />
+                    <div key={item.id} className="relative pl-6 pb-6 border-l border-muted/50 last:pb-0 last:border-0 hover-lift group">
+                      <div className={`absolute -left-3.5 top-0 h-7 w-7 rounded-full border-4 border-white flex items-center justify-center shadow-sm ${Config.cls}`}>
+                        <Icon size={12} strokeWidth={3} />
                       </div>
-                      <div>
-                        <p className="text-[11px] font-bold text-navy leading-none mb-1">
-                          {item.student} <span className="text-muted-foreground/60 font-medium whitespace-nowrap">via {item.actor}</span>
+                      <div className="transition-all group-hover:translate-x-1">
+                        <p className="text-[11px] font-black text-navy leading-none mb-1">
+                          {item.student}
                         </p>
-                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
-                          {item.context}
+                        <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-tight">
+                           Action by <span className="font-bold text-navy/60">{item.actor}</span> • {item.context}
                         </p>
-                        <span className="text-[9px] text-muted-foreground/40 font-mono mt-1 block">
-                          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        <span className="text-[8px] text-muted-foreground/30 font-black uppercase mt-1.5 block">
+                           {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(item.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                         </span>
                       </div>
                     </div>
@@ -265,16 +423,16 @@ const HodDashboard = () => {
               ) : (
                 <div className="text-center py-10 opacity-40">
                   <Clock size={32} className="mx-auto mb-2" />
-                  <p className="text-[10px] uppercase font-black tracking-widest">No activities</p>
+                  <p className="text-[10px] uppercase font-black tracking-widest">No Recent Stream</p>
                 </div>
               )}
             </div>
             
             <button 
               onClick={() => navigate('/hod/overrides')}
-              className="w-full mt-6 py-3 border-t border-muted text-[10px] font-black uppercase tracking-widest text-navy/40 hover:text-navy transition-colors flex items-center justify-center gap-2"
+              className="w-full mt-8 py-3 bg-offwhite rounded-xl border border-muted text-[10px] font-black uppercase tracking-widest text-navy/60 hover:text-navy hover:bg-white transition-all flex items-center justify-center gap-2"
             >
-              View Override Logs <ChevronRight size={14} />
+              Full History <ChevronRight size={14} />
             </button>
           </div>
         </div>

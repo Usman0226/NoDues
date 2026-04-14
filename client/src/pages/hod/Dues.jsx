@@ -8,9 +8,9 @@ import { useApi } from '../../hooks/useApi';
 import { getHodDues, overrideDue, bulkOverrideDues } from '../../api/hod';
 import { getDepartmentSSEUrl } from '../../api/sse';
 import useSSE from '../../hooks/useSSE';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 const Dues = () => {
   const { user } = useAuth();

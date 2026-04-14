@@ -14,7 +14,7 @@ const TableSkeletonRows = ({ columns, rowCount, selectable }) => (
           </td>
         )}
         {columns.map((col, ci) => (
-          <td key={col.key} className="px-4 sm:px-6 py-4 sm:py-5">
+          <td key={col.key} className="px-3 sm:px-4 py-3 sm:py-3.5" style={{ width: col.width }}>
             <div
               className={`h-4 rounded-md bg-zinc-200/60 animate-pulse ${ci % 3 === 0 ? 'w-3/4' : ci % 3 === 1 ? 'w-1/2' : 'w-5/6'}`}
               aria-hidden
@@ -105,6 +105,7 @@ const Table = ({
   // Controlled Search Props
   searchValue = '',
   onSearchChange = null,
+  fixedLayout = false,
 }) => {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -165,7 +166,7 @@ const Table = ({
   const totalPages = pagination ? Math.ceil(pagination.total / pagination.limit) : 0;
 
   return (
-    <div className="surface-panel overflow-hidden fade-up relative flex flex-col">
+    <div className="surface-panel overflow-hidden relative flex flex-col">
       {(searchable || showCount) && (
         <div className="p-4 sm:p-5 border-b border-muted bg-gradient-to-r from-white to-zinc-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           {searchable && (
@@ -273,11 +274,11 @@ const Table = ({
       </AnimatePresence>
 
       <div className="overflow-x-auto" aria-busy={loading}>
-        <table className="w-full text-sm">
+        <table className={`w-full text-sm ${fixedLayout ? 'table-fixed' : ''}`}>
           <thead>
             <tr className="bg-zinc-50 sticky top-0 z-10 border-b border-zinc-200">
               {selectable && (
-                <th className="w-12 px-4 sm:px-6 py-4">
+                <th className="w-10 px-3 sm:px-4 py-3">
                   <Checkbox
                     checked={isAllSelected}
                     indeterminate={isSomeSelected}
@@ -290,11 +291,13 @@ const Table = ({
                 <th
                   key={col.key}
                   onClick={() => !loading && col.sortable !== false && handleSort(col.key)}
-                  className={`text-left px-4 sm:px-6 py-4 sm:py-5 text-xs sm:text-sm font-semibold text-zinc-600 tracking-tight
+                  className={`px-3 sm:px-4 py-3 sm:py-3.5 text-xs sm:text-sm font-semibold text-zinc-600 tracking-tight
                     ${col.sortable !== false && !loading ? 'cursor-pointer hover:text-indigo-700 select-none' : ''}
-                    ${loading ? 'cursor-default' : ''}`}
+                    ${loading ? 'cursor-default' : ''}
+                    ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'}`}
+                  style={{ width: col.width }}
                 >
-                  <span className="inline-flex items-center gap-1">
+                  <span className={`inline-flex items-center gap-1 ${col.align === 'center' ? 'justify-center w-full' : col.align === 'right' ? 'justify-end w-full' : ''}`}>
                     {col.label}
                     {!loading && sortKey === col.key && (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                   </span>
@@ -324,7 +327,7 @@ const Table = ({
                   `}
                 >
                   {selectable && (
-                    <td className="px-4 sm:px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 sm:px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selection.includes(row[primaryKey])}
                         onChange={(e) => toggleRow(row[primaryKey], e)}
@@ -332,7 +335,12 @@ const Table = ({
                     </td>
                   )}
                   {columns.map((col) => (
-                    <td key={col.key} className="px-4 sm:px-6 py-4 sm:py-5 text-[11px] sm:text-sm text-zinc-700 font-semibold">
+                    <td 
+                      key={col.key} 
+                      className={`px-3 sm:px-4 py-3 sm:py-3.5 text-[11px] sm:text-sm text-zinc-700 font-semibold
+                        ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'}`}
+                      style={{ width: col.width }}
+                    >
                       {col.render ? col.render(row[col.key], row) : row[col.key]}
                     </td>
                   ))}

@@ -9,7 +9,6 @@ import useSSE from '../../hooks/useSSE';
 import { 
   getPendingApprovals, 
   approveRecord, 
-  markDueRecord, 
   updateApproval,
   bulkApproveRecords 
 } from '../../api/approvals';
@@ -25,7 +24,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 
 const FILTERS = ['all', 'pending', 'approved', 'due_marked'];
 
@@ -214,16 +213,14 @@ const Pending = () => {
     },
   ];
 
-  const batches = Array.from(new Set(approvals.map((a) => a.batchId))).map((batchId) => {
-    const record = approvals.find((a) => a.batchId === batchId);
-    return { id: batchId, name: record?.className || `Batch ${batchId}` };
-  });
-
-  const filtered = useMemo(() => {
-    // Backend only returns pending for this view. 
-    // If user changes filter to something else, it might be empty on refetch.
-    return approvals;
+  const batches = useMemo(() => {
+    return Array.from(new Set(approvals.map((a) => a.batchId))).map((batchId) => {
+      const record = approvals.find((a) => a.batchId === batchId);
+      return { id: batchId, name: record?.className || `Batch ${batchId}` };
+    });
   }, [approvals]);
+
+
 
   const bulkActions = (
     <Button

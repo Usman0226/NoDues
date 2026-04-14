@@ -29,13 +29,9 @@ const signAndSetCookie = (payload, res) => {
   return token;
 };
 
+// Global audit helper (standardized)
 const auditLog = (action, actor, resourceId = null) => {
-  logger.info('auth_event', {
-    timestamp: new Date().toISOString(),
-    actor,
-    action,
-    resource_id: resourceId,
-  });
+  logger.audit(action, { actor, resource_id: resourceId });
 };
 
 
@@ -65,7 +61,7 @@ export const login = async (req, res, next) => {
     let userType = admin ? 'admin' : (faculty ? 'faculty' : null);
 
     if (!user) {
-      logger.warn('Login failure: User not found', { email: sanitizedEmail });
+      logger.audit('LOGIN_FAILURE', { email: sanitizedEmail, reason: 'USER_NOT_FOUND' });
       return next(
         new ErrorResponse('Invalid email or password', 401, 'AUTH_INVALID_CREDENTIALS')
       );
@@ -87,7 +83,7 @@ export const login = async (req, res, next) => {
     ]);
 
     if (!isMatch) {
-      logger.warn('Login failure: Password mismatch', { email: sanitizedEmail });
+      logger.audit('LOGIN_FAILURE', { email: sanitizedEmail, reason: 'PASSWORD_MISMATCH' });
       return next(
         new ErrorResponse('Invalid email or password', 401, 'AUTH_INVALID_CREDENTIALS')
       );

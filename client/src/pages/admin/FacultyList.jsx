@@ -11,7 +11,7 @@ import ImportStepper from '../../components/import/ImportStepper';
 import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../components/ui/Spinner';
 
@@ -56,7 +56,7 @@ const FacultyList = () => {
     queryKey: facultyQueryKey,
     immediate: false
   });
-  const faculty = response?.data || [];
+  const faculty = useMemo(() => response?.data || [], [response?.data]);
   const total = response?.pagination?.total || 0;
   
   const deptQueryKey = useMemo(() => ['departments'], []);
@@ -65,8 +65,8 @@ const FacultyList = () => {
     immediate: true,
     queryKey: deptQueryKey
   });
-  const allDepts = deptResponse?.data || [];
-  const depts = isHod ? allDepts.filter(d => d._id === user.departmentId) : allDepts;
+  const allDepts = useMemo(() => deptResponse?.data || [], [deptResponse?.data]);
+  const depts = useMemo(() => isHod ? allDepts.filter(d => d._id === user.departmentId) : allDepts, [isHod, allDepts, user?.departmentId]);
 
   // Debounce search input
   useEffect(() => {
@@ -187,12 +187,12 @@ const FacultyList = () => {
   };
 
   const columns = [
-    { key: 'employeeId', label: 'Emp ID', render: (v) => <span className="font-mono text-xs font-black tracking-tight text-navy">{v}</span> },
+    { key: 'employeeId', label: 'Emp ID', width: '90px', render: (v) => <span className="font-mono text-xs font-black tracking-tight text-navy">{v}</span> },
     { key: 'name', label: 'Name', render: (v) => <span className="font-bold text-navy/80">{v}</span> },
-    { key: 'email', label: 'Email', render: (v) => <span className="text-muted-foreground/60">{v}</span> },
-    { key: 'departmentName', label: 'Dept' },
+    { key: 'email', label: 'Email', width: '220px', render: (v) => <span className="text-muted-foreground/60">{v}</span> },
+    { key: 'departmentName', label: 'Dept', width: '100px' },
     {
-      key: 'roles', label: 'Roles', sortable: false, render: (tags, row) => (
+      key: 'roles', label: 'Roles', width: '180px', sortable: false, render: (tags, row) => (
         <div className="flex flex-wrap gap-1.5">
           {(tags || row.roleTags || ['faculty']).map((tag) => (
             <span key={tag} className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${ROLE_TAG_COLORS[tag] || ROLE_TAG_COLORS.faculty}`}>
@@ -203,7 +203,7 @@ const FacultyList = () => {
       )
     },
     {
-      key: 'actions', label: '', sortable: false, render: (_, row) => (
+      key: 'actions', label: '', width: '50px', sortable: false, align: 'right', render: (_, row) => (
         <div className="flex justify-end">
           <ActionMenu
             actions={[

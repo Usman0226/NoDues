@@ -4,7 +4,7 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
 import { getBatches } from '../../api/batch';
-import { useUI } from '../../context/UIContext';
+import { useUI } from '../../hooks/useUI';
 import { 
   Users, 
   Layers, 
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -27,7 +27,7 @@ const AdminDashboard = () => {
   const { showGlobalLoader } = useUI();
 
   const { data: response, loading, error, request: fetchBatches } = useApi(getBatches);
-  const batches = response?.data || [];
+  const batches = useMemo(() => response?.data || [], [response?.data]);
 
   React.useEffect(() => {
     const params = {};
@@ -39,7 +39,6 @@ const AdminDashboard = () => {
     if (!batches) return [];
     
     const activeBatches = batches.filter(b => b.status === 'active');
-    const closedBatches = batches.filter(b => b.status === 'closed');
     
     let totalCands = 0;
     let totalCleared = 0;
