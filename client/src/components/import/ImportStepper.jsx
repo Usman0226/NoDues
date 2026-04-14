@@ -90,14 +90,14 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
         });
       }
       
-      toast.success(`${type} sync finished`, { icon: '✅' });
+      toast.success(`${type} sync finished`);
     } catch (err) {
       const errorMsg = err?.message || 'Connection lost during sync';
       updateBackgroundTask(taskId, { 
         status: 'error', 
         message: errorMsg 
       });
-      toast.error(`${type} sync failed`, { icon: '❌' });
+      toast.error(`${type} sync failed`);
     }
   }, [type, previewData, classId, onComplete, addBackgroundTask, updateBackgroundTask]);
 

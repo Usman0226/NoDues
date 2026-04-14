@@ -30,7 +30,6 @@ export const pushEvent = (userIds, eventName, payload) => {
     if (!connections) continue;
     for (const res of connections) {
       try {
-        res.write(`event: ${eventName}\n`);
         res.write(`data: ${data}\n\n`);
       } catch (e) {
         logger.warn('SSE write failed', { userId: uid, error: e.message });
@@ -45,9 +44,9 @@ export const sseConnect = (req, res) => {
 
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // disable Nginx buffering
+  res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
   // Send initial heartbeat so the browser knows the connection is live

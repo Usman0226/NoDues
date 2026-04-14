@@ -221,7 +221,7 @@ const Table = ({
             initial={{ y: 100, x: '-50%', opacity: 0 }}
             animate={{ y: 0, x: '-50%', opacity: 1 }}
             exit={{ y: 100, x: '-50%', opacity: 0 }}
-            className="fixed bottom-10 left-1/2 z-[100] flex items-center gap-1.5 p-1.5 bg-white/95 backdrop-blur-xl rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-zinc-200 border border-white select-none"
+            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1.5 p-1.5 bg-white/80 backdrop-blur-2xl rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-zinc-200/50 border border-white/50 select-none"
           >
             {/* Selection Info */}
             <div className="flex items-center gap-2.5 px-4 h-10 bg-zinc-50 border border-zinc-100 rounded-full mr-1">

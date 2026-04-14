@@ -10,17 +10,17 @@ import { getBatch, closeBatch } from '../../api/batch';
 import { getBatchSSEUrl } from '../../api/sse';
 import { STATUSES } from '../../utils/constants';
 import Modal from '../../components/ui/Modal';
-import { ArrowLeft, X, ChevronRight, Info, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, X, ChevronRight, Info, AlertTriangle, RefreshCw, Check, Clock, Shield } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
 
 
 const ICON_MAP = {
-  [STATUSES.APPROVED]: { icon: '✅', cls: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-  [STATUSES.PENDING]: { icon: '⏳', cls: 'bg-amber-50 text-amber-700 border-amber-100' },
-  [STATUSES.DUE_MARKED]: { icon: '❌', cls: 'bg-red-50 text-red-700 border-red-100' },
-  [STATUSES.HOD_OVERRIDE]: { icon: '🛡️', cls: 'bg-blue-50 text-blue-700 border-blue-100' },
+  [STATUSES.APPROVED]: { icon: <Check size={14} className="stroke-[3]" />, cls: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+  [STATUSES.PENDING]: { icon: <Clock size={14} className="stroke-[3]" />, cls: 'bg-amber-50 text-amber-700 border-amber-100' },
+  [STATUSES.DUE_MARKED]: { icon: <X size={14} className="stroke-[3]" />, cls: 'bg-red-50 text-red-700 border-red-100' },
+  [STATUSES.HOD_OVERRIDE]: { icon: <Shield size={14} className="stroke-[3]" />, cls: 'bg-blue-50 text-blue-700 border-blue-100' },
 };
 
 const BatchView = () => {
@@ -40,7 +40,7 @@ const BatchView = () => {
 
   // Real-time updates via SSE
   useSSE(batchId ? getBatchSSEUrl(batchId) : null, (event) => {
-    if (event.type === 'approval_updated' || event.type === 'batch_updated') {
+    if (event?.event?.toLowerCase() === 'approval_updated' || event?.event?.toLowerCase() === 'batch_updated') {
       fetchBatch();
     }
   });

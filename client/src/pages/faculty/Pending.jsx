@@ -29,7 +29,22 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
-import SearchableSelect from '../../components/ui/SearchableSelect';
+import { motion } from 'framer-motion';
+
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const item = {
+  hidden: { y: 20, opacity: 0 },
+  show: { y: 0, opacity: 1 }
+};
 
 const FILTERS = ['all', 'pending', 'approved', 'due_marked'];
 
@@ -41,10 +56,6 @@ const getApprovalLabel = (item) => {
     ? `${item.subjectName}${code ? ` (${code})` : ''}`
     : '—';
 };
-
-// ── Inline Due Form (Moved out of card, used in Modal-like context or simply rendered) ──────────────
-// For simplicity in the table view, we will use a small inline form or a simple action.
-// Since the table is more structured, I'll keep the DueForm as a standalone component if needed.
 
 const Pending = () => {
   const location = useLocation();
@@ -99,7 +110,7 @@ const Pending = () => {
     sseUrl,
     useCallback(
       (event) => {
-        if (event?.type !== 'APPROVAL_UPDATED') return;
+        if (event?.event !== 'APPROVAL_UPDATED') return;
         // For simplicity and correctness with pagination, refetch is best
         fetchApprovals({ 
           page, 
@@ -113,7 +124,19 @@ const Pending = () => {
     )
   );
 
-  // ── Actions ──────────────────────────────────────────────────────────────────
+  const handleUndo = async (id) => {
+    setActionLoading(id);
+    try {
+      await updateApproval(id, { action: 'pending', dueType: null, remarks: null });
+      fetchApprovals();
+      toast.success('Action reversed. Record is back in Pending.', { id: `undo-${id}` });
+    } catch (err) {
+      toast.error('Failed to reverse action');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleApprove = async (id) => {
     setActionLoading(id);
     try {
@@ -124,7 +147,20 @@ const Pending = () => {
         if (prev?.data) return { ...prev, data: prev.data.map(update) };
         return prev;
       });
-      toast.success('Approval recorded ✅');
+      toast((t) => (
+        <div className="flex items-center justify-between gap-4 w-full">
+          <span className="font-medium flex items-center gap-1.5"><Check size={16} className="text-emerald-500" /> Approval recorded</span>
+          <button 
+            onClick={() => {
+              toast.dismiss(t.id);
+              handleUndo(id);
+            }}
+            className="text-[10px] font-black uppercase tracking-widest bg-zinc-100 hover:bg-zinc-200 text-zinc-600 px-3 py-1.5 rounded-lg transition-colors border border-zinc-200"
+          >
+            Undo
+          </button>
+        </div>
+      ), { duration: 5000 });
     } finally {
       setActionLoading(null);
     }
@@ -135,7 +171,7 @@ const Pending = () => {
     setActionLoading('bulk');
     try {
       const res = await bulkApproveRecords(selection);
-      toast.success(`Successfully approved ${res.data.processed} students ✅`);
+      toast.success(`Successfully approved ${res.data.processed} students `);
       setSelection([]);
       fetchApprovals(); // Refresh to catch all Recalc effects
     } finally {
@@ -149,7 +185,25 @@ const Pending = () => {
     try {
       await updateApproval(id, data);
       fetchApprovals();
-      toast.success('Record updated');
+      
+      if (data.action === 'due_marked') {
+        toast((t) => (
+          <div className="flex items-center justify-between gap-4 w-full">
+            <span className="font-medium text-red-600 flex items-center gap-1.5"><AlertTriangle size={16} /> Deficiency Flagged</span>
+            <button 
+              onClick={() => {
+                toast.dismiss(t.id);
+                handleUndo(id);
+              }}
+              className="text-[10px] font-black uppercase tracking-widest bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors border border-red-100"
+            >
+              Undo
+            </button>
+          </div>
+        ), { duration: 6000 });
+      } else {
+        toast.success(data.action === 'pending' ? 'Record reset to pending' : 'Record updated');
+      }
     } finally {
       setActionLoading(null);
     }
@@ -162,7 +216,7 @@ const Pending = () => {
       label: 'Roll No',
       sortable: true,
       render: (val) => (
-        <span className="bg-zinc-100 text-zinc-900 px-2 py-0.5 rounded font-mono text-[10px] sm:text-xs font-bold border border-zinc-200">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-900/[0.04] text-zinc-900 border border-zinc-900/10 font-mono text-[10px] sm:text-xs font-black tracking-tight">
           {val}
         </span>
       ),
@@ -242,164 +296,127 @@ const Pending = () => {
 
 
 
-  const bulkActions = (
-    <Button
-      variant="primary"
-      size="sm"
-      className="bg-white text-navy hover:bg-indigo-50 border-none shadow-xl px-6 rounded-full"
-      onClick={handleBulkApprove}
-      disabled={actionLoading === 'bulk'}
-    >
-      {actionLoading === 'bulk' ? (
-        <Loader2 size={16} className="animate-spin mr-2" />
-      ) : (
-        <Check size={16} className="mr-2" />
-      )}
-      Approve {selection.length} Students
-    </Button>
-  );
-
-  const backConfig = useMemo(() => {
-    const from = location.state?.from;
-    if (from === 'hod-my-classes') return { title: 'Return to My Classes', fallback: '/hod/my-classes' };
-    if (from === 'faculty-my-classes') return { title: 'Return to My Classes', fallback: '/faculty/my-classes' };
-    return { title: 'Return to Dashboard', fallback: '/faculty' };
-  }, [location.state]);
+  const bulkActionsList = useMemo(() => [
+    {
+      label: 'Approve Selection',
+      icon: Check,
+      onClick: handleBulkApprove,
+      variant: 'primary'
+    }
+  ], [selection, actionLoading]);
 
   return (
-    <PageWrapper title="Pending Approvals" subtitle="Efficiently manage clearance requests">
-      <BackHeader title={backConfig.title} fallback={backConfig.fallback} />
-      
-      {/* Summary Banner */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-6 rounded-2xl border border-muted shadow-sm flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-             <Clock size={24} />
-          </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Total Pending</p>
-            <p className="text-xl font-black text-navy">{approvals.filter(a => a.action === 'pending').length}</p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-muted shadow-sm flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-             <AlertTriangle size={24} />
-          </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Actioned Dues</p>
-            <p className="text-xl font-black text-navy">{approvals.filter(a => a.action === 'due_marked').length}</p>
-          </div>
-        </div>
-        {selection.length > 0 && (
-          <div className="lg:col-span-2 bg-indigo-600 rounded-2xl p-4 flex items-center justify-between text-white shadow-lg shadow-indigo-600/20 animate-in slide-in-from-top-4 duration-500">
-             <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
-                   <Check size={20} />
-                </div>
-                <div>
-                   <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Selection Active</p>
-                   <p className="text-sm font-bold">{selection.length} students selected for bulk approval</p>
-                </div>
-             </div>
-             {bulkActions}
-          </div>
-        )}
-      </div>
+    <PageWrapper 
+      title="Pending Approvals" 
+      // subtitle="Efficiently manage clearance requests"
+    >
+      <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
+        
 
-      {/* Header Filters */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-        <div className="flex items-center gap-1 bg-zinc-100/80 p-1 rounded-2xl w-fit border border-zinc-200/50">
-          {FILTERS.map((f) => {
-            const count = approvals.filter((a) => f === 'all' || a.action === f).length;
-            const active = filter === f;
-            return (
-              <button
-                key={f}
-                onClick={() => { setFilter(f); setSelection([]); }}
-                className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all
-                  ${active ? 'bg-white text-indigo-600 shadow-md translate-y-[-1px]' : 'text-zinc-500 hover:text-zinc-900'}`}
-              >
-                {f === 'all' ? 'Everything' : f === 'due_marked' ? 'Dues' : f}
-                <span className={`ml-2 opacity-50 ${active ? 'text-indigo-400' : ''}`}>({count})</span>
-              </button>
-            );
-          })}
-        </div>
+        {/* Header Filters */}
+        <motion.div variants={item} className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-1 bg-zinc-200/40 p-1.5 rounded-[20px] w-fit border border-zinc-200/20 backdrop-blur-md">
+            {FILTERS.map((f) => {
+              const count = approvals.filter((a) => f === 'all' || a.action === f).length;
+              const active = filter === f;
+              return (
+                <button
+                  key={f}
+                  onClick={() => { setFilter(f); setSelection([]); }}
+                  className={`px-6 py-2.5 rounded-[14px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-300 relative
+                    ${active ? 'text-indigo-600' : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/40'}`}
+                >
+                  {active && (
+                    <motion.div 
+                      layoutId="activeFilter"
+                      className="absolute inset-0 bg-white rounded-[14px] shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-indigo-50"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                    />
+                  )}
+                  <span className="relative z-10">
+                    {f === 'all' ? 'Everything' : f === 'due_marked' ? 'Dues' : f}
+                    <span className={`ml-2 opacity-40 font-bold ${active ? 'text-indigo-400' : ''}`}>{count}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-             <Settings2 size={14} className="text-zinc-400" />
-             <SearchableSelect 
-              options={[
-                { value: 'all', label: 'All Academic Groups', subLabel: 'Everything' },
-                ...batches.map(b => ({
-                  value: b.id,
-                  label: b.name,
-                  subLabel: 'Academic Batch'
-                }))
-              ]}
-              value={selectedBatch}
-              onChange={(val) => { setSelectedBatch(val); setSelection([]); }}
-              placeholder="Filter by Group"
-              className="min-w-[200px]"
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+               <Settings2 size={16} className="text-zinc-400" />
+               <SearchableSelect 
+                options={[
+                  { value: 'all', label: 'All Academic Groups', subLabel: 'Everything' },
+                  ...batches.map(b => ({
+                    value: b.id,
+                    label: b.name,
+                  }))
+                ]}
+                value={selectedBatch}
+                onChange={(val) => { setSelectedBatch(val); setSelection([]); }}
+                placeholder="Filter by Class"
+                className="min-w-[240px]"
+              />
+            </div>
+
+            <button
+              onClick={async () => {
+                const hide = showGlobalLoader('Syncing Clearance Records...');
+                await fetchApprovals();
+                hide();
+              }}
+              className={`p-3.5 rounded-2xl bg-white border border-zinc-200 text-zinc-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-500/5 transition-all ${loading ? 'opacity-50' : ''}`}
+            >
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </motion.div>
+
+        <motion.div variants={item}>
+          {error ? (
+            <div className="surface-panel p-20 text-center">
+              <AlertTriangle className="mx-auto text-status-due mb-4" size={48} />
+              <h2 className="text-xl font-black text-navy mb-2">Sync Interrupted</h2>
+              <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
+              <Button variant="primary" onClick={() => fetchApprovals()}>Retry Sync</Button>
+            </div>
+          ) : approvals.length === 0 && !loading ? (
+            <div className="bg-white border border-dashed border-zinc-200 rounded-3xl p-16 text-center">
+              <div className="bg-zinc-50 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Check className="text-zinc-300" size={40} />
+              </div>
+              <h3 className="text-navy font-brand text-xl mb-2">Queue Fully Processed</h3>
+              <p className="text-sm text-zinc-500 max-w-sm mx-auto">
+                No student clearance requests are pending for the selected {selectedBatch === 'all' ? 'active batches' : 'class'}. 
+                Check individual status or history for previously actioned records.
+              </p>
+            </div>
+          ) : (
+            <Table
+              columns={columns}
+              data={approvals}
+              loading={loading}
+              pagination={{
+                total,
+                page,
+                limit,
+                onPageChange: (p) => setPage(p),
+                onLimitChange: (l) => { setLimit(l); setPage(1); }
+              }}
+              searchable
+              searchValue={searchValue}
+              onSearchChange={setSearchValue}
+              searchPlaceholder="Search by roll number or name..."
+              selectable={filter === 'pending'} // Only allow selection in pending view
+              selection={selection}
+              onSelectionChange={setSelection}
+              bulkActions={bulkActionsList}
+              showCount
             />
-          </div>
-
-          <button
-            onClick={async () => {
-              const hide = showGlobalLoader('Syncing Clearance Records...');
-              await fetchApprovals();
-              hide();
-            }}
-            className={`p-3 rounded-xl bg-white border border-zinc-200 text-zinc-500 hover:text-indigo-600 hover:border-indigo-100 transition-all ${loading ? 'opacity-50' : ''}`}
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
-      </div>
-
-      {error ? (
-        <div className="surface-panel p-20 text-center">
-          <AlertTriangle className="mx-auto text-status-due mb-4" size={48} />
-          <h2 className="text-xl font-black text-navy mb-2">Sync Interrupted</h2>
-          <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
-          <Button variant="primary" onClick={() => fetchApprovals()}>Retry Sync</Button>
-        </div>
-      ) : approvals.length === 0 && !loading ? (
-        <div className="bg-white border border-dashed border-zinc-200 rounded-3xl p-16 text-center">
-          <div className="bg-zinc-50 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Check className="text-zinc-300" size={40} />
-          </div>
-          <h3 className="text-navy font-brand text-xl mb-2">Queue Fully Processed</h3>
-          <p className="text-sm text-zinc-500 max-w-sm mx-auto">
-            No student clearance requests are pending for the selected {selectedBatch === 'all' ? 'active batches' : 'class'}. 
-            Check individual status or history for previously actioned records.
-          </p>
-        </div>
-      ) : (
-        <Table
-          columns={columns}
-          data={approvals}
-          loading={loading}
-          pagination={{
-            total,
-            page,
-            limit,
-            onPageChange: (p) => setPage(p),
-            onLimitChange: (l) => { setLimit(l); setPage(1); }
-          }}
-          searchable
-          searchValue={searchValue}
-          onSearchChange={setSearchValue}
-          searchPlaceholder="Search by roll number or name..."
-          selectable={filter === 'pending'} // Only allow selection in pending view
-          selection={selection}
-          onSelectionChange={setSelection}
-          selectionActions={bulkActions}
-          showCount
-        />
-      )}
-      {/* Due Marking Modal */}
+          )}
+        </motion.div>
+      </motion.div>
       <Modal
         isOpen={!!dueModal}
         onClose={() => setDueModal(null)}

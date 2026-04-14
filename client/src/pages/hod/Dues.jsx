@@ -44,7 +44,7 @@ const Dues = () => {
   }, [fetchDues, page, limit, debouncedSearch]);
 
   useSSE(user?.departmentId ? getDepartmentSSEUrl(user.departmentId) : null, (event) => {
-    if (event.type === 'APPROVAL_UPDATED' || event.type === 'HOD_OVERRIDE') {
+    if (event?.event === 'APPROVAL_UPDATED' || event?.event === 'HOD_OVERRIDE') {
       fetchDues({ page, limit, search: debouncedSearch });
     }
   });

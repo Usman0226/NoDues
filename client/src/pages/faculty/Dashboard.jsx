@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import useSSE from '../../hooks/useSSE';
 import { useUI } from '../../hooks/useUI';
 
@@ -26,7 +27,7 @@ const FacultyDashboard = () => {
   const sseUrl  = `${apiBase}/api/sse/connect`;
   
   useSSE(sseUrl, (event) => {
-    if (event?.type === 'APPROVAL_UPDATED') {
+    if (event?.event === 'APPROVAL_UPDATED') {
       fetchApprovals();
     }
   });
@@ -78,7 +79,33 @@ const FacultyDashboard = () => {
     );
   }
 
-  if (error) {
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.2
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: {
+        type: "spring",
+        stiffness: 300,
+        damping: 30,
+        // Using mass: 1 and velocity: 0 for performance stability
+        mass: 1
+      }
+    }
+  };
+
+  if (loading && !response) {
     return (
       <PageWrapper title="Candidate Approvals" subtitle="System Sync Issue">
         <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
@@ -101,84 +128,156 @@ const FacultyDashboard = () => {
   }
 
   return (
-    <PageWrapper title="Candidate Approvals" subtitle="Your active duties and pending requests">
-      {/* Global Action Banner */}
-      <div className="mb-8 sm:mb-12 bg-navy rounded-xl p-6 sm:p-8 text-white relative overflow-hidden shadow-2xl shadow-navy/20">
-        <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="text-center sm:text-left">
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight mb-2">Attention Required</h2>
-            <p className="text-white/60 text-xs sm:text-sm max-w-sm font-medium leading-relaxed">
-              You have {totalPending > 0 ? (
-                <><span className="text-gold font-black">{totalPending} pending actions</span> across {summary.length} academic groups.</>
-              ) : (
-                "No pending actions right now. All clearances are up to date."
-              )}
-            </p>
-          </div>
-          {totalPending > 0 && (
-            <Button variant="accent" size="lg" className="w-full sm:w-auto whitespace-nowrap shadow-xl shadow-gold/20" onClick={() => navigate('/faculty/pending')}>
-              Process Queue <ArrowRight size={16} />
-            </Button>
-          )}
-        </div>
-        <div className="absolute -right-8 -bottom-8 opacity-10 pointer-events-none">
-          <ClipboardCheck size={200} />
-        </div>
-      </div>
-
-      <h2 className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-navy/40 mb-6 px-1 text-center sm:text-left">Engagement Summary</h2>
-
-      {summary.length > 0 ? (
-        <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
-          {summary.map((item) => (
-            <div key={item.id} className="bg-white rounded-xl border border-muted shadow-sm p-5 sm:p-6 hover:shadow-md transition-academic group">
-              <div className="flex items-start justify-between mb-4 sm:mb-6">
-                <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-black text-navy tracking-tight group-hover:text-gold transition-colors truncate">{item.class}</h3>
-                  <div className="flex items-center gap-1.5 mt-1 text-muted-foreground/60 min-w-0">
-                     <UserCheck size={12} className="shrink-0" />
-                     <p className="text-[8px] sm:text-[9px] uppercase font-black tracking-widest leading-none truncate">{item.role}</p>
+    <PageWrapper 
+      title="Candidate Approvals" 
+      subtitle="Your active duties and pending requests"
+    >
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="space-y-10"
+      >
+        {/* Minimal Action Header */}
+        <motion.div 
+          variants={itemVariants}
+          className="lg:px-2"
+        >
+          <div className="rounded-3xl premium-card p-6 sm:p-8 bg-gradient-to-br from-white to-indigo-50/30 border-zinc-200/60 shadow-xl shadow-navy/5 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full translate-x-32 -translate-y-32 group-hover:scale-110 transition-transform duration-1000"></div>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+              <div className="flex items-center gap-6">
+                <div className="relative">
+                  <div className="absolute inset-0 blur-xl bg-indigo-500/20 rounded-full animate-pulse"></div>
+                  <div className="h-14 w-14 rounded-2xl bg-white border border-indigo-100 flex items-center justify-center shrink-0 shadow-sm relative">
+                    <AlertCircle size={26} className="text-indigo-600" />
                   </div>
                 </div>
-                <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 ${item.pending > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                   <Layers size={18} className="sm:w-5 sm:h-5" />
-                </div>
-              </div>
-
-              <div className="space-y-4 sm:space-y-5">
                 <div>
-                  <div className="flex items-center justify-between text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
-                    <span>Status</span>
-                    <span className={item.pending > 0 ? 'text-amber-600' : 'text-emerald-600'}>
-                      {item.pending > 0 ? `${item.pending} TO GO` : 'COMPLETED'}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-offwhite rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${item.pending > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`} 
-                      style={{ width: `${((item.total - item.pending) / item.total) * 100}%` }} 
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-muted/30">
-                  <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-bold text-muted-foreground">
-                    <Calendar size={12} />
-                    <span className="truncate">Active Session</span>
-                  </div>
-                  <button onClick={() => navigate('/faculty/pending')} className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gold hover:text-navy transition-colors flex items-center gap-1 shrink-0">
-                    {item.pending > 0 ? 'Resolve' : 'View'} <ArrowRight size={12} strokeWidth={3} />
-                  </button>
+                  <h2 className="text-xl font-black text-navy tracking-tight mb-1">Queue Status</h2>
+                  <p className="text-zinc-500 text-sm font-medium">
+                    {totalPending > 0 ? (
+                      <>You have <span className="text-indigo-600 font-black">{totalPending} pending requests</span> awaiting focus.</>
+                    ) : (
+                      "Your approval queue is fully cleared."
+                    )}
+                  </p>
                 </div>
               </div>
+
+              {totalPending > 0 ? (
+                <Button 
+                  variant="primary" 
+                  className="w-full md:w-auto px-10 h-14 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-navy/20 hover:shadow-xl transition-all active:scale-95" 
+                  onClick={() => navigate('/faculty/pending')}
+                >
+                  PROCESS QUEUE <ArrowRight size={14} className="ml-2" />
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-50 border border-emerald-100/50 text-emerald-600">
+                  <ClipboardCheck size={18} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">All Clear</span>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-20 bg-white rounded-xl border border-dashed border-muted">
-           <p className="text-sm font-black text-navy/20 uppercase tracking-widest">No active duties assigned</p>
-        </div>
-      )}
+          </div>
+        </motion.div>
+
+        {/* Minimal Engagement Section */}
+        <motion.div variants={itemVariants} className="space-y-6">
+          <div className="flex items-center gap-4 px-2">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">Engagement Summary</h2>
+            <div className="h-px flex-1 bg-zinc-100" />
+          </div>
+
+          {summary.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <AnimatePresence mode="popLayout">
+                {summary.map((item) => (
+                  <motion.div 
+                    layout
+                    key={item.id} 
+                    variants={itemVariants}
+                  >
+                    <div className="rounded-3xl premium-card p-6 scale-hover border-zinc-200/60 relative group overflow-hidden h-full flex flex-col justify-between">
+                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                      
+                      <div className="relative z-10">
+                        <div className="flex items-start justify-between mb-8">
+                          <div className="min-w-0">
+                            <span className="text-[9px] font-black text-navy/20 uppercase tracking-[0.2em] mb-1 block">
+                              {item.role}
+                            </span>
+                            <h3 className="text-lg font-black text-navy tracking-tight group-hover:text-indigo-600 transition-colors truncate">
+                              {item.class}
+                            </h3>
+                          </div>
+                          <div className="relative shrink-0">
+                            <div className={`absolute inset-0 blur-xl opacity-20 rounded-full transition-all duration-500 group-hover:opacity-30 ${
+                              item.pending > 0 ? 'bg-amber-400' : 'bg-emerald-400'
+                            }`} />
+                            <div className={`h-11 w-11 rounded-2xl flex items-center justify-center relative border transition-all duration-500 group-hover:scale-110 ${
+                              item.pending > 0 
+                                ? 'bg-amber-50 border-amber-100/50 text-amber-600' 
+                                : 'bg-emerald-50 border-emerald-100/50 text-emerald-600'
+                            }`}>
+                               <Layers size={18} strokeWidth={2.5} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-6">
+                          <div>
+                            <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] mb-2.5">
+                              <span className="text-zinc-400">Sync Status</span>
+                              <span className={item.pending > 0 ? 'text-amber-600' : 'text-emerald-600'}>
+                                {item.pending > 0 ? `${item.pending} Awaiting` : 'Complete'}
+                              </span>
+                            </div>
+                            <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/40">
+                              <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${((item.total - item.pending) / item.total) * 100}%` }}
+                                transition={{ duration: 1.2, ease: "circOut" }}
+                                className={`h-full rounded-full transition-colors duration-500 ${
+                                  item.pending > 0 
+                                    ? 'bg-gradient-to-r from-amber-500 to-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]' 
+                                    : 'bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                                }`} 
+                              />
+                            </div>
+                          </div>
+
+                          <button 
+                            onClick={() => navigate('/faculty/pending', { state: { classId: item.id } })} 
+                            className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 border group/btn relative z-10 ${
+                              item.pending > 0 
+                                ? 'bg-navy text-white border-navy shadow-lg shadow-navy/10 hover:shadow-xl active:scale-[0.97]' 
+                                : 'bg-white text-navy border-divider hover:bg-zinc-50'
+                            }`}
+                          >
+                            <span>{item.pending > 0 ? 'Enter Portal' : 'Audit Class'}</span>
+                            <ArrowRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <motion.div 
+              variants={itemVariants}
+              className="group text-center py-24 bg-white/40 backdrop-blur rounded-[2rem] border border-dashed border-muted/50 transition-colors hover:border-gold/30"
+            >
+               <Layers size={48} className="mx-auto text-muted/10 mb-4 group-hover:text-gold/20 transition-colors" />
+               <p className="text-[11px] font-black text-navy/20 uppercase tracking-[0.3em]">No active duties found</p>
+               <p className="text-[10px] text-muted-foreground/40 font-medium mt-2">Check back later for new academic assignments</p>
+            </motion.div>
+          )}
+        </motion.div>
+      </motion.div>
     </PageWrapper>
   );
 };

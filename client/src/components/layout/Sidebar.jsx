@@ -31,9 +31,8 @@ const NAV_CONFIG = {
     { label: 'Overrides', path: '/hod/overrides', icon: Shield },
   ],
   [ROLES.FACULTY]: [
-    { label: 'Dashboard', path: '/faculty', icon: LayoutDashboard },
-    { label: 'My Classes', path: '/faculty/classes', icon: GraduationCap },
     { label: 'Pending', path: '/faculty/pending', icon: ClipboardCheck },
+    { label: 'My Classes', path: '/faculty/classes', icon: GraduationCap },
     { label: 'History', path: '/faculty/history', icon: History },
   ],
 };

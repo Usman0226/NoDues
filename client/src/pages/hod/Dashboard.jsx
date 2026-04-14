@@ -193,85 +193,95 @@ const HodDashboard = () => {
     <PageWrapper title="HOD Dashboard" subtitle={`Advanced Analytics — ${user?.department || 'Department'}`}>
       
       {/* Top row: High Impact Stats Card (§10.1) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-2xl border border-muted/60 shadow-sm flex items-center gap-4 hover-lift">
-          <div className="h-12 w-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-            <Users size={24} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        {[
+          { label: 'Total Enrollment', value: stats.total, Icon: Users, color: 'indigo', trend: 'Total students tracked' },
+          { label: 'Completion Rate', value: `${stats.completionRate}%`, Icon: ShieldCheck, color: 'emerald', trend: 'Departmental efficiency' },
+          { label: 'Active Dues', value: stats.dues, Icon: AlertTriangle, color: 'red', trend: 'Awaiting resolution' },
+          { label: 'Active Cycles', value: stats.activeCycles, Icon: FileCheck2, color: 'amber', trend: 'Current batch runs' }
+        ].map((stat, i) => (
+          <div key={i} className="premium-card p-6 bg-white relative overflow-hidden group">
+            <div className={`absolute top-0 right-0 w-24 h-24 bg-${stat.color}-500/5 rounded-full translate-x-8 -translate-y-8 group-hover:scale-125 transition-transform duration-700`} />
+            <div className="flex items-center gap-5 relative z-10">
+              <div className={`h-14 w-14 rounded-2xl bg-${stat.color}-50 flex items-center justify-center text-${stat.color}-600 border border-${stat.color}-100 shadow-sm group-hover:scale-110 transition-transform`}>
+                <stat.Icon size={26} strokeWidth={2.5} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">{stat.label}</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-2xl font-black text-navy">{stat.value}</p>
+                  <p className="text-[8px] font-bold text-zinc-400/60 uppercase">{stat.trend}</p>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Total Enrollment</p>
-            <p className="text-xl font-black text-navy">{stats.total}</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-muted/60 shadow-sm flex items-center gap-4 hover-lift">
-          <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-            <ShieldCheck size={24} />
-          </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Completion Rate</p>
-            <p className="text-xl font-black text-navy">{stats.completionRate}%</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-muted/60 shadow-sm flex items-center gap-4 hover-lift">
-          <div className="h-12 w-12 rounded-xl bg-red-50 flex items-center justify-center text-red-600">
-            <AlertTriangle size={24} />
-          </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Active Dues</p>
-            <p className="text-xl font-black text-navy">{stats.dues}</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-muted/60 shadow-sm flex items-center gap-4 hover-lift">
-          <div className="h-12 w-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
-            <FileCheck2 size={24} />
-          </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Active Cycles</p>
-            <p className="text-xl font-black text-navy">{stats.activeCycles}</p>
-          </div>
-        </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10">
         {/* Progress Chart: Main Visualized Form (§10.1) */}
-        <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-muted shadow-sm">
-           <div className="flex items-center justify-between mb-8">
+        <div className="lg:col-span-8 premium-card bg-white p-8 relative group overflow-hidden">
+           <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/[0.02] rounded-full translate-x-32 -translate-y-32" />
+           <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-10 relative z-10">
               <div>
-                <h3 className="text-sm font-black text-navy uppercase tracking-widest">Class-wise Performance</h3>
-                <p className="text-[10px] text-muted-foreground font-medium">Comparative clearance status across all batches</p>
+                <h3 className="text-base font-black text-navy uppercase tracking-[0.2em] mb-1">Class-wise Performance</h3>
+                <p className="text-[11px] text-zinc-400 font-medium">Comparative analytics architecture</p>
               </div>
               <button 
                 onClick={() => setIsBulkModalOpen(true)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-navy text-white text-[10px] font-black uppercase tracking-widest hover:bg-navy/90 transition-all shadow-sm shadow-navy/20"
+                className="flex items-center gap-2.5 px-8 py-3.5 rounded-2xl bg-navy text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-navy/90 transition-all shadow-xl shadow-navy/20 active:scale-95"
               >
-                <Layers size={14} /> NEW CYCLE
+                <Layers size={14} /> INITIALIZE PROTOCOL
               </button>
            </div>
            
            <div className="h-[320px] w-full relative">
               {chartData.batches.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData.batches} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
+                  <BarChart data={chartData.batches} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} barGap={8}>
+                    <defs>
+                      <linearGradient id="colorCleared" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                      </linearGradient>
+                      <linearGradient id="colorPending" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
+                      </linearGradient>
+                      <linearGradient id="colorDues" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="6 6" vertical={false} stroke="#f1f5f9" />
                     <XAxis 
                       dataKey="name" 
                       axisLine={false} 
                       tickLine={false} 
-                      tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} 
-                      dy={10}
+                      tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }} 
+                      dy={15}
                     />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }} />
                     <Tooltip 
-                      cursor={{ fill: '#f8fafc' }}
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                      cursor={{ fill: '#f8fafc', radius: 8 }}
+                      contentStyle={{ 
+                        borderRadius: '20px', 
+                        border: '1px solid #f1f5f9', 
+                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', 
+                        padding: '16px',
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(10px)'
+                      }}
                     />
-                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px' }} />
-                    <Bar dataKey="cleared" type="monotone" fill="#10b981" radius={[4, 4, 0, 0]} barSize={32} />
-                    <Bar dataKey="pending" type="monotone" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={32} />
-                    <Bar dataKey="dues" type="monotone" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={32} />
+                    <Legend 
+                      verticalAlign="top" 
+                      align="right" 
+                      iconType="circle" 
+                      wrapperStyle={{ paddingBottom: '30px', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#64748b' }} 
+                    />
+                    <Bar dataKey="cleared" fill="url(#colorCleared)" radius={[8, 8, 4, 4]} barSize={24} />
+                    <Bar dataKey="pending" fill="url(#colorPending)" radius={[8, 8, 4, 4]} barSize={24} />
+                    <Bar dataKey="dues" fill="url(#colorDues)" radius={[8, 8, 4, 4]} barSize={24} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -293,10 +303,11 @@ const HodDashboard = () => {
         </div>
 
         {/* Distribution Doughnut (§10.1) */}
-        <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-muted shadow-sm flex flex-col items-center">
-           <div className="w-full text-left mb-4">
-              <h3 className="text-sm font-black text-navy uppercase tracking-widest">Global Status</h3>
-              <p className="text-[10px] text-muted-foreground font-medium">Departmental aggregation</p>
+        <div className="lg:col-span-4 premium-card bg-white p-8 flex flex-col items-center relative overflow-hidden">
+           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-indigo-500 to-amber-500 opacity-50" />
+           <div className="w-full text-left mb-8">
+              <h3 className="text-sm font-black text-navy uppercase tracking-[0.2em]">Departmental Pulse</h3>
+              <p className="text-[10px] text-zinc-400 font-medium tracking-tight">System-wide status distribution</p>
            </div>
            
            <div className="h-64 w-full relative">
@@ -308,9 +319,10 @@ const HodDashboard = () => {
                         data={chartData.distribution}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={8}
+                        innerRadius={70}
+                        outerRadius={95}
+                        paddingAngle={10}
+                        cornerRadius={12}
                         dataKey="value"
                       >
                         {chartData.distribution.map((entry, index) => (
@@ -318,35 +330,46 @@ const HodDashboard = () => {
                         ))}
                       </Pie>
                       <Tooltip 
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                        contentStyle={{ 
+                          borderRadius: '16px', 
+                          border: 'none', 
+                          boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', 
+                          padding: '12px',
+                          background: 'rgba(255, 255, 255, 0.95)',
+                          backdropFilter: 'blur(8px)'
+                        }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-2xl font-black text-navy leading-none">{stats.completionRate}%</span>
-                    <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground mt-1">Cleared</span>
+                    <span className="text-3xl font-black text-navy leading-none tracking-tighter">{stats.completionRate}%</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400 mt-2">Certified</span>
                   </div>
                 </>
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20 grayscale scale-90 pointer-events-none">
+                <div className="absolute inset-0 flex flex-col items-center justify-center opacity-10 grayscale scale-90 pointer-events-none">
                    <Activity size={64} className="mb-2" />
-                   <p className="text-[9px] font-black uppercase tracking-widest">No Distribution</p>
+                   <p className="text-[9px] font-black uppercase tracking-widest">Awaiting Pulse</p>
                 </div>
               )}
            </div>
 
-           <div className="w-full space-y-2 mt-4">
+           <div className="w-full space-y-3 mt-6">
               {chartData.distribution.length > 0 ? chartData.distribution.map((item) => (
-                <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-offwhite hover:bg-white border border-transparent hover:border-muted transition-academic">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
-                    <span className="text-[10px] font-black text-navy uppercase tracking-tight">{item.name}</span>
+                <div key={item.name} className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-50/50 hover:bg-zinc-50 border border-transparent hover:border-zinc-200/50 transition-all group">
+                  <div className="flex items-center gap-3">
+                    <div className="h-2.5 w-2.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)]" style={{ backgroundColor: item.color }} />
+                    <span className="text-[10px] font-black text-navy uppercase tracking-[0.1em] group-hover:translate-x-0.5 transition-transform">{item.name}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-muted-foreground">{item.value} Students</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black text-navy">{Math.round((item.value / stats.total) * 100)}%</span>
+                    <span className="h-1 w-1 rounded-full bg-zinc-200" />
+                    <span className="text-[10px] font-bold text-zinc-400">{item.value} Units</span>
+                  </div>
                 </div>
               )) : (
                 <div className="p-4 text-center border border-dashed border-muted rounded-xl opacity-40">
-                   <p className="text-[9px] font-black uppercase tracking-widest">Awaiting Data Points</p>
+                   <p className="text-[9px] font-black uppercase tracking-widest">Calibration Pending</p>
                 </div>
               )}
            </div>
@@ -366,73 +389,114 @@ const HodDashboard = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-             {(Array.isArray(overview?.data) ? overview.data : []).map((batch) => (
-               <div key={batch.batchId} onClick={() => navigate(`/hod/batch/${batch.batchId}`)} className="bg-white p-4 rounded-xl border border-muted/60 hover:shadow-lg hover:shadow-navy/5 transition-all group cursor-pointer flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-lg bg-offwhite flex items-center justify-center text-navy/30 group-hover:text-navy transition-colors">
-                      <GraduationCap size={20} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+             {(Array.isArray(overview?.data) ? overview.data : []).map((batch) => {
+               const progress = Math.round((batch.cleared / batch.total) * 100);
+               return (
+                <div 
+                  key={batch.batchId} 
+                  onClick={() => navigate(`/hod/batch/${batch.batchId}`)} 
+                  className="premium-card p-6 bg-white group cursor-pointer relative overflow-hidden"
+                >
+                    <div className="absolute top-0 left-0 h-1 bg-zinc-50 w-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progress}%` }}
+                        className={`h-full ${progress === 100 ? 'bg-emerald-500' : 'bg-indigo-500'} transition-all duration-1000`}
+                      />
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-navy leading-none mb-1 group-hover:text-gold transition-colors">{batch.className}</h4>
-                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Sem {batch.semester} • {Math.round((batch.cleared / batch.total) * 100)}% Done</p>
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="h-12 w-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all duration-500">
+                        <GraduationCap size={24} strokeWidth={2.5} />
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-md ${
+                          progress === 100 ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-400'
+                        }`}>
+                          {progress}% SYNC
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <ChevronRight size={16} className="text-muted-foreground/20 group-hover:text-gold group-hover:translate-x-1 transition-all" />
-               </div>
-             ))}
+                    <div className="space-y-1">
+                      <h4 className="text-lg font-black text-navy tracking-tight group-hover:text-indigo-600 transition-colors">
+                        {batch.className}
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Sem {batch.semester}</p>
+                        <span className="h-1 w-1 rounded-full bg-zinc-200" />
+                        <p className="text-[10px] font-bold text-zinc-400">{batch.total} STUDENTS</p>
+                      </div>
+                    </div>
+                </div>
+               );
+             })}
           </div>
         </div>
 
         {/* Activity: Polished Bento-style sidebar (§10.1) */}
         <div className="lg:col-span-4 space-y-6">
-           <div className="bg-white rounded-2xl border border-muted shadow-sm p-6 overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-[0.03] pointer-events-none">
-               <History size={80} />
+           <div className="premium-card bg-white rounded-[2rem] p-8 overflow-hidden relative group">
+            <div className="absolute top-0 right-0 p-6 opacity-[0.02] pointer-events-none group-hover:rotate-12 transition-transform duration-1000">
+               <History size={120} />
             </div>
             
-            <div className="flex items-center gap-2 mb-8">
-              <Activity size={18} className="text-navy" />
-              <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy">Live Activity</h2>
+            <div className="flex items-center justify-between mb-10">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <Activity size={20} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-navy">Live Action Stream</h2>
+                  <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Real-time awareness</p>
+                </div>
+              </div>
+              <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
             </div>
             
-            <div className="space-y-6 relative z-10">
+            <div className="space-y-0 relative z-10">
               {activity?.data?.length > 0 ? (
-                activity.data.map((item) => {
+                activity.data.map((item, idx) => {
                   const Config = ACTIVITY_ICONS[item.type] || ACTIVITY_ICONS.CLEARANCE;
                   const Icon = Config.icon;
                   return (
-                    <div key={item.id} className="relative pl-6 pb-6 border-l border-muted/50 last:pb-0 last:border-0 hover-lift group">
-                      <div className={`absolute -left-3.5 top-0 h-7 w-7 rounded-full border-4 border-white flex items-center justify-center shadow-sm ${Config.cls}`}>
+                    <div key={item.id} className="relative pl-8 pb-10 last:pb-2 group/item">
+                      {idx !== activity.data.length - 1 && (
+                        <div className="absolute left-[13px] top-8 bottom-0 w-px bg-gradient-to-b from-zinc-100 to-transparent" />
+                      )}
+                      <div className={`absolute left-0 top-0 h-7 w-7 rounded-2xl border-2 border-white flex items-center justify-center shadow-lg shadow-black/5 z-10 transition-transform group-hover/item:scale-110 ${Config.cls}`}>
                         <Icon size={12} strokeWidth={3} />
                       </div>
-                      <div className="transition-all group-hover:translate-x-1">
-                        <p className="text-[11px] font-black text-navy leading-none mb-1">
-                          {item.student}
+                      <div className="transition-all group-hover/item:translate-x-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-[12px] font-black text-navy leading-none">
+                            {item.student}
+                          </p>
+                          <span className="text-[8px] text-zinc-300 font-black uppercase">
+                            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 font-medium leading-relaxed">
+                           <span className="font-black text-indigo-600/60 uppercase text-[9px] tracking-wide">{item.actor}</span>
+                           <span className="mx-1">•</span>
+                           {item.context}
                         </p>
-                        <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-tight">
-                           Action by <span className="font-bold text-navy/60">{item.actor}</span> • {item.context}
-                        </p>
-                        <span className="text-[8px] text-muted-foreground/30 font-black uppercase mt-1.5 block">
-                           {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(item.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                        </span>
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="text-center py-10 opacity-40">
-                  <Clock size={32} className="mx-auto mb-2" />
-                  <p className="text-[10px] uppercase font-black tracking-widest">No Recent Stream</p>
+                <div className="text-center py-12 opacity-30">
+                  <Clock size={48} strokeWidth={1.5} className="mx-auto mb-4 text-zinc-300" />
+                  <p className="text-[10px] uppercase font-black tracking-[0.2em] text-zinc-400">Stream Calibrating...</p>
                 </div>
               )}
             </div>
             
             <button 
               onClick={() => navigate('/hod/overrides')}
-              className="w-full mt-8 py-3 bg-offwhite rounded-xl border border-muted text-[10px] font-black uppercase tracking-widest text-navy/60 hover:text-navy hover:bg-white transition-all flex items-center justify-center gap-2"
+              className="w-full mt-10 py-4 bg-zinc-50 rounded-2xl border border-zinc-100 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-indigo-600 hover:bg-white hover:border-indigo-100/50 transition-all flex items-center justify-center gap-3 group/btn"
             >
-              Full History <ChevronRight size={14} />
+              ARCHIVE PROTOCOL <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
             </button>
           </div>
         </div>

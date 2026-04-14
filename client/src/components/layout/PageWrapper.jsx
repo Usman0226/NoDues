@@ -15,16 +15,21 @@ const PageWrapper = ({ children, title, subtitle, backTitle, backFallback }) => 
         {backFallback && (
           <BackHeader title={backTitle || 'Back'} fallback={backFallback} />
         )}
-        <header className="mb-6 sm:mb-7 lg:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 sm:gap-4">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-navy tracking-tight shrink-0">
-              {title}
-            </h1>
-            {subtitle && (
-              <div className="text-xs sm:text-sm text-zinc-500 font-medium text-left sm:text-right leading-snug max-w-xl">
-                {subtitle}
-              </div>
-            )}
+        <header className="mb-8 lg:mb-10">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 md:gap-6">
+            <div className="space-y-1">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-navy tracking-tighter leading-none">
+                {title}
+              </h1>
+              {subtitle && (
+                <div className="flex items-center gap-2">
+                  <div className="h-0.5 w-6 bg-gold/40 rounded-full" />
+                  <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">
+                    {subtitle}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <main>{children}</main>

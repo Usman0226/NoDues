@@ -86,12 +86,23 @@ const SearchableSelect = ({
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
-      <button
+      <div
         ref={triggerRef}
-        type="button"
-        disabled={disabled || loading}
-        onClick={() => setIsOpen(!isOpen)}
-        className={triggerClasses}
+        role="button"
+        tabIndex={disabled || loading ? -1 : 0}
+        aria-disabled={disabled || loading}
+        onClick={() => {
+          if (!disabled && !loading) {
+            setIsOpen(!isOpen);
+          }
+        }}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && !disabled && !loading) {
+            e.preventDefault();
+            setIsOpen(!isOpen);
+          }
+        }}
+        className={`${triggerClasses} cursor-pointer select-none`}
       >
         <div className="flex flex-col items-start overflow-hidden">
           {selectedOption ? (
@@ -114,6 +125,7 @@ const SearchableSelect = ({
           {loading && <Loader2 size={size === 'sm' ? 12 : 16} className="animate-spin text-indigo-500" />}
           {selectedOption && !disabled && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onChange?.(null);
@@ -129,7 +141,7 @@ const SearchableSelect = ({
             className={`text-zinc-400 transition-transform duration-300 ${isOpen ? 'rotate-180 text-indigo-500' : 'group-hover:text-zinc-600'}`} 
           />
         </div>
-      </button>
+      </div>
 
       {isOpen && createPortal(
         <div 

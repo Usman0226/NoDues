@@ -6,7 +6,10 @@
     "Refinement: Explicit sidebar matching logic (isActive)",
     "Functionality: 'Manage Queue' filtering (Backend query updates)",
     "Functionality: 'Manage Queue' filtering (Frontend state & dropdown sync)",
-    "Bugfix: Resolved missing SearchableSelect import in Pending.jsx"
+    "Bugfix: Resolved missing SearchableSelect import in Pending.jsx",
+    "Redesign: Student Portal 'Clean & Premium' reskin (Status.jsx, PageWrapper.jsx, Badge.jsx)",
+    "Styling: Ambient background depth and high-performance design tokens in index.css",
+    "Redesign: High-fidelity Subject Cards (Status.jsx) with light-sweep animations and improved metadata layout"
   ],
   "in_progress": [],
   "pending": [
@@ -23,6 +26,11 @@
       "context": "Batch dropdown in Pending page was deriving items from filtered data.",
       "decision": "Added a separate call to getMyClasses in Pending.jsx to populate the batch dropdown independently of the visible queue data.",
       "trade_offs": "One extra call on mount, but significantly improves UX by keeping all class options available."
+    },
+    {
+      "context": "Student Portal felt 'too white/plain' but required high performance on low-end devices.",
+      "decision": "Implemented a 'Clean & Premium' reskin focusing on CSS design tokens, multi-stop shadows, and Soft Surface layering instead of layout changes or heavy blurs.",
+      "trade_offs": "Sacrificed full glassmorphism for better scrolling performance on budget hardware while achieving premium depth."
     }
   ],
   "blockers": []

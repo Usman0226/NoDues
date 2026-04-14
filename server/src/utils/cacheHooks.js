@@ -1,10 +1,6 @@
 import cache from '../config/cache.js';
 import logger from './logger.js';
 
-/**
- * Atomic cache invalidation for key entities.
- * Decouples model logic from specific cache key strings.
- */
 export const invalidateEntityCache = (entityType, entityId, additionalId = null) => {
   const keys = [];
 
@@ -23,7 +19,6 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
 
     case 'faculty':
       keys.push(`user:${entityId}`);
-      // If faculty holds a role that causes pending lists, we might clear those too
       if (additionalId) keys.push(`faculty_pending:${entityId}:${additionalId}`);
       break;
 

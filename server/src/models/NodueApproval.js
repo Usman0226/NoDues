@@ -76,10 +76,14 @@ nodueApprovalSchema.index({ requestId: 1, action: 1 });
 // ── Cache Invalidation Hooks ────────────────────────────────────────────────
 nodueApprovalSchema.post('save', async function (doc) {
   invalidateEntityCache('approval', doc.facultyId, doc.batchId);
+  invalidateEntityCache('student', doc.studentId);
 });
 
 nodueApprovalSchema.post('findOneAndUpdate', async function (doc) {
-  if (doc) invalidateEntityCache('approval', doc.facultyId, doc.batchId);
+  if (doc) {
+    invalidateEntityCache('approval', doc.facultyId, doc.batchId);
+    invalidateEntityCache('student', doc.studentId);
+  }
 });
 
 export default mongoose.model('NodueApproval', nodueApprovalSchema);

@@ -77,14 +77,23 @@ const AppLayout = () => {
 };
 
 const StudentLayout = () => (
-  <div className="h-screen overflow-hidden bg-offwhite flex flex-col">
-    <nav className="h-14 lg:h-16 bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-900 border-b border-white/10 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
+  <div className="h-screen overflow-hidden bg-offwhite flex flex-col relative">
+    {/* Ambient Background Depth */}
+    <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/5 blur-[120px] rounded-full" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-amber-500/5 blur-[120px] rounded-full" />
+      <div className="absolute inset-0 grid-overlay opacity-[0.2]" />
+    </div>
+
+    <nav className="h-14 lg:h-16 bg-gradient-to-r from-indigo-950 via-indigo-900 to-slate-900 border-b border-white/10 flex items-center justify-between px-4 lg:px-8 shrink-0 relative z-40 shadow-lg">
       <h2 className="text-white font-brand text-lg">No<span className="text-gold">Dues</span></h2>
       <StudentNavRight />
     </nav>
-    <div className="flex-1 overflow-y-auto">
-      <Outlet />
-    </div>
+    <main className="flex-1 overflow-y-auto relative z-10">
+      <div className="max-w-7xl mx-auto min-h-full">
+        <Outlet />
+      </div>
+    </main>
   </div>
 );
 

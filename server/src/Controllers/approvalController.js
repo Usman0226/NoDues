@@ -206,7 +206,7 @@ export const approveRequest = async (req, res, next) => {
       action: 'APPROVE', resource_id: approvalId,
     });
 
-    pushEvent([approval.studentId.toString()], 'APPROVAL_UPDATED', {
+    pushEvent([approval.studentId.toString(), req.user.userId.toString()], 'APPROVAL_UPDATED', {
       studentId:  approval.studentId,
       requestId:  approval.requestId,
       approvalId,
@@ -276,7 +276,7 @@ export const bulkApproveRequests = async (req, res, next) => {
     });
 
     if (studentIdsToNotify.size > 0) {
-      pushEvent([...studentIdsToNotify], 'APPROVAL_UPDATED', {
+      pushEvent([...studentIdsToNotify, req.user.userId.toString()], 'APPROVAL_UPDATED', {
         action: 'approved',
         bulk: true,
         timestamp: now
@@ -336,7 +336,7 @@ export const markDue = async (req, res, next) => {
       action: 'MARK_DUE', resource_id: approvalId, dueType,
     });
 
-    pushEvent([approval.studentId.toString()], 'APPROVAL_UPDATED', {
+    pushEvent([approval.studentId.toString(), req.user.userId.toString()], 'APPROVAL_UPDATED', {
       studentId:  approval.studentId,
       requestId:  approval.requestId,
       approvalId,
@@ -368,7 +368,7 @@ export const updateApproval = async (req, res, next) => {
       return next(new ErrorResponse('Cannot update approval — batch is closed', 400, 'BATCH_CLOSED'));
     }
 
-    const VALID_ACTIONS = ['approved', 'due_marked'];
+    const VALID_ACTIONS = ['pending', 'approved', 'due_marked'];
     if (action && !VALID_ACTIONS.includes(action)) {
       return next(new ErrorResponse(`action must be one of: ${VALID_ACTIONS.join(', ')}`, 400, 'VALIDATION_ERROR'));
     }
@@ -376,8 +376,16 @@ export const updateApproval = async (req, res, next) => {
       return next(new ErrorResponse('dueType required when action is due_marked', 400, 'VALIDATION_ERROR'));
     }
 
-    if (action)             approval.action  = action;
-    if (dueType)            approval.dueType = dueType;
+    if (action) {
+      approval.action = action;
+      if (action === 'pending' || action === 'approved') {
+        approval.dueType = null;
+        approval.remarks = null;
+      }
+    }
+    
+    // Allow explicit overriding if provided
+    if (dueType !== undefined) approval.dueType = dueType;
     if (remarks !== undefined) approval.remarks = remarks;
     approval.actionedAt = new Date();
     await approval.save();
@@ -391,7 +399,7 @@ export const updateApproval = async (req, res, next) => {
       action: 'UPDATE_APPROVAL', resource_id: approvalId,
     });
 
-    pushEvent([approval.studentId.toString()], 'APPROVAL_UPDATED', {
+    pushEvent([approval.studentId.toString(), req.user.userId.toString()], 'APPROVAL_UPDATED', {
       studentId:  approval.studentId,
       requestId:  approval.requestId,
       approvalId,
