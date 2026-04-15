@@ -10,7 +10,7 @@ import BackHeader from '../ui/BackHeader';
  */
 const PageWrapper = ({ children, title, subtitle, backTitle, backFallback }) => {
   return (
-    <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-10 fade-up">
+    <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-10 fade-up max-w-full overflow-x-hidden">
       <div className="max-w-7xl mx-auto relative">
         {backFallback && (
           <BackHeader title={backTitle || 'Back'} fallback={backFallback} />

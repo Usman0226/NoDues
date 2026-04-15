@@ -51,13 +51,13 @@ const AppLayout = () => {
   const isLocked = user?.mustChangePassword;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-offwhite">
+    <div className="flex h-screen overflow-hidden bg-offwhite max-w-full">
       <ForcedChangePasswordModal />
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <div className="flex-1 min-w-0 relative h-full flex flex-col">
+      <div className="flex-1 min-w-0 relative h-full flex flex-col overflow-x-hidden">
         <div className="absolute inset-0 pointer-events-none grid-overlay opacity-[0.32] -z-10" />
         <Navbar onMenuToggle={() => setMobileOpen(true)} />
-        <div className="flex-1 overflow-y-auto relative z-10">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden relative z-10">
           {!isLocked ? (
             <Outlet />
           ) : (
@@ -89,7 +89,7 @@ const StudentLayout = () => (
       <h2 className="text-white font-brand text-lg">No<span className="text-gold">Dues</span></h2>
       <StudentNavRight />
     </nav>
-    <main className="flex-1 overflow-y-auto relative z-10">
+    <main className="flex-1 overflow-y-auto overflow-x-hidden relative z-10">
       <div className="max-w-7xl mx-auto min-h-full">
         <Outlet />
       </div>

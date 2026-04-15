@@ -127,7 +127,7 @@ const AdminDashboard = () => {
   return (
     <PageWrapper title={isHod ? "Department Dashboard" : "Admin Dashboard"} >
       {/* Stats Grid */}
-      <div className={`grid grid-cols-2 lg:grid-cols-5 gap-6 mb-12 ${loading && !response ? 'animate-pulse' : ''}`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-12 ${loading && !response ? 'animate-pulse' : ''}`}>
         {stats.map((stat, i) => (
           <div key={i} className="bg-white rounded-xl p-6 border border-muted shadow-sm hover:shadow-md transition-academic group">
             <div className={`h-10 w-10 rounded-xl ${stat.bg} flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>

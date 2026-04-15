@@ -647,17 +647,19 @@ const SUBJECT_COLS = [
       backFallback={isHod ? '/hod/classes' : (departmentId ? `/admin/departments/${departmentId}/classes` : '/admin/departments')}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-full p-1.5 w-fit">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            return (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300
-                  ${tab === t.key ? 'bg-navy text-white shadow-md scale-100' : 'text-muted-foreground hover:bg-offwhite hover:text-navy hover:scale-[0.98]'}`}>
-                <Icon size={14} /> {t.label}
-              </button>
-            );
-          })}
+        <div className="overflow-x-auto no-scrollbar pb-1 -mb-1">
+          <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-full p-1.5 w-fit min-w-full sm:min-w-0">
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              return (
+                <button key={t.key} onClick={() => setTab(t.key)}
+                  className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap
+                    ${tab === t.key ? 'bg-navy text-white shadow-md scale-100' : 'text-muted-foreground hover:bg-offwhite hover:text-navy hover:scale-[0.98]'}`}>
+                  <Icon size={14} /> {t.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {tab === 'students' && (

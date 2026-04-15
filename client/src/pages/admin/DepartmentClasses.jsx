@@ -270,7 +270,7 @@ const DepartmentClasses = () => {
                     <motion.div key={cls._id} variants={itemVariants} layout>
                        <Link 
                         to={isHod ? `/hod/class/${cls._id}` : `/admin/class/${cls._id}`}
-                        className="group block bg-white rounded-2xl border border-muted p-6 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] hover:border-indigo-200 transition-all duration-300 relative overflow-hidden"
+                        className="group block bg-white rounded-2xl border border-muted p-4 sm:p-6 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] hover:border-indigo-200 transition-all duration-300 relative overflow-hidden"
                       >
                         {!cls.isActive && (
                           <div className="absolute top-0 right-0 px-3 py-1 bg-zinc-100 text-[8px] font-black uppercase tracking-widest text-zinc-400 rounded-bl-lg">
@@ -279,9 +279,9 @@ const DepartmentClasses = () => {
                         )}
                         
                         <div className="flex justify-between items-start mb-6">
-                          <div>
-                            <h4 className="font-black text-navy text-lg group-hover:text-gold transition-colors uppercase tracking-tight">{cls.name}</h4>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 mt-1">
+                          <div className="min-w-0">
+                            <h4 className="font-black text-navy text-lg group-hover:text-gold transition-colors uppercase tracking-tight truncate">{cls.name}</h4>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 mt-1 truncate">
                                Batch: {cls.academicYear}
                             </p>
                           </div>
