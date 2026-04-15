@@ -8,94 +8,113 @@ import { withCache } from '../utils/withCache.js';
 // Critical-path endpoint: every student hits this simultaneously at deadline.
 // Target: < 5ms on cache hit | < 30ms on cache miss.
 export const getStudentStatus = async (req, res, next) => {
-  try {
-    const { userId } = req.user;
+  const userId = req.user.userId;
+  const { requestId } = req.params; // Support path param for history detail
 
-    const data = await withCache(`student_status:${userId}`, 30, async () => {
-      // Parallel fetch: student meta + most recent request
+  try {
+    // Distinct cache key for historical requests vs active status
+    const cacheKey = requestId ? `student_status:${userId}:${requestId}` : `student_status:${userId}:active`;
+
+    const data = await withCache(cacheKey, 60, async () => {
+      // 1. Fetch student and the targeted request (specific ID or latest)
       const [student, request] = await Promise.all([
         Student.findById(userId)
           .select('rollNo name semester classId departmentId')
           .lean(),
-        NodueRequest.findOne({ studentId: userId })
-          .sort({ createdAt: -1 })
-          .select('_id batchId status facultySnapshot overriddenBy overrideRemark overriddenAt')
-          .lean(),
+        requestId 
+          ? NodueRequest.findOne({ _id: requestId, studentId: userId })
+              .select('_id batchId status facultySnapshot overriddenBy overrideRemark overriddenAt')
+              .lean()
+          : NodueRequest.findOne({ studentId: userId })
+              .sort({ createdAt: -1 })
+              .select('_id batchId status facultySnapshot overriddenBy overrideRemark overriddenAt')
+              .lean(),
       ]);
 
+      if (!student) throw new Error('Student profile not found');
+
+      // 2. If NO request exists (student hasn't been invited to any batch yet)
       if (!request) {
-        return {
-          status:   'no_batch',
-          message:  'No no-due batch initiated for your class',
-          approvals: [],
+        const activeBatch = await NodueBatch.findOne({ 
+          status: 'active',
+          departmentId: student.departmentId 
+        }).lean();
+
+        if (!activeBatch) return { status: 'no_batch' };
+        return { status: 'not_initiated', batchId: activeBatch._id };
+      }
+
+      // 3. Request exists — verify Parent Batch state
+      const batch = await NodueBatch.findById(request.batchId)
+        .select('semester academicYear deadline className status')
+        .lean();
+
+      // IF viewing active status (no requestId) AND (batch is missing OR batch is closed)
+      // THEN redirect to no_batch state
+      if (!requestId && (!batch || batch.status !== 'active')) {
+        return { 
+          status: 'no_batch',
+          message: 'Active clearance cycle has concluded.' 
         };
       }
 
-      // Parallel fetch: approvals + batch info — both hit indexes
-      const [approvals, batch] = await Promise.all([
-        NodueApproval.find({ requestId: request._id })
-          .select('subjectId subjectName approvalType roleTag action dueType remarks actionedAt facultyName')
-          .lean(),
-        NodueBatch.findById(request.batchId)
-          .select('semester academicYear deadline className')
-          .lean(),
-      ]);
+      // If viewing history BUT batch was deleted, we still show the request data 
+      // with fallback metadata to prevent the "Taking to Home" (no_batch) loop.
 
-      // Shape response — no internal IDs, no fields the UI doesn't render
+      // 3. Fetch all granular approvals for this request
+      const approvals = await NodueApproval.find({ requestId: request._id }).lean();
+
+      // 4. Map to high-fidelity status registry
+      const statusRegistry = approvals.map(a => {
+        // Resolve lookup against request-time snapshot (handles role changes/deletions)
+        const snapshot = (Array.isArray(request.facultySnapshot) 
+          ? request.facultySnapshot.find(f => 
+              (a.approvalType === 'subject' && f.subjectId?.toString() === a.subjectId?.toString()) ||
+              (a.approvalType !== 'subject' && f.roleTag === a.roleTag)
+            )
+          : request.facultySnapshot?.[a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag]
+        ) || {};
+
+        let displayContext = snapshot.subjectName || a.subjectName;
+        if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
+        if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Academic Advisor';
+        if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Institutional Mentor';
+
+        return {
+          id: a._id,
+          facultyName: snapshot.facultyName || 'Department Station',
+          subjectName: displayContext || 'General Appraisal',
+          subjectCode: snapshot.subjectCode || null,
+          action: a.action,
+          dueType: a.dueType,
+          remarks: a.remarks,
+          approvalType: a.approvalType,
+          roleTag: a.roleTag,
+          actionedAt: a.actionedAt
+        };
+      });
+
       return {
-        requestId:      request._id,
-        batchId:        request.batchId,
-        className:      batch?.className    ?? 'N/A',
-        semester:       batch?.semester     ?? 0,
-        academicYear:   batch?.academicYear ?? 'N/A',
-        deadline:       batch?.deadline     ?? null,
-        rollNo:         student?.rollNo     ?? 'N/A',
-        name:           student?.name       ?? 'N/A',
-        status:         request.status,
-        overallStatus:  request.status,
-        overrideRemark: request.overrideRemark ?? null,
-        approvals: approvals.map((a) => {
-          // Look up details from the facultySnapshot — handle both Legacy Array and Modern Object formats
-          const snapshot = (Array.isArray(request.facultySnapshot) 
-            ? request.facultySnapshot.find(f => 
-                (a.approvalType === 'subject' && f.subjectId?.toString() === a.subjectId?.toString()) ||
-                (a.approvalType !== 'subject' && f.roleTag === a.roleTag)
-              )
-            : request.facultySnapshot?.[a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag]
-          ) || {};
-
-          let displayContext = snapshot.subjectName || a.subjectName;
-          if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
-          if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Academic Advisor (Class Teacher)';
-          if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Institutional Mentor';
-
-          return {
-            id:           a._id,
-            facultyName:  snapshot.facultyName || 'Office of Administration',
-            subjectName:  displayContext       || 'General Appraisal',
-            subjectCode:  snapshot.subjectCode || null,
-            approvalType: a.approvalType,
-            roleTag:      a.roleTag,
-            action:       a.action,
-            dueType:      a.dueType            || null,
-            remarks:      a.remarks            || null,
-            actionedAt:   a.actionedAt         || null,
-          };
-        }),
+        status: request.status,
+        requestId: request._id,
+        batchId: request.batchId,
+        metadata: {
+          batchName:    batch?.className    || 'Legacy Cycle',
+          academicYear: batch?.academicYear || 'Unknown Session',
+          semester:     batch?.semester     || '?',
+          deadline:     batch?.deadline     || null
+        },
+        rollNo: student.rollNo,
+        studentName: student.name,
+        overrides: request.overriddenBy ? {
+          remark: request.overrideRemark,
+          at: request.overriddenAt
+        } : null,
+        approvals: statusRegistry
       };
     });
 
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    
-    if (process.env.NODE_ENV !== 'production' || userId === '69dbf9e4344fe25b6768d0e5') {
-      console.log(`[Diagnostic] Student Status for ${userId}:`, {
-        requestId: data.requestId,
-        approvalsCount: data.approvals?.length,
-        status: data.status
-      });
-    }
-
-    console.dir(data);
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -137,15 +156,15 @@ export const getStudentHistory = async (req, res, next) => {
     const batchMap = Object.fromEntries(batches.map((b) => [b._id.toString(), b]));
 
     const data = requests.map((r) => {
-      const b = batchMap[r.batchId?.toString()] ?? {};
+      const b = batchMap[r.batchId?.toString()];
       return {
         requestId:      r._id,
         batchId:        r.batchId,
-        className:      b.className    ?? null,
-        semester:       b.semester     ?? null,
-        academicYear:   b.academicYear ?? null,
+        className:      b?.className    || 'Legacy Cycle',
+        semester:       b?.semester     || '?',
+        academicYear:   b?.academicYear || 'Unknown Session',
         status:         r.status,
-        overrideRemark: r.overrideRemark ?? null,
+        overrideRemark: r.overrideRemark || null,
         createdAt:      r.createdAt,
       };
     });

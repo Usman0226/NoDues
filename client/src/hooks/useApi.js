@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 
@@ -46,31 +46,32 @@ export const useApi = (apiFunc, options = {}) => {
     ...options.queryOptions // Allow passing extra react-query options
   });
 
+  const optionsRef = React.useRef(options);
+  React.useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
+
   const request = useCallback(async (...args) => {
-    // If we have arguments, we bypass the query cache for this specific call 
-    // or we could refactor more aggressively. For now, let's support it:
+    const currentOptions = optionsRef.current;
     if (args.length > 0) {
       try {
-        // We still use refetch or direct call
         const result = await apiFunc(...args);
-        // Update the cache with this new data manually
         queryClient.setQueryData(queryKey, result);
-        options.onSuccess?.(result);
+        currentOptions.onSuccess?.(result);
         return result;
       } catch (err) {
         const errorMessage = err?.response?.data?.error?.message || err.message || 'Something went wrong';
-        if (!options.silent) {
+        if (!currentOptions.silent) {
           toast.error(errorMessage);
         }
-        options.onError?.(err);
+        currentOptions.onError?.(err);
         throw err;
       }
     }
     
-    // Otherwise just refetch the query
     const { data: refetchedData } = await refetch();
     return refetchedData;
-  }, [apiFunc, queryKey, queryClient, refetch, options]);
+  }, [apiFunc, queryKey, queryClient, refetch]);
 
   const setData = useCallback((newData) => {
     queryClient.setQueryData(queryKey, newData);

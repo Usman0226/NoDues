@@ -9,6 +9,7 @@ router.use(protect);
 router.use(RoleGuard(['student']));
 
 router.get('/status',  getStudentStatus);
+router.get('/status/:requestId', getStudentStatus);
 router.get('/history', getStudentHistory);
 
 export default router;

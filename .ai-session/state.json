@@ -1,29 +1,20 @@
 {
-  "last_updated": "2026-04-15T16:07:30Z",
+  "last_updated": "2026-04-16T02:20:00Z",
   "completed": [
-    "Hardened backend data consistency with Mongoose Transactions across all critical controllers (Faculty, Batch, Approval, Class, Student, and Import modules).",
-    "Enabled cross-instance real-time synchronization using MongoDB Change Streams and SSE.",
-    "Refactored status recalculation and batch synchronization logic to be session-aware.",
-    "Eliminated dependency on Redis by leveraging native MongoDB features."
+    "Hardened student portal visibility logic",
+    "Implemented check for active batch in backend",
+    "Created Student Clearance History page",
+    "Updated student navigation with History and Dashboard links"
   ],
-  "in_progress": [
-    "Final verification and load testing of transactional overhead.",
-    "Observing production logs on Render for any transaction-related timeouts under high concurrency."
-  ],
+  "in_progress": [],
   "pending": [
-    "Reduce cache TTLs in server/src/config/cache.js to 5-10 seconds to further mitigate stale data issues.",
-    "Implement specific cache invalidation triggers based on Change Stream events."
+    "Final UI polish across other roles (if needed)"
   ],
   "decisions": [
     {
-      "context": "Multi-instance server environment on Render causing data inconsistency.",
-      "decision": "Implemented MongoDB Change Streams to broadcast SSE updates globally across all node instances, ensuring silent background sync without requiring Redis.",
-      "trade_offs": "Adds slight overhead to MongoDB (Oplog pressure) but simplifies infrastructure and eliminates Redis management/costs."
-    },
-    {
-      "context": "Ensuring data integrity for complex academic management operations.",
-      "decision": "Applied mandatory Mongoose Transactions to all write-heavy controllers.",
-      "trade_offs": "Increases latency slightly for write operations but guarantees ACID compliance and state consistency."
+      "context": "Student dashboard was showing old data after batches were closed.",
+      "decision": "Force dashboard to 'no_batch' state if latest batch is closed and provide a separate History view.",
+      "trade_offs": "Students must click an extra time to see historical data, but the dashboard remains clean and focused on urgent actions."
     }
   ],
   "blockers": []

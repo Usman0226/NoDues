@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, Link } from 'react-router-dom';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { UIProvider, UIContext } from './context/UIContext';
@@ -13,6 +13,7 @@ import { Toaster } from 'react-hot-toast';
 
 import Sidebar from './components/layout/Sidebar';
 import Navbar from './components/layout/Navbar';
+import { LayoutDashboard, History } from 'lucide-react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ScrollToTop from './components/ui/ScrollToTop';
@@ -44,6 +45,7 @@ import Pending from './pages/faculty/Pending';
 import FacultyHistory from './pages/faculty/History';
 
 import StudentStatus from './pages/student/Status';
+import StudentHistory from './pages/student/History';
 
 const AppLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -100,12 +102,33 @@ const StudentLayout = () => (
 const StudentNavRight = () => {
   const { user, logout } = useAuth();
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
+        <Link 
+          to="/student" 
+          className="p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-all group relative"
+          title="Dashboard"
+        >
+          <LayoutDashboard size={18} />
+          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-navy text-[8px] font-black uppercase tracking-widest text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-white/10">Home</span>
+        </Link>
+        <Link 
+          to="/student/history" 
+          className="p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-all group relative"
+          title="Clearance History"
+        >
+          <History size={18} />
+          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-navy text-[8px] font-black uppercase tracking-widest text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-white/10">History</span>
+        </Link>
+      </div>
+
+      <div className="h-6 w-px bg-white/10 mx-1" />
+
       <div className="text-right hidden sm:block">
         <p className="text-sm font-black text-white leading-none tracking-tight">{user?.rollNo}</p>
         <p className="text-[9px] text-indigo-100/70 uppercase tracking-[0.24em] mt-1">{user?.name}</p>
       </div>
-      <button onClick={logout} className="px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-white/20 transition-colors">
+      <button onClick={logout} className="px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-status-rejected hover:border-status-rejected transition-all active:scale-95 shadow-lg shadow-black/20">
         Logout
       </button>
     </div>
@@ -211,6 +234,8 @@ const AppContent = () => {
 
           <Route element={<ProtectedRoute allowedRoles={[ROLES.STUDENT]}><StudentLayout /></ProtectedRoute>}>
             <Route path="/student" element={<StudentStatus />} />
+            <Route path="/student/history" element={<StudentHistory />} />
+            <Route path="/student/history/:requestId" element={<StudentStatus />} />
           </Route>
 
           <Route path="/unauthorized" element={
