@@ -18,8 +18,8 @@ import {
   CheckCircle2,
   XCircle,
   ShieldCheck,
+  ClipboardCheck,
   Users,
-  Check,
   Info,
   Archive,
   GraduationCap,
@@ -48,7 +48,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-
+import {motion} from 'framer-motion'
 
 const ACTIVITY_ICONS = {
   CLEARANCE: { icon: CheckCircle2, cls: 'text-emerald-500 bg-emerald-50' },
@@ -59,7 +59,7 @@ const ACTIVITY_ICONS = {
 const HodDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { showGlobalLoader } = useUI();
+  const { showGlobalLoader, refreshTasks } = useUI();
   
   const { data: overview, loading, error, request: fetchOverview } = useApi(getHodOverview, { immediate: true });
   const { data: activity, request: fetchActivity } = useApi(getHodActivity, { immediate: true });
@@ -67,9 +67,16 @@ const HodDashboard = () => {
   const [isBulkModalOpen, setIsBulkModalOpen] = React.useState(false);
   const [deadline, setDeadline] = React.useState('');
   const [isInitiating, setIsInitiating] = React.useState(false);
+  const [isMounted, setIsMounted] = React.useState(false);
 
   const { data: previewResponse, loading: loadingPreview, request: fetchPreview } = useApi(getInitiationPreview);
   const previewData = useMemo(() => previewResponse?.data || [], [previewResponse?.data]);
+
+  useEffect(() => {
+    // Delay mounting charts to ensure container dimensions are calculated
+    const timer = setTimeout(() => setIsMounted(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (isBulkModalOpen) {
@@ -85,26 +92,22 @@ const HodDashboard = () => {
     e.preventDefault();
     if (isInitiating) return;
 
+    const hide = showGlobalLoader('Initiating Department-wide Clearance...');
     try {
       setIsInitiating(true);
       const res = await initiateDepartmentBatch({ deadline: deadline || null });
       
       if (res.success) {
-        const { summary } = res.data;
-        if (summary.failed > 0) {
-          toast.error(`Initiated ${summary.initiated} cycles, but ${summary.failed} failed.`);
-        } else {
-          toast.success(`Successfully initiated ${summary.initiated} clearance cycles.`);
-        }
+        toast.success(res.data.message || 'Bulk initiation started');
         setIsBulkModalOpen(false);
         setDeadline('');
-        fetchOverview();
-        fetchActivity();
+        if (refreshTasks) refreshTasks();
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Department initiation failed');
+      toast.error(err.message || 'Bulk initiation failed');
     } finally {
       setIsInitiating(false);
+      hide();
     }
   };
 
@@ -190,54 +193,108 @@ const HodDashboard = () => {
   }
 
   return (
-    <PageWrapper title="HOD Dashboard" subtitle={`Advanced Analytics — ${user?.department || 'Department'}`}>
+    <PageWrapper title="Department Dashboard" subtitle={`Overview — ${user?.department || 'Department'}`}>
       
-      {/* Top row: High Impact Stats Card (§10.1) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        {[
-          { label: 'Total Enrollment', value: stats.total, Icon: Users, color: 'indigo', trend: 'Total students tracked' },
-          { label: 'Completion Rate', value: `${stats.completionRate}%`, Icon: ShieldCheck, color: 'emerald', trend: 'Departmental efficiency' },
-          { label: 'Active Dues', value: stats.dues, Icon: AlertTriangle, color: 'red', trend: 'Awaiting resolution' },
-          { label: 'Active Cycles', value: stats.activeCycles, Icon: FileCheck2, color: 'amber', trend: 'Current batch runs' }
-        ].map((stat, i) => (
-          <div key={i} className="premium-card p-6 bg-white relative overflow-hidden group">
-            <div className={`absolute top-0 right-0 w-24 h-24 bg-${stat.color}-500/5 rounded-full translate-x-8 -translate-y-8 group-hover:scale-125 transition-transform duration-700`} />
-            <div className="flex items-center gap-5 relative z-10">
-              <div className={`h-14 w-14 rounded-2xl bg-${stat.color}-50 flex items-center justify-center text-${stat.color}-600 border border-${stat.color}-100 shadow-sm group-hover:scale-110 transition-transform`}>
-                <stat.Icon size={26} strokeWidth={2.5} />
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">{stat.label}</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-black text-navy">{stat.value}</p>
-                  <p className="text-[8px] font-bold text-zinc-400/60 uppercase">{stat.trend}</p>
+      {/* Minimal Hero Section */}
+      <div className="flex flex-col lg:flex-row gap-6 mb-10">
+        {/* Progress Card */}
+        <div className="flex-1 bg-white rounded-3xl premium-card p-8 flex flex-col md:flex-row items-center gap-10 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/[0.03] rounded-full translate-x-20 -translate-y-20 transition-transform group-hover:scale-110 duration-700" />
+          
+          <div className="relative h-44 w-44 shrink-0">
+             {/* Progress Circle container */}
+             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="text-4xl font-black text-navy leading-none">{stats.completionRate}%</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mt-2 flex items-center gap-1.5">
+                   <ShieldCheck size={12} /> Progress
+                </span>
+             </div>
+             {/* Using a simple SVG for the progress circle for a custom feel */}
+             <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                   cx="50" cy="50" r="45" 
+                   fill="none" 
+                   stroke="#f1f5f9" 
+                   strokeWidth="8" 
+                />
+                <motion.circle 
+                   cx="50" cy="50" r="45" 
+                   fill="none" 
+                   stroke="currentColor" 
+                   strokeWidth="8" 
+                   strokeDasharray="283"
+                   strokeDashoffset={283 - (283 * stats.completionRate / 100)}
+                   strokeLinecap="round"
+                   className="text-emerald-500 transition-all duration-1000"
+                   initial={{ strokeDashoffset: 283 }}
+                   animate={{ strokeDashoffset: 283 - (283 * stats.completionRate / 100) }}
+                />
+             </svg>
+          </div>
+
+          <div className="flex-1 space-y-6 relative z-10 w-full">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Students</p>
+                <div className="flex items-center gap-2">
+                   <p className="text-xl font-black text-navy">{stats.total}</p>
+                   <Users size={14} className="text-zinc-300" />
                 </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Classes</p>
+                <div className="flex items-center gap-2">
+                   <p className="text-xl font-black text-navy">{stats.activeCycles}</p>
+                   <Layers size={14} className="text-zinc-300" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Cleared</p>
+                <p className="text-xl font-black text-emerald-600">{stats.cleared}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-500">With Dues</p>
+                <p className="text-xl font-black text-red-500">{stats.dues}</p>
               </div>
             </div>
           </div>
-        ))}
+        </div>
+
+        {/* Primary Action Card */}
+        <div className="w-full lg:w-[380px] bg-navy rounded-3xl p-8 text-white flex flex-col justify-between relative overflow-hidden shadow-2xl shadow-navy/20 group">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent pointer-events-none" />
+          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-gold/10 rounded-full blur-3xl" />
+          
+          <div className="relative z-10">
+             <div className="h-12 w-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-6">
+                <ClipboardCheck size={24} className="text-gold" />
+             </div>
+             <h3 className="text-2xl font-black tracking-tight mb-2 text-white ">Start New Process</h3>
+             <p className="text-xs text-white/50 leading-relaxed font-medium">Create clearance cycles for all eligible classes across the department.</p>
+          </div>
+
+          <button 
+             onClick={() => setIsBulkModalOpen(true)}
+             className="mt-8 w-full py-4 bg-white text-navy rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-lg hover:shadow-gold/20 active:scale-95 transition-all relative z-10 flex items-center justify-center gap-3 group/btn"
+          >
+             INITIALIZE NODUES <RefreshCw size={14} className="group-hover/btn:rotate-180 transition-transform duration-700" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10">
-        {/* Progress Chart: Main Visualized Form (§10.1) */}
-        <div className="lg:col-span-8 premium-card bg-white p-8 relative group overflow-hidden">
+        <div className="rounded-3xl lg:col-span-8 premium-card bg-white p-8 relative group overflow-hidden">
            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/[0.02] rounded-full translate-x-32 -translate-y-32" />
            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-10 relative z-10">
               <div>
-                <h3 className="text-base font-black text-navy uppercase tracking-[0.2em] mb-1">Class-wise Performance</h3>
-                <p className="text-[11px] text-zinc-400 font-medium">Comparative analytics architecture</p>
+                <h3 className="text-base font-black text-navy uppercase tracking-[0.2em] mb-1">Status per Class</h3>
+                <p className="text-[11px] text-zinc-400 font-medium">Progress overview across batches</p>
               </div>
-              <button 
-                onClick={() => setIsBulkModalOpen(true)}
-                className="flex items-center gap-2.5 px-8 py-3.5 rounded-2xl bg-navy text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-navy/90 transition-all shadow-xl shadow-navy/20 active:scale-95"
-              >
-                <Layers size={14} /> INITIALIZE PROTOCOL
-              </button>
            </div>
            
-           <div className="h-[320px] w-full relative">
-              {chartData.batches.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+           <div className="h-[320px] w-full relative min-h-[320px]">
+              {chartData.batches.length > 0 && isMounted ? (
+                <ResponsiveContainer width="100%" height="100%" minHeight={320}>
                   <BarChart data={chartData.batches} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} barGap={8}>
                     <defs>
                       <linearGradient id="colorCleared" x1="0" y1="0" x2="0" y2="1">
@@ -289,13 +346,13 @@ const HodDashboard = () => {
                    <div className="h-12 w-12 rounded-full bg-white shadow-sm flex items-center justify-center text-zinc-300 mb-4">
                       <Layers size={24} />
                    </div>
-                   <h4 className="text-xs font-black text-navy/40 uppercase tracking-widest leading-none mb-2">No Active Records Found</h4>
-                   <p className="text-[10px] text-muted-foreground font-medium mb-6">Start your first clearance cycle to see analytics.</p>
+                   <h4 className="text-xs font-black text-navy/40 uppercase tracking-widest leading-none mb-2">No active cycles</h4>
+                   <p className="text-[10px] text-muted-foreground font-medium mb-6">Start your first process to see progress here.</p>
                    <button 
                     onClick={() => setIsBulkModalOpen(true)}
                     className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-navy text-white text-[10px] font-black uppercase tracking-widest hover:bg-navy/90 transition-all shadow-lg shadow-navy/20"
                    >
-                     <RefreshCw size={12} className="animate-spin-slow" /> Initiate Bulk Process
+                     <RefreshCw size={12} className="animate-spin-slow" /> Start NoDue's for this SEM
                    </button>
                 </div>
               )}
@@ -303,17 +360,17 @@ const HodDashboard = () => {
         </div>
 
         {/* Distribution Doughnut (§10.1) */}
-        <div className="lg:col-span-4 premium-card bg-white p-8 flex flex-col items-center relative overflow-hidden">
-           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-indigo-500 to-amber-500 opacity-50" />
+        <div className="rounded-3xl lg:col-span-4 premium-card bg-white p-8 flex flex-col items-center relative overflow-hidden">
+           {/* <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-indigo-500 to-amber-500 opacity-50" /> */}
            <div className="w-full text-left mb-8">
-              <h3 className="text-sm font-black text-navy uppercase tracking-[0.2em]">Departmental Pulse</h3>
+              <h3 className="text-sm font-black text-navy uppercase tracking-[0.2em]">Departmental Stats</h3>
               <p className="text-[10px] text-zinc-400 font-medium tracking-tight">System-wide status distribution</p>
            </div>
            
-           <div className="h-64 w-full relative">
-              {chartData.distribution.length > 0 ? (
+           <div className="h-64 w-full relative min-h-[256px]">
+              {chartData.distribution.length > 0 && isMounted ? (
                 <>
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minHeight={256}>
                     <PieChart>
                       <Pie
                         data={chartData.distribution}
@@ -380,7 +437,7 @@ const HodDashboard = () => {
         {/* Active Batches List (Simplified) */}
         <div className="lg:col-span-8">
           <div className="px-1 flex items-center justify-between mb-6">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/40">Active Department Batches</h2>
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/40">Active Batches</h2>
             <button 
               onClick={() => navigate('/hod/dues')}
               className="text-[10px] font-black uppercase tracking-widest text-gold hover:underline"
@@ -396,7 +453,7 @@ const HodDashboard = () => {
                 <div 
                   key={batch.batchId} 
                   onClick={() => navigate(`/hod/batch/${batch.batchId}`)} 
-                  className="premium-card p-6 bg-white group cursor-pointer relative overflow-hidden"
+                  className="rounded-3xl premium-card p-6 bg-white group cursor-pointer relative overflow-hidden"
                 >
                     <div className="absolute top-0 left-0 h-1 bg-zinc-50 w-full overflow-hidden">
                       <motion.div 
@@ -446,8 +503,8 @@ const HodDashboard = () => {
                   <Activity size={20} strokeWidth={2.5} />
                 </div>
                 <div>
-                  <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-navy">Live Action Stream</h2>
-                  <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Real-time awareness</p>
+                  <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-navy">Recent Activity</h2>
+                  <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">Live updates</p>
                 </div>
               </div>
               <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
@@ -496,7 +553,7 @@ const HodDashboard = () => {
               onClick={() => navigate('/hod/overrides')}
               className="w-full mt-10 py-4 bg-zinc-50 rounded-2xl border border-zinc-100 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-indigo-600 hover:bg-white hover:border-indigo-100/50 transition-all flex items-center justify-center gap-3 group/btn"
             >
-              ARCHIVE PROTOCOL <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
+              VIEW HISTORY <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
             </button>
           </div>
         </div>
@@ -505,7 +562,7 @@ const HodDashboard = () => {
       <Modal 
         isOpen={isBulkModalOpen} 
         onClose={() => !isInitiating && setIsBulkModalOpen(false)}
-        title="Start Department Clearance"
+        title="Start Clearance Process"
         size="xl"
         footer={(
           <div className="flex justify-end gap-3">
@@ -523,7 +580,7 @@ const HodDashboard = () => {
               type="submit"
               variant="primary" 
               className="min-w-[240px]"
-              isLoading={isInitiating}
+              loading={isInitiating}
               disabled={loadingPreview || readyClassesCount === 0}
             >
               {readyClassesCount > 0 ? `Initiate ${readyClassesCount} Classes` : 'No Eligible Classes'}
@@ -539,9 +596,9 @@ const HodDashboard = () => {
                 <Info size={20} />
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs font-black text-navy uppercase tracking-tight">Eligibility Overview</p>
+                <p className="text-xs font-black text-navy uppercase tracking-tight">Overview</p>
                 <p className="text-[11px] text-navy/60 font-medium leading-relaxed">
-                  We've analyzed your department's classes. Only sessions with enrolled students and no existing active cycles can be initiated.
+                  Only classes with students and no active cycles can be started.
                 </p>
               </div>
             </div>
@@ -551,7 +608,7 @@ const HodDashboard = () => {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between ml-1">
                     <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                      Global Submission Deadline
+                      Deadline
                     </label>
                     <span className="text-[9px] font-bold text-navy/30 uppercase">Optional</span>
                   </div>
@@ -563,7 +620,7 @@ const HodDashboard = () => {
                     min={new Date().toISOString().split('T')[0]}
                   />
                   <p className="text-[10px] text-muted-foreground/60 italic ml-1">
-                    Set a target date for faculty to complete their dues clearance.
+                    Set a date for faculty to finish their work.
                   </p>
                 </div>
               </form>
@@ -573,7 +630,7 @@ const HodDashboard = () => {
           {/* Right Panel: Class Selection Preview */}
           <div className="lg:col-span-7 flex flex-col border-l border-zinc-100 lg:pl-10 mt-8 lg:mt-0">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Class Scan Results</h4>
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Class Status</h4>
               <div className="px-2 py-0.5 rounded-md bg-zinc-100 text-[9px] font-bold text-zinc-500 uppercase">
                 {previewData.length} Total
               </div>
@@ -612,7 +669,7 @@ const HodDashboard = () => {
                       
                       {cls.status === 'READY' ? (
                         <div className="flex flex-col items-end gap-1">
-                          <span className="text-[9px] font-black uppercase text-emerald-600 tracking-widest">Compatible</span>
+                          <span className="text-[9px] font-black uppercase text-emerald-600 tracking-widest">Ready</span>
                           <div className="flex items-center gap-1.5">
                             <Users size={12} className="text-neutral-400" />
                             <span className="text-xs font-bold text-navy">{cls.studentCount}</span>

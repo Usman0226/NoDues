@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import app from './src/app.js';
 import connectDB from './src/config/db.js';
 import logger from './src/utils/logger.js';
+import { initChangeStreams } from './src/utils/changeStream.js';
 
 process.on('uncaughtException', (err) => {
   logger.error('UNCAUGHT EXCEPTION! Shutting down...', {
@@ -13,8 +14,20 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
+// ── Environment Validation ──────────────────────────────────────────────────
+const requiredEnv = ['MONGODB_URI', 'JWT_SECRET', 'NODE_ENV'];
+const missingEnv = requiredEnv.filter(key => !process.env[key]);
+
+if (missingEnv.length > 0) {
+  logger.error('CRITICAL: Missing environment variables', { missing: missingEnv });
+  process.exit(1);
+}
+
 const start = async () => {
   await connectDB();
+  
+  // Initialize Real-time synchronization (Change Streams)
+  initChangeStreams();
 
   const PORT   = process.env.PORT || 5000;
   const server = app.listen(PORT, () => {

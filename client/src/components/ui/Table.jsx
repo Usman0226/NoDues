@@ -43,7 +43,7 @@ const Checkbox = ({ checked, indeterminate, onChange, disabled }) => {
         checked={checked}
         onChange={onChange}
         disabled={disabled}
-        className="w-5 h-5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed appearance-none border flex items-center justify-center checked:bg-indigo-600 checked:border-indigo-600"
+        className="w-5 h-5 min-w-[20px] min-h-[20px] shrink-0 aspect-square rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed appearance-none border flex items-center justify-center checked:bg-indigo-600 checked:border-indigo-600"
       />
       {checked && !indeterminate && (
         <Check size={12} className="absolute inset-0 m-auto text-white pointer-events-none" />
@@ -278,7 +278,7 @@ const Table = ({
           <thead>
             <tr className="bg-zinc-50 sticky top-0 z-10 border-b border-zinc-200">
               {selectable && (
-                <th className="w-10 px-3 sm:px-4 py-3">
+                <th className="w-12 px-3 sm:px-4 py-3" style={{ width: '48px' }}>
                   <Checkbox
                     checked={isAllSelected}
                     indeterminate={isSomeSelected}
@@ -327,7 +327,7 @@ const Table = ({
                   `}
                 >
                   {selectable && (
-                    <td className="px-3 sm:px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 sm:px-4 py-3" style={{ width: '48px' }} onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selection.includes(row[primaryKey])}
                         onChange={(e) => toggleRow(row[primaryKey], e)}

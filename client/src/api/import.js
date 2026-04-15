@@ -8,7 +8,8 @@ export const previewImport = (type, formData, params = {}) => {
     students: '/import/students/preview',
     faculty: '/import/faculty/preview',
     electives: '/import/electives/preview',
-    mentors: '/import/mentors/preview'
+    mentors: '/import/mentors/preview',
+    subjects: '/import/subjects/preview'
   };
   return api.post(endpoints[type] || endpoints.students, formData, { 
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -24,7 +25,8 @@ export const commitImport = (type, data) => {
     students: '/import/students/commit',
     faculty: '/import/faculty/commit',
     electives: '/import/electives/commit',
-    mentors: '/import/mentors/commit'
+    mentors: '/import/mentors/commit',
+    subjects: '/import/subjects/commit'
   };
   return api.post(endpoints[type] || endpoints.students, data);
 };

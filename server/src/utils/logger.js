@@ -49,24 +49,42 @@ const transports = [
       winston.format.json()
     )
   }),
-  ...(process.env.NODE_ENV === 'production' 
-    ? [
-        new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-        new winston.transports.File({ filename: 'logs/combined.log' }),
-      ]
-    : [])
+  new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+  new winston.transports.File({ filename: 'logs/combined.log' }),
 ];
+
+const formatAudit = winston.format((info) => {
+  if (info.level === 'audit') {
+    info.isAudit = true;
+    // Ensure payload is structured for indexing
+    if (typeof info.message === 'string') {
+      info.action = info.message;
+      delete info.message; // Remove string message to keep it structured
+    }
+  }
+  return info;
+});
 
 const logger = winston.createLogger({
   level: level(),
   levels,
-  format,
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    formatAudit(),
+    winston.format.json()
+  ),
   transports,
 });
 
-logger.audit = (action, payload) => {
+/**
+ * Standardized audit logger for production forensics.
+ * @param {string} action - Event identifier (e.g., 'BATCH_INITIATED')
+ * @param {Object} metadata - Context (actor, resource_id, diffs, etc.)
+ */
+logger.audit = (action, metadata = {}) => {
   logger.log('audit', action, { 
-    ...payload,
+    ...metadata,
+    log_type: 'AUDIT',
     timestamp: new Date().toISOString()
   });
 };

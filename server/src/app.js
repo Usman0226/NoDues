@@ -28,14 +28,42 @@ const app = express();
 app.use(responseTimeLogger);
 
 app.use(helmet());
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:5173', // Local dev
+  /\.vercel\.app$/,        // All vercel previews
+  /\.trycloudflare\.com$/  // Cloudflare tunnels
+];
+
 app.use(
   cors({
-    origin:      process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      
+      const isAllowed = allowedOrigins.some(pattern => {
+        if (pattern instanceof RegExp) return pattern.test(origin);
+        return pattern === origin;
+      });
+
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   })
 );
 
-app.use(compression({ level: 6, threshold: 1024 }));
+app.use(compression({ 
+  level: 6, 
+  threshold: 1024,
+  filter: (req, res) => {
+    // Disable compression for SSE routes to prevent buffering
+    if (req.originalUrl?.startsWith('/api/sse')) return false;
+    return compression.filter(req, res);
+  }
+}));
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));

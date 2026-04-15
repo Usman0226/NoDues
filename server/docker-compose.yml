@@ -1,0 +1,32 @@
+services:
+  # NoDues Backend API
+  api:
+    build: .
+    container_name: nodues_api
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - app_network
+    # We don't expose 5000 to the public host for security. 
+    # The tunnel will talk to it internally.
+
+  # Cloudflare Tunnel
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflare_tunnel
+    restart: always
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    networks:
+      - app_network
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  app_network:
+    driver: bridge

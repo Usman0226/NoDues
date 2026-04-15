@@ -84,36 +84,80 @@ const Batches = () => {
   };
 
   const columns = [
-    { key: 'className', label: 'Class Name', render: (v) => <span className="font-black text-navy">{v}</span> },
-    { key: 'departmentName', label: 'Department', width: '120px' },
-    { key: 'academicYear', label: 'Year', width: '100px', render: (v, row) => <span className="font-semibold text-muted-foreground/60">{v} · S{row.semester}</span> },
-    { key: 'initiatorName', label: 'Started By', width: '120px' },
-    { 
-      key: 'clearedCount', 
-      label: 'Status', 
-      width: '130px',
+    {
+      label: 'Class',
+      key: 'className',
+      width: '24%',
       render: (v, row) => (
         <div className="flex flex-col">
-           <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">{v} Cleared</span>
-           <span className="text-[9px] font-bold text-muted-foreground/40">{row.totalStudents - v} Remaining</span>
+          <span className="font-black text-navy truncate block">{v}</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+             <span className="text-[9px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded font-black uppercase">SEM {row.semester}</span>
+             <span className="text-[10px] text-zinc-400 font-medium italic">{row.academicYear}</span>
+          </div>
         </div>
-      ) 
+      )
     },
-    { 
-      key: 'duesCount', 
-      label: 'Dues', 
-      width: '60px',
-      render: (v) => <span className={`font-black tabular-nums ${v > 0 ? 'text-status-due' : 'text-muted-foreground/20'}`}>{v}</span> 
-    },
-    { key: 'status', label: 'Badge', width: '100px', render: (v) => <Badge status={v} /> },
     {
+      label: 'Department',
+      key: 'departmentId',
+      width: '14%',
+      render: (v) => <span className="text-zinc-500 font-bold truncate block">{v?.name || '—'}</span>
+    },
+    {
+      label: 'Completion',
+      key: 'clearedCount',
+      width: '16%',
+      render: (v, row) => {
+        const cleared = Number(v) || 0;
+        const total = Number(row.totalStudents) || 0;
+        const remaining = Math.max(0, total - cleared);
+        return (
+          <div className="flex flex-col">
+             <span className="text-[10px] font-black uppercase text-emerald-600 tracking-widest leading-tight">{cleared} Cleared</span>
+             <span className="text-[9px] font-bold text-muted-foreground/30 uppercase tracking-tighter">{remaining} Remaining</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Started By',
+      key: 'initiatedBy',
+      width: '15%',
+      render: (v, row) => (
+        <div className="flex flex-col">
+          <span className="text-navy font-bold truncate block">{v?.name || 'System'}</span>
+          <span className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">
+            {new Date(row.initiatedAt).toLocaleDateString()}
+          </span>
+        </div>
+      )
+    },
+    {
+      label: 'Status',
+      key: 'status',
+      width: '12%',
+      align: 'center',
+      render: (v) => (
+        <span className={`
+          px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest
+          ${v === 'active' ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100' : 'bg-zinc-100 text-zinc-500'}
+        `}>
+          {v}
+        </span>
+      )
+    },
+    {
+      label: 'Action',
       key: 'actions',
-      label: '',
-      width: '80px',
+      width: '15%',
       align: 'right',
       render: (_, row) => (
-        <button onClick={() => navigate(`${basePath}/batch/${row._id}`)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] bg-navy text-white hover:bg-navy/90 font-black uppercase tracking-widest transition-all shadow-sm shadow-navy/10">
-          <Eye size={12} strokeWidth={3} /> View
+        <button 
+          onClick={(e) => { e.stopPropagation(); navigate(`${basePath}/batch/${row._id}`); }} 
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] bg-navy text-white hover:bg-navy/90 font-black uppercase tracking-widest transition-all shadow-sm shadow-navy/10"
+        >
+          <Eye size={12} strokeWidth={3} /> View Detail
         </button>
       )
     }
@@ -180,6 +224,7 @@ const Batches = () => {
           selectable
           selection={selectedIds}
           onSelectionChange={setSelectedIds}
+          fixedLayout={true}
           bulkActions={[
             { 
               label: 'Close Selected', 

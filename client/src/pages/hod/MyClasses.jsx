@@ -92,8 +92,8 @@ const MyClasses = () => {
 
                 <div className="pt-4 flex items-center justify-between">
                   <div className="flex -space-x-2">
-                    <div className="h-6 w-6 rounded-full border-2 border-white bg-zinc-100 flex items-center justify-center text-[10px] font-bold text-zinc-400">?</div>
-                    <div className="h-6 w-6 rounded-full border-2 border-white bg-indigo-500 flex items-center justify-center text-[8px] font-bold text-white">Live</div>
+                    {/* <div className="h-6 w-6 rounded-full border-2 border-white bg-zinc-100 flex items-center justify-center text-[10px] font-bold text-zinc-400"></div> */}
+                    {/* <div className="h-6 w-6 rounded-full border-2 border-white bg-indigo-500 flex items-center justify-center text-[8px] font-bold text-white"></div> */}
                   </div>
                   
                   <button 

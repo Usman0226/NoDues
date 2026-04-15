@@ -134,7 +134,7 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
         <div className="flex items-center gap-3">
           <div className={`w-1 h-1 rounded-full ${row.isValid ? 'bg-emerald-500' : 'bg-red-500'}`} />
           <span className={`font-mono text-xs font-bold tracking-tight ${row.isValid ? 'text-navy' : 'text-red-400 line-through'}`}>
-            {row.rollNo || row.employeeId || row.identity}
+            {row.rollNo || row.employeeId || row.code || row.identity}
           </span>
         </div>
       )},
@@ -149,6 +149,10 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
     } else if (type === 'mentors') {
       baseCols.push({ key: 'studentName', label: 'Student' });
       baseCols.push({ key: 'facultyName', label: 'Mentor' });
+    } else if (type === 'subjects') {
+      baseCols.push({ key: 'name', label: 'Subject Name' });
+      baseCols.push({ key: 'code', label: 'Code' });
+      baseCols.push({ key: 'semester', label: 'Semester' });
     }
 
     baseCols.push({ key: 'status', label: 'Analysis', render: (_, row) => row.isValid ? (

@@ -6,9 +6,9 @@ import NodeCache from 'node-cache';
  * stdTTL: 60s default; individual set() calls override per-key.
  */
 const cache = new NodeCache({
-  stdTTL: 60,           // default TTL: 60 seconds
-  checkperiod: 120,     // sweep for expired keys every 2 min
-  useClones: false,     // skip deep-clone on get/set — measurably faster
+  stdTTL: 10,           // tighter TTL for multi-instance consistency
+  checkperiod: 60,      // sweep for expired keys every 1 min
+  useClones: false,     // performance optimization
 });
 
 export default cache;

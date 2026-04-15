@@ -125,7 +125,7 @@ const AdminDashboard = () => {
   }
 
   return (
-    <PageWrapper title={isHod ? "Department Dashboard" : "Admin Dashboard"} subtitle={isHod ? "Overview of department clearance metrics" : "System-wide overview of active clearance cycles"}>
+    <PageWrapper title={isHod ? "Department Dashboard" : "Admin Dashboard"} >
       {/* Stats Grid */}
       <div className={`grid grid-cols-2 lg:grid-cols-5 gap-6 mb-12 ${loading && !response ? 'animate-pulse' : ''}`}>
         {stats.map((stat, i) => (

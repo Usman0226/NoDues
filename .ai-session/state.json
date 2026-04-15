@@ -1,36 +1,29 @@
 {
-  "last_updated": "2026-04-14T20:47:00+05:30",
+  "last_updated": "2026-04-15T16:07:30Z",
   "completed": [
-    "HoD Portal: Integration of 'My Classes' section for personal faculty assignments",
-    "Refinement: Role-separated HoD/Faculty MyClasses pages",
-    "Refinement: Explicit sidebar matching logic (isActive)",
-    "Functionality: 'Manage Queue' filtering (Backend query updates)",
-    "Functionality: 'Manage Queue' filtering (Frontend state & dropdown sync)",
-    "Bugfix: Resolved missing SearchableSelect import in Pending.jsx",
-    "Redesign: Student Portal 'Clean & Premium' reskin (Status.jsx, PageWrapper.jsx, Badge.jsx)",
-    "Styling: Ambient background depth and high-performance design tokens in index.css",
-    "Redesign: High-fidelity Subject Cards (Status.jsx) with light-sweep animations and improved metadata layout"
+    "Hardened backend data consistency with Mongoose Transactions across all critical controllers (Faculty, Batch, Approval, Class, Student, and Import modules).",
+    "Enabled cross-instance real-time synchronization using MongoDB Change Streams and SSE.",
+    "Refactored status recalculation and batch synchronization logic to be session-aware.",
+    "Eliminated dependency on Redis by leveraging native MongoDB features."
   ],
-  "in_progress": [],
+  "in_progress": [
+    "Final verification and load testing of transactional overhead.",
+    "Observing production logs on Render for any transaction-related timeouts under high concurrency."
+  ],
   "pending": [
-    "Frontend data visualization for HoD analytics",
-    "Comprehensive e2e testing of hardened backend"
+    "Reduce cache TTLs in server/src/config/cache.js to 5-10 seconds to further mitigate stale data issues.",
+    "Implement specific cache invalidation triggers based on Change Stream events."
   ],
   "decisions": [
     {
-      "context": "Manage Queue from My Classes required filtering on the Pending page.",
-      "decision": "Implemented server-side filtering by batchId and action in getPendingApprovals controller and connected it to the UI dropdowns.",
-      "trade_offs": "Adds more requests during filter changes but ensures consistency with large student lists."
+      "context": "Multi-instance server environment on Render causing data inconsistency.",
+      "decision": "Implemented MongoDB Change Streams to broadcast SSE updates globally across all node instances, ensuring silent background sync without requiring Redis.",
+      "trade_offs": "Adds slight overhead to MongoDB (Oplog pressure) but simplifies infrastructure and eliminates Redis management/costs."
     },
     {
-      "context": "Batch dropdown in Pending page was deriving items from filtered data.",
-      "decision": "Added a separate call to getMyClasses in Pending.jsx to populate the batch dropdown independently of the visible queue data.",
-      "trade_offs": "One extra call on mount, but significantly improves UX by keeping all class options available."
-    },
-    {
-      "context": "Student Portal felt 'too white/plain' but required high performance on low-end devices.",
-      "decision": "Implemented a 'Clean & Premium' reskin focusing on CSS design tokens, multi-stop shadows, and Soft Surface layering instead of layout changes or heavy blurs.",
-      "trade_offs": "Sacrificed full glassmorphism for better scrolling performance on budget hardware while achieving premium depth."
+      "context": "Ensuring data integrity for complex academic management operations.",
+      "decision": "Applied mandatory Mongoose Transactions to all write-heavy controllers.",
+      "trade_offs": "Increases latency slightly for write operations but guarantees ACID compliance and state consistency."
     }
   ],
   "blockers": []

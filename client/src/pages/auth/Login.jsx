@@ -82,23 +82,57 @@ const Login = () => {
 
 
   return (
-    <div className="relative min-h-[100svh] bg-offwhite overflow-hidden flex items-start sm:items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
-      <div className="absolute inset-0 pointer-events-none grid-overlay opacity-30" />
-      <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-indigo-500/18 blur-3xl" />
-      <div className="absolute -bottom-32 -left-24 h-72 w-72 rounded-full bg-amber-400/22 blur-3xl" />
+    <div className="relative min-h-[100svh] bg-[#fcfcfd] overflow-hidden flex items-center justify-center p-4">
+      {/* Premium Background Layer */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Architectural Texture Overlay */}
+        <div 
+          className="absolute inset-0 opacity-[0.04] mix-blend-multiply" 
+          style={{ 
+            backgroundImage: `url('/assets/images/login-bg.png')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center'
+          }} 
+        />
+        
+        {/* Noise Texture for Depth */}
+        <div className="absolute inset-0 noise-bg opacity-[0.4]" />
+
+        {/* Large Typographic Watermark - Optimized for ARC Club Branding */}
+        <div className="absolute -bottom-10 -right-10 sm:-bottom-24 sm:-right-24 select-none pointer-events-none">
+          <h2 className="text-[45vw] sm:text-[24vw] font-black text-navy/[0.025] leading-none tracking-[-0.08em] uppercase">
+            ARC
+          </h2>
+        </div>
+
+        {/* Subtle Ambient Blobs (Refined) */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-500/[0.03] blur-[120px]" />
+        <div className="absolute bottom-[10%] right-[10%] w-[35%] h-[35%] rounded-full bg-amber-400/[0.03] blur-[100px]" />
+        
+        {/* Refined Grid Overlay */}
+        <div className="absolute inset-0 grid-overlay opacity-[0.08]" />
+      </div>
 
       <MotionDiv
         layout
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28, ease: 'easeOut' }}
-        className={`relative z-10 w-full max-w-md min-h-[560px] sm:min-h-[590px] max-h-[calc(100svh-1.5rem)] overflow-y-auto bg-white rounded-3xl shadow-md border border-zinc-200 p-6 sm:p-8 transition-all duration-300 ${successFlash ? 'ring-4 ring-emerald-200 border-emerald-300 bg-emerald-50/30' : ''}`}
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ 
+          duration: 0.8, 
+          ease: [0.16, 1, 0.3, 1],
+          scale: { duration: 0.6 }
+        }}
+        className={`relative z-10 w-full max-w-md bg-white/80 backdrop-blur-3xl rounded-[2.5rem] shadow-[0_48px_96px_-24px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,1)] border border-white/80 p-6 sm:p-10 transition-all duration-500 ${successFlash ? 'scale-[1.02] ring-8 ring-emerald-100 border-emerald-200' : ''}`}
       >
         <div className="text-center mb-6 min-h-[98px]">
           <h1 className="text-4xl sm:text-5xl font-brand text-navy leading-none tracking-tight">
             No<span className="text-gold">Dues</span>
           </h1>
-          <p className="text-[9px] uppercase tracking-[0.28em] font-black text-zinc-500 mt-4">User Login</p>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <span className="h-px w-4 bg-zinc-200" />
+            <p className="text-[9px] uppercase tracking-[0.4em] font-black text-zinc-500">ARC PORTAL</p>
+            <span className="h-px w-4 bg-zinc-200" />
+          </div>
         </div>
 
         <div className="relative grid grid-cols-2 bg-zinc-100 p-1 rounded-full mb-5 h-12">
@@ -234,13 +268,15 @@ const Login = () => {
         </div>
 
 
-        <div className="mt-8 pt-6 border-t border-zinc-100 text-center">
-          <p className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-400">
-            Platform built by
-          </p>
-          <p className="text-[11px] font-brand text-navy mt-1 opacity-70">
-            ARC Club <span className="text-gold">-</span> Community
-          </p>
+        <div className="mt-8 pt-6 border-t border-zinc-100/50 text-center">
+          <div className="flex flex-col items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity duration-500">
+            <p className="text-[8px] sm:text-[9px] uppercase tracking-[0.3em] font-black text-zinc-400">
+              Designed & Developed by
+            </p>
+            <p className="text-[10px] sm:text-[12px] font-brand text-navy tracking-tight">
+              ARC <span className="text-gold">CLUB</span> <span className="text-zinc-300 mx-1">/</span> MITS
+            </p>
+          </div>
         </div>
       </MotionDiv>
     </div>

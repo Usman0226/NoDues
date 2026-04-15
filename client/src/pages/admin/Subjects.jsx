@@ -8,7 +8,8 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
 import { getSubjects, createSubject, updateSubject, deleteSubject, bulkDeleteSubjects } from '../../api/subjects';
-import { Plus, Filter, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { Plus, Upload, Filter, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import ImportStepper from '../../components/import/ImportStepper';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
@@ -22,7 +23,10 @@ const Subjects = () => {
   const [semesterFilter, setSemesterFilter] = useState('all');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const isHod = user?.role === 'hod';
+  const canManage = isAdmin || isHod;
   const [submitting, setSubmitting] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   // Pagination & Search State
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -151,7 +155,7 @@ const Subjects = () => {
         </span>
       )
     },
-    ...(isAdmin ? [{
+    ...(canManage ? [{
       key: 'actions', label: '', sortable: false, render: (_, row) => (
         <div className="flex justify-end">
           <ActionMenu
@@ -163,7 +167,7 @@ const Subjects = () => {
         </div>
       )
     }] : [])
-  ], [isAdmin]);
+  ], [canManage]);
 
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
@@ -172,12 +176,17 @@ const Subjects = () => {
     <PageWrapper title="Subjects" subtitle="Centralized academic component subject for institution-wide mapping">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
-          {isAdmin && (
+          {canManage && (
             <Button variant="primary" size="sm" onClick={() => {
               setFormData({ code: '', name: '', semester: 1, isElective: false });
               setShowCreate(true);
             }} className="gap-2">
               <Plus size={14} /> Register Subject
+            </Button>
+          )}
+          {canManage && (
+            <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite gap-2">
+              <Upload size={14} /> Import Subjects
             </Button>
           )}
           <div className="w-[180px]">
@@ -407,6 +416,17 @@ const Subjects = () => {
         isDestructive={true}
         loading={submitting}
       />
+
+      <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Bulk Subject Import">
+         <ImportStepper 
+            type="subjects" 
+            contextLabel="Academic Component Catalog Sync" 
+            onComplete={() => {
+              setShowImport(false);
+              fetchSubjects();
+            }} 
+         />
+      </Modal>
     </PageWrapper>
   );
 };

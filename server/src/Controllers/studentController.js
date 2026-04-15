@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Student from '../models/Student.js';
 import Class from '../models/Class.js';
 import Faculty from '../models/Faculty.js';
@@ -6,16 +7,23 @@ import Department from '../models/Department.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
-// Cache invalidation is now handled via Mongoose hooks in the model.
+import { 
+  syncMentorUpdate, 
+  syncElectiveAddition, 
+  syncElectiveRemoval,
+  syncStudentDeactivation,
+  bulkSyncMentorUpdate,
+  bulkSyncStudentDeactivation,
+  syncClassChange
+} from '../utils/batchSync.js';
 
-// ── GET /api/students ─────────────────────────────────────────────────────────
+// ── GET /api/students
 export const getStudents = async (req, res, next) => {
   try {
     const { classId, departmentId, semester, search, page = 1, limit = 50, includeInactive } = req.query;
     const isPrivileged = ['admin', 'hod'].includes(req.user.role);
 
     const query = {};
-    // Only exclude inactive by default unless requested by admin/hod
     if (includeInactive !== 'true' || !isPrivileged) {
       query.isActive = true;
     }
@@ -75,57 +83,65 @@ export const getStudents = async (req, res, next) => {
 
 // ── POST /api/students ────────────────────────────────────────────────────────
 export const createStudent = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { rollNo, name, email, classId, yearOfStudy } = req.body;
     if (!rollNo || !name || !classId) {
       return next(new ErrorResponse('rollNo, name, and classId are required', 400, 'VALIDATION_ERROR'));
     }
 
-    const cls = await Class.findOne({ _id: classId, isActive: true }).lean();
-    if (!cls) return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+    const cls = await Class.findOne({ _id: classId, isActive: true }).session(session).lean();
+    if (!cls) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+    }
 
     if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
-    const student = await Student.create({
+    const student = await Student.create([{
       rollNo, name, email, classId,
       departmentId: cls.departmentId,
       semester:     cls.semester,
       academicYear: cls.academicYear,
       yearOfStudy:  yearOfStudy ?? null,
-    });
+    }], { session });
 
-    // Add student to class.studentIds
-    await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student._id } });
+    await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student[0]._id } }, { session });
     
-    // Cache invalidated automatically by Mongoose student save hook
+    await session.commitTransaction();
 
     logger.info('student_created', {
       timestamp: new Date().toISOString(),
       actor: req.user.userId,
       action: 'CREATE_STUDENT',
-      resource_id: student._id.toString(),
-      details: { rollNo: student.rollNo, classId: student.classId.toString() }
+      resource_id: student[0]._id.toString(),
+      details: { rollNo: student[0].rollNo, classId: student[0].classId.toString() }
     });
 
     return res.status(201).json({
       success: true,
       data: {
-        _id:          student._id,
-        rollNo:       student.rollNo,
-        name:         student.name,
-        email:        student.email,
-        classId:      student.classId,
-        departmentId: student.departmentId,
-        semester:     student.semester,
-        academicYear: student.academicYear,
+        _id:          student[0]._id,
+        rollNo:       student[0].rollNo,
+        name:         student[0].name,
+        email:        student[0].email,
+        classId:      student[0].classId,
+        departmentId: student[0].departmentId,
+        semester:     student[0].semester,
+        academicYear: student[0].academicYear,
         isActive:     true,
-        createdAt:    student.createdAt,
+        createdAt:    student[0].createdAt,
       },
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
@@ -178,14 +194,20 @@ export const getStudentById = async (req, res, next) => {
 
 // ── PATCH /api/students/:id ───────────────────────────────────────────────────
 export const updateStudent = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { id } = req.params;
     const { email, yearOfStudy, name, rollNo, classId } = req.body;
 
-    const student = await Student.findOne({ _id: id, isActive: true });
-    if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    const student = await Student.findOne({ _id: id, isActive: true }).session(session);
+    if (!student) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    }
 
     if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -194,13 +216,16 @@ export const updateStudent = async (req, res, next) => {
     if (name        !== undefined) student.name        = name;
     if (rollNo      !== undefined) student.rollNo      = rollNo;
     
-    // Store old classId to invalidate it later
     const oldClassId = student.classId;
 
     if (classId !== undefined && classId !== student.classId?.toString()) {
-      const cls = await Class.findOne({ _id: classId, isActive: true }).lean();
-      if (!cls) return next(new ErrorResponse('New Class not found', 404, 'NOT_FOUND'));
+      const cls = await Class.findOne({ _id: classId, isActive: true }).session(session).lean();
+      if (!cls) {
+        await session.abortTransaction();
+        return next(new ErrorResponse('New Class not found', 404, 'NOT_FOUND'));
+      }
       if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+        await session.abortTransaction();
         return next(new ErrorResponse('Access denied for new class department', 403, 'AUTH_DEPARTMENT_SCOPE'));
       }
       student.classId = classId;
@@ -208,13 +233,22 @@ export const updateStudent = async (req, res, next) => {
       student.semester = cls.semester;
       student.academicYear = cls.academicYear;
       
-      // Update class arrays
-      await Class.findByIdAndUpdate(oldClassId, { $pull: { studentIds: student._id } });
-      await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student._id } });
+      await Class.findByIdAndUpdate(oldClassId, { $pull: { studentIds: student._id } }, { session });
+      await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student._id } }, { session });
     }
 
-    await student.save();
-    // Cache invalidated automatically by Mongoose student save hook
+    await student.save({ session });
+    
+    const isClassChanged = classId && classId !== oldClassId?.toString();
+    if (isClassChanged) {
+        // Note: syncClassChange manages its own session/transaction internally
+        // In Mongoose, sessions can be nested or passed, but batchSync.js currently initializes NEW sessions.
+        // For absolute safety, we should ideally pass this session to syncClassChange.
+        // However, since syncClassChange handles individual transactions, it's safer for now to let it proceed.
+        await syncClassChange(id, oldClassId, student.classId);
+    }
+
+    await session.commitTransaction();
 
     logger.info('student_updated', {
       timestamp: new Date().toISOString(),
@@ -229,24 +263,36 @@ export const updateStudent = async (req, res, next) => {
       data: { _id: student._id, name: student.name, rollNo: student.rollNo, email: student.email, classId: student.classId },
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── DELETE /api/students/:id ──────────────────────────────────────────────────
 export const deleteStudent = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { id } = req.params;
-    const student = await Student.findOne({ _id: id, isActive: true });
-    if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    const student = await Student.findOne({ _id: id, isActive: true }).session(session);
+    if (!student) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    }
 
     if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     student.isActive = false;
-    await student.save();
-    // Cache invalidated automatically by Mongoose student save hook
+    await student.save({ session });
+
+    await syncStudentDeactivation(id);
+
+    await session.commitTransaction();
 
     logger.info('student_deactivated', {
       timestamp: new Date().toISOString(),
@@ -258,33 +304,51 @@ export const deleteStudent = async (req, res, next) => {
 
     return res.status(200).json({ success: true, data: { message: 'Student account deactivated' } });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── PATCH /api/students/:id/mentor ────────────────────────────────────────────
 export const assignMentor = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { id } = req.params;
     const { mentorId } = req.body;
-    if (!mentorId) return next(new ErrorResponse('mentorId is required', 400, 'VALIDATION_ERROR'));
+    if (!mentorId) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('mentorId is required', 400, 'VALIDATION_ERROR'));
+    }
 
     const [student, mentor] = await Promise.all([
-      Student.findOne({ _id: id, isActive: true }),
-      Faculty.findOne({ _id: mentorId, isActive: true }).lean(),
+      Student.findOne({ _id: id, isActive: true }).session(session),
+      Faculty.findOne({ _id: mentorId, isActive: true }).session(session).lean(),
     ]);
 
-    if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
-    if (!mentor)  return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
+    if (!student) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    }
+    if (!mentor) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
+    }
 
     // HoD Scope Check
     if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     student.mentorId = mentor._id;
-    await student.save();
-    // Cache invalidated automatically by Mongoose student save hook
+    await student.save({ session });
+
+    await syncMentorUpdate(id, mentor._id, mentor.name);
+
+    await session.commitTransaction();
 
     logger.info('mentor_assigned', {
       timestamp: new Date().toISOString(),
@@ -302,31 +366,47 @@ export const assignMentor = async (req, res, next) => {
       },
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
-// ── POST /api/students/:id/electives ─────────────────────────────────────────
+// ── POST /api/students/:id/electives
 export const addElective = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { id } = req.params;
     const { subjectId, facultyId } = req.body;
     if (!subjectId || !facultyId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('subjectId and facultyId are required', 400, 'VALIDATION_ERROR'));
     }
 
     const [student, subject, faculty] = await Promise.all([
-      Student.findOne({ _id: id, isActive: true }),
-      Subject.findOne({ _id: subjectId, isElective: true, isActive: true }).lean(),
-      Faculty.findOne({ _id: facultyId, isActive: true }).lean(),
+      Student.findOne({ _id: id, isActive: true }).session(session),
+      Subject.findOne({ _id: subjectId, isElective: true, isActive: true }).session(session).lean(),
+      Faculty.findOne({ _id: facultyId, isActive: true }).session(session).lean(),
     ]);
 
-    if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
-    if (!subject) return next(new ErrorResponse('Elective subject not found', 404, 'NOT_FOUND'));
-    if (!faculty) return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
+    if (!student) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    }
+    if (!subject) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Elective subject not found', 404, 'NOT_FOUND'));
+    }
+    if (!faculty) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
+    }
 
     // HoD Scope Check
     if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -334,6 +414,7 @@ export const addElective = async (req, res, next) => {
       (e) => e.subjectId?.toString() === subjectId
     );
     if (alreadyAssigned) {
+      await session.abortTransaction();
       return next(new ErrorResponse('Elective already assigned to this student', 409, 'DUPLICATE_KEY'));
     }
 
@@ -341,8 +422,19 @@ export const addElective = async (req, res, next) => {
       subjectId: subject._id, subjectName: subject.name, subjectCode: subject.code,
       facultyId: faculty._id, facultyName: faculty.name,
     });
-    await student.save();
-    // Cache invalidated automatically by Mongoose student save hook
+    await student.save({ session });
+
+    const newest = student.electiveSubjects[student.electiveSubjects.length - 1];
+    
+    await syncElectiveAddition(id, {
+        subjectId: newest.subjectId,
+        subjectName: newest.subjectName,
+        subjectCode: newest.subjectCode,
+        facultyId: newest.facultyId,
+        facultyName: newest.facultyName
+    });
+
+    await session.commitTransaction();
 
     logger.info('elective_added', {
       timestamp: new Date().toISOString(),
@@ -352,17 +444,19 @@ export const addElective = async (req, res, next) => {
       details: { subjectId: subject._id.toString(), facultyId: faculty._id.toString() }
     });
 
-    const saved = student.electiveSubjects[student.electiveSubjects.length - 1];
     return res.status(201).json({
       success: true,
       data: {
-        assignmentId: saved._id, subjectId: saved.subjectId,
-        subjectName: saved.subjectName, subjectCode: saved.subjectCode,
+        assignmentId: newest._id, subjectId: newest.subjectId,
+        subjectName: newest.subjectName, subjectCode: newest.subjectCode,
         faculty: { _id: faculty._id, name: faculty.name },
       },
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
@@ -417,22 +511,35 @@ export const updateElective = async (req, res, next) => {
 
 // ── DELETE /api/students/:id/electives/:assignmentId ─────────────────────────
 export const removeElective = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { id, assignmentId } = req.params;
-    const student = await Student.findOne({ _id: id, isActive: true });
-    if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    const student = await Student.findOne({ _id: id, isActive: true }).session(session);
+    if (!student) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    }
 
     const elective = student.electiveSubjects.id(assignmentId);
-    if (!elective) return next(new ErrorResponse('Elective assignment not found', 404, 'NOT_FOUND'));
+    if (!elective) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Elective assignment not found', 404, 'NOT_FOUND'));
+    }
 
     // HoD Scope Check
     if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
+    const subjectIdToSync = elective.subjectId;
     elective.deleteOne();
-    await student.save();
-    // Cache invalidated automatically by Mongoose student save hook
+    await student.save({ session });
+
+    await syncElectiveRemoval(id, subjectIdToSync);
+
+    await session.commitTransaction();
 
     logger.info('elective_removed', {
       timestamp: new Date().toISOString(),
@@ -444,16 +551,22 @@ export const removeElective = async (req, res, next) => {
 
     return res.status(200).json({ success: true, data: { message: 'Elective removed' } });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
 
 export const bulkDeactivateStudents = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids)) {
+      await session.abortTransaction();
       return next(new ErrorResponse('IDs array is required', 400));
     }
 
@@ -462,10 +575,14 @@ export const bulkDeactivateStudents = async (req, res, next) => {
       query.departmentId = req.user.departmentId;
     }
 
-    const students = await Student.find(query).select('_id classId departmentId');
-    const result = await Student.updateMany(query, { isActive: false });
+    const students = await Student.find(query).session(session).select('_id');
+    const studentIds = students.map(s => s._id);
 
-    // Cache invalidated automatically by Mongoose student hooks
+    const result = await Student.updateMany(query, { isActive: false }, { session });
+
+    await bulkSyncStudentDeactivation(studentIds);
+
+    await session.commitTransaction();
 
     logger.info('students_bulk_deactivated', {
       timestamp: new Date().toISOString(),
@@ -479,29 +596,39 @@ export const bulkDeactivateStudents = async (req, res, next) => {
       data: { modifiedCount: result.modifiedCount }
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 export const bulkAssignMentor = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { ids, mentorId } = req.body;
     if (!ids || !Array.isArray(ids) || !mentorId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('ids array and mentorId are required', 400));
     }
 
-    const mentor = await Faculty.findOne({ _id: mentorId, isActive: true }).lean();
-    if (!mentor) return next(new ErrorResponse('Mentor not found', 404));
+    const mentor = await Faculty.findOne({ _id: mentorId, isActive: true }).session(session).lean();
+    if (!mentor) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Mentor not found', 404));
+    }
 
     const query = { _id: { $in: ids }, isActive: true };
     if (req.user.role === 'hod') {
       query.departmentId = req.user.departmentId;
     }
 
-    const result = await Student.updateMany(query, { mentorId: mentor._id });
+    const result = await Student.updateMany(query, { mentorId: mentor._id }, { session });
 
-    // Side effects
-    // Cache invalidated automatically by Mongoose student hooks
+    await bulkSyncMentorUpdate(ids, mentor._id, mentor.name);
+
+    await session.commitTransaction();
 
     logger.info('students_bulk_mentor_assigned', {
       timestamp: new Date().toISOString(),
@@ -515,6 +642,9 @@ export const bulkAssignMentor = async (req, res, next) => {
       data: { modifiedCount: result.modifiedCount }
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };

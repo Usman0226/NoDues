@@ -175,19 +175,29 @@ export const getApprovalHistory = async (req, res, next) => {
 
 // ── POST /api/approvals/approve ───────────────────────────────────────────────
 export const approveRequest = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { approvalId } = req.body;
-    if (!approvalId) return next(new ErrorResponse('approvalId is required', 400, 'VALIDATION_ERROR'));
+    if (!approvalId) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('approvalId is required', 400, 'VALIDATION_ERROR'));
+    }
 
-    const approval = await NodueApproval.findOne({ _id: approvalId, facultyId: req.user.userId });
-    if (!approval) return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
+    const approval = await NodueApproval.findOne({ _id: approvalId, facultyId: req.user.userId }).session(session);
+    if (!approval) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
+    }
 
     if (approval.action !== 'pending') {
+      await session.abortTransaction();
       return next(new ErrorResponse('This approval has already been actioned', 400, 'APPROVAL_ALREADY_ACTIONED'));
     }
 
-    const batch = await NodueBatch.findById(approval.batchId).select('status').lean();
+    const batch = await NodueBatch.findById(approval.batchId).session(session).select('status').lean();
     if (!batch || batch.status !== 'active') {
+      await session.abortTransaction();
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
 
@@ -195,11 +205,11 @@ export const approveRequest = async (req, res, next) => {
     approval.dueType    = null;
     approval.remarks    = null;
     approval.actionedAt = new Date();
-    await approval.save();
+    await approval.save({ session });
 
-    await Promise.all([recalcRequestStatus(approval.requestId)]);
+    await recalcRequestStatus(approval.requestId, session);
 
-    // Invalidation handled by hooks
+    await session.commitTransaction();
 
     logger.info('approval_actioned', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -215,15 +225,21 @@ export const approveRequest = async (req, res, next) => {
 
     return res.status(200).json({ success: true, data: { approvalId, action: 'approved' } });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── POST /api/approvals/bulk-approve ──────────────────────────────────────────
 export const bulkApproveRequests = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { approvalIds } = req.body;
     if (!Array.isArray(approvalIds) || !approvalIds.length) {
+      await session.abortTransaction();
       return next(new ErrorResponse('approvalIds array is required', 400, 'VALIDATION_ERROR'));
     }
 
@@ -231,19 +247,21 @@ export const bulkApproveRequests = async (req, res, next) => {
       _id: { $in: approvalIds },
       facultyId: req.user.userId,
       action: 'pending'
-    });
+    }).session(session);
 
     if (!approvals.length) {
+      await session.abortTransaction();
       return next(new ErrorResponse('No pending approval records found with provided IDs', 404, 'NOT_FOUND'));
     }
 
     const batchIds = [...new Set(approvals.map(a => a.batchId))];
-    const batches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' }).select('_id').lean();
+    const batches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' }).session(session).select('_id').lean();
     const activeBatchIds = new Set(batches.map(b => b._id.toString()));
 
     const eligibleApprovals = approvals.filter(a => activeBatchIds.has(a.batchId.toString()));
     
     if (!eligibleApprovals.length) {
+      await session.abortTransaction();
       return next(new ErrorResponse('All specified batches are closed or inaccessible', 400, 'BATCH_CLOSED'));
     }
 
@@ -257,16 +275,16 @@ export const bulkApproveRequests = async (req, res, next) => {
       approval.dueType = null;
       approval.remarks = null;
       approval.actionedAt = now;
-      await approval.save();
+      await approval.save({ session });
 
       requestIdsToRecalc.add(approval.requestId.toString());
       studentIdsToNotify.add(approval.studentId.toString());
       results.push(approval._id);
-
-      // Invalidation handled by hooks
     }
 
-    await Promise.all([...requestIdsToRecalc].map(id => recalcRequestStatus(id)));
+    await Promise.all([...requestIdsToRecalc].map(id => recalcRequestStatus(id, session)));
+
+    await session.commitTransaction();
 
     logger.info('bulk_approval_actioned', {
       timestamp: now.toISOString(),
@@ -292,32 +310,44 @@ export const bulkApproveRequests = async (req, res, next) => {
       }
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── POST /api/approvals/mark-due ──────────────────────────────────────────────
 export const markDue = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { approvalId, dueType, remarks } = req.body;
     if (!approvalId || !dueType) {
+      await session.abortTransaction();
       return next(new ErrorResponse('approvalId and dueType are required', 400, 'VALIDATION_ERROR'));
     }
 
     const VALID_DUE_TYPES = ['library', 'lab', 'fees', 'attendance', 'other'];
     if (!VALID_DUE_TYPES.includes(dueType)) {
+      await session.abortTransaction();
       return next(new ErrorResponse(`Invalid dueType. Must be one of: ${VALID_DUE_TYPES.join(', ')}`, 400, 'VALIDATION_ERROR'));
     }
 
-    const approval = await NodueApproval.findOne({ _id: approvalId, facultyId: req.user.userId });
-    if (!approval) return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
+    const approval = await NodueApproval.findOne({ _id: approvalId, facultyId: req.user.userId }).session(session);
+    if (!approval) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
+    }
 
     if (approval.action !== 'pending') {
+      await session.abortTransaction();
       return next(new ErrorResponse('This approval has already been actioned', 400, 'APPROVAL_ALREADY_ACTIONED'));
     }
 
-    const batch = await NodueBatch.findById(approval.batchId).select('status').lean();
+    const batch = await NodueBatch.findById(approval.batchId).session(session).select('status').lean();
     if (!batch || batch.status !== 'active') {
+      await session.abortTransaction();
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
 
@@ -325,11 +355,11 @@ export const markDue = async (req, res, next) => {
     approval.dueType    = dueType;
     approval.remarks    = remarks ?? null;
     approval.actionedAt = new Date();
-    await approval.save();
+    await approval.save({ session });
 
-    await recalcRequestStatus(approval.requestId);
+    await recalcRequestStatus(approval.requestId, session);
 
-    // Invalidation handled by hooks
+    await session.commitTransaction();
 
     logger.info('due_marked', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -350,29 +380,40 @@ export const markDue = async (req, res, next) => {
       data: { approvalId, action: 'due_marked', dueType, remarks: approval.remarks },
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── PATCH /api/approvals/:approvalId ─────────────────────────────────────────
 export const updateApproval = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { approvalId } = req.params;
     const { action, dueType, remarks } = req.body;
 
-    const approval = await NodueApproval.findOne({ _id: approvalId, facultyId: req.user.userId });
-    if (!approval) return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
+    const approval = await NodueApproval.findOne({ _id: approvalId, facultyId: req.user.userId }).session(session);
+    if (!approval) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
+    }
 
-    const batch = await NodueBatch.findById(approval.batchId).select('status').lean();
+    const batch = await NodueBatch.findById(approval.batchId).session(session).select('status').lean();
     if (!batch || batch.status !== 'active') {
+      await session.abortTransaction();
       return next(new ErrorResponse('Cannot update approval — batch is closed', 400, 'BATCH_CLOSED'));
     }
 
     const VALID_ACTIONS = ['pending', 'approved', 'due_marked'];
     if (action && !VALID_ACTIONS.includes(action)) {
+      await session.abortTransaction();
       return next(new ErrorResponse(`action must be one of: ${VALID_ACTIONS.join(', ')}`, 400, 'VALIDATION_ERROR'));
     }
     if (action === 'due_marked' && !dueType) {
+      await session.abortTransaction();
       return next(new ErrorResponse('dueType required when action is due_marked', 400, 'VALIDATION_ERROR'));
     }
 
@@ -384,15 +425,14 @@ export const updateApproval = async (req, res, next) => {
       }
     }
     
-    // Allow explicit overriding if provided
     if (dueType !== undefined) approval.dueType = dueType;
     if (remarks !== undefined) approval.remarks = remarks;
     approval.actionedAt = new Date();
-    await approval.save();
+    await approval.save({ session });
 
-    await recalcRequestStatus(approval.requestId);
+    await recalcRequestStatus(approval.requestId, session);
 
-    // Invalidation handled by hooks
+    await session.commitTransaction();
 
     logger.info('approval_updated', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -413,22 +453,27 @@ export const updateApproval = async (req, res, next) => {
       data: { approvalId, action: approval.action, dueType: approval.dueType, remarks: approval.remarks },
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── Internal helper ────────────────────────────────────────────────────────────
-async function recalcRequestStatus(requestId) {
-  const approvals = await NodueApproval.find(
-    { requestId },
-    'action'
-  ).lean();
+async function recalcRequestStatus(requestId, session = null) {
+  const query = NodueApproval.find({ requestId }, 'action');
+  if (session) query.session(session);
+  const approvals = await query.lean();
 
   const hasDue     = approvals.some((a) => a.action === 'due_marked');
   const allCleared = approvals.every((a) => a.action === 'approved');
 
   const status = hasDue ? 'has_dues' : allCleared ? 'cleared' : 'pending';
 
-  await NodueRequest.findByIdAndUpdate(requestId, { status, updatedAt: new Date() });
+  const updateQuery = NodueRequest.findByIdAndUpdate(requestId, { status, updatedAt: new Date() });
+  if (session) updateQuery.session(session);
+  await updateQuery;
+  
   return status;
 }

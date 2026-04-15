@@ -106,7 +106,7 @@ const Departments = () => {
   }
 
   return (
-    <PageWrapper title="Departments" subtitle="Academic department structure and oversight management">
+    <PageWrapper title="Departments">
       {depts.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 mb-6 text-[10px] font-black uppercase tracking-widest text-navy">
           <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-muted shadow-sm">

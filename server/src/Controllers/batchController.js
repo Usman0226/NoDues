@@ -11,6 +11,7 @@ import { withCache, invalidateKeys } from '../utils/withCache.js';
 import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
+import Task from '../models/Task.js';
 
 // ── GET /api/batch ────────────────────────────────────────────────────────────
 export const getBatches = async (req, res, next) => {
@@ -33,7 +34,9 @@ export const getBatches = async (req, res, next) => {
     const skip = (Number(page) - 1) * Number(limit);
     const [batches, total] = await Promise.all([
       NodueBatch.find(query)
-        .select('_id classId className departmentId semester academicYear status totalStudents initiatedAt deadline')
+        .select('_id classId className departmentId semester academicYear status totalStudents initiatedAt deadline initiatedBy')
+        .populate('departmentId', 'name')
+        .populate('initiatedBy', 'name')
         .sort({ initiatedAt: -1 })
         .skip(skip)
         .limit(Number(limit))
@@ -56,12 +59,13 @@ export const getBatches = async (req, res, next) => {
 };
 
 
-const _executeInitiation = async (cls, deadline, initiator) => {
+const _executeInitiation = async (cls, deadline, initiator, session) => {
   const classId = cls._id;
 
   // 1. Fetch active students 
   const students = await Student.find({ classId, isActive: true })
     .select('_id rollNo name mentorId electiveSubjects')
+    .session(session)
     .lean();
   
   if (!students.length) {
@@ -69,7 +73,7 @@ const _executeInitiation = async (cls, deadline, initiator) => {
   }
 
   // 2. Build Batch Record
-  const batch = await NodueBatch.create({
+  const [batch] = await NodueBatch.create([{
     classId,
     className:       cls.name,
     departmentId:    cls.departmentId._id || cls.departmentId,
@@ -80,7 +84,7 @@ const _executeInitiation = async (cls, deadline, initiator) => {
     deadline:        deadline ? new Date(deadline) : null,
     status:          'active',
     totalStudents:   students.length,
-  });
+  }], { session });
 
   // 3. Fetch necessary faculty info
   const [hodAccount, ctInfo] = await Promise.all([
@@ -88,12 +92,15 @@ const _executeInitiation = async (cls, deadline, initiator) => {
       departmentId: cls.departmentId._id || cls.departmentId, 
       roleTags: 'hod', 
       isActive: true 
-    }).select('name').lean(),
-    cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').lean() : null
+    }).select('name').session(session).lean(),
+    cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() : null
   ]);
 
   const allMentorIds = [...new Set(students.map(s => s.mentorId).filter(Boolean))];
-  const mentors = await Faculty.find({ _id: { $in: allMentorIds } }).select('name').lean();
+  const mentors = await Faculty.find({ _id: { $in: allMentorIds } })
+    .select('name')
+    .session(session)
+    .lean();
   const mentorMap = new Map(mentors.map(m => [m._id.toString(), m.name]));
 
   // 4. Operation Builder
@@ -215,8 +222,8 @@ const _executeInitiation = async (cls, deadline, initiator) => {
 
   // 5. Execute Bulk Writes
   const [requestResult, approvalResult] = await Promise.all([
-    NodueRequest.bulkWrite(requestOps,  { ordered: false }),
-    NodueApproval.bulkWrite(approvalOps, { ordered: false }),
+    NodueRequest.bulkWrite(requestOps,  { ordered: false, session }),
+    NodueApproval.bulkWrite(approvalOps, { ordered: false, session }),
   ]);
 
   // 6. Cache & Logs
@@ -329,29 +336,63 @@ export const getInitiationPreview = async (req, res, next) => {
 };
 
 export const initiateBatch = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { classId, deadline } = req.body;
-    if (!classId) return next(new ErrorResponse('classId is required', 400));
+    if (!classId) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new ErrorResponse('classId is required', 400));
+    }
+
+    const initiator = { userId: req.user.userId, role: req.user.role };
 
     const cls = await Class.findOne({ _id: classId, isActive: true })
       .populate('departmentId', 'name')
+      .session(session)
       .lean();
-    if (!cls) return next(new ErrorResponse('Class not found', 404));
+    if (!cls) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new ErrorResponse('Class not found', 404));
+    }
 
     if (req.user.role === 'hod' && cls.departmentId?._id?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
+      session.endSession();
       return next(new ErrorResponse('Access denied', 403));
     }
 
-    const existing = await NodueBatch.findOne({ classId, status: 'active' }).lean();
-    if (existing) return next(new ErrorResponse(`Active session already exists for ${cls.name}`, 409));
+    const existing = await NodueBatch.findOne({ classId, status: 'active' }).session(session).lean();
+    if (existing) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new ErrorResponse(`Active session already exists for ${cls.name}`, 409));
+    }
 
-    const result = await _executeInitiation(cls, deadline, { userId: req.user.userId, role: req.user.role });
+    const result = await _executeInitiation(cls, deadline, initiator, session);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    logger.audit('BATCH_INITIATED', {
+      actor: req.user.userId,
+      actor_role: req.user.role,
+      classId,
+      departmentId: cls.departmentId?._id ?? cls.departmentId,
+      totalStudents: result.totalStudents
+    });
 
     return res.status(201).json({
       success: true,
       data: { ...result, initiatedAt: new Date() },
     });
   } catch (err) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    session.endSession();
     if (err.message.includes('No active students')) {
       return next(new ErrorResponse(err.message, 400));
     }
@@ -368,7 +409,6 @@ export const initiateDepartmentWide = async (req, res, next) => {
       return next(new ErrorResponse('Department context missing from session', 400));
     }
 
-    // 1. Fetch all active classes for the department
     const classes = await Class.find({ departmentId, isActive: true })
       .populate('departmentId', 'name')
       .lean();
@@ -377,15 +417,12 @@ export const initiateDepartmentWide = async (req, res, next) => {
       return next(new ErrorResponse('No active classes found for this department', 404));
     }
 
-    // 2. Identify which classes already have active batches
     const activeBatches = await NodueBatch.find({
       departmentId,
       status: 'active'
     }).select('classId').lean();
 
     const activeClassIds = new Set(activeBatches.map(b => b.classId.toString()));
-    
-    // 3. Filter eligible classes
     const eligibleClasses = classes.filter(c => !activeClassIds.has(c._id.toString()));
 
     if (!eligibleClasses.length) {
@@ -396,43 +433,98 @@ export const initiateDepartmentWide = async (req, res, next) => {
       });
     }
 
-    const results = {
-      initiated: [],
-      failed: [],
-      skippedCount: activeClassIds.size
-    };
-
-    for (const cls of eligibleClasses) {
-      try {
-        const res = await _executeInitiation(cls, deadline, { 
-          userId: req.user.userId, 
-          role: req.user.role 
-        });
-        results.initiated.push(res);
-      } catch (err) {
-        logger.error('bulk_initiate_single_failure', { 
-          class: cls.name, 
-          error: err.message 
-        });
-        results.failed.push({ 
-          className: cls.name, 
-          reason: err.message 
-        });
+    // Initialize background task
+    const task = await Task.create({
+      type: 'batch_initiation',
+      label: `Initiating NoDues for ${eligibleClasses.length} classes`,
+      status: 'processing',
+      actor: req.user.userId,
+      progress: 0,
+      meta: { 
+        total: eligibleClasses.length,
+        departmentId 
       }
-    }
+    });
 
-    return res.status(201).json({
+    // Respond immediately - the frontend Activity Center (Inbox) will track progress
+    res.status(202).json({
       success: true,
       data: {
-        summary: {
-          total: classes.length,
-          initiated: results.initiated.length,
-          failed: results.failed.length,
-          skipped: results.skippedCount
-        },
-        details: results.initiated,
-        errors: results.failed.length > 0 ? results.failed : undefined
+        message: 'Bulk initiation started in background',
+        taskId: task._id
       }
+    });
+
+    // Background processing loop
+    (async () => {
+      const results = {
+        initiated: [],
+        failed: []
+      };
+
+      for (let i = 0; i < eligibleClasses.length; i++) {
+        const cls = eligibleClasses[i];
+        const session = await mongoose.startSession();
+        session.startTransaction();
+        try {
+          const initRes = await _executeInitiation(cls, deadline, { 
+            userId: req.user.userId, 
+            role: req.user.role 
+          }, session);
+          
+          await session.commitTransaction();
+          results.initiated.push(initRes);
+
+          logger.audit('BATCH_INITIATED', {
+            actor: req.user.userId,
+            actor_role: req.user.role,
+            classId: cls._id,
+            departmentId: cls.departmentId?._id ?? cls.departmentId,
+            totalStudents: initRes.totalStudents,
+            context: 'DEPARTMENT_WIDE_INITIATION'
+          });
+
+        } catch (err) {
+          await session.abortTransaction();
+          logger.error('bulk_initiate_single_failure', { 
+            class: cls.name, 
+            error: err.message 
+          });
+          results.failed.push({ 
+            className: cls.name, 
+            reason: err.message 
+          });
+        } finally {
+          session.endSession();
+          
+          const progress = Math.round(((i + 1) / eligibleClasses.length) * 100);
+          await Task.findByIdAndUpdate(task._id, { 
+            progress,
+            message: `Processed ${i + 1} of ${eligibleClasses.length} classes...`
+          });
+        }
+      }
+
+      // Final task update
+      const finalStatus = results.initiated.length > 0 ? 'success' : 'error';
+      await Task.findByIdAndUpdate(task._id, {
+        status: finalStatus,
+        progress: 100,
+        message: `Completed: ${results.initiated.length} succeeded, ${results.failed.length} failed.`,
+        meta: { 
+          ...task.meta,
+          success: results.initiated.length, 
+          failed: results.failed.length,
+          errors: results.failed.slice(0, 10)
+        }
+      });
+
+    })().catch(err => {
+      logger.error('bulk_initiation_background_crash', { error: err.message, taskId: task._id });
+      Task.findByIdAndUpdate(task._id, { 
+        status: 'error', 
+        message: `Background process crashed: ${err.message}` 
+      }).catch(() => {});
     });
 
   } catch (err) {
@@ -461,32 +553,46 @@ export const getBatchStatus = async (req, res, next) => {
       return res.status(200).json({ success: true, data: { batch, ...cachedGrid } });
     }
 
-    // Requests + approval counts in parallel — both indexed on batchId
-    const [requests, approvalCounts] = await Promise.all([
+    // Requests + approvals in parallel — both indexed on batchId
+    const [requests, approvals] = await Promise.all([
       NodueRequest.find({ batchId })
         .select('studentId studentSnapshot status facultySnapshot')
         .lean(),
-      NodueApproval.aggregate([
-        { $match: { batchId: new mongoose.Types.ObjectId(batchId) } },
-        {
-          $group: {
-            _id:     '$studentId',
-            total:   { $sum: 1 },
-            cleared: { $sum: { $cond: [{ $eq: ['$action', 'approved'] },    1, 0] } },
-            dues:    { $sum: { $cond: [{ $eq: ['$action', 'due_marked'] }, 1, 0] } },
-            pending: { $sum: { $cond: [{ $eq: ['$action', 'pending'] },    1, 0] } },
-          },
-        },
-      ]),
+      NodueApproval.find({ batchId })
+        .select('studentId facultyId action subjectId approvalType')
+        .lean(),
     ]);
 
-    const countMap = Object.fromEntries(
-      approvalCounts.map((a) => [a._id.toString(), a])
-    );
+    // Build approval map for each student: studentId -> columnKey -> approvalData
+    const studentApprovalMap = {};
+    approvals.forEach((a) => {
+      const sId = a.studentId.toString();
+      // Uniquely identify the clearance task column
+      const colKey = a.approvalType === 'subject' ? (a.subjectId?.toString() || a.subjectName) : a.roleTag;
+      
+      if (!studentApprovalMap[sId]) studentApprovalMap[sId] = {};
+      studentApprovalMap[sId][colKey] = {
+        _id: a._id,
+        status: a.action,
+        subjectId: a.subjectId,
+        type: a.approvalType,
+      };
+    });
 
     const students = requests.map((r) => {
-      const counts = countMap[r.studentId?.toString()] ?? { total: 0, cleared: 0, dues: 0, pending: 0 };
+      const sId = r.studentId.toString();
+      const studentApprovals = studentApprovalMap[sId] || {};
+      
+      const counts = Object.values(studentApprovals).reduce((acc, a) => {
+        acc.total++;
+        if (a.status === 'approved') acc.cleared++;
+        else if (a.status === 'due_marked') acc.dues++;
+        else acc.pending++;
+        return acc;
+      }, { total: 0, cleared: 0, dues: 0, pending: 0 });
+
       return {
+        _id:       r._id,
         studentId: r.studentId,
         rollNo:    r.studentSnapshot?.rollNo,
         name:      r.studentSnapshot?.name,
@@ -495,12 +601,32 @@ export const getBatchStatus = async (req, res, next) => {
         pending:   counts.pending,
         dues:      counts.dues,
         total:     counts.total,
+        approvals: studentApprovals,
+        facultySnapshot: Array.isArray(r.facultySnapshot) 
+          ? r.facultySnapshot 
+          : Object.values(r.facultySnapshot || {}),
       };
     });
 
-    const facultySnapshot = requests[0]?.facultySnapshot ?? [];
-    const faculty = facultySnapshot.map((f) => ({
-      _id:         f.facultyId,
+    // Extract unique columns (faculty-task pairs) from snapshots
+    const columnsMap = new Map();
+    requests.forEach(r => {
+      const snapshot = r.facultySnapshot || {};
+      if (Array.isArray(snapshot)) {
+        snapshot.forEach(f => {
+          const key = f.approvalType === 'subject' ? (f.subjectId?.toString() || f.subjectName) : f.roleTag;
+          if (!columnsMap.has(key)) columnsMap.set(key, f);
+        });
+      } else {
+        Object.entries(snapshot).forEach(([key, f]) => {
+          if (!columnsMap.has(key)) columnsMap.set(key, f);
+        });
+      }
+    });
+
+    const faculty = Array.from(columnsMap.entries()).map(([key, f]) => ({
+      _id:         key, // Matrix column ID
+      facultyId:   f.facultyId,
       name:        f.facultyName,
       subjectId:   f.subjectId,
       subjectName: f.subjectName,
@@ -586,30 +712,36 @@ export const getBatchStudentDetail = async (req, res, next) => {
 
 // ── PATCH /api/batch/:batchId/close ──────────────────────────────────────────
 export const closeBatch = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { batchId } = req.params;
 
-    const batch = await NodueBatch.findById(batchId);
-    if (!batch) return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
+    const batch = await NodueBatch.findById(batchId).session(session);
+    if (!batch) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
+    }
     if (batch.status === 'closed') {
+      await session.abortTransaction();
       return next(new ErrorResponse('Batch is already closed', 400, 'BATCH_ALREADY_CLOSED'));
     }
 
     if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     batch.status = 'closed';
-    await batch.save();
+    await batch.save({ session });
 
-    // Cache invalidated automatically by Mongoose batch save hook
+    await session.commitTransaction();
 
     logger.audit('BATCH_CLOSED', {
       actor: req.user.userId,
       resource_id: batchId,
     });
 
-    // Notify students via SSE
     const batchRequests = await NodueRequest.find({ batchId }, 'studentId').lean();
     const batchStudentIds = batchRequests.map((r) => r.studentId.toString());
     pushEvent(batchStudentIds, 'BATCH_CLOSED', { batchId });
@@ -619,67 +751,162 @@ export const closeBatch = async (req, res, next) => {
       data: { batchId: batch._id, status: 'closed' },
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── POST /api/batch/:batchId/students ─────────────────────────────────────────
 export const addStudentToBatch = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { batchId } = req.params;
     const { studentId } = req.body;
-    if (!studentId) return next(new ErrorResponse('studentId is required', 400, 'VALIDATION_ERROR'));
+    if (!studentId) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new ErrorResponse('studentId is required', 400, 'VALIDATION_ERROR'));
+    }
 
-    // Fetch batch and student in parallel
     const [batch, student] = await Promise.all([
-      NodueBatch.findById(batchId).lean(),
+      NodueBatch.findById(batchId).session(session).lean(),
       Student.findOne({ _id: studentId, isActive: true })
-        .select('_id rollNo name mentorId electiveSubjects classId')
+        .select('_id rollNo name mentorId electiveSubjects classId departmentId')
+        .session(session)
         .lean(),
     ]);
 
-    if (!batch)   return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
+    if (!batch) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
+    }
     if (batch.status !== 'active') {
+      await session.abortTransaction();
+      session.endSession();
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
 
-    // HoD Scope Check
     if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
+      session.endSession();
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
-    if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    if (!student) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    }
 
-    const existing = await NodueRequest.findOne({ batchId, studentId })
-      .select('_id')
-      .lean();
+    const existing = await NodueRequest.findOne({ batchId, studentId }).session(session).lean();
     if (existing) {
+      await session.abortTransaction();
+      session.endSession();
       return next(new ErrorResponse('Student already in this batch', 409, 'DUPLICATE_KEY'));
     }
 
-    const classData = await Class.findById(batch.classId)
-      .select('subjectAssignments classTeacherId')
+    const cls = await Class.findById(batch.classId)
+      .select('name departmentId semester academicYear classTeacherId subjectAssignments')
+      .session(session)
       .lean();
 
-    const request = await NodueRequest.create({
+    // ── Build Faculty Snapshot (Full implementation) ─────────────────────────
+    const [hodAccount, ctInfo] = await Promise.all([
+      Faculty.findOne({ 
+        departmentId: cls.departmentId._id || cls.departmentId, 
+        roleTags: 'hod', 
+        isActive: true 
+      }).select('name').session(session).lean(),
+      cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() : null
+    ]);
+
+    const snapshot = {};
+    if (hodAccount) {
+      snapshot['hod'] = {
+        facultyId: hodAccount._id, facultyName: hodAccount.name,
+        roleTag: 'hod', approvalType: 'office',
+      };
+    }
+
+    // Regular subjects
+    for (const s of cls.subjectAssignments ?? []) {
+      if (!s.facultyId || s.isElective) continue;
+      snapshot[s.subjectId.toString()] = {
+        facultyId: s.facultyId, facultyName: s.facultyName,
+        subjectId: s.subjectId, subjectName: s.subjectName, subjectCode: s.subjectCode,
+        roleTag: 'faculty', approvalType: 'subject',
+      };
+    }
+
+    if (cls.classTeacherId) {
+      snapshot['classTeacher'] = {
+        facultyId: cls.classTeacherId, facultyName: ctInfo?.name ?? null,
+        roleTag: 'classTeacher', approvalType: 'classTeacher',
+        subjectName: 'Academic Advisor (Class Teacher)',
+      };
+    }
+
+    if (student.mentorId) {
+      const mentor = await Faculty.findById(student.mentorId).select('name').session(session).lean();
+      snapshot['mentor'] = {
+        facultyId: student.mentorId, facultyName: mentor?.name ?? null,
+        roleTag: 'mentor', approvalType: 'mentor',
+        subjectName: 'Institutional Mentor',
+      };
+    }
+
+    for (const e of student.electiveSubjects ?? []) {
+      if (!e.facultyId) continue;
+      snapshot[e.subjectId.toString()] = {
+        facultyId: e.facultyId, facultyName: e.facultyName,
+        subjectId: e.subjectId, subjectName: e.subjectName, subjectCode: e.subjectCode,
+        roleTag: 'faculty', approvalType: 'subject',
+      };
+    }
+
+    // ── Create Documents ─────────────────────────────────────────────────────
+    const requestId = new mongoose.Types.ObjectId();
+    const [request] = await NodueRequest.create([{
+      _id: requestId,
       batchId,
       studentId,
-      studentSnapshot: { rollNo: student.rollNo, name: student.name },
-      facultySnapshot: classData?.subjectAssignments?.map((a) => ({
-        facultyId: a.facultyId, facultyName: a.facultyName,
-        subjectId: a.subjectId, subjectName: a.subjectName, subjectCode: a.subjectCode,
-        roleTag: 'faculty', approvalType: 'subject',
-      })) ?? [],
+      studentSnapshot: { 
+        rollNo: student.rollNo, 
+        name: student.name,
+        departmentName: cls.departmentId?.name ?? null 
+      },
+      facultySnapshot: snapshot,
       status: 'pending',
-    });
+    }], { session });
 
-    await NodueBatch.findByIdAndUpdate(batchId, { $inc: { totalStudents: 1 } });
+    const approvals = Object.values(snapshot).map(f => ({
+      requestId,
+      batchId,
+      studentId,
+      studentRollNo: student.rollNo,
+      studentName: student.name,
+      facultyId: f.facultyId,
+      subjectId: f.subjectId ?? null,
+      subjectName: f.subjectName ?? null,
+      approvalType: f.approvalType,
+      roleTag: f.roleTag,
+      action: 'pending',
+    }));
 
-    // Cache invalidated automatically by Mongoose batch hooks
+    await NodueApproval.insertMany(approvals, { session });
+    await NodueBatch.findByIdAndUpdate(batchId, { $inc: { totalStudents: 1 } }, { session });
 
-    logger.info('student_added_to_batch', {
-      timestamp: new Date().toISOString(), actor: req.user.userId,
-      action: 'ADD_STUDENT_BATCH', resource_id: batchId,
+    await session.commitTransaction();
+    session.endSession();
+
+    logger.audit('STUDENT_ADDED_TO_BATCH', {
+      actor: req.user.userId,
+      resource_id: batchId,
+      studentId,
     });
 
     pushEvent([studentId.toString()], 'STUDENT_ADDED_TO_BATCH', {
@@ -692,33 +919,43 @@ export const addStudentToBatch = async (req, res, next) => {
       data: { requestId: request._id, studentId, batchId, status: 'pending' },
     });
   } catch (err) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    session.endSession();
     next(err);
   }
 };
 
 // ── DELETE /api/batch/:batchId/faculty/:facultyId ─────────────────────────────
 export const removeFacultyFromBatch = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { batchId, facultyId } = req.params;
 
-    const batch = await NodueBatch.findById(batchId).select('status departmentId').lean();
-    if (!batch)                    return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
-    if (batch.status !== 'active') return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
+    const batch = await NodueBatch.findById(batchId).select('status departmentId').session(session).lean();
+    if (!batch) {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
+    }
+    if (batch.status !== 'active') {
+      await session.abortTransaction();
+      return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
+    }
 
-    // HoD Scope Check
     if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+      await session.abortTransaction();
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
-    // Delete only PENDING approvals; preserve actioned ones (approved/due_marked)
     const result = await NodueApproval.deleteMany({
       batchId,
       facultyId,
       action: 'pending',
-    });
+    }, { session });
 
-    // Manual invalidation redundant with batch hooks for batch_status
-    // Cache invalidated automatically by Mongoose approval hooks
+    await session.commitTransaction();
 
     logger.audit('FACULTY_REMOVED_BATCH', {
       actor: req.user.userId,
@@ -736,16 +973,22 @@ export const removeFacultyFromBatch = async (req, res, next) => {
       },
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
 
 export const bulkCloseBatches = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids)) {
+      await session.abortTransaction();
       return next(new ErrorResponse('IDs array is required', 400));
     }
 
@@ -754,14 +997,14 @@ export const bulkCloseBatches = async (req, res, next) => {
       query.departmentId = req.user.departmentId;
     }
 
-    const batches = await NodueBatch.find(query).select('_id').lean();
-    const result = await NodueBatch.updateMany(query, { status: 'closed' });
+    const batches = await NodueBatch.find(query).select('_id').session(session).lean();
+    const result = await NodueBatch.updateMany(query, { status: 'closed' }, { session });
 
+    await session.commitTransaction();
+
+    // Notify students after commit
     for (const batch of batches) {
       const bid = batch._id.toString();
-      // Cache invalidated automatically by Mongoose batch hooks
-      
-      // Notify students of each batch
       const batchRequests = await NodueRequest.find({ batchId: bid }, 'studentId').lean();
       const studentIds = batchRequests.map(r => r.studentId.toString());
       if (studentIds.length) {
@@ -779,6 +1022,9 @@ export const bulkCloseBatches = async (req, res, next) => {
       data: { modifiedCount: result.modifiedCount }
     });
   } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
     next(err);
+  } finally {
+    session.endSession();
   }
 };

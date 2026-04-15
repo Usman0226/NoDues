@@ -9,6 +9,8 @@ import {
   commitElectives,
   previewMentors,
   commitMentors,
+  previewSubjects,
+  commitSubjects,
   getTemplate
 } from '../Controllers/import.controller.js';
 import { protect } from '../middlewares/auth.js';
@@ -39,5 +41,9 @@ router.post('/electives/commit', commitElectives);
 // Mentors
 router.post('/mentors/preview', upload.single('file'), previewMentors);
 router.post('/mentors/commit', commitMentors);
+
+// Subjects
+router.post('/subjects/preview', upload.single('file'), previewSubjects);
+router.post('/subjects/commit', commitSubjects);
 
 export default router;

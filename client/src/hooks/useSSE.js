@@ -3,10 +3,10 @@ import { useEffect, useRef, useCallback } from 'react';
 const useSSE = (url, onMessage) => {
   const sourceRef     = useRef(null);
   const retryTimerRef = useRef(null);
+  const retryCountRef = useRef(0);
   const onMessageRef  = useRef(onMessage);
-  const connectRef    = useRef(null); // holds the connect fn to avoid TDZ in onerror
+  const connectRef    = useRef(null);
 
-  // Keep refs current on every render
   useEffect(() => {
     onMessageRef.current = onMessage;
   });
@@ -14,12 +14,15 @@ const useSSE = (url, onMessage) => {
   const connect = useCallback(() => {
     if (!url) return;
 
-    // Clean up any existing connection before opening a new one
     sourceRef.current?.close();
     sourceRef.current = null;
 
     const source = new EventSource(url, { withCredentials: true });
     sourceRef.current = source;
+
+    source.onopen = () => {
+      retryCountRef.current = 0; // Reset on success
+    };
 
     source.onmessage = (event) => {
       try {
@@ -33,7 +36,12 @@ const useSSE = (url, onMessage) => {
     source.onerror = () => {
       source.close();
       sourceRef.current = null;
-      retryTimerRef.current = setTimeout(() => connectRef.current?.(), 5000);
+      
+      // Exponential backoff: 2s, 4s, 8s, 16s, max 30s
+      const delay = Math.min(Math.pow(2, retryCountRef.current) * 1000, 30000);
+      retryCountRef.current++;
+      
+      retryTimerRef.current = setTimeout(() => connectRef.current?.(), delay);
     };
   }, [url]);
 

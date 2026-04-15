@@ -1,4 +1,7 @@
 import ErrorResponse from '../utils/errorResponse.js';
+import NodueBatch from '../models/NodueBatch.js';
+import Student from '../models/Student.js';
+import Class from '../models/Class.js';
 
 
 export const RoleGuard = (roles) => (req, res, next) => {
@@ -20,26 +23,46 @@ export const RoleGuard = (roles) => (req, res, next) => {
 };
 
 
-export const DepartmentGuard = (req, res, next) => {
-  if (req.user.role === 'admin') return next();
+export const DepartmentGuard = async (req, res, next) => {
+  try {
+    if (req.user.role === 'admin') return next();
 
-  const targetDept =
-    req.params.departmentId ||
-    req.query.departmentId;
+    const { departmentId, batchId, classId, studentId } = { ...req.params, ...req.query };
+    const userDeptId = req.user.departmentId?.toString();
 
-  if (
-    req.user.role === 'hod' &&
-    targetDept &&
-    targetDept !== req.user.departmentId?.toString()
-  ) {
-    return next(
-      new ErrorResponse(
-        'Access denied: you can only manage your own department',
-        403,
-        'AUTH_DEPARTMENT_SCOPE'
-      )
-    );
+    if (req.user.role === 'hod') {
+      // 1. Explicit Department Check
+      if (departmentId && departmentId !== userDeptId) {
+        return next(new ErrorResponse('Access denied: Unauthorized department context', 403, 'AUTH_DEPARTMENT_SCOPE'));
+      }
+
+      // 2. Batch Ownership Check
+      if (batchId) {
+        const batch = await NodueBatch.findById(batchId).select('departmentId').lean();
+        if (batch && batch.departmentId?.toString() !== userDeptId) {
+          return next(new ErrorResponse('Access denied: Unauthorized batch access', 403, 'AUTH_DEPARTMENT_SCOPE'));
+        }
+      }
+
+      // 3. Class Ownership Check
+      if (classId) {
+        const cls = await Class.findById(classId).select('departmentId').lean();
+        if (cls && cls.departmentId?.toString() !== userDeptId) {
+          return next(new ErrorResponse('Access denied: Unauthorized class access', 403, 'AUTH_DEPARTMENT_SCOPE'));
+        }
+      }
+
+      // 4. Student Ownership Check
+      if (studentId) {
+        const student = await Student.findById(studentId).select('departmentId').lean();
+        if (student && student.departmentId?.toString() !== userDeptId) {
+          return next(new ErrorResponse('Access denied: Unauthorized student access', 403, 'AUTH_DEPARTMENT_SCOPE'));
+        }
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
   }
-
-  next();
 };

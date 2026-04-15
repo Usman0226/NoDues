@@ -34,7 +34,7 @@ export const getStudentStatus = async (req, res, next) => {
       // Parallel fetch: approvals + batch info — both hit indexes
       const [approvals, batch] = await Promise.all([
         NodueApproval.find({ requestId: request._id })
-          .select('subjectName approvalType roleTag action dueType remarks actionedAt facultyName')
+          .select('subjectId subjectName approvalType roleTag action dueType remarks actionedAt facultyName')
           .lean(),
         NodueBatch.findById(request.batchId)
           .select('semester academicYear deadline className')
@@ -55,9 +55,14 @@ export const getStudentStatus = async (req, res, next) => {
         overallStatus:  request.status,
         overrideRemark: request.overrideRemark ?? null,
         approvals: approvals.map((a) => {
-          // Look up details from the facultySnapshot object
-          const snapshotKey = a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag;
-          const snapshot = request.facultySnapshot?.[snapshotKey] || {};
+          // Look up details from the facultySnapshot — handle both Legacy Array and Modern Object formats
+          const snapshot = (Array.isArray(request.facultySnapshot) 
+            ? request.facultySnapshot.find(f => 
+                (a.approvalType === 'subject' && f.subjectId?.toString() === a.subjectId?.toString()) ||
+                (a.approvalType !== 'subject' && f.roleTag === a.roleTag)
+              )
+            : request.facultySnapshot?.[a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag]
+          ) || {};
 
           let displayContext = snapshot.subjectName || a.subjectName;
           if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
