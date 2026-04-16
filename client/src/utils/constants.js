@@ -26,4 +26,5 @@ export const APPROVAL_TYPES = {
   SUBJECT: 'subject',
   CLASS_TEACHER: 'classTeacher',
   MENTOR: 'mentor',
+  HOD_APPROVAL: 'hodApproval',
 };

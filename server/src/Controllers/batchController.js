@@ -119,7 +119,9 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
         facultyId:    hodAccount._id,
         facultyName:  hodAccount.name,
         roleTag:      'hod',
-        approvalType: 'office',
+        approvalType: 'hodApproval',
+        subjectId:    null,
+        subjectName:  'Department Clearance (HoD)',
       };
     }
 
@@ -828,7 +830,8 @@ export const addStudentToBatch = async (req, res, next) => {
     if (hodAccount) {
       snapshot['hod'] = {
         facultyId: hodAccount._id, facultyName: hodAccount.name,
-        roleTag: 'hod', approvalType: 'office',
+        roleTag: 'hod', approvalType: 'hodApproval',
+        subjectId: null, subjectName: 'Department Clearance (HoD)',
       };
     }
 

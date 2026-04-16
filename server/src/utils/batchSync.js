@@ -471,7 +471,14 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
         const snapshot = {};
 
         if (hodAccount) {
-            snapshot['hod'] = { facultyId: hodAccount._id, facultyName: hodAccount.name, roleTag: 'hod', approvalType: 'office' };
+            snapshot['hod'] = {
+                facultyId: hodAccount._id,
+                facultyName: hodAccount.name,
+                roleTag: 'hod',
+                approvalType: 'hodApproval',
+                subjectId: null,
+                subjectName: 'Department Clearance (HoD)'
+            };
         }
 
         for (const s of cls.subjectAssignments ?? []) {

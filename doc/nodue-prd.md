@@ -36,7 +36,7 @@ The current no-due clearance process at MITS is entirely paper-based. At the end
 
 ### Solution
 
-A role-based web application that digitalises the entire no-due workflow. Admin or HoD initiates batch clearance requests per class. Every faculty assigned to that class approves or flags dues for every student they are responsible for. Students get a real-time status view using only their roll number. HoD holds override authority. All actions are timestamped and stored permanently.
+A role-based web application that digitalises the entire no-due workflow. Admin or HoD initiates batch clearance requests per class. Every faculty assigned to that class approves or flags dues for every student they are responsible for. The department HoD must also approve every student individually as a normal approver in the clearance chain, separate from override. Students get a real-time status view using only their roll number. HoD override remains a separate exception flow used only when a student is blocked by marked dues. All actions are timestamped and stored permanently.
 
 ### Scale
 
@@ -52,7 +52,7 @@ A role-based web application that digitalises the entire no-due workflow. Admin 
 | Role | Login Method | Scope | Key Capabilities |
 |---|---|---|---|
 | **Admin** | Email + Password | Global (both departments) | Full CRUD on all data; initiate batches; view all status |
-| **HoD** | Email + Password | Own department only | Same as Admin but scoped to their department |
+| **HoD** | Email + Password | Own department only | Same as Admin but scoped to their department; approves every student individually and can override blocked clearances |
 | **Faculty** | Email + Password (emailed) | Assigned classes only | View all students in assigned class; approve or mark due per subject/role |
 | **Student** | Roll Number only | Own records only | Read-only: own no-due status for current semester |
 
@@ -70,7 +70,7 @@ A role-based web application that digitalises the entire no-due workflow. Admin 
 | Assign electives to students | ✅ | ✅ (own dept) | ❌ | ❌ |
 | Assign mentors to students | ✅ | ✅ (own dept) | ❌ | ❌ |
 | Initiate no-due batch | ✅ | ✅ (own dept) | ❌ | ❌ |
-| Approve / mark due | ❌ | ✅ (as faculty) | ✅ | ❌ |
+| Approve / mark due as required approver | ❌ | ✅ (mandatory HoD approval + any faculty-role approvals) | ✅ | ❌ |
 | Override blocked clearance | ❌ | ✅ (own dept) | ❌ | ❌ |
 | View department no-due overview | ✅ | ✅ (own dept) | ❌ | ❌ |
 | View own no-due status | ❌ | ❌ | ❌ | ✅ |
@@ -310,7 +310,7 @@ A role-based web application that digitalises the entire no-due workflow. Admin 
       "subjectName": "String | null",
       "subjectCode": "String | null",
       "roleTag": "faculty | classTeacher | mentor | hod",
-      "approvalType": "subject | classTeacher | mentor"
+      "approvalType": "subject | classTeacher | mentor | hodApproval"
     }
   ],
   "status": "pending | cleared | has_dues | hod_override",
@@ -327,6 +327,7 @@ A role-based web application that digitalises the entire no-due workflow. Admin 
 > - `student.electiveSubjects` → elective entries (approvalType: "subject")
 > - `class.classTeacherId` → one entry (approvalType: "classTeacher", subjectId: null)
 > - `student.mentorId` → one entry (approvalType: "mentor", subjectId: null)
+> - `department.hodId` → one entry per student (approvalType: "hodApproval", subjectId: null)
 
 ---
 
@@ -343,7 +344,7 @@ A role-based web application that digitalises the entire no-due workflow. Admin 
   "facultyId": "ObjectId → faculty",
   "subjectId": "ObjectId | null",
   "subjectName": "String | null",
-  "approvalType": "subject | classTeacher | mentor",
+  "approvalType": "subject | classTeacher | mentor | hodApproval",
   "roleTag": "faculty | classTeacher | mentor | hod",
   "action": "pending | approved | due_marked",
   "dueType": "library | lab | fees | attendance | other | null",
@@ -724,8 +725,11 @@ Roll No | Faculty Employee ID
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/overview` | All active batches in HoD's department with summary counts |
+| GET | `/pending` | HoD's normal per-student approval queue for active batches |
 | GET | `/dues` | All `has_dues` requests in HoD's department |
 | POST | `/override` | Force-clear a `has_dues` request |
+
+> HoD approval itself uses the standard approval action flow, just like faculty approvals. `/api/hod/*` is for HoD dashboard data and override handling, not a replacement for the normal HoD approval record.
 
 **POST `/api/hod/override`:**
 ```json
@@ -828,7 +832,8 @@ Step 3 — For each student in class.studentIds:
       ├── class.subjectAssignments → { facultyId, facultyName, subjectId, subjectName, subjectCode, roleTag: "faculty", approvalType: "subject" }
       ├── student.electiveSubjects → same shape, isElective: true
       ├── class.classTeacherId    → { facultyId, facultyName, subjectId: null, subjectName: null, roleTag: "classTeacher", approvalType: "classTeacher" }
-      └── student.mentorId        → { facultyId, facultyName, subjectId: null, subjectName: null, roleTag: "mentor", approvalType: "mentor" }
+      ├── student.mentorId        → { facultyId, facultyName, subjectId: null, subjectName: null, roleTag: "mentor", approvalType: "mentor" }
+      └── department.hodId       → { facultyId, facultyName, subjectId: null, subjectName: null, roleTag: "hod", approvalType: "hodApproval" }
 
   3b. INSERT nodueRequest with:
       ├── batchId, studentId
@@ -973,6 +978,7 @@ mongoose.connect(MONGO_URI, {
         BatchStudentDetail.jsx
       /hod
         Dashboard.jsx
+        Pending.jsx
         Dues.jsx
         Overrides.jsx
       /faculty
@@ -1117,7 +1123,7 @@ Three tabs:
 #### `/admin/batch/:batchId/students/:studentId`
 - Student header: Roll No | Name | Department (in that order)
 - Per-approval cards listed vertically:
-  - Subject Name (or "Class Teacher" / "Mentor" for role-based)
+  - Subject Name (or "Class Teacher" / "Mentor" / "HoD Approval" for role-based)
   - Faculty Name
   - Action status badge
   - If due_marked: Due Type chip + Remarks text
@@ -1172,7 +1178,27 @@ Three tabs:
 #### `/hod/dashboard`
 - Department overview (scoped to own dept automatically)
 - Batch summary cards per class
+- "You have N pending HoD approvals across X classes"
 - Alert: "X students have blocked clearances requiring override"
+
+#### `/hod/pending`
+- Same per-student approval pattern as faculty, but scoped only to the HoD approval record for each student
+- Batch selector dropdown for active batches in HoD's department
+- Student list (20 per page)
+- Filter tabs: All | Pending | Approved | Due Marked
+- **Each student card:**
+  - Roll No | Name | Class | Department
+  - Approval type badge: "HoD Approval"
+  - Current action status
+  - If pending:
+    - "✅ Approve" button → single click, instant toast confirmation
+    - "❌ Mark Due" button → inline form expands:
+      - Due Type: Library / Lab / Fees / Attendance / Other (dropdown)
+      - Remarks (required text area)
+      - Submit
+  - If actioned: shows result + "Edit" button (only if batch active)
+- This queue is the normal HoD approval stage and is separate from override
+- SSE: card updates if another session acts on same record
 
 #### `/hod/dues`
 - Table: Roll No | Name | Class | Faculty Who Flagged | Subject | Due Type | Remarks
@@ -1206,6 +1232,7 @@ Three tabs:
   (Open Elective)
   Class Teacher          Dr. Patel         ✅ Approved
   Mentor                 Dr. Meena         ⏳ Pending
+  HoD Approval           Dr. Reddy         ⏳ Pending
   ```
 
 - Display order per card: Subject/Role | Faculty Name | Status
@@ -1351,6 +1378,8 @@ HOD OVERRIDE
 ```
 
 ---
+
+**Clarification locked for v4.0:** every `nodueRequest` must include one normal HoD approval entry in `facultySnapshot` and `nodueApprovals`, one per student. A student is not fully cleared until that HoD approval is approved. HoD override is a separate exception path and must never replace the normal HoD approval stage.
 
 ## 8. Data Import Strategy
 

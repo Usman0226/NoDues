@@ -15,7 +15,7 @@ import {
 const getApprovalLabel = (item) => {
   if (item.type === 'class_teacher') return 'Academic Advisor (Class Teacher)';
   if (item.type === 'mentor') return 'Personal Mentor';
-  if (item.type === 'office') return 'Administrative Office';
+  if (item.type === 'hodApproval' || item.type === 'office') return 'Department Clearance (HoD)';
   return `${item.subjectName || 'Departmental Component'}${item.subjectCode ? ` (${item.subjectCode})` : ''}`;
 };
 

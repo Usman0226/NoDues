@@ -21,6 +21,7 @@ import {
 const PAGE_SIZE = 20;
 
 const getApprovalLabel = (item) => {
+  if (item.approvalType === 'hodApproval' || item.approvalType === 'office' || item.roleTag === 'hod') return 'HoD Approval';
   if (item.approvalType === 'classTeacher') return 'Class Teacher';
   if (item.approvalType === 'mentor') return 'Mentor';
   return item.subjectName || '—';

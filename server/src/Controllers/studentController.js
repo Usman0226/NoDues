@@ -4,6 +4,9 @@ import Class from '../models/Class.js';
 import Faculty from '../models/Faculty.js';
 import Subject from '../models/Subject.js';
 import Department from '../models/Department.js';
+import NodueBatch from '../models/NodueBatch.js';
+import NodueRequest from '../models/NodueRequest.js';
+import NodueApproval from '../models/NodueApproval.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
@@ -111,6 +114,92 @@ export const createStudent = async (req, res, next) => {
     }], { session });
 
     await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student[0]._id } }, { session });
+
+    const activeBatch = await NodueBatch.findOne({ classId, status: 'active' }).session(session).lean();
+    if (activeBatch) {
+      const department = await Department.findById(cls.departmentId).select('name').session(session).lean();
+      const [hodAccount, ctInfo] = await Promise.all([
+        Faculty.findOne({
+          departmentId: cls.departmentId,
+          roleTags: 'hod',
+          isActive: true
+        }).select('name').session(session).lean(),
+        cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() : null
+      ]);
+
+      const snapshot = {};
+
+      if (hodAccount) {
+        snapshot.hod = {
+          facultyId: hodAccount._id,
+          facultyName: hodAccount.name,
+          roleTag: 'hod',
+          approvalType: 'hodApproval',
+          subjectId: null,
+          subjectName: 'Department Clearance (HoD)',
+        };
+      }
+
+      for (const s of cls.subjectAssignments ?? []) {
+        if (!s.facultyId || s.isElective) continue;
+        snapshot[s.subjectId.toString()] = {
+          facultyId: s.facultyId,
+          facultyName: s.facultyName,
+          subjectId: s.subjectId,
+          subjectName: s.subjectName,
+          subjectCode: s.subjectCode,
+          roleTag: 'faculty',
+          approvalType: 'subject',
+        };
+      }
+
+      if (cls.classTeacherId) {
+        snapshot.classTeacher = {
+          facultyId: cls.classTeacherId,
+          facultyName: ctInfo?.name ?? null,
+          roleTag: 'classTeacher',
+          approvalType: 'classTeacher',
+          subjectId: null,
+          subjectName: 'Academic Advisor (Class Teacher)',
+        };
+      }
+
+      const requestId = new mongoose.Types.ObjectId();
+      await NodueRequest.create([{
+        _id: requestId,
+        batchId: activeBatch._id,
+        studentId: student[0]._id,
+        studentSnapshot: {
+          rollNo: student[0].rollNo,
+          name: student[0].name,
+          departmentName: department?.name ?? null,
+        },
+        facultySnapshot: snapshot,
+        status: 'pending',
+      }], { session });
+
+      const approvals = Object.values(snapshot)
+        .filter((entry) => entry?.facultyId)
+        .map((entry) => ({
+          requestId,
+          batchId: activeBatch._id,
+          studentId: student[0]._id,
+          studentRollNo: student[0].rollNo,
+          studentName: student[0].name,
+          facultyId: entry.facultyId,
+          subjectId: entry.subjectId ?? null,
+          subjectName: entry.subjectName ?? null,
+          approvalType: entry.approvalType,
+          roleTag: entry.roleTag,
+          action: 'pending',
+        }));
+
+      if (approvals.length) {
+        await NodueApproval.insertMany(approvals, { session });
+      }
+
+      await NodueBatch.findByIdAndUpdate(activeBatch._id, { $inc: { totalStudents: 1 } }, { session });
+    }
     
     await session.commitTransaction();
 
