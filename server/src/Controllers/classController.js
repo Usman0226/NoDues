@@ -3,6 +3,8 @@ import Class from '../models/Class.js';
 import Faculty from '../models/Faculty.js';
 import Subject from '../models/Subject.js';
 import NodueBatch from '../models/NodueBatch.js';
+import NodueRequest from '../models/NodueRequest.js';
+import NodueApproval from '../models/NodueApproval.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
@@ -13,6 +15,83 @@ import { syncSubjectRemoval, syncSubjectUpdate, syncSubjectAddition } from '../u
 // ── Scope helper — HoD auto-filters to own department ─────────────────────────
 const deptScope = (req) =>
   req.user.role === 'hod' ? req.user.departmentId : null;
+
+const ensureHodApprovalCoverage = async (batch, departmentId) => {
+  if (!batch?._id || !departmentId) return;
+
+  const hod = await Faculty.findOne({
+    departmentId,
+    roleTags: 'hod',
+    isActive: true,
+  }).select('_id name').lean();
+
+  if (!hod) return;
+
+  const requests = await NodueRequest.find({ batchId: batch._id })
+    .select('_id studentId studentSnapshot facultySnapshot')
+    .lean();
+
+  if (!requests.length) return;
+
+  const existing = await NodueApproval.find({
+    batchId: batch._id,
+    roleTag: 'hod',
+  }).select('requestId').lean();
+
+  const existingRequestIds = new Set(existing.map((row) => row.requestId?.toString()));
+  const approvalDocs = [];
+  const snapshotUpdates = [];
+
+  for (const request of requests) {
+    const hasSnapshotHod = Array.isArray(request.facultySnapshot)
+      ? request.facultySnapshot.some((entry) => entry?.roleTag === 'hod')
+      : !!request.facultySnapshot?.hod;
+
+    if (!hasSnapshotHod) {
+      snapshotUpdates.push(
+        NodueRequest.updateOne(
+          { _id: request._id },
+          {
+            $set: {
+              'facultySnapshot.hod': {
+                facultyId: hod._id,
+                facultyName: hod.name,
+                roleTag: 'hod',
+                approvalType: 'hodApproval',
+                subjectId: null,
+                subjectName: 'Department Clearance (HoD)',
+              },
+            },
+          }
+        )
+      );
+    }
+
+    if (existingRequestIds.has(request._id.toString())) continue;
+
+    approvalDocs.push({
+      requestId: request._id,
+      batchId: batch._id,
+      studentId: request.studentId,
+      studentRollNo: request.studentSnapshot?.rollNo,
+      studentName: request.studentSnapshot?.name,
+      facultyId: hod._id,
+      subjectId: null,
+      subjectName: 'Department Clearance (HoD)',
+      approvalType: 'hodApproval',
+      roleTag: 'hod',
+      action: 'pending',
+    });
+  }
+
+  if (snapshotUpdates.length) {
+    await Promise.all(snapshotUpdates);
+  }
+
+  if (approvalDocs.length) {
+    await NodueApproval.insertMany(approvalDocs, { ordered: false });
+  }
+};
 
 // ── GET /api/classes ──────────────────────────────────────────────────────────
 export const getClasses = async (req, res, next) => {
@@ -161,6 +240,10 @@ export const getClassById = async (req, res, next) => {
     const activeBatch = await NodueBatch.findOne(
       { classId: id, status: 'active' }, '_id'
     ).lean();
+
+    if (activeBatch) {
+      await ensureHodApprovalCoverage(activeBatch, cls.departmentId?._id ?? cls.departmentId);
+    }
 
     const data = {
       _id:            cls._id,

@@ -49,6 +49,7 @@ const item = {
 const FILTERS = ['all', 'pending', 'approved', 'due_marked'];
 
 const getApprovalLabel = (item) => {
+  if (item.approvalType === 'hodApproval' || item.approvalType === 'office' || item.roleTag === 'hod') return 'HoD Approval';
   if (item.approvalType === 'classTeacher') return 'Class Teacher';
   if (item.approvalType === 'mentor') return 'Mentor Approval';
   const code = item.subjectCode || null;
