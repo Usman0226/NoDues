@@ -2,13 +2,9 @@ import React, { useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 
-/**
- * useApi - Enhanced hook that integrates with react-query for production-grade caching.
- * @param {Function} apiFunc - The API function to call.
- * @param {Object} options - Configuration options (immediate, initialData, queryKey, etc.)
- */
 export const useApi = (apiFunc, options = {}) => {
   const queryClient = useQueryClient();
+  const [manualLoading, setManualLoading] = React.useState(false);
   
   // Create a unique query key if not provided, based on the function name if possible
   // In a real app, passing an explicit queryKey is safer, but this provides a fallback.
@@ -66,11 +62,18 @@ export const useApi = (apiFunc, options = {}) => {
         }
         currentOptions.onError?.(err);
         throw err;
+      } finally {
+        setManualLoading(false);
       }
     }
     
-    const { data: refetchedData } = await refetch();
-    return refetchedData;
+    setManualLoading(true);
+    try {
+      const { data: refetchedData } = await refetch();
+      return refetchedData;
+    } finally {
+      setManualLoading(false);
+    }
   }, [apiFunc, queryKey, queryClient, refetch]);
 
   const setData = useCallback((newData) => {
@@ -79,9 +82,9 @@ export const useApi = (apiFunc, options = {}) => {
 
   return { 
     data, 
-    loading: isLoading, // backward compatibility: only show skeleton on first load
-    isFetching,
-    refreshing: isFetching, // Alias for better semantics in background refetches
+    loading: isLoading || manualLoading,
+    isFetching: isFetching || manualLoading,
+    refreshing: isFetching || manualLoading, // Alias for better semantics in background refetches
     error: error ? (error?.response?.data?.error?.message || error.message) : null, 
     request, 
     setData 

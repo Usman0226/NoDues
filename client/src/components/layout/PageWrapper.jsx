@@ -8,9 +8,15 @@ import BackHeader from '../ui/BackHeader';
  * @param {string} backTitle - Label for the back button
  * @param {string} backFallback - Fallback route for the back button
  */
-const PageWrapper = ({ children, title, subtitle, backTitle, backFallback }) => {
+const PageWrapper = ({ children, title, subtitle, backTitle, backFallback, isRefreshing }) => {
   return (
-    <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-10 fade-up max-w-full overflow-x-hidden">
+    <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-10 fade-up max-w-full overflow-x-hidden relative">
+      {/* Top-line Linear Loader - High Layer */}
+      {isRefreshing && (
+        <div className="fixed top-0 inset-x-0 z-[100] h-0.5 pointer-events-none">
+          <div className="h-full bg-gold/80 animate-progress origin-left" />
+        </div>
+      )}
       <div className="max-w-7xl mx-auto relative">
         {backFallback && (
           <BackHeader title={backTitle || 'Back'} fallback={backFallback} />

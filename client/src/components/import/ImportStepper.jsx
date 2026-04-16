@@ -131,11 +131,19 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
   const tableColumns = React.useMemo(() => {
     const baseCols = [
       { key: 'identity', label: 'Identity', render: (_, row) => (
-        <div className="flex items-center gap-3">
-          <div className={`w-1 h-1 rounded-full ${row.isValid ? 'bg-emerald-500' : 'bg-red-500'}`} />
-          <span className={`font-mono text-xs font-bold tracking-tight ${row.isValid ? 'text-navy' : 'text-red-400 line-through'}`}>
-            {row.rollNo || row.employeeId || row.code || row.identity}
-          </span>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <div className={`w-1 h-1 rounded-full ${row.isValid ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span className={`font-mono text-xs font-bold tracking-tight ${row.isValid ? 'text-navy' : 'text-red-400 line-through'}`}>
+              {row.rollNo || row.employeeId || row.code || row.identity}
+            </span>
+            {row.isExpanded && (
+              <span className="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[8px] font-black uppercase tracking-wider border border-indigo-100">Range</span>
+            )}
+          </div>
+          {row.isExpanded && row.originalRange && (
+            <span className="text-[9px] text-muted-foreground/60 font-medium ml-4 italic">Source: {row.originalRange}</span>
+          )}
         </div>
       )},
     ];
@@ -155,10 +163,17 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       baseCols.push({ key: 'semester', label: 'Semester' });
     }
 
-    baseCols.push({ key: 'status', label: 'Analysis', render: (_, row) => row.isValid ? (
-      <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Compliant</span>
-    ) : (
-      <span className="text-[9px] font-black text-red-600 uppercase italic opacity-80">{row.errors?.[0] || 'Format Error'}</span>
+    baseCols.push({ key: 'status', label: 'Analysis', render: (_, row) => (
+      <div className="flex flex-col gap-0.5">
+        {row.isValid ? (
+          <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Compliant</span>
+        ) : (
+          <span className="text-[9px] font-black text-red-600 uppercase italic opacity-80">{row.errors?.[0] || 'Format Error'}</span>
+        )}
+        {row.isExpanded && row.isValid && (
+          <span className="text-[8px] font-bold text-indigo-400/80 uppercase">Derived from range</span>
+        )}
+      </div>
     )});
 
     return baseCols;
@@ -267,12 +282,16 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
               </div>
             )}
 
-            <div className="rounded-xl border border-muted/40 overflow-y-auto max-h-[400px] mb-6 bg-white shadow-sm no-scrollbar">
-              <Table 
-                columns={tableColumns} 
-                data={dataRows}
-                searchable={false}
-              />
+            <div className="rounded-xl border border-muted/40 overflow-hidden mb-6 bg-white shadow-sm flex flex-col">
+              <div className="overflow-x-auto overflow-y-auto max-h-[450px] scrollbar-thin scrollbar-thumb-zinc-200">
+                <div className="min-w-max">
+                  <Table 
+                    columns={tableColumns} 
+                    data={dataRows}
+                    searchable={false}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">

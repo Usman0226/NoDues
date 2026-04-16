@@ -12,6 +12,18 @@ export const getStudentStatus = async (req, res, next) => {
   const { requestId } = req.params; // Support path param for history detail
 
   try {
+    // 0. Security Guard: Only students should access this endpoint logic
+    if (req.user.role !== 'student') {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Access restricted to student accounts only.',
+          statusCode: 403
+        }
+      });
+    }
+
     // Distinct cache key for historical requests vs active status
     const cacheKey = requestId ? `student_status:${userId}:${requestId}` : `student_status:${userId}:active`;
 
@@ -31,7 +43,16 @@ export const getStudentStatus = async (req, res, next) => {
               .lean(),
       ]);
 
-      if (!student) throw new Error('Student profile not found');
+      if (!student) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'STUDENT_NOT_FOUND',
+            message: 'Student profile not found. Please contact support if this is an error.',
+            statusCode: 400
+          }
+        });
+      }
 
       // 2. If NO request exists (student hasn't been invited to any batch yet)
       if (!request) {
@@ -78,7 +99,7 @@ export const getStudentStatus = async (req, res, next) => {
         let displayContext = snapshot.subjectName || a.subjectName;
         if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
         if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Academic Advisor';
-        if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Institutional Mentor';
+        if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Mentor';
 
         return {
           id: a._id,

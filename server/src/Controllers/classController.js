@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Class from '../models/Class.js';
+import Student from '../models/Student.js';
 import Faculty from '../models/Faculty.js';
 import Subject from '../models/Subject.js';
 import NodueBatch from '../models/NodueBatch.js';
@@ -9,6 +10,7 @@ import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
 import { syncSubjectRemoval, syncSubjectUpdate, syncSubjectAddition } from '../utils/batchSync.js';
+import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 
 // Cache invalidation is now handled via Mongoose hooks in the model.
 
@@ -169,15 +171,15 @@ export const getClasses = async (req, res, next) => {
 export const createClass = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { name, departmentId, semester, academicYear, classTeacherId } = req.body;
     if (!name || !departmentId || !semester || !academicYear) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('name, departmentId, semester, academicYear required', 400, 'VALIDATION_ERROR'));
     }
 
     if (req.user.role === 'hod' && req.user.departmentId !== departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -188,7 +190,7 @@ export const createClass = async (req, res, next) => {
 
     const cls = clsArray[0];
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.info('class_created', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -205,7 +207,7 @@ export const createClass = async (req, res, next) => {
       },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -229,12 +231,6 @@ export const getClassById = async (req, res, next) => {
     const cls = await Class.findOne({ _id: id, isActive: true })
       .populate('departmentId', 'name')
       .populate('classTeacherId', 'name email employeeId')
-      .populate({
-        path: 'studentIds',
-        match: { isActive: true },
-        select: 'rollNo name email mentorId electiveSubjects isActive',
-        populate: { path: 'mentorId', select: 'name' }
-      })
       .lean();
 
     if (!cls) {
@@ -256,9 +252,11 @@ export const getClassById = async (req, res, next) => {
       await ensureHodApprovalCoverage(activeBatch, cls.departmentId?._id ?? cls.departmentId);
     }
 
-    if (activeBatch) {
-      await ensureHodApprovalCoverage(activeBatch, cls.departmentId?._id ?? cls.departmentId);
-    }
+    // 2.5 Fetch Students directly by classId for 100% data integrity
+    const students = await Student.find({ classId: id, isActive: true })
+      .populate('mentorId', 'name')
+      .sort({ rollNo: 1 })
+      .lean();
 
     // 3. Robust Data Mapping with boundary checks
     const data = {
@@ -286,17 +284,17 @@ export const getClassById = async (req, res, next) => {
           ? { _id: a.facultyId, name: a.facultyName }
           : null,
       })),
-      students: (cls.studentIds || []).filter(s => !!s).map(s => ({
+      students: students.map(s => ({
         _id: s._id,
         rollNo: s.rollNo,
         name: s.name,
         email: s.email,
-        mentorId: s.mentorId?._id || s.mentorId || null,
-        mentorName: s.mentorId?.name || 'Not Assigned',
+        mentorId: s.mentorId?._id?.toString() || (typeof s.mentorId === 'string' ? s.mentorId : s.mentorId?.toString()) || null,
+        mentorName: s.mentorId?.name || (s.mentorId ? 'Assigned (No Name)' : 'Not Assigned'),
         electiveSubjects: s.electiveSubjects || [],
         status: s.isActive ? 'active' : 'inactive'
       })),
-      studentCount:    cls.studentIds?.length ?? 0,
+      studentCount:    students.length,
       hasActiveBatch:  !!activeBatch,
       activeBatchId:   activeBatch?._id ?? null,
       isActive:        cls.isActive,
@@ -317,18 +315,18 @@ export const getClassById = async (req, res, next) => {
 export const updateClass = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id } = req.params;
     const { name, academicYear } = req.body;
 
     const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
     if (!cls) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
 
     if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -336,14 +334,14 @@ export const updateClass = async (req, res, next) => {
     if (academicYear) cls.academicYear = academicYear;
     await cls.save({ session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     return res.status(200).json({
       success: true,
       data: { _id: cls._id, name: cls.name, academicYear: cls.academicYear },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -354,16 +352,16 @@ export const updateClass = async (req, res, next) => {
 export const deleteClass = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id } = req.params;
     const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
     if (!cls) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
 
     if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -377,7 +375,7 @@ export const deleteClass = async (req, res, next) => {
         logger.audit('SYNC_BATCH_CLOSED_ON_CLASS_DELETE', { classId: id, batchId: activeBatch._id });
     }
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.info('class_deleted', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -386,7 +384,7 @@ export const deleteClass = async (req, res, next) => {
 
     return res.status(200).json({ success: true, data: { message: 'Class deleted successfully' } });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -397,7 +395,7 @@ export const deleteClass = async (req, res, next) => {
 export const assignClassTeacher = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id } = req.params;
     const { classTeacherId } = req.body;
 
@@ -407,23 +405,23 @@ export const assignClassTeacher = async (req, res, next) => {
     ]);
 
     if (!cls) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
     if (classTeacherId && !teacher) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
     }
 
     if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     cls.classTeacherId = classTeacherId || null;
     await cls.save({ session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     return res.status(200).json({
       success: true,
@@ -433,7 +431,7 @@ export const assignClassTeacher = async (req, res, next) => {
       },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -444,11 +442,11 @@ export const assignClassTeacher = async (req, res, next) => {
 export const addSubjectAssignment = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id } = req.params;
     const { subjectId, facultyId, subjectCode } = req.body;
     if (!subjectId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('subjectId is required', 400, 'VALIDATION_ERROR'));
     }
 
@@ -459,20 +457,20 @@ export const addSubjectAssignment = async (req, res, next) => {
     ]);
 
     if (!cls) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
     if (!subject) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Subject not found', 404, 'NOT_FOUND'));
     }
     if (facultyId && !faculty) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
     }
 
     if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -480,7 +478,7 @@ export const addSubjectAssignment = async (req, res, next) => {
       (a) => a.subjectId?.toString() === subjectId
     );
     if (alreadyAssigned) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Subject already assigned to this class', 409, 'DUPLICATE_KEY'));
     }
 
@@ -502,9 +500,9 @@ export const addSubjectAssignment = async (req, res, next) => {
         subjectCode: assignment.subjectCode,
         facultyId: assignment.facultyId,
         facultyName: assignment.facultyName
-    }, session);
+    });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     const saved = cls.subjectAssignments[cls.subjectAssignments.length - 1];
 
@@ -521,7 +519,7 @@ export const addSubjectAssignment = async (req, res, next) => {
       },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -532,24 +530,24 @@ export const addSubjectAssignment = async (req, res, next) => {
 export const updateSubjectAssignment = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id, assignmentId } = req.params;
     const { facultyId, subjectCode } = req.body;
 
     const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
     if (!cls) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
 
     if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     const assignment = cls.subjectAssignments.id(assignmentId);
     if (!assignment) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Assignment not found', 404, 'NOT_FOUND'));
     }
 
@@ -560,7 +558,7 @@ export const updateSubjectAssignment = async (req, res, next) => {
       if (facultyId) {
         faculty = await Faculty.findOne({ _id: facultyId, isActive: true }).session(session).lean();
         if (!faculty) {
-          await session.abortTransaction();
+          await abortSafeTransaction(session);
           return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
         }
         assignment.facultyId   = faculty._id;
@@ -577,9 +575,9 @@ export const updateSubjectAssignment = async (req, res, next) => {
       facultyId: assignment.facultyId,
       facultyName: assignment.facultyName,
       subjectCode: assignment.subjectCode
-    }, session);
+    });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     return res.status(200).json({
       success: true,
@@ -594,7 +592,7 @@ export const updateSubjectAssignment = async (req, res, next) => {
       },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -605,23 +603,23 @@ export const updateSubjectAssignment = async (req, res, next) => {
 export const removeSubjectAssignment = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id, assignmentId } = req.params;
 
     const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
     if (!cls) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
 
     if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     const assignment = cls.subjectAssignments.id(assignmentId);
     if (!assignment) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Assignment not found', 404, 'NOT_FOUND'));
     }
 
@@ -629,13 +627,13 @@ export const removeSubjectAssignment = async (req, res, next) => {
     assignment.deleteOne();
     await cls.save({ session });
 
-    await syncSubjectRemoval(id, subjectIdToSync, session);
+    await syncSubjectRemoval(id, subjectIdToSync);
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     return res.status(200).json({ success: true, data: { message: 'Subject assignment removed' } });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -646,12 +644,12 @@ export const removeSubjectAssignment = async (req, res, next) => {
 export const cloneSubjects = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id } = req.params;
     const { sourceClassId } = req.body;
 
     if (!sourceClassId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('sourceClassId is required', 400, 'VALIDATION_ERROR'));
     }
 
@@ -661,23 +659,23 @@ export const cloneSubjects = async (req, res, next) => {
     ]);
 
     if (!cls) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Target class not found', 404, 'NOT_FOUND'));
     }
     if (!source) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Source class not found', 404, 'NOT_FOUND'));
     }
     
     if (req.user.role === 'hod') {
       if (cls.departmentId?.toString() !== req.user.departmentId || source.departmentId?.toString() !== req.user.departmentId) {
-         await session.abortTransaction();
+         await abortSafeTransaction(session);
          return next(new ErrorResponse('Access denied: cross-department cloning', 403, 'AUTH_DEPARTMENT_SCOPE'));
       }
     }
 
     if (id === sourceClassId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Cannot clone from self', 400, 'VALIDATION_ERROR'));
     }
 
@@ -693,7 +691,7 @@ export const cloneSubjects = async (req, res, next) => {
     cls.subjectAssignments = cloned;
     await cls.save({ session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.info('subjects_cloned', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -718,7 +716,7 @@ export const cloneSubjects = async (req, res, next) => {
       },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();

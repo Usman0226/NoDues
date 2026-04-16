@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import xlsx from 'xlsx';
 import Student from '../models/Student.js';
 import Faculty from '../models/Faculty.js';
@@ -6,20 +7,14 @@ import Class from '../models/Class.js';
 import Department from '../models/Department.js';
 import { sendCredentialEmail } from '../services/emailService.js';
 import asyncHandler from '../utils/asyncHandler.js';
+import { parseBuffer, getRowValue } from '../utils/importUtils.js';
+import { expandRollNoRange, isRange } from '../utils/rollNoUtils.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import crypto from 'crypto';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import Task from '../models/Task.js';
-
-const parseBuffer = (buffer) => {
-  const workbook = xlsx.read(buffer, { type: 'buffer' });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  return xlsx.utils.sheet_to_json(sheet);
-};
-
-// ── Shared Helpers for Complexity Reduction ───────────────────────────────────
+import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 
 const validateEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
 
@@ -27,13 +22,6 @@ const checkDeptScope = (user, deptId) => {
   if (user.role === 'hod' && deptId.toString() !== user.departmentId) {
     throw new ErrorResponse('Access denied: Department outside your scope', 403, 'AUTH_DEPARTMENT_SCOPE');
   }
-};
-
-const getRowValue = (row, keys) => {
-  for (const key of keys) {
-    if (row[key] !== undefined) return row[key]?.toString().trim();
-  }
-  return null;
 };
 
 export const previewStudents = asyncHandler(async (req, res, next) => {
@@ -88,11 +76,11 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
   const session = await mongoose.startSession();
   let task;
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
 
     const targetClass = await Class.findById(classId).session(session);
     if (!targetClass) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Target class not found', 404));
     }
     checkDeptScope(req.user, targetClass.departmentId);
@@ -134,6 +122,7 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
     if (createdIds.length > 0) {
       await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: { $each: createdIds } } }, { session });
       invalidateEntityCache('student', 'all');
+      invalidateEntityCache('class', classId.toString());
     }
 
     const finalStatus = 'success';
@@ -147,7 +136,7 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
       }
     }, { session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.audit('STUDENT_IMPORT_COMMIT', {
       actor: req.user.userId,
@@ -169,7 +158,7 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
     });
 
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     
     // If we aborted, we should still update the TASK if possible elsewhere or handle the error
     // But since the Task creation is INSIDE the transaction, it's also rolled back.
@@ -257,7 +246,7 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
 
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
 
     // Initialize persistent background task
     const task = await Task.create([{
@@ -317,7 +306,7 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
       }
     }, { session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.audit('FACULTY_IMPORT_COMMIT', {
       actor: req.user.userId,
@@ -338,7 +327,7 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
     });
 
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -353,58 +342,79 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
 export const previewElectives = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
   const rows = parseBuffer(req.file.buffer);
-  const results = { valid: [], errors: [], summary: { total: rows.length, valid: 0, errors: 0 } };
+  const results = { valid: [], errors: [], summary: { total: 0, valid: 0, errors: 0 } };
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rollNo = getRowValue(row, ['Roll No', 'rollNo']);
+    const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
     const subjectCode = getRowValue(row, ['Subject Code', 'subjectCode']);
     const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
 
-    if (!rollNo || !subjectCode || !empId) {
+    if (!rawRoll || !subjectCode || !empId) {
       results.errors.push({ row: i + 1, data: row, reason: 'Missing required columns (Roll No, Subject Code, Faculty Employee ID)' });
       results.summary.errors++;
+      results.summary.total++;
       continue;
     }
 
-    const [student, subject, faculty] = await Promise.all([
-      Student.findOne({ rollNo: rollNo.toUpperCase(), isActive: true }).select('_id rollNo name departmentId').lean(),
-      Subject.findOne({ code: subjectCode.toUpperCase(), isElective: true, isActive: true }).select('_id code name').lean(),
-      Faculty.findOne({ employeeId: empId.toUpperCase(), isActive: true }).select('_id employeeId name').lean()
-    ]);
-
-    let reason = null;
-    if (!student) {
-      reason = `Student ${rollNo} not found or inactive`;
-    } else if (!subject) {
-      reason = `Subject ${subjectCode} not found or inactive`;
-    } else if (!faculty) {
-      reason = `Faculty ${empId} not found or inactive`;
-    } else {
-      try {
-        checkDeptScope(req.user, student.departmentId);
-      } catch (e) {
-        reason = `Access denied for Student ${rollNo}: ${e.message}`;
-      }
+    // Expansion Logic
+    const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
+    if (!rolls || rolls.length === 0) {
+      results.errors.push({ row: i + 1, data: row, reason: `Invalid range format: ${rawRoll}` });
+      results.summary.errors++;
+      results.summary.total++;
+      continue;
     }
 
-    if (reason) {
-      results.errors.push({ row: i+1, data: row, reason });
-      results.summary.errors++;
-    } else {
-      results.valid.push({ 
-        studentId: student._id, 
-        rollNo: student.rollNo, 
-        studentName: student.name,
-        subjectId: subject._id, 
-        subjectCode: subject.code,
-        subjectName: subject.name,
-        facultyId: faculty._id, 
-        employeeId: faculty.employeeId,
-        facultyName: faculty.name,
-        studentDeptId: student.departmentId
-      });
-      results.summary.valid++;
+    for (const rollNo of rolls) {
+      results.summary.total++;
+      const [student, subject, faculty] = await Promise.all([
+        Student.findOne({ rollNo: rollNo.toUpperCase(), isActive: true }).select('_id rollNo name departmentId').lean(),
+        Subject.findOne({ code: subjectCode.toUpperCase(), isElective: true, isActive: true }).select('_id code name').lean(),
+        Faculty.findOne({ employeeId: empId.toUpperCase(), isActive: true }).select('_id employeeId name').lean()
+      ]);
+
+      let reason = null;
+      if (!student) {
+        reason = `Student ${rollNo} not found or inactive`;
+      } else if (!subject) {
+        reason = `Subject ${subjectCode} not found or inactive`;
+      } else if (!faculty) {
+        reason = `Faculty ${empId} not found or inactive`;
+      } else {
+        try {
+          checkDeptScope(req.user, student.departmentId);
+        } catch (e) {
+          reason = `Access denied for Student ${rollNo}: ${e.message}`;
+        }
+      }
+
+      if (reason) {
+        results.errors.push({ 
+          row: i + 1, 
+          data: { ...row, rollNo }, 
+          reason,
+          isExpanded: rolls.length > 1,
+          originalRange: rolls.length > 1 ? rawRoll : null
+        });
+        results.summary.errors++;
+      } else {
+        results.valid.push({ 
+          studentId: student._id, 
+          rollNo: student.rollNo, 
+          studentName: student.name,
+          subjectId: subject._id, 
+          subjectCode: subject.code,
+          subjectName: subject.name,
+          facultyId: faculty._id, 
+          employeeId: faculty.employeeId,
+          facultyName: faculty.name,
+          studentDeptId: student.departmentId,
+          isExpanded: rolls.length > 1,
+          originalRange: rolls.length > 1 ? rawRoll : null
+        });
+        results.summary.valid++;
+      }
     }
   }
   res.status(200).json({ success: true, data: results });
@@ -419,7 +429,7 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
 
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
 
     // Initialize persistent background task
     const task = await Task.create([{
@@ -469,7 +479,7 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
       }
     }, { session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.audit('ELECTIVE_IMPORT_COMMIT', {
       actor: req.user.userId,
@@ -490,7 +500,7 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
     });
 
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -504,64 +514,88 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
 export const previewMentors = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
   const rows = parseBuffer(req.file.buffer);
-  const results = { valid: [], errors: [], summary: { total: rows.length, valid: 0, errors: 0 } };
+  const results = { valid: [], errors: [], summary: { total: 0, valid: 0, errors: 0 } };
 
   const seenRolls = new Set();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rollNo = getRowValue(row, ['Roll No', 'rollNo']);
+    const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
     const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
     
-    if (!rollNo || !empId) {
+    if (!rawRoll || !empId) {
       results.errors.push({ row: i+1, data: row, reason: 'Missing required columns (Roll No, Faculty Employee ID)' });
       results.summary.errors++;
+      results.summary.total++;
       continue;
     }
 
-    const upperRoll = rollNo.toUpperCase();
-    if (seenRolls.has(upperRoll)) {
-      results.errors.push({ row: i+1, data: row, reason: `Duplicate Roll No ${rollNo} in file` });
+    // Expansion Logic
+    const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
+    if (!rolls || rolls.length === 0) {
+      results.errors.push({ row: i + 1, data: row, reason: `Invalid range format: ${rawRoll}` });
       results.summary.errors++;
+      results.summary.total++;
       continue;
     }
-    seenRolls.add(upperRoll);
 
-    const [student, faculty] = await Promise.all([
-      Student.findOne({ rollNo: upperRoll, isActive: true }).select('_id rollNo name departmentId').lean(),
-      Faculty.findOne({ employeeId: empId.toUpperCase(), isActive: true }).select('_id employeeId name departmentId roleTags').lean()
-    ]);
-
-    let reason = null;
-    if (!student) {
-      reason = `Student ${rollNo} not found or inactive`;
-    } else if (!faculty) {
-      reason = `Faculty ${empId} not found or inactive`;
-    } else {
-      try {
-        checkDeptScope(req.user, student.departmentId);
-        if (student.departmentId?.toString() !== faculty.departmentId?.toString()) {
-          reason = `Cross-department mapping rejected: Student ${rollNo} belongs to ${student.departmentId} but Faculty ${empId} is in ${faculty.departmentId}`;
-        }
-      } catch (e) {
-        reason = `Access denied for Student ${rollNo}: ${e.message}`;
+    for (const rollNo of rolls) {
+      results.summary.total++;
+      const upperRoll = rollNo.toUpperCase();
+      if (seenRolls.has(upperRoll)) {
+        results.errors.push({ 
+          row: i + 1, 
+          data: { ...row, rollNo }, 
+          reason: `Duplicate Roll No ${rollNo} in expansion or file`,
+          isExpanded: rolls.length > 1,
+          originalRange: rolls.length > 1 ? rawRoll : null
+        });
+        results.summary.errors++;
+        continue;
       }
-    }
+      seenRolls.add(upperRoll);
 
-    if (reason) {
-      results.errors.push({ row: i+1, data: row, reason });
-      results.summary.errors++;
-    } else {
-      results.valid.push({ 
-        studentId: student._id, 
-        rollNo: student.rollNo, 
-        studentName: student.name,
-        mentorId: faculty._id, 
-        employeeId: faculty.employeeId,
-        facultyName: faculty.name,
-        studentDeptId: student.departmentId
-      });
-      results.summary.valid++;
+      const [student, faculty] = await Promise.all([
+        Student.findOne({ rollNo: upperRoll, isActive: true }).select('_id rollNo name departmentId').lean(),
+        Faculty.findOne({ employeeId: empId.toUpperCase(), isActive: true }).select('_id employeeId name departmentId roleTags').lean()
+      ]);
+
+      let reason = null;
+      if (!student) {
+        reason = `Student ${rollNo} not found or inactive`;
+      } else if (!faculty) {
+        reason = `Faculty ${empId} not found or inactive`;
+      } else {
+          try {
+            checkDeptScope(req.user, student.departmentId);
+          } catch (e) {
+            reason = `Access denied for Student ${rollNo}: ${e.message}`;
+          }
+      }
+
+      if (reason) {
+        results.errors.push({ 
+          row: i + 1, 
+          data: { ...row, rollNo }, 
+          reason,
+          isExpanded: rolls.length > 1,
+          originalRange: rolls.length > 1 ? rawRoll : null
+        });
+        results.summary.errors++;
+      } else {
+        results.valid.push({ 
+          studentId: student._id, 
+          rollNo: student.rollNo, 
+          studentName: student.name,
+          mentorId: faculty._id, 
+          employeeId: faculty.employeeId,
+          facultyName: faculty.name,
+          studentDeptId: student.departmentId,
+          isExpanded: rolls.length > 1,
+          originalRange: rolls.length > 1 ? rawRoll : null
+        });
+        results.summary.valid++;
+      }
     }
   }
   res.status(200).json({ success: true, data: results });
@@ -576,7 +610,7 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
 
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
 
     // Initialize persistent background task
     const task = await Task.create([{
@@ -617,7 +651,13 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
       }
     }, { session });
 
-    await session.commitTransaction();
+    const studentIds = mentors.map(m => m.studentId);
+    const affectedStudents = await Student.find({ _id: { $in: studentIds } }).select('classId').session(session).lean();
+    const affectedClassIds = [...new Set(affectedStudents.map(s => s.classId?.toString()).filter(Boolean))];
+
+    await commitSafeTransaction(session);
+
+    affectedClassIds.forEach(cid => invalidateEntityCache('class', cid));
 
     logger.audit('MENTOR_IMPORT_COMMIT', {
       actor: req.user.userId,
@@ -638,7 +678,7 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
     });
 
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -694,17 +734,14 @@ export const previewSubjects = asyncHandler(async (req, res, next) => {
   res.status(200).json({ success: true, data: results });
 });
 
-/**
- * @desc    Commit subject import
- * @route   POST /api/import/subjects/commit
- */
+
 export const commitSubjects = asyncHandler(async (req, res, next) => {
   const { subjects } = req.body;
   if (!subjects?.length) return next(new ErrorResponse('No valid subject data provided', 400));
 
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
 
     // Initialize persistent background task
     const task = await Task.create([{
@@ -741,7 +778,7 @@ export const commitSubjects = asyncHandler(async (req, res, next) => {
       }
     }, { session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.audit('SUBJECT_IMPORT_COMMIT', {
       actor: req.user.userId,
@@ -762,7 +799,7 @@ export const commitSubjects = asyncHandler(async (req, res, next) => {
     });
 
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();

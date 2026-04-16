@@ -1,32 +1,22 @@
 {
-  "last_updated": "2026-04-15T16:06:10Z",
+  "last_updated": "2026-04-16T17:45:00Z",
   "completed": [
-    "Integrated syncSubjectRemoval to classController.js",
-    "Integrated syncSubjectAddition to classController.js",
-    "Developed batchSync.js utility for real-time clearance synchronization",
-    "Integrated syncMentorUpdate, syncElectiveAddition, and syncElectiveRemoval to studentController.js",
-    "Implemented student class-change synchronization (syncClassChange)",
-    "Implemented bulk student deactivation and bulk mentor update synchronization",
-    "Added auto-closing of active batches on class deletion",
-    "Fixed HoD Batch Initiation UI prop mismatch (isLoading -> loading)",
-    "Added showGlobalLoader feedback to HoD initiation handler",
-    "Refactored HoD bulk initiation to a non-blocking Background Task architecture"
+    "Disabled Employee ID login for faculty",
+    "Standardized temporary password generation to 8-character hex strings",
+    "Implemented automatic input trimming for faculty registration",
+    "Implemented Range-Based Roll Number Expansion (e.g. 21A91A0501-10) for Mentor and Elective imports",
+    "Enhanced Import Preview UI with expansion badges and landscape support"
   ],
   "in_progress": [],
   "pending": [
-    "Perform full regression testing on liver environment",
-    "Verify SSE event propagation for synchronized updates"
+    "Recent Activity Feed implementation on Admin dashboard",
+    "Subject structure logic for 'Clone Class' functionality"
   ],
   "decisions": [
     {
-      "context": "Circular dependency between batchController and batchSync",
-      "decision": "Re-implemented snapshot logic in batchSync.js instead of importing batchController functions.",
-      "trade_offs": "Slight duplication of logic but ensures reliable utility execution without import loops."
-    },
-    {
-      "context": "HoD Bulk Initiation UX",
-      "decision": "Migrated to background task returning immediate 202 response.",
-      "trade_offs": "Requires user to look at the Activity Center (Inbox) for progress, but prevents UI freeze and timeouts."
+      "context": "Bulk assignments for subjects/mentors are tedious when done row-by-row for large batches.",
+      "decision": "Added range-based expansion logic (01-10, 098 to 102) with a 100-student cap per row.",
+      "trade_offs": "Adds complexity to import controllers but significantly reduces admin manual labor."
     }
   ],
   "blockers": []

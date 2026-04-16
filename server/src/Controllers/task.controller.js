@@ -18,11 +18,6 @@ export const getMyTasks = asyncHandler(async (req, res, next) => {
   });
 });
 
-/**
- * @desc    Delete/Clear a task
- * @route   DELETE /api/tasks/:id
- * @access  Private
- */
 export const deleteTask = asyncHandler(async (req, res, next) => {
   const task = await Task.findById(req.params.id);
 

@@ -19,7 +19,6 @@ import { RoleGuard } from '../middlewares/RoleGuard.js';
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// All import routes are protected and restricted to Admin/HoD
 router.use(protect);
 router.use(RoleGuard(['admin', 'hod']));
 

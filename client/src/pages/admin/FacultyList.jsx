@@ -299,7 +299,7 @@ const FacultyList = () => {
         <Table
           columns={columns}
           data={faculty || []}
-          loading={loading && !response}
+          loading={loading}
           pagination={{
             total,
             page,

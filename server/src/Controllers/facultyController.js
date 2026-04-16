@@ -8,9 +8,9 @@ import logger from '../utils/logger.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendCredentialEmail } from '../services/emailService.js';
+import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 
-const generateTempPassword = (empId) =>
-  `${empId}@Nds#${crypto.randomInt(1000, 9999)}`;
+const generateTempPassword = () => crypto.randomBytes(4).toString('hex');
 
 export const getFaculty = async (req, res, next) => {
   try {
@@ -23,7 +23,7 @@ export const getFaculty = async (req, res, next) => {
     }
 
     if (req.user.role === 'hod') {
-      query.departmentId = req.user.departmentId;
+      query.departmentId = departmentId || req.user.departmentId;
     } else if (departmentId) {
       query.departmentId = departmentId;
     }
@@ -49,7 +49,6 @@ export const getFaculty = async (req, res, next) => {
       Faculty.countDocuments(query),
     ]);
 
-    // Count classes per faculty in a single aggregation
     const facultyIds = faculty.map((f) => f._id);
     const classCounts = await Class.aggregate([
       {
@@ -74,7 +73,6 @@ export const getFaculty = async (req, res, next) => {
       },
     ]);
 
-    // Simple class count per faculty via separate query (M0-safe alternative)
     const classCountMap = {};
     const [ctClasses, subjClasses] = await Promise.all([
       Class.find(
@@ -130,11 +128,15 @@ export const getFaculty = async (req, res, next) => {
 export const createFaculty = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
-    const { name, email, phone, employeeId, departmentId, roleTags } = req.body;
+    await startSafeTransaction(session);
+    const name = req.body.name?.trim();
+    const email = req.body.email?.trim().toLowerCase();
+    const phone = req.body.phone?.trim();
+    const employeeId = req.body.employeeId?.trim();
+    const { departmentId, roleTags } = req.body;
 
     if (!name || !email || !employeeId || !departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(
         new ErrorResponse('name, email, employeeId, departmentId are required', 400, 'VALIDATION_ERROR')
       );
@@ -142,16 +144,16 @@ export const createFaculty = async (req, res, next) => {
 
     const dept = await Department.findById(departmentId).session(session).lean();
     if (!dept) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Department not found', 404, 'NOT_FOUND'));
     }
 
     if (req.user.role === 'hod' && req.user.departmentId !== departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
-    const tempPassword = generateTempPassword(employeeId);
+    const tempPassword = generateTempPassword();
 
     const faculty = await Faculty.create([{
       name,
@@ -164,7 +166,7 @@ export const createFaculty = async (req, res, next) => {
       mustChangePassword: true,
     }], { session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.info('faculty_created', {
       timestamp: new Date().toISOString(),
@@ -196,7 +198,7 @@ export const createFaculty = async (req, res, next) => {
       },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -255,13 +257,13 @@ export const getFacultyById = async (req, res, next) => {
 export const updateFaculty = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id } = req.params;
     const { name, email, phone, roleTags } = req.body;
 
     const faculty = await Faculty.findOne({ _id: id, isActive: true }).session(session);
     if (!faculty) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
     }
 
@@ -269,7 +271,7 @@ export const updateFaculty = async (req, res, next) => {
       req.user.role === 'hod' &&
       faculty.departmentId?.toString() !== req.user.departmentId
     ) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -280,7 +282,7 @@ export const updateFaculty = async (req, res, next) => {
 
     await faculty.save({ session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.info('faculty_updated', {
       timestamp: new Date().toISOString(),
@@ -295,7 +297,7 @@ export const updateFaculty = async (req, res, next) => {
       data: { _id: faculty._id, name: faculty.name, roleTags: faculty.roleTags },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -306,12 +308,12 @@ export const updateFaculty = async (req, res, next) => {
 export const deleteFaculty = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id } = req.params;
 
     const faculty = await Faculty.findOne({ _id: id, isActive: true }).session(session);
     if (!faculty) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
     }
 
@@ -319,14 +321,14 @@ export const deleteFaculty = async (req, res, next) => {
       req.user.role === 'hod' &&
       faculty.departmentId?.toString() !== req.user.departmentId
     ) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     faculty.isActive = false;
     await faculty.save({ session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.info('faculty_deactivated', {
       timestamp: new Date().toISOString(),
@@ -341,7 +343,7 @@ export const deleteFaculty = async (req, res, next) => {
       data: { message: 'Faculty account deactivated' },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -420,12 +422,12 @@ export const getFacultyClasses = async (req, res, next) => {
 export const resendCredentials = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { id } = req.params;
     
     const faculty = await Faculty.findById(id).session(session);
     if (!faculty) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Faculty not found', 404));
     }
 
@@ -433,7 +435,7 @@ export const resendCredentials = async (req, res, next) => {
       req.user.role === 'hod' &&
       faculty.departmentId?.toString() !== req.user.departmentId
     ) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -443,7 +445,7 @@ export const resendCredentials = async (req, res, next) => {
     
     await faculty.save({ session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.info('faculty_credentials_resent', {
       timestamp: new Date().toISOString(),
@@ -464,7 +466,7 @@ export const resendCredentials = async (req, res, next) => {
       credentialEmailSent: emailResult
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -476,10 +478,10 @@ export const resendCredentials = async (req, res, next) => {
 export const bulkDeactivateFaculty = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids)) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('IDs array is required', 400));
     }
 
@@ -490,7 +492,7 @@ export const bulkDeactivateFaculty = async (req, res, next) => {
 
     const result = await Faculty.updateMany(query, { isActive: false }, { session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.info('faculty_bulk_deactivated', {
       timestamp: new Date().toISOString(),
@@ -504,7 +506,7 @@ export const bulkDeactivateFaculty = async (req, res, next) => {
       data: { modifiedCount: result.modifiedCount }
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -514,10 +516,10 @@ export const bulkDeactivateFaculty = async (req, res, next) => {
 export const bulkResendCredentials = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids)) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('IDs array is required', 400));
     }
 
@@ -541,7 +543,7 @@ export const bulkResendCredentials = async (req, res, next) => {
     }
 
     await Promise.all(savePromises);
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     // Send emails after transaction commits
     const emailPromises = emailData.map(d => sendCredentialEmail(d.email, d.name, d.email, d.tempPassword, 'faculty'));
@@ -561,7 +563,7 @@ export const bulkResendCredentials = async (req, res, next) => {
       message: `Emails dispatched for ${successCount}/${faculties.length} faculty members`
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -571,15 +573,15 @@ export const bulkResendCredentials = async (req, res, next) => {
 export const bulkUpdateRoles = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { ids, targetRole, action } = req.body; // action: 'add' | 'remove'
     if (!ids || !Array.isArray(ids) || !targetRole || !action) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('IDs, targetRole and action are required', 400));
     }
 
     if (targetRole === 'hod') {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('HoD role cannot be managed in bulk', 400));
     }
 
@@ -622,7 +624,7 @@ export const bulkUpdateRoles = async (req, res, next) => {
     }
 
     await Promise.all(savePromises);
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.info('faculty_bulk_role_updated', {
       timestamp: new Date().toISOString(),
@@ -645,7 +647,7 @@ export const bulkUpdateRoles = async (req, res, next) => {
       }
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();

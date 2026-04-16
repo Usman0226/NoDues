@@ -348,7 +348,7 @@ const Pending = () => {
                <Settings2 size={16} className="text-zinc-400" />
                <SearchableSelect 
                 options={[
-                  { value: 'all', label: 'All Academic Groups', subLabel: 'Everything' },
+                  { value: 'all', label: 'All Academic Classes  ' },
                   ...batches.map(b => ({
                     value: b.id,
                     label: b.name,
@@ -363,7 +363,7 @@ const Pending = () => {
 
             <button
               onClick={async () => {
-                const hide = showGlobalLoader('Syncing Clearance Records...');
+                const hide = showGlobalLoader('Fetching latest records...');
                 await fetchApprovals();
                 hide();
               }}

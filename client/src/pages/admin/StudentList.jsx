@@ -258,7 +258,7 @@ const StudentList = () => {
         <Table
           columns={columns}
           data={students || []}
-          loading={loading && !response}
+          loading={loading}
           pagination={{
             total,
             page,

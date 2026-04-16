@@ -85,14 +85,13 @@ const ClassDetail = () => {
     queryKey: ['class', classId]
   });
   const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, {
+    immediate: false,
     queryKey: ['faculty', isHod ? user?.departmentId : 'all']
   });
 
   useEffect(() => {
-    const params = {};
-    if (isHod) params.departmentId = user.departmentId;
-    fetchFaculty(params);
-  }, [fetchFaculty, isHod, user?.departmentId]);
+    fetchFaculty({ limit: 500 }); 
+  }, [fetchFaculty]);
 
   const classData = useMemo(() => response?.data || {}, [response?.data]);
   const students = useMemo(() => classData?.students || [], [classData?.students]);
@@ -105,7 +104,9 @@ const ClassDetail = () => {
       : BASE_TABS
   ), [isHod]);
   const facultyList = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
-  const { data: approvalResponse, loading: approvalsLoading, request: fetchApprovals } = useApi(getPendingApprovals);
+  const { data: approvalResponse, loading: approvalsLoading, request: fetchApprovals } = useApi(getPendingApprovals, { 
+    immediate: false 
+  });
   const hodApprovals = useMemo(() => {
     const rows = approvalResponse?.data || [];
     return rows
@@ -132,12 +133,13 @@ const ClassDetail = () => {
   const departmentId = classData?.departmentId || classData?.department;
 
   const filteredFaculty = useMemo(() => {
-    if (!facultyList || !departmentId) return [];
+    if (!facultyList) return [];
+    // For specific UI filters, we can keep departmentId as a 'suggested' filter 
+    // but the system now allows interdisciplinary assignments.
     return facultyList.filter(f => 
-      f.departmentId === departmentId && 
-      (f.roleTags?.includes('mentor') || f.roleTags?.includes('faculty'))
+      f.roleTags?.includes('mentor') || f.roleTags?.includes('faculty')
     );
-  }, [facultyList, departmentId]);
+  }, [facultyList]);
 
   const [otherClasses, setOtherClasses] = useState([]);
   useEffect(() => {
@@ -369,7 +371,7 @@ const ClassDetail = () => {
 
   const handleMentorChange = async (studentId, newMentorId) => {
     const oldStudent = studentsList.find(s => s._id === studentId);
-    const newMentor = filteredFaculty.find(f => f._id === newMentorId);
+    const newMentor = facultyList.find(f => f._id === newMentorId);
     
     setStudentsList(prev => prev.map(s => 
       s._id === studentId ? { ...s, mentorId: newMentorId, mentorName: newMentor?.name || 'Not Assigned', _isUpdating: true } : s
@@ -379,6 +381,7 @@ const ClassDetail = () => {
     try {
       await assignMentor(studentId, newMentorId);
       toast.success(`Mentor assigned to ${oldStudent.name}`);
+      fetchClass(); // Reconcile UI with server — avoids stale state from cache
       setTimeout(() => {
         setStudentsList(prev => prev.map(s => s._id === studentId ? { ...s, _isUpdating: false } : s));
       }, 1000);
@@ -496,19 +499,26 @@ const ClassDetail = () => {
       label: 'Mentor Mapping', 
       width: '180px',
       render: (_, row) => (
-        <SearchableSelect
-          size="sm"
-          variant="ghost"
-          options={filteredFaculty.map(f => ({
-            value: f._id,
-            label: f.name,
-            subLabel: f.employeeId
-          }))}
-          value={row.mentorId}
-          onChange={(val) => handleMentorChange(row._id, val)}
-          placeholder="Unassigned"
-          loading={loadingStudentId === row._id}
-        />
+        <div className="flex flex-col">
+          <SearchableSelect
+            size="sm"
+            variant="ghost"
+            options={facultyList.map(f => ({
+              value: f._id,
+              label: f.name,
+              subLabel: `${f.employeeId || 'No ID'} | ${f.departmentId?.name || f.department || 'N/A'}`
+            }))}
+            value={row.mentorId}
+            onChange={(val) => handleMentorChange(row._id, val)}
+            placeholder={row.mentorName || 'Unassigned'}
+            loading={loadingStudentId === row._id}
+          />
+          {!facultyList.some(f => f._id === row.mentorId) && row.mentorId && (
+            <span className="text-[10px] text-muted-foreground ml-2 italic">
+              {row.mentorName} (External)
+            </span>
+          )}
+        </div>
       ) 
     },
     { key: 'status', label: 'Last Cycle', width: '100px', align: 'center', render: (v) => <Badge status={v || 'pending'} /> },
@@ -758,15 +768,28 @@ const SUBJECT_COLS = [
 
   if (loading && !classData.name) {
     return (
-      <PageWrapper title="Loading..." subtitle="Syncing academic records">
+      <PageWrapper 
+        title="Loading..." 
+        subtitle="Syncing academic records"
+        isRefreshing={true}
+      >
         <div className="space-y-8">
           {/* Header Skeleton */}
-          <div className="flex items-center justify-between pb-6 border-b border-muted animate-pulse">
-            <div className="space-y-2">
-              <div className="h-4 w-40 bg-muted/10 rounded-full"></div>
-              <div className="h-8 w-64 bg-muted/10 rounded-xl"></div>
+          <div className="flex flex-col gap-6 pb-6 border-b border-muted animate-pulse">
+            <div className="flex items-center justify-between w-full">
+              <div className="space-y-2">
+                <div className="h-4 w-40 bg-muted/10 rounded-full"></div>
+                <div className="h-8 w-64 bg-muted/10 rounded-xl"></div>
+              </div>
+              <div className="h-10 w-32 bg-muted/10 rounded-full"></div>
             </div>
-            <div className="h-10 w-32 bg-muted/10 rounded-full"></div>
+            
+            {/* Stable Tabs Skeleton - Correctly positioned "below" the header */}
+            <div className="flex gap-4 border-b border-muted">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-10 w-24 bg-muted/5 rounded-t-lg"></div>
+              ))}
+            </div>
           </div>
 
           {/* Stats Skeleton */}
@@ -805,17 +828,8 @@ const SUBJECT_COLS = [
   return (
     <PageWrapper 
       title={classData?.name} 
-      subtitle={
-        <div className="flex items-center gap-3">
-          <span>{`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}</span>
-          {refreshing && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-navy/5 text-navy/40 rounded-full animate-pulse border border-navy/10">
-              <RefreshCw size={10} className="animate-spin" />
-              <span className="text-[8px] font-black uppercase tracking-widest">Background Sync</span>
-            </div>
-          )}
-        </div>
-      }
+      subtitle={`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}
+      isRefreshing={refreshing}
       backTitle="Return to Directory"
       backFallback={isHod ? '/hod/classes' : (departmentId ? `/admin/departments/${departmentId}/classes` : '/admin/departments')}
     >
@@ -877,6 +891,7 @@ const SUBJECT_COLS = [
           <Table 
             columns={STUDENT_COLS} 
             data={studentsList} 
+            loading={loading}
             rowClassName={(row) => `
               transition-colors duration-200
               ${!row.mentorId ? 'border-l-4 border-amber-400 bg-amber-50/20' : ''}
@@ -908,6 +923,7 @@ const SUBJECT_COLS = [
           <Table 
             columns={SUBJECT_COLS} 
             data={subjects} 
+            loading={loading}
             showCount={true} 
             selectable
             searchable

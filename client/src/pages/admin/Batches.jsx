@@ -209,7 +209,7 @@ const Batches = () => {
         <Table
           columns={columns}
           data={batches}
-          loading={loading && !response}
+          loading={loading}
           pagination={{
             total,
             page,

@@ -50,7 +50,7 @@ export const login = async (req, res, next) => {
     const [admin, faculty] = await Promise.all([
       Admin.findOne({ email: sanitizedEmail }).select('+password').lean(),
       Faculty.findOne({
-        $or: [{ email: sanitizedEmail }, { employeeId: email.trim() }],
+        email: sanitizedEmail,
         isActive: true,
       })
         .select('+password departmentId roleTags name email mustChangePassword role')

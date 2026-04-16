@@ -12,6 +12,7 @@ import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import Task from '../models/Task.js';
+import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 
 // ── GET /api/batch ────────────────────────────────────────────────────────────
 export const getBatches = async (req, res, next) => {
@@ -159,7 +160,7 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
         facultyId:    student.mentorId,
         facultyName:  mentorName ?? null,
         subjectId:    null,
-        subjectName:  'Institutional Mentor',
+        subjectName:  'Mentor',
         subjectCode:  null,
         roleTag:      'mentor',
         approvalType: 'mentor',
@@ -339,12 +340,11 @@ export const getInitiationPreview = async (req, res, next) => {
 
 export const initiateBatch = async (req, res, next) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
   try {
+    await startSafeTransaction(session);
     const { classId, deadline } = req.body;
     if (!classId) {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('classId is required', 400));
     }
 
@@ -355,28 +355,24 @@ export const initiateBatch = async (req, res, next) => {
       .session(session)
       .lean();
     if (!cls) {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Class not found', 404));
     }
 
     if (req.user.role === 'hod' && cls.departmentId?._id?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403));
     }
 
     const existing = await NodueBatch.findOne({ classId, status: 'active' }).session(session).lean();
     if (existing) {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse(`Active session already exists for ${cls.name}`, 409));
     }
 
     const result = await _executeInitiation(cls, deadline, initiator, session);
 
-    await session.commitTransaction();
-    session.endSession();
+    await commitSafeTransaction(session);
 
     logger.audit('BATCH_INITIATED', {
       actor: req.user.userId,
@@ -391,14 +387,13 @@ export const initiateBatch = async (req, res, next) => {
       data: { ...result, initiatedAt: new Date() },
     });
   } catch (err) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
-    session.endSession();
-    if (err.message.includes('No active students')) {
+    await abortSafeTransaction(session);
+    if (err.message?.includes('No active students')) {
       return next(new ErrorResponse(err.message, 400));
     }
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
@@ -467,14 +462,14 @@ export const initiateDepartmentWide = async (req, res, next) => {
       for (let i = 0; i < eligibleClasses.length; i++) {
         const cls = eligibleClasses[i];
         const session = await mongoose.startSession();
-        session.startTransaction();
         try {
+          await startSafeTransaction(session);
           const initRes = await _executeInitiation(cls, deadline, { 
             userId: req.user.userId, 
             role: req.user.role 
           }, session);
           
-          await session.commitTransaction();
+          await commitSafeTransaction(session);
           results.initiated.push(initRes);
 
           logger.audit('BATCH_INITIATED', {
@@ -487,7 +482,7 @@ export const initiateDepartmentWide = async (req, res, next) => {
           });
 
         } catch (err) {
-          await session.abortTransaction();
+          await abortSafeTransaction(session);
           logger.error('bulk_initiate_single_failure', { 
             class: cls.name, 
             error: err.message 
@@ -716,28 +711,28 @@ export const getBatchStudentDetail = async (req, res, next) => {
 export const closeBatch = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { batchId } = req.params;
 
     const batch = await NodueBatch.findById(batchId).session(session);
     if (!batch) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
     }
     if (batch.status === 'closed') {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Batch is already closed', 400, 'BATCH_ALREADY_CLOSED'));
     }
 
     if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     batch.status = 'closed';
     await batch.save({ session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.audit('BATCH_CLOSED', {
       actor: req.user.userId,
@@ -753,7 +748,7 @@ export const closeBatch = async (req, res, next) => {
       data: { batchId: batch._id, status: 'closed' },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -763,13 +758,12 @@ export const closeBatch = async (req, res, next) => {
 // ── POST /api/batch/:batchId/students ─────────────────────────────────────────
 export const addStudentToBatch = async (req, res, next) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
   try {
+    await startSafeTransaction(session);
     const { batchId } = req.params;
     const { studentId } = req.body;
     if (!studentId) {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('studentId is required', 400, 'VALIDATION_ERROR'));
     }
 
@@ -782,32 +776,27 @@ export const addStudentToBatch = async (req, res, next) => {
     ]);
 
     if (!batch) {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
     }
     if (batch.status !== 'active') {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
 
     if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     if (!student) {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
     }
 
     const existing = await NodueRequest.findOne({ batchId, studentId }).session(session).lean();
     if (existing) {
-      await session.abortTransaction();
-      session.endSession();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Student already in this batch', 409, 'DUPLICATE_KEY'));
     }
 
@@ -858,7 +847,7 @@ export const addStudentToBatch = async (req, res, next) => {
       snapshot['mentor'] = {
         facultyId: student.mentorId, facultyName: mentor?.name ?? null,
         roleTag: 'mentor', approvalType: 'mentor',
-        subjectName: 'Institutional Mentor',
+        subjectName: 'Mentor',
       };
     }
 
@@ -903,8 +892,7 @@ export const addStudentToBatch = async (req, res, next) => {
     await NodueApproval.insertMany(approvals, { session });
     await NodueBatch.findByIdAndUpdate(batchId, { $inc: { totalStudents: 1 } }, { session });
 
-    await session.commitTransaction();
-    session.endSession();
+    await commitSafeTransaction(session);
 
     logger.audit('STUDENT_ADDED_TO_BATCH', {
       actor: req.user.userId,
@@ -922,11 +910,10 @@ export const addStudentToBatch = async (req, res, next) => {
       data: { requestId: request._id, studentId, batchId, status: 'pending' },
     });
   } catch (err) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
-    session.endSession();
+    await abortSafeTransaction(session);
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
@@ -934,21 +921,21 @@ export const addStudentToBatch = async (req, res, next) => {
 export const removeFacultyFromBatch = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { batchId, facultyId } = req.params;
 
     const batch = await NodueBatch.findById(batchId).select('status departmentId').session(session).lean();
     if (!batch) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
     }
     if (batch.status !== 'active') {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
 
     if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -958,7 +945,7 @@ export const removeFacultyFromBatch = async (req, res, next) => {
       action: 'pending',
     }, { session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     logger.audit('FACULTY_REMOVED_BATCH', {
       actor: req.user.userId,
@@ -976,7 +963,7 @@ export const removeFacultyFromBatch = async (req, res, next) => {
       },
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();
@@ -988,10 +975,10 @@ export const removeFacultyFromBatch = async (req, res, next) => {
 export const bulkCloseBatches = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    await startSafeTransaction(session);
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids)) {
-      await session.abortTransaction();
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('IDs array is required', 400));
     }
 
@@ -1003,7 +990,7 @@ export const bulkCloseBatches = async (req, res, next) => {
     const batches = await NodueBatch.find(query).select('_id').session(session).lean();
     const result = await NodueBatch.updateMany(query, { status: 'closed' }, { session });
 
-    await session.commitTransaction();
+    await commitSafeTransaction(session);
 
     // Notify students after commit
     for (const batch of batches) {
@@ -1025,7 +1012,7 @@ export const bulkCloseBatches = async (req, res, next) => {
       data: { modifiedCount: result.modifiedCount }
     });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    await abortSafeTransaction(session);
     next(err);
   } finally {
     session.endSession();

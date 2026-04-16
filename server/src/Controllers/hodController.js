@@ -8,6 +8,7 @@ import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import { withCache, invalidateKeys } from '../utils/withCache.js';
 import { pushEvent } from './sseController.js';
+import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 
 // Convenience: extract HoD's departmentId from token
 const hodDept = (req) => req.user.departmentId;
@@ -225,27 +226,37 @@ export const getDues = async (req, res, next) => {
 
 // ── POST /api/hod/override ────────────────────────────────────────────────────
 export const overrideDues = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    await startSafeTransaction(session);
     const { requestId, overrideRemark } = req.body;
     if (!requestId || !overrideRemark?.trim()) {
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('requestId and overrideRemark are required', 400, 'VALIDATION_ERROR'));
     }
 
-    const request = await NodueRequest.findById(requestId);
-    if (!request) return next(new ErrorResponse('Request not found', 404, 'NOT_FOUND'));
+    const request = await NodueRequest.findById(requestId).session(session);
+    if (!request) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Request not found', 404, 'NOT_FOUND'));
+    }
 
     if (request.status !== 'has_dues') {
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Override is only allowed for requests with dues', 400, 'OVERRIDE_NOT_APPLICABLE'));
     }
 
     // Verify this request belongs to an active batch in HoD's department
     const batch = await NodueBatch.findById(request.batchId)
       .select('status departmentId')
+      .session(session)
       .lean();
     if (!batch || batch.status !== 'active') {
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
     if (batch.departmentId?.toString() !== hodDept(req)) {
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -253,9 +264,9 @@ export const overrideDues = async (req, res, next) => {
     request.overriddenBy   = req.user.userId;
     request.overrideRemark = overrideRemark.trim();
     request.overriddenAt   = new Date();
-    await request.save();
+    await request.save({ session });
 
-    // Cache invalidated automatically by Mongoose request save hook
+    await commitSafeTransaction(session);
 
     logger.info('hod_override', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -281,16 +292,22 @@ export const overrideDues = async (req, res, next) => {
       },
     });
   } catch (err) {
+    await abortSafeTransaction(session);
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
 // ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
 
 export const bulkOverrideDues = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    await startSafeTransaction(session);
     const { requestIds, overrideRemark } = req.body;
     if (!Array.isArray(requestIds) || !requestIds.length || !overrideRemark?.trim()) {
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('requestIds array and overrideRemark are required', 400, 'VALIDATION_ERROR'));
     }
 
@@ -302,9 +319,10 @@ export const bulkOverrideDues = async (req, res, next) => {
     const requests = await NodueRequest.find({
       _id: { $in: requestIds },
       status: 'has_dues'
-    });
+    }).session(session);
 
     if (!requests.length) {
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('No applicable requests found with dues', 404, 'NOT_FOUND'));
     }
 
@@ -313,12 +331,13 @@ export const bulkOverrideDues = async (req, res, next) => {
       _id: { $in: batchIds },
       departmentId: deptId,
       status: 'active'
-    }).select('_id').lean();
+    }).session(session).select('_id').lean();
 
     const activeBatchIdSet = new Set(activeBatches.map(b => b._id.toString()));
     const eligibleRequests = requests.filter(r => activeBatchIdSet.has(r.batchId.toString()));
 
     if (!eligibleRequests.length) {
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('All specified batches are closed or inaccessible', 400, 'BATCH_CLOSED'));
     }
 
@@ -332,8 +351,11 @@ export const bulkOverrideDues = async (req, res, next) => {
         overrideRemark: remark,
         overriddenAt: now,
         updatedAt: now
-      }
+      },
+      { session }
     );
+
+    await commitSafeTransaction(session);
 
     // 3. Side effects: Notifications & Invalidation
     const studentIds = eligibleRequests.map(r => r.studentId.toString());
@@ -345,8 +367,6 @@ export const bulkOverrideDues = async (req, res, next) => {
       overrideRemark: remark,
       timestamp: now
     });
-
-    // Cache invalidated automatically by Mongoose request hooks
 
     logger.info('hod_bulk_override', {
       timestamp: now.toISOString(),
@@ -363,6 +383,9 @@ export const bulkOverrideDues = async (req, res, next) => {
       }
     });
   } catch (err) {
+    await abortSafeTransaction(session);
     next(err);
+  } finally {
+    session.endSession();
   }
 };

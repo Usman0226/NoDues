@@ -227,7 +227,7 @@ const Subjects = () => {
         <Table
           columns={columns}
           data={subjects}
-          loading={loading && !response}
+          loading={loading}
           pagination={{
             total,
             page,

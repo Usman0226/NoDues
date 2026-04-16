@@ -14,8 +14,6 @@ import { RoleGuard } from '../middlewares/RoleGuard.js';
 
 const router = Router();
 
-// ── Public ────────────────────────────────────────────────────────────────────
-// POST /api/auth/login         — Admin / Faculty
 router.post('/login', login);
 
 // POST /api/auth/student-login — Student (roll number only)
