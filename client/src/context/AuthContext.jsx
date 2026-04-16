@@ -56,7 +56,7 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('nds_token', response.token);
         }
         setUser(response.data);
-        toast.success(`Logged in as Roll No: ${rollNo}`);
+        toast.success(`Logged in as ${rollNo}`);
       }
       return response;
     } catch (error) {

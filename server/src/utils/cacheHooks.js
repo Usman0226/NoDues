@@ -29,15 +29,22 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
       keys.push(`departments:hod:${entityId}`);
       break;
 
-    case 'class':
+    case 'class': {
       keys.push(`class:${entityId}`);
       keys.push(`class:detail:${entityId}`);
-      // Wildcard list invalidation
+      
       const allKeys = cache.keys();
+      
+      // 1. Clear scoped keys (e.g., class:ID:role_admin)
+      const scopedKeys = allKeys.filter(k => k.startsWith(`class:${entityId}:`));
+      keys.push(...scopedKeys);
+
+      // 2. Wildcard list invalidation for departments
       const listPrefix = additionalId ? `classes:list:dept_${additionalId}` : 'classes:list:';
       const listKeys = allKeys.filter(k => k.startsWith(listPrefix));
       keys.push(...listKeys);
       break;
+    }
 
     case 'batch':
       keys.push(`batch_status:${entityId}`);

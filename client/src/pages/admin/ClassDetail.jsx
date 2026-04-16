@@ -76,7 +76,7 @@ const ClassDetail = () => {
   const isHod = user?.role === 'hod';
   const basePath = isHod ? '/hod' : '/admin';
 
-  const { data: response, loading, error, request: fetchClass } = useApi(() => getClass(classId), { 
+  const { data: response, loading, refreshing, error, request: fetchClass } = useApi(() => getClass(classId), { 
     immediate: true,
     queryKey: ['class', classId]
   });
@@ -642,7 +642,17 @@ const SUBJECT_COLS = [
   return (
     <PageWrapper 
       title={classData?.name} 
-      subtitle={`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}
+      subtitle={
+        <div className="flex items-center gap-3">
+          <span>{`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}</span>
+          {refreshing && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-navy/5 text-navy/40 rounded-full animate-pulse border border-navy/10">
+              <RefreshCw size={10} className="animate-spin" />
+              <span className="text-[8px] font-black uppercase tracking-widest">Background Sync</span>
+            </div>
+          )}
+        </div>
+      }
       backTitle="Return to Directory"
       backFallback={isHod ? '/hod/classes' : (departmentId ? `/admin/departments/${departmentId}/classes` : '/admin/departments')}
     >

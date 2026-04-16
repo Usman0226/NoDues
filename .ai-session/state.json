@@ -1,10 +1,11 @@
 {
-  "last_updated": "2026-04-16T02:20:00Z",
+  "last_updated": "2026-04-16T14:05:00Z",
   "completed": [
     "Hardened student portal visibility logic",
     "Implemented check for active batch in backend",
     "Created Student Clearance History page",
-    "Updated student navigation with History and Dashboard links"
+    "Updated student navigation with History and Dashboard links",
+    "Restored ARC Club branding to Student Portal layout in App.jsx"
   ],
   "in_progress": [],
   "pending": [
@@ -15,6 +16,11 @@
       "context": "Student dashboard was showing old data after batches were closed.",
       "decision": "Force dashboard to 'no_batch' state if latest batch is closed and provide a separate History view.",
       "trade_offs": "Students must click an extra time to see historical data, but the dashboard remains clean and focused on urgent actions."
+    },
+    {
+      "context": "ARC Club branding disappeared in Student Portal update.",
+      "decision": "Restored 'Student Portal' subtitle and 'Built by ARC Club Community' footer to StudentLayout.",
+      "trade_offs": "None; maintained consistency with Admin Sidebar."
     }
   ],
   "blockers": []

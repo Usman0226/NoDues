@@ -19,14 +19,13 @@ const ActionMenu = ({ actions }) => {
     };
     
     const handleScroll = (e) => {
-      // Don't close if scrolling inside the menu itself
       if (menuRef.current && menuRef.current.contains(e.target)) return;
       if (isOpen) setIsOpen(false);
     };
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('scroll', handleScroll, true); // Capture all scrolls
+      document.addEventListener('scroll', handleScroll, true);
       window.addEventListener('resize', handleScroll);
     }
     return () => {

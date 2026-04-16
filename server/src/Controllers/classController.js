@@ -137,9 +137,15 @@ export const createClass = async (req, res, next) => {
 export const getClassById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const cacheKey = `class:${id}`;
+    
+    // 1. Context-aware cache key to prevent scope leakage between Admin/HoD
+    const cacheKey = `class:${id}:role_${req.user.role}:dept_${req.user.departmentId || 'all'}`;
     const cached   = cache.get(cacheKey);
-    if (cached) return res.status(200).json({ success: true, data: cached });
+    
+    if (cached) {
+      logger.debug('class_cache_hit', { id, cacheKey });
+      return res.status(200).json({ success: true, data: cached });
+    }
 
     const cls = await Class.findOne({ _id: id, isActive: true })
       .populate('departmentId', 'name')
@@ -152,8 +158,13 @@ export const getClassById = async (req, res, next) => {
       })
       .lean();
 
-    if (!cls) return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+    if (!cls) {
+      // If not found, ensure we clear any stale positive cache (unlikely but safe)
+      cache.del(cacheKey);
+      return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+    }
 
+    // 2. Departmental security boundary
     if (req.user.role === 'hod' && cls.departmentId?._id?.toString() !== req.user.departmentId) {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -162,6 +173,7 @@ export const getClassById = async (req, res, next) => {
       { classId: id, status: 'active' }, '_id'
     ).lean();
 
+    // 3. Robust Data Mapping with boundary checks
     const data = {
       _id:            cls._id,
       name:           cls.name,
@@ -170,19 +182,24 @@ export const getClassById = async (req, res, next) => {
       semester:       cls.semester,
       academicYear:   cls.academicYear,
       classTeacher:   cls.classTeacherId
-        ? { _id: cls.classTeacherId._id, name: cls.classTeacherId.name, email: cls.classTeacherId.email, employeeId: cls.classTeacherId.employeeId }
+        ? { 
+            _id: cls.classTeacherId._id, 
+            name: cls.classTeacherId.name, 
+            email: cls.classTeacherId.email, 
+            employeeId: cls.classTeacherId.employeeId 
+          }
         : null,
-      subjectAssignments: cls.subjectAssignments.map((a) => ({
-        _id:         a._id,
-        subjectId:   a.subjectId,
-        subjectName: a.subjectName,
-        subjectCode: a.subjectCode,
-        isElective:  a.isElective,
-        faculty:     a.facultyId
+      subjectAssignments: (cls.subjectAssignments || []).map((a) => ({
+        _id:         a?._id,
+        subjectId:   a?.subjectId,
+        subjectName: a?.subjectName,
+        subjectCode: a?.subjectCode,
+        isElective:  a?.isElective,
+        faculty:     a?.facultyId
           ? { _id: a.facultyId, name: a.facultyName }
           : null,
       })),
-      students: (cls.studentIds || []).map(s => ({
+      students: (cls.studentIds || []).filter(s => !!s).map(s => ({
         _id: s._id,
         rollNo: s.rollNo,
         name: s.name,
@@ -200,6 +217,8 @@ export const getClassById = async (req, res, next) => {
     };
 
     cache.set(cacheKey, data, 60);
+    logger.debug('class_cache_miss', { id, cacheKey });
+    
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {

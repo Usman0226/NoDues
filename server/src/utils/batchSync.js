@@ -48,6 +48,7 @@ export const syncSubjectRemoval = async (classId, subjectId) => {
     });
 
     invalidateEntityCache('student', 'all');
+    invalidateEntityCache('class', classId);
   } catch (err) {
     if (session.inTransaction()) await session.abortTransaction();
     logger.error('sync_subject_removal_failed', { classId, subjectId, error: err.message });
@@ -112,6 +113,8 @@ export const syncSubjectUpdate = async (classId, subjectId, facultyData) => {
       subjectId: subjectId.toString(),
       newFacultyId: facultyId?.toString()
     });
+
+    invalidateEntityCache('class', classId);
   } catch (err) {
     if (session.inTransaction()) await session.abortTransaction();
     logger.error('sync_subject_update_failed', { classId, subjectId, error: err.message });
@@ -317,6 +320,7 @@ export const syncStudentDeactivation = async (studentId) => {
         logger.audit('SYNC_STUDENT_DEACTIVATED', { studentId, batchId: activeBatch._id });
         
         invalidateEntityCache('student', 'all');
+        invalidateEntityCache('class', activeBatch.classId);
     } catch (err) {
         if (session.inTransaction()) await session.abortTransaction();
         logger.error('sync_student_deactivation_failed', { studentId, error: err.message });
@@ -395,7 +399,7 @@ export const bulkSyncStudentDeactivation = async (studentIds) => {
     try {
         session.startTransaction();
 
-        const requests = await NodueRequest.find({ studentId: { $in: studentIds } }).session(session);
+        const requests = await NodueRequest.find({ studentId: { $in: studentIds } }).populate('batchId').session(session);
         const requestIds = requests.map(r => r._id);
 
         if (requestIds.length > 0) {
@@ -405,7 +409,12 @@ export const bulkSyncStudentDeactivation = async (studentIds) => {
 
         await session.commitTransaction();
         logger.audit('BULK_SYNC_STUDENT_DEACTIVATED', { count: requestIds.length });
+        
         invalidateEntityCache('student', 'all');
+        const affectedClassIds = [...new Set(requests.map(r => r.batchId?.classId?.toString()).filter(Boolean))];
+        for (const cid of affectedClassIds) {
+            invalidateEntityCache('class', cid);
+        }
     } catch (err) {
         if (session.inTransaction()) await session.abortTransaction();
         logger.error('bulk_sync_student_deactivation_failed', { error: err.message });
@@ -524,7 +533,10 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
         
         await session.commitTransaction();
         logger.audit('SYNC_CLASS_CHANGE_COMPLETED', { studentId, oldClassId, newClassId, batchId: activeBatch._id });
+        
         invalidateEntityCache('student', 'all');
+        invalidateEntityCache('class', oldClassId);
+        invalidateEntityCache('class', newClassId);
     } catch (err) {
         if (session.inTransaction()) await session.abortTransaction();
         logger.error('sync_class_change_failed', { studentId, error: err.message });
@@ -593,6 +605,8 @@ export const syncSubjectAddition = async (classId, subjectData) => {
             subjectId: subjectId.toString(),
             approvalsCreated: bulkApprovals.length
         });
+
+        invalidateEntityCache('class', classId);
     } catch (err) {
         if (session.inTransaction()) await session.abortTransaction();
         logger.error('sync_subject_addition_failed', { classId, error: err.message });

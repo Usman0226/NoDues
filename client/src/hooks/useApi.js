@@ -80,7 +80,8 @@ export const useApi = (apiFunc, options = {}) => {
   return { 
     data, 
     loading: isLoading, // backward compatibility: only show skeleton on first load
-    isFetching, // available for subtle loading indicators
+    isFetching,
+    refreshing: isFetching, // Alias for better semantics in background refetches
     error: error ? (error?.response?.data?.error?.message || error.message) : null, 
     request, 
     setData 
