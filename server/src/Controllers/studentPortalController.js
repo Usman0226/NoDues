@@ -2,17 +2,14 @@ import NodueRequest from '../models/NodueRequest.js';
 import NodueApproval from '../models/NodueApproval.js';
 import NodueBatch from '../models/NodueBatch.js';
 import Student from '../models/Student.js';
+import CoCurricularType from '../models/CoCurricularType.js';
 import { withCache } from '../utils/withCache.js';
 
-// ── GET /api/student/status ───────────────────────────────────────────────────
-// Critical-path endpoint: every student hits this simultaneously at deadline.
-// Target: < 5ms on cache hit | < 30ms on cache miss.
 export const getStudentStatus = async (req, res, next) => {
   const userId = req.user.userId;
-  const { requestId } = req.params; // Support path param for history detail
+  const { requestId } = req.params;
 
   try {
-    // 0. Security Guard: Only students should access this endpoint logic
     if (req.user.role !== 'student') {
       return res.status(403).json({
         success: false,
@@ -31,7 +28,7 @@ export const getStudentStatus = async (req, res, next) => {
       // 1. Fetch student and the targeted request (specific ID or latest)
       const [student, request] = await Promise.all([
         Student.findById(userId)
-          .select('rollNo name semester classId departmentId')
+          .select('rollNo name semester classId departmentId coCurricular')
           .lean(),
         requestId 
           ? NodueRequest.findOne({ _id: requestId, studentId: userId })
@@ -85,13 +82,25 @@ export const getStudentStatus = async (req, res, next) => {
       // 3. Fetch all granular approvals for this request
       const approvals = await NodueApproval.find({ requestId: request._id }).lean();
 
+      // NEW: Fetch all Co-Curricular Types involved to get form fields
+      const ccTypeIds = approvals
+        .filter(a => a.approvalType === 'coCurricular')
+        .map(a => a.itemTypeId)
+        .filter(Boolean);
+      
+      const ccTypes = ccTypeIds.length > 0 
+        ? await CoCurricularType.find({ _id: { $in: ccTypeIds } }).select('fields name code isOptional').lean()
+        : [];
+      const ccTypeMap = new Map(ccTypes.map(t => [t._id.toString(), t]));
+
       // 4. Map to high-fidelity status registry
       const statusRegistry = approvals.map(a => {
         // Resolve lookup against request-time snapshot (handles role changes/deletions)
         const snapshot = (Array.isArray(request.facultySnapshot) 
           ? request.facultySnapshot.find(f => 
               (a.approvalType === 'subject' && f.subjectId?.toString() === a.subjectId?.toString()) ||
-              (a.approvalType !== 'subject' && f.roleTag === a.roleTag)
+              (a.approvalType === 'coCurricular' && f.itemTypeId?.toString() === a.itemTypeId?.toString()) ||
+              (a.approvalType !== 'subject' && a.approvalType !== 'coCurricular' && f.roleTag === a.roleTag)
             )
           : request.facultySnapshot?.[a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag]
         ) || {};
@@ -100,10 +109,18 @@ export const getStudentStatus = async (req, res, next) => {
         if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
         if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Academic Advisor';
         if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Mentor';
+        if (a.approvalType === 'coCurricular') displayContext = a.itemTypeName || snapshot.itemTypeName || a.subjectName;
+
+        const submission = a.approvalType === 'coCurricular' 
+          ? student.coCurricular?.find(c => c.itemTypeId?.toString() === (a.itemTypeId?.toString() || snapshot.itemTypeId?.toString()))
+          : null;
+
+        const ccType = a.approvalType === 'coCurricular' ? ccTypeMap.get(a.itemTypeId?.toString()) : null;
 
         return {
           id: a._id,
           facultyName: snapshot.facultyName || 'Department Station',
+          itemTypeId: a.itemTypeId,
           subjectName: displayContext || 'General Appraisal',
           subjectCode: snapshot.subjectCode || null,
           action: a.action,
@@ -111,7 +128,14 @@ export const getStudentStatus = async (req, res, next) => {
           remarks: a.remarks,
           approvalType: a.approvalType,
           roleTag: a.roleTag,
-          actionedAt: a.actionedAt
+          actionedAt: a.actionedAt,
+          isOptional: a.isOptional || ccType?.isOptional || false,
+          formFields: ccType?.fields || [],
+          submission: submission ? {
+            data: submission.submittedData,
+            status: submission.status,
+            submittedAt: submission.submittedAt
+          } : null
         };
       });
 

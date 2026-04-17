@@ -33,6 +33,7 @@ import BatchStudentDetail from './pages/admin/BatchStudentDetail';
 import Subjects from './pages/admin/Subjects';
 import Batches from './pages/admin/Batches';
 import EmailMonitor from './pages/admin/EmailMonitor';
+import CoCurricular from './pages/admin/CoCurricular';
 
 import HodDashboard from './pages/hod/Dashboard';
 import Dues from './pages/hod/Dues';
@@ -224,6 +225,7 @@ const AppContent = () => {
             <Route path="/admin/batches" element={<Batches />} />
             <Route path="/admin/batch/:batchId" element={<BatchView />} />
             <Route path="/admin/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
+            <Route path="/admin/co-curricular" element={<CoCurricular />} />
             <Route path="/admin/email-monitor" element={<EmailMonitor />} />
             <Route path="/change-password" element={<ChangePassword />} />
 
@@ -234,6 +236,7 @@ const AppContent = () => {
             <Route path="/hod/students" element={<StudentList />} />
             <Route path="/hod/faculty" element={<FacultyList />} />
             <Route path="/hod/subjects" element={<Subjects />} />
+            <Route path="/hod/co-curricular" element={<CoCurricular />} />
             <Route path="/hod/batches" element={<Batches />} />
             <Route path="/hod/dues" element={<Dues />} />
             <Route path="/hod/overrides" element={<Overrides />} />

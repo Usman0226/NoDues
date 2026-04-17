@@ -12,6 +12,7 @@ import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import Task from '../models/Task.js';
+import CoCurricularType from '../models/CoCurricularType.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 
 // ── GET /api/batch ────────────────────────────────────────────────────────────
@@ -104,6 +105,12 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
     .lean();
   const mentorMap = new Map(mentors.map(m => [m._id.toString(), m.name]));
 
+  // 3b. Fetch Co-Curricular items for this department
+  const coCurricularItems = await CoCurricularType.find({
+    departmentId: cls.departmentId._id || cls.departmentId,
+    isActive: true
+  }).session(session).lean();
+
   // 4. Operation Builder
   const requestOps  = [];
   const approvalOps = [];
@@ -181,6 +188,30 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
       };
     }
 
+    // Co-Curricular items (based on student year)
+    const activeStudentYear = student.yearOfStudy || (cls.semester > 2 ? Math.ceil(cls.semester / 2) : 1); // Fallback if not set
+    const studentYear = student.yearOfStudy || activeStudentYear;
+
+    const applicableItems = coCurricularItems.filter(item => 
+      item.applicableYears.includes(studentYear)
+    );
+
+    for (const item of applicableItems) {
+      snapshot[item._id.toString()] = {
+        facultyId:    item.coordinatorId,
+        facultyName:  null, // Will be populated if needed, or coordinatorId is sufficient
+        subjectId:    null,
+        subjectName:  item.name,
+        subjectCode:  item.code,
+        roleTag:      'coordinator',
+        approvalType: 'coCurricular',
+        itemTypeId:   item._id,
+        itemTypeName: item.name,
+        itemCode:     item.code,
+        isOptional:   item.isOptional || false
+      };
+    }
+
     requestOps.push({
       insertOne: {
         document: {
@@ -213,9 +244,13 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
             facultyId:    f.facultyId,
             subjectId:    f.subjectId    ?? null,
             subjectName:  f.subjectName  ?? null,
+            itemTypeId:   f.itemTypeId   ?? null,
+            itemTypeName: f.itemTypeName ?? null,
+            itemCode:     f.itemCode     ?? null,
+            isOptional:   f.isOptional   ?? false,
             approvalType: f.approvalType,
             roleTag:      f.roleTag,
-            action:       'pending',
+            action:       f.approvalType === 'coCurricular' ? 'not_submitted' : 'pending',
             createdAt:    now,
           },
         },

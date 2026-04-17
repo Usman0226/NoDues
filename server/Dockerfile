@@ -1,4 +1,3 @@
-# Build stage
 FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
@@ -43,5 +42,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 EXPOSE 5000
 
-# Start node with optimized memory for 4GB VM (Allocating ~3GB to Node)
 CMD ["node", "--max-old-space-size=3072", "server.js"]

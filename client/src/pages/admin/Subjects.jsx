@@ -27,7 +27,6 @@ const Subjects = () => {
   const canManage = isAdmin || isHod;
   const [submitting, setSubmitting] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  // Pagination & Search State
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [searchValue, setSearchValue] = useState('');

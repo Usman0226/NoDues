@@ -134,8 +134,6 @@ const ClassDetail = () => {
 
   const filteredFaculty = useMemo(() => {
     if (!facultyList) return [];
-    // For specific UI filters, we can keep departmentId as a 'suggested' filter 
-    // but the system now allows interdisciplinary assignments.
     return facultyList.filter(f => 
       f.roleTags?.includes('mentor') || f.roleTags?.includes('faculty')
     );

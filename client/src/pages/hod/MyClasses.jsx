@@ -41,9 +41,9 @@ const MyClasses = () => {
             <div className="bg-zinc-50 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6">
               <GraduationCap className="text-zinc-300" size={40} />
             </div>
-            <h3 className="text-navy font-brand text-xl mb-2">No Directives Detected</h3>
+            <h3 className="text-navy font-brand text-xl mb-2">No Classes Assigned</h3>
             <p className="text-sm text-zinc-500 max-w-sm mx-auto">
-              This node has no active Class Teacher or Subject Faculty assignments in the current matrix. 
+              You have no active Class Teacher or Subject Faculty assignments in the currently. 
               Verify assignments in the identity management portal.
             </p>
           </div>

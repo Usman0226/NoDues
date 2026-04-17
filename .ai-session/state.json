@@ -1,23 +1,24 @@
 {
-  "last_updated": "2026-04-16T14:20:00Z",
+  "last_updated": "2026-04-17T06:20:00Z",
   "completed": [
-    "Fixed Mentor Visibility regression in Class Detail UI",
-    "Relaxed HOD department restriction in facultyController.js",
-    "Enabled global faculty fetching in ClassDetail.jsx",
-    "Implemented robust mentor name fallback rendering in ClassDetail UI"
+    "Fixed Co-Curricular API 400 Bad Request by standardizing departmentId handling",
+    "Enhanced CoCurricular UI with department selector for Admin and auto-detection for HoD",
+    "Implemented filtered coordinator selection based on department scope",
+    "Hardened co-curricular controllers with robust department scope guards"
   ],
-  "in_progress": [
-    "End-to-end verification of bulk import on M0 standalone MongoDB"
-  ],
+  "in_progress": [],
   "pending": [
-    "Verify cache invalidation for cross-departmental mentor re-assignment"
+    "Resolve MongoDB Change Stream dependency for standalone instances",
+    "Verify end-to-end clearance flow with actual coordinators"
   ],
   "decisions": [
     {
-      "context": "Interdisciplinary mapping enabled but HODs were restricted to their own department in the backend.",
-      "decision": "Relaxed HOD query filter in getFaculty to honor requested departmentId or default to global directory.",
-      "trade_offs": "Slightly increased load on faculty API (limit 500) but necessary for cross-departmental visibility."
+      "context": "Co-curricular items required departmentId but frontend was not sending it, and HoDs were forced to select it manually.",
+      "decision": "Inferred departmentId from req.user on backend for HoDs and added explicit selector for Admin on frontend.",
+      "trade_offs": "Adds one extra API call (getDepartments) for Admins on the co-curricular page."
     }
   ],
-  "blockers": []
+  "blockers": [
+    "MongoDB standalone deployment causes errors with $changeStream; needs replica set or refactoring"
+  ]
 }

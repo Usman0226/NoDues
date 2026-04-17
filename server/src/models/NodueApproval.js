@@ -27,16 +27,23 @@ const nodueApprovalSchema = new mongoose.Schema({
   subjectName: String,
   approvalType: {
     type: String,
-    enum: ['subject', 'classTeacher', 'mentor', 'hodApproval', 'office']
+    enum: ['subject', 'classTeacher', 'mentor', 'hodApproval', 'office', 'coCurricular']
   },
   roleTag: {
     type: String,
-    enum: ['faculty', 'classTeacher', 'mentor', 'hod']
+    enum: ['faculty', 'classTeacher', 'mentor', 'hod', 'coordinator']
   },
   action: {
     type: String,
-    enum: ['pending', 'approved', 'due_marked'],
+    enum: ['pending', 'approved', 'due_marked', 'not_submitted', 'rejected'],
     default: 'pending'
+  },
+  itemTypeId: mongoose.Schema.ObjectId,
+  itemTypeName: String,
+  itemCode: String,
+  isOptional: {
+    type: Boolean,
+    default: false
   },
   dueType: {
     type: String,
@@ -52,7 +59,7 @@ const nodueApprovalSchema = new mongoose.Schema({
 
 // Primary compound index — prevent duplicates, cover requestId lookups
 nodueApprovalSchema.index(
-  { requestId: 1, facultyId: 1, subjectId: 1, roleTag: 1 },
+  { requestId: 1, facultyId: 1, subjectId: 1, roleTag: 1, itemTypeId: 1 },
   { unique: true }
 );
 

@@ -74,7 +74,7 @@ const Overrides = () => {
   }, [overrides, search]);
 
   return (
-    <PageWrapper title="Override History" subtitle="Audit log of all department-level manual clearances">
+    <PageWrapper title="Override History (Under Development)" subtitle="Audit log of all department-level manual clearances">
       {/* Header Info */}
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 mb-8 flex items-center gap-5">
         <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">

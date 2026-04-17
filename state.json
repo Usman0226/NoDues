@@ -1,22 +1,21 @@
 {
-  "last_updated": "2026-04-16T17:45:00Z",
+  "last_updated": "2026-04-17T06:54:00Z",
   "completed": [
-    "Disabled Employee ID login for faculty",
-    "Standardized temporary password generation to 8-character hex strings",
-    "Implemented automatic input trimming for faculty registration",
-    "Implemented Range-Based Roll Number Expansion (e.g. 21A91A0501-10) for Mentor and Elective imports",
-    "Enhanced Import Preview UI with expansion badges and landscape support"
+    "Fixed Co-Curricular API 400 Bad Request by standardizing departmentId handling",
+    "Enabled co-curricular data visibility by adding 'not_submitted' and 'rejected' to NodueApproval schema",
+    "Fixed logical precedence bug in batch initiation year calculation",
+    "Updated student portal Status.jsx to correctly filter and sort co-curricular items",
+    "Resolved duplicate schema index warning in EmailLog model"
   ],
   "in_progress": [],
   "pending": [
-    "Recent Activity Feed implementation on Admin dashboard",
-    "Subject structure logic for 'Clone Class' functionality"
+    "Verify end-to-end clearance flow with actual coordinators"
   ],
   "decisions": [
     {
-      "context": "Bulk assignments for subjects/mentors are tedious when done row-by-row for large batches.",
-      "decision": "Added range-based expansion logic (01-10, 098 to 102) with a 100-student cap per row.",
-      "trade_offs": "Adds complexity to import controllers but significantly reduces admin manual labor."
+      "context": "Co-curricular items were not appearing because 'not_submitted' wasn't a valid DB status.",
+      "decision": "Expanded NodueApproval enum to accommodate the co-curricular lifecycle (not_submitted -> pending -> approved).",
+      "trade_offs": "Requires any active batches to be re-initiated to correctly populate the new statuses."
     }
   ],
   "blockers": []

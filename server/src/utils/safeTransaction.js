@@ -58,6 +58,12 @@ export const commitSafeTransaction = async (session) => {
  */
 export const abortSafeTransaction = async (session) => {
   if (session.inTransaction()) {
-    await session.abortTransaction();
+    try {
+      await session.abortTransaction();
+    } catch (err) {
+      logger.warn('safeTransaction: Failed to abort transaction (it may have been already aborted by MongoDB).', {
+        error: err.message
+      });
+    }
   }
 };

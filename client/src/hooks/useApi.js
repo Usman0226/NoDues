@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 
@@ -6,19 +6,15 @@ export const useApi = (apiFunc, options = {}) => {
   const queryClient = useQueryClient();
   const [manualLoading, setManualLoading] = React.useState(false);
   
-  // Create a unique query key if not provided, based on the function name if possible
-  // In a real app, passing an explicit queryKey is safer, but this provides a fallback.
   const queryKey = useMemo(() => {
     if (options.queryKey) return options.queryKey;
-    // Fallback keying based on the function itself (only works if static)
-    // For manual requests (not immediate), caching is less critical but still useful.
-    return ['api', apiFunc.name || 'unnamed'];
+      return ['api', apiFunc.name || 'unnamed'];
   }, [options.queryKey, apiFunc]);
 
   const {
     data,
-    isLoading, // Only true on the first fetch when no data in cache
-    isFetching, // True whenever a request is in flight
+    isLoading, 
+    isFetching, 
     error,
     refetch,
   } = useQuery({
@@ -84,7 +80,7 @@ export const useApi = (apiFunc, options = {}) => {
     data, 
     loading: isLoading || manualLoading,
     isFetching: isFetching || manualLoading,
-    refreshing: isFetching || manualLoading, // Alias for better semantics in background refetches
+    refreshing: isFetching || manualLoading,
     error: error ? (error?.response?.data?.error?.message || error.message) : null, 
     request, 
     setData 

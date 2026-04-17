@@ -84,6 +84,24 @@ const studentSchema = new mongoose.Schema(
       enum: ['student'],
       default: 'student',
     },
+    coCurricular: [
+      {
+        itemTypeId: {
+          type: mongoose.Schema.ObjectId,
+          ref: 'CoCurricularType',
+        },
+        itemCode: String,
+        itemTypeName: String,
+        submittedData: mongoose.Schema.Types.Mixed,
+        submittedAt: Date,
+        status: {
+          type: String,
+          enum: ['not_submitted', 'submitted', 'approved', 'rejected'],
+          default: 'not_submitted',
+        },
+        rejectionRemark: String,
+      },
+    ],
   },
   {
     timestamps: true,
@@ -99,7 +117,6 @@ studentSchema.index({ departmentId: 1, isActive: 1 });
 // Mentor's student list
 studentSchema.index({ mentorId: 1 });
 
-// ── Cache Invalidation Hooks ──────────────────────────────────────────────────
 studentSchema.post('save', function(doc) {
   invalidateEntityCache('student', doc._id);
 });

@@ -130,7 +130,7 @@ const Login = () => {
           </h1>
           <div className="flex items-center justify-center gap-2 mt-4">
             <span className="h-px w-4 bg-zinc-200" />
-            <p className="text-[9px] uppercase tracking-[0.4em] font-black text-zinc-500">ARC PORTAL</p>
+            <p className="text-[9px] uppercase tracking-[0.4em] font-black text-zinc-500">MITS</p>
             <span className="h-px w-4 bg-zinc-200" />
           </div>
         </div>

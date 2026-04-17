@@ -44,7 +44,7 @@ const emailLogSchema = new mongoose.Schema({
 });
 
 // Index for date-based lookups (quota calculation)
-emailLogSchema.index({ timestamp: 1 });
+// redundant: already indexed in field definition
 
 const EmailLog = mongoose.model('EmailLog', emailLogSchema);
 

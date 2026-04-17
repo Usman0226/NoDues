@@ -1,5 +1,4 @@
 services:
-  # NoDues Backend API
   api:
     build: .
     container_name: nodues_api
@@ -10,10 +9,7 @@ services:
       - ./logs:/app/logs
     networks:
       - app_network
-    # We don't expose 5000 to the public host for security. 
-    # The tunnel will talk to it internally.
-
-  # Cloudflare Tunnel
+      
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: cloudflare_tunnel

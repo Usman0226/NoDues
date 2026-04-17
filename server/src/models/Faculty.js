@@ -44,7 +44,7 @@ const facultySchema = new mongoose.Schema(
     },
     roleTags: {
       type: [String],
-      enum: ['faculty', 'classTeacher', 'mentor', 'hod'],
+      enum: ['faculty', 'classTeacher', 'mentor', 'hod', 'coordinator'],
       default: ['faculty'],
     },
     role: {

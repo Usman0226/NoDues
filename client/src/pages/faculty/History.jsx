@@ -3,9 +3,11 @@ import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useUI } from '../../hooks/useUI';
 import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../hooks/useAuth';
 import { getApprovalHistory } from '../../api/approvals';
 import {
   History,
@@ -16,6 +18,11 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  UserCheck,
+  FileText,
+  Clock,
+  ExternalLink,
 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -27,7 +34,7 @@ const getApprovalLabel = (item) => {
   return item.subjectName || '—';
 };
 
-const COLUMNS = [
+const getColumns = (user, setReviewModal) => [
   {
     key: 'studentRollNo',
     label: 'Roll No',
@@ -42,7 +49,14 @@ const COLUMNS = [
     key: 'subjectName',
     label: 'Subject / Type',
     render: (_, row) => (
-      <span className="text-xs text-muted-foreground">{getApprovalLabel(row)}</span>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-xs text-muted-foreground">{getApprovalLabel(row)}</span>
+        {user?.userId !== row.facultyId && row.facultyName && (
+           <span className="text-[9px] font-bold text-zinc-400 whitespace-nowrap">
+             Assigned to: {row.facultyName}
+           </span>
+        )}
+      </div>
     ),
   },
   {
@@ -78,6 +92,26 @@ const COLUMNS = [
       </div>
     ),
   },
+  {
+    key: 'actions',
+    label: '',
+    render: (_, row) => {
+      if (row.approvalType === 'coCurricular') {
+        return (
+          <div className="flex items-center justify-end">
+            <button
+              onClick={(e) => { e.stopPropagation(); setReviewModal(row); }}
+              className="p-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-all shadow-sm"
+              title="Review Submission"
+            >
+              <Eye size={14} />
+            </button>
+          </div>
+        );
+      }
+      return null;
+    }
+  }
 ];
 
 const FacultyHistory = () => {
@@ -86,8 +120,10 @@ const FacultyHistory = () => {
   const [semesterFilter, setSemesterFilter] = useState('all');
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [reviewModal, setReviewModal] = useState(null);
 
   const { showGlobalLoader } = useUI();
+  const { user } = useAuth();
   const { data: response, loading, error, request: fetchHistory } = useApi(getApprovalHistory);
 
   // Debounce search input
@@ -178,7 +214,7 @@ const FacultyHistory = () => {
 
       {/* Main Table */}
       <Table
-        columns={COLUMNS}
+        columns={getColumns(user, setReviewModal)}
         data={rows}
         loading={loading}
         pagination={{
@@ -209,6 +245,68 @@ const FacultyHistory = () => {
           )}
         </div>
       )}
+
+      {/* Review Modal */}
+      <Modal
+        isOpen={!!reviewModal}
+        onClose={() => setReviewModal(null)}
+        title="Review Clearance Submission"
+        size="md"
+      >
+        {reviewModal && (
+          <div className="space-y-6">
+             <div className="flex items-start gap-4 p-4 rounded-2xl bg-zinc-50 border border-zinc-100">
+                <div className="h-12 w-12 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 shrink-0">
+                   <UserCheck size={24} />
+                </div>
+                <div className="min-w-0">
+                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">Student Candidate</p>
+                   <h3 className="text-lg font-black text-navy leading-none mb-1">{reviewModal.studentName}</h3>
+                   <p className="text-xs font-bold text-zinc-500 font-mono tracking-tighter">{reviewModal.studentRollNo} · {reviewModal.className}</p>
+                </div>
+             </div>
+
+             <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                   <FileText size={16} className="text-indigo-600" />
+                   <h4 className="text-[10px] font-black uppercase tracking-widest text-navy">Submission Details</h4>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-3">
+                   {!reviewModal.submission ? (
+                      <div className="p-8 text-center bg-offwhite rounded-2xl border border-dashed border-muted/50">
+                         <Clock className="mx-auto text-muted-foreground/30 mb-2" size={32} />
+                         <p className="text-sm font-bold text-muted-foreground">No documentation submitted yet.</p>
+                      </div>
+                   ) : (
+                      Object.entries(reviewModal.submission.data || {}).map(([key, value]) => (
+                        <div key={key} className="p-4 rounded-xl bg-white border border-zinc-100 shadow-sm">
+                           <p className="text-[9px] font-black uppercase tracking-wider text-zinc-400 mb-1">{key.replace(/_/g, ' ')}</p>
+                           <p className="text-sm font-bold text-navy break-all">
+                              {value?.toString().match(/^https?:\/\//) ? (
+                                <a href={value} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-1">
+                                   View Document <ExternalLink size={12} />
+                                </a>
+                              ) : value || '—'}
+                           </p>
+                        </div>
+                      ))
+                   )}
+                </div>
+             </div>
+
+             <div className="flex items-center gap-3 pt-6 border-t border-zinc-100">
+                <Button 
+                   variant="ghost" 
+                   className="flex-1" 
+                   onClick={() => setReviewModal(null)}
+                >
+                   Close
+                </Button>
+             </div>
+          </div>
+        )}
+      </Modal>
 
     </PageWrapper>
   );

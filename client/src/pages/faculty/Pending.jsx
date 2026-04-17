@@ -7,6 +7,7 @@ import Table from '../../components/ui/Table';
 import { DUE_TYPES } from '../../utils/constants';
 import { useApi } from '../../hooks/useApi';
 import useSSE from '../../hooks/useSSE';
+import { useAuth } from '../../hooks/useAuth';
 import { 
   getPendingApprovals, 
   approveRecord, 
@@ -26,6 +27,10 @@ import {
   Clock,
   Loader2,
   Settings2,
+  Eye,
+  FileText,
+  UserCheck,
+  ExternalLink
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
@@ -52,6 +57,7 @@ const getApprovalLabel = (item) => {
   if (item.approvalType === 'hodApproval' || item.approvalType === 'office' || item.roleTag === 'hod') return 'HoD Approval';
   if (item.approvalType === 'classTeacher') return 'Class Teacher';
   if (item.approvalType === 'mentor') return 'Mentor Approval';
+  if (item.approvalType === 'coCurricular') return item.itemTypeName || 'Co-Curricular';
   const code = item.subjectCode || null;
   return item.subjectName
     ? `${item.subjectName}${code ? ` (${code})` : ''}`
@@ -63,20 +69,21 @@ const Pending = () => {
   const [selectedBatch, setSelectedBatch] = useState(location.state?.classId || 'all');
   const [filter, setFilter]               = useState('pending');
   const [selection, setSelection]         = useState([]);
-  const [actionLoading, setActionLoading] = useState(null); // 'bulk' or approvalId
-  const [dueModal, setDueModal]           = useState(null); // { id, ... }
-
+  const [actionLoading, setActionLoading] = useState(null); 
+  const [dueModal, setDueModal]           = useState(null); 
+  const [reviewModal, setReviewModal]     = useState(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const { showGlobalLoader } = useUI();
+  const { user } = useAuth();
 
   const { data: response, loading, error, request: fetchApprovals, setData: setResponse } =
     useApi(getPendingApprovals);
 
-  const { data: classesData, loading: classesLoading } = useApi(getMyClasses, { immediate: true });
+  const { data: classesData } = useApi(getMyClasses, { immediate: true });
   
   const total = response?.pagination?.total || 0;
 
@@ -132,6 +139,7 @@ const Pending = () => {
       fetchApprovals();
       toast.success('Action reversed. Record is back in Pending.', { id: `undo-${id}` });
     } catch (err) {
+      console.warn(err)
       toast.error('Failed to reverse action');
     } finally {
       setActionLoading(null);
@@ -167,7 +175,7 @@ const Pending = () => {
     }
   };
 
-  const handleBulkApprove = async () => {
+  const handleBulkApprove = useCallback(async () => {
     if (!selection.length) return;
     setActionLoading('bulk');
     try {
@@ -179,7 +187,7 @@ const Pending = () => {
       setActionLoading('bulk');
       setTimeout(() => setActionLoading(null), 500);
     }
-  };
+  }, [selection, fetchApprovals]);
 
   const handleUpdate = async (id, data) => {
     setActionLoading(id);
@@ -237,9 +245,16 @@ const Pending = () => {
       key: 'approvalType',
       label: 'Request Type',
       render: (_, row) => (
-        <span className="text-[10px] uppercase font-black tracking-widest text-gold/80">
-          {getApprovalLabel(row)}
-        </span>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] uppercase font-black tracking-widest text-gold/80">
+            {getApprovalLabel(row)}
+          </span>
+          {user?.userId !== row.facultyId && row.facultyName && (
+             <span className="text-[9px] font-bold text-zinc-400 whitespace-nowrap">
+               Assigned to: {row.facultyName}
+             </span>
+          )}
+        </div>
       ),
     },
     {
@@ -252,10 +267,20 @@ const Pending = () => {
       label: 'Actions',
       render: (_, row) => {
         const isActioning = actionLoading === row._id;
+        const isCoCurricular = row.approvalType === 'coCurricular';
         
         if (row.action === 'pending') {
           return (
             <div className="flex items-center gap-1.5">
+              {isCoCurricular && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setReviewModal(row); }}
+                  className="p-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-all shadow-sm"
+                  title="Review Submission"
+                >
+                  <Eye size={14} />
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); handleApprove(row._id); }}
                 disabled={isActioning}
@@ -268,7 +293,7 @@ const Pending = () => {
                 onClick={(e) => { e.stopPropagation(); setDueModal(row); }}
                 disabled={isActioning}
                 className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm"
-                title="Mark Due"
+                title="Mark Due / Reject"
               >
                 <X size={14} />
               </button>
@@ -304,7 +329,7 @@ const Pending = () => {
       onClick: handleBulkApprove,
       variant: 'primary'
     }
-  ], [selection, actionLoading]);
+  ], [handleBulkApprove]);
 
   return (
     <PageWrapper 
@@ -488,6 +513,80 @@ const Pending = () => {
               <Button type="submit" variant="danger" className="flex-1" loading={actionLoading === dueModal._id}>Confirm Flag</Button>
             </div>
           </form>
+        )}
+      </Modal>
+      <Modal
+        isOpen={!!reviewModal}
+        onClose={() => setReviewModal(null)}
+        title="Review Clearance Submission"
+        size="md"
+      >
+        {reviewModal && (
+          <div className="space-y-6">
+             <div className="flex items-start gap-4 p-4 rounded-2xl bg-zinc-50 border border-zinc-100">
+                <div className="h-12 w-12 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 shrink-0">
+                   <UserCheck size={24} />
+                </div>
+                <div className="min-w-0">
+                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">Student Candidate</p>
+                   <h3 className="text-lg font-black text-navy leading-none mb-1">{reviewModal.studentName}</h3>
+                   <p className="text-xs font-bold text-zinc-500 font-mono tracking-tighter">{reviewModal.studentRollNo} · {reviewModal.className}</p>
+                </div>
+             </div>
+
+             <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                   <FileText size={16} className="text-indigo-600" />
+                   <h4 className="text-[10px] font-black uppercase tracking-widest text-navy">Submission Details</h4>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-3">
+                   {!reviewModal.submission ? (
+                      <div className="p-8 text-center bg-offwhite rounded-2xl border border-dashed border-muted/50">
+                         <Clock className="mx-auto text-muted-foreground/30 mb-2" size={32} />
+                         <p className="text-sm font-bold text-muted-foreground">No documentation submitted yet.</p>
+                      </div>
+                   ) : (
+                      Object.entries(reviewModal.submission.data || {}).map(([key, value]) => (
+                        <div key={key} className="p-4 rounded-xl bg-white border border-zinc-100 shadow-sm">
+                           <p className="text-[9px] font-black uppercase tracking-wider text-zinc-400 mb-1">{key.replace(/_/g, ' ')}</p>
+                           <p className="text-sm font-bold text-navy break-all">
+                              {value?.toString().match(/^https?:\/\//) ? (
+                                <a href={value} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-1">
+                                   View Document <ExternalLink size={12} />
+                                </a>
+                              ) : value || '—'}
+                           </p>
+                        </div>
+                      ))
+                   )}
+                </div>
+             </div>
+
+             <div className="flex items-center gap-3 pt-6 border-t border-zinc-100">
+                <Button 
+                   variant="danger" 
+                   className="flex-1" 
+                   onClick={() => {
+                      setReviewModal(null);
+                      setDueModal(reviewModal);
+                   }}
+                >
+                   Reject Submission
+                </Button>
+                <Button 
+                   variant="primary" 
+                   className="flex-1" 
+                   onClick={async () => {
+                      await handleApprove(reviewModal._id);
+                      setReviewModal(null);
+                   }}
+                   loading={actionLoading === reviewModal._id}
+                >
+                   Approve
+                </Button>
+             </div>
+          </div>
         )}
       </Modal>
     </PageWrapper>

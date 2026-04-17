@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import NodueApproval from '../models/NodueApproval.js';
 import NodueRequest from '../models/NodueRequest.js';
 import NodueBatch from '../models/NodueBatch.js';
+import Student from '../models/Student.js';
+import CoCurricularType from '../models/CoCurricularType.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
@@ -15,44 +17,67 @@ export const getPendingApprovals = async (req, res, next) => {
     const { page = 1, limit = 20, search = '', batchId, action } = req.query;
     
     // Validate requested batch accessibility
-    const activeBatchIds = await NodueBatch.find(
+    const activeBatches = await NodueBatch.find(
       { status: 'active' },
-      '_id'
+      '_id departmentId'
     ).lean();
 
-    if (!activeBatchIds.length) {
+    if (!activeBatches.length) {
       return res.status(200).json({ success: true, data: [] });
     }
 
-    const batchIdSet = activeBatchIds.map((b) => b._id);
+    const batchIdSet = activeBatches.map((b) => b._id);
+    let myDeptBatchIds = [];
+    if (req.user.role === 'hod' && req.user.departmentId) {
+        myDeptBatchIds = activeBatches
+           .filter(b => b.departmentId && b.departmentId.toString() === req.user.departmentId.toString())
+           .map(b => b._id);
+    }
 
-    const query = {
-      facultyId: userId,
-    };
+    const andConditions = [];
 
     // Action filter: default to 'pending' unless 'all' is explicitly requested
     if (action !== 'all') {
-      query.action = action || 'pending';
+      andConditions.push({ action: action || 'pending' });
     }
 
     // Batch filter: scope to specified batch if valid active batch, otherwise all active batches
-    if (batchId && batchIdSet.some(id => id.toString() === batchId.toString())) {
-      query.batchId = batchId;
+    const targetBatchIds = batchId && batchIdSet.some(id => id.toString() === batchId.toString()) 
+                           ? [batchId] 
+                           : batchIdSet;
+    andConditions.push({ batchId: { $in: targetBatchIds } });
+
+    // Faculty vs HOD-Department Filter
+    if (req.user.role === 'hod' && myDeptBatchIds.length > 0) {
+        andConditions.push({
+            $or: [
+                { facultyId: userId },
+                { 
+                    batchId: { $in: myDeptBatchIds }, 
+                    approvalType: { $in: ['coCurricular', 'subject'] }
+                }
+            ]
+        });
     } else {
-      query.batchId = { $in: batchIdSet };
+        andConditions.push({ facultyId: userId });
     }
 
     if (search) {
-      query.$or = [
-        { studentName: { $regex: search, $options: 'i' } },
-        { studentRollNo: { $regex: search, $options: 'i' } },
-      ];
+      andConditions.push({
+          $or: [
+            { studentName: { $regex: search, $options: 'i' } },
+            { studentRollNo: { $regex: search, $options: 'i' } },
+          ]
+      });
     }
+
+    const query = andConditions.length > 0 ? { $and: andConditions } : {};
 
     const skip = (Number(page) - 1) * Number(limit);
     const [approvals, total] = await Promise.all([
       NodueApproval.find(query)
-        .select('_id batchId studentId studentRollNo studentName subjectName subjectId approvalType roleTag action createdAt')
+        .select('_id batchId studentId studentRollNo studentName subjectName subjectId approvalType roleTag action createdAt itemTypeId itemTypeName itemCode facultyId')
+        .populate('facultyId', 'name')
         .sort({ createdAt: 1 })
         .skip(skip)
         .limit(Number(limit))
@@ -62,31 +87,55 @@ export const getPendingApprovals = async (req, res, next) => {
 
     // Build a batch className lookup map — single query, O(1) per approval
     const batchMap = {};
-    activeBatchIds.forEach((b) => { batchMap[b._id.toString()] = b.className || null; });
+    activeBatches.forEach((b) => { batchMap[b._id.toString()] = b.className || null; });
 
-    // Re-fetch batch className if not available (M0-safe: batchIds already loaded)
     const batchesWithName = await NodueBatch.find(
       { _id: { $in: batchIdSet } },
       '_id className'
     ).lean();
     batchesWithName.forEach((b) => { batchMap[b._id.toString()] = b.className || null; });
 
+    // NEW: Fetch submission data for Co-Curricular items
+    const ccApprovals = approvals.filter(a => a.approvalType === 'coCurricular');
+    const studentIds = [...new Set(ccApprovals.map(a => a.studentId))];
+    const students = studentIds.length > 0 
+      ? await Student.find({ _id: { $in: studentIds } }).select('coCurricular').lean()
+      : [];
+    const studentMap = new Map(students.map(s => [s._id.toString(), s]));
+
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
-      data: approvals.map((a) => ({
-        _id:           a._id,
-        batchId:       a.batchId,
-        className:     batchMap[a.batchId?.toString()] ?? null,
-        studentId:     a.studentId,
-        studentRollNo: a.studentRollNo,
-        studentName:   a.studentName,
-        subjectName:   a.subjectName,
-        subjectId:     a.subjectId ?? null,
-        approvalType:  a.approvalType,
-        roleTag:       a.roleTag,
-        action:        a.action,
-      })),
+      data: approvals.map((a) => {
+        const student = studentMap.get(a.studentId.toString());
+        const submission = a.approvalType === 'coCurricular' 
+          ? student?.coCurricular?.find(cc => cc.itemTypeId?.toString() === a.itemTypeId?.toString())
+          : null;
+
+        return {
+          _id:           a._id,
+          batchId:       a.batchId,
+          className:     batchMap[a.batchId?.toString()] ?? null,
+          studentId:     a.studentId,
+          studentRollNo: a.studentRollNo,
+          studentName:   a.studentName,
+          subjectName:   a.subjectName,
+          subjectId:     a.subjectId ?? null,
+          approvalType:  a.approvalType,
+          roleTag:       a.roleTag,
+          action:        a.action,
+          itemTypeId:    a.itemTypeId ?? null,
+          itemTypeName:  a.itemTypeName ?? null,
+          itemCode:      a.itemCode ?? null,
+          facultyId:     a.facultyId?._id || a.facultyId,
+          facultyName:   a.facultyId?.name || null,
+          submission: submission ? {
+            data: submission.submittedData,
+            status: submission.status,
+            submittedAt: submission.submittedAt
+          } : null
+        };
+      }),
       pagination: {
         page: Number(page),
         limit: Number(limit),
@@ -105,14 +154,40 @@ export const getApprovalHistory = async (req, res, next) => {
     const { userId } = req.user;
     const { semester, page = 1, limit = 20, search = '' } = req.query;
 
-    const query = { facultyId: userId, action: { $ne: 'pending' } };
+    let myDeptBatchIds = [];
+    if (req.user.role === 'hod' && req.user.departmentId) {
+       const deptBatches = await NodueBatch.find({ departmentId: req.user.departmentId }, '_id').lean();
+       myDeptBatchIds = deptBatches.map(b => b._id);
+    }
+
+    const andConditions = [
+      { action: { $ne: 'pending' } }
+    ];
+
+    if (req.user.role === 'hod' && myDeptBatchIds.length > 0) {
+       andConditions.push({
+           $or: [
+               { facultyId: userId },
+               { 
+                   batchId: { $in: myDeptBatchIds }, 
+                   approvalType: { $in: ['coCurricular', 'subject'] }
+               }
+           ]
+       });
+    } else {
+       andConditions.push({ facultyId: userId });
+    }
 
     if (search) {
-      query.$or = [
-        { studentName: { $regex: search, $options: 'i' } },
-        { studentRollNo: { $regex: search, $options: 'i' } },
-      ];
+      andConditions.push({
+          $or: [
+            { studentName: { $regex: search, $options: 'i' } },
+            { studentRollNo: { $regex: search, $options: 'i' } },
+          ]
+      });
     }
+
+    const query = { $and: andConditions };
 
     if (semester) {
       // Filter by semester via batch — two queries but both indexed
@@ -126,7 +201,8 @@ export const getApprovalHistory = async (req, res, next) => {
     const skip = (Number(page) - 1) * Number(limit);
     const [approvals, total] = await Promise.all([
       NodueApproval.find(query)
-        .select('_id batchId studentRollNo studentName subjectName approvalType roleTag action dueType remarks actionedAt')
+        .select('_id batchId studentRollNo studentName subjectName approvalType roleTag action dueType remarks actionedAt itemTypeId itemTypeName itemCode facultyId')
+        .populate('facultyId', 'name')
         .sort({ actionedAt: -1 })
         .skip(skip)
         .limit(Number(limit))
@@ -159,6 +235,8 @@ export const getApprovalHistory = async (req, res, next) => {
           approvalType:  a.approvalType,
           roleTag:       a.roleTag,
           action:        a.action,
+          facultyId:     a.facultyId?._id || a.facultyId,
+          facultyName:   a.facultyId?.name || null,
           dueType:       a.dueType ?? null,
           remarks:       a.remarks ?? null,
           actionedAt:    a.actionedAt,
@@ -185,7 +263,7 @@ export const approveRequest = async (req, res, next) => {
       return next(new ErrorResponse('approvalId is required', 400, 'VALIDATION_ERROR'));
     }
 
-    const approval = await NodueApproval.findOne({ _id: approvalId, facultyId: req.user.userId }).session(session);
+    const approval = await NodueApproval.findOne({ _id: approvalId }).session(session);
     if (!approval) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
@@ -196,10 +274,22 @@ export const approveRequest = async (req, res, next) => {
       return next(new ErrorResponse('This approval has already been actioned', 400, 'APPROVAL_ALREADY_ACTIONED'));
     }
 
-    const batch = await NodueBatch.findById(approval.batchId).session(session).select('status').lean();
+    const batch = await NodueBatch.findById(approval.batchId).session(session).select('status departmentId').lean();
     if (!batch || batch.status !== 'active') {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
+    }
+
+    if (approval.facultyId.toString() !== req.user.userId.toString()) {
+        if (req.user.role === 'hod' && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
+            if (!['coCurricular', 'subject'].includes(approval.approvalType)) {
+                 await abortSafeTransaction(session);
+                 return next(new ErrorResponse('Access denied', 403));
+            }
+        } else {
+            await abortSafeTransaction(session);
+            return next(new ErrorResponse('Access denied', 403));
+        }
     }
 
     approval.action     = 'approved';
@@ -207,6 +297,21 @@ export const approveRequest = async (req, res, next) => {
     approval.remarks    = null;
     approval.actionedAt = new Date();
     await approval.save({ session });
+
+    // NEW: Update Student Co-Curricular status if applicable
+    if (approval.approvalType === 'coCurricular') {
+      await Student.updateOne(
+        { _id: approval.studentId, 'coCurricular.itemTypeId': approval.itemTypeId },
+        { 
+          $set: { 
+            'coCurricular.$.status': 'approved',
+            'coCurricular.$.verifiedBy': req.user.userId,
+            'coCurricular.$.verifiedAt': new Date()
+          } 
+        },
+        { session }
+      );
+    }
 
     await recalcRequestStatus(approval.requestId, session);
 
@@ -246,7 +351,6 @@ export const bulkApproveRequests = async (req, res, next) => {
 
     const approvals = await NodueApproval.find({
       _id: { $in: approvalIds },
-      facultyId: req.user.userId,
       action: 'pending'
     }).session(session);
 
@@ -255,15 +359,27 @@ export const bulkApproveRequests = async (req, res, next) => {
       return next(new ErrorResponse('No pending approval records found with provided IDs', 404, 'NOT_FOUND'));
     }
 
-    const batchIds = [...new Set(approvals.map(a => a.batchId))];
-    const batches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' }).session(session).select('_id').lean();
-    const activeBatchIds = new Set(batches.map(b => b._id.toString()));
+    const batchIds = [...new Set(approvals.map(a => a.batchId.toString()))];
+    const batches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' }).session(session).select('_id departmentId').lean();
+    const activeBatchMap = new Map(batches.map(b => [b._id.toString(), b]));
 
-    const eligibleApprovals = approvals.filter(a => activeBatchIds.has(a.batchId.toString()));
+    const eligibleApprovals = approvals.filter(a => {
+        const batch = activeBatchMap.get(a.batchId.toString());
+        if (!batch) return false;
+
+        if (a.facultyId.toString() !== req.user.userId.toString()) {
+            if (req.user.role === 'hod' && batch.departmentId?.toString() === req.user.departmentId?.toString()) {
+                if (!['coCurricular', 'subject'].includes(a.approvalType)) return false;
+            } else {
+                return false;
+            }
+        }
+        return true;
+    });
     
     if (!eligibleApprovals.length) {
       await abortSafeTransaction(session);
-      return next(new ErrorResponse('All specified batches are closed or inaccessible', 400, 'BATCH_CLOSED'));
+      return next(new ErrorResponse('All specified approvals are invalid, closed, or unauthorized', 400, 'UNAUTHORIZED'));
     }
 
     const now = new Date();
@@ -278,12 +394,29 @@ export const bulkApproveRequests = async (req, res, next) => {
       approval.actionedAt = now;
       await approval.save({ session });
 
+      // NEW: Update Student Co-Curricular status if applicable
+      if (approval.approvalType === 'coCurricular') {
+        await Student.updateOne(
+          { _id: approval.studentId, 'coCurricular.itemTypeId': approval.itemTypeId },
+          { 
+            $set: { 
+              'coCurricular.$.status': 'approved',
+              'coCurricular.$.verifiedBy': req.user.userId,
+              'coCurricular.$.verifiedAt': now
+            } 
+          },
+          { session }
+        );
+      }
+
       requestIdsToRecalc.add(approval.requestId.toString());
       studentIdsToNotify.add(approval.studentId.toString());
       results.push(approval._id);
     }
 
-    await Promise.all([...requestIdsToRecalc].map(id => recalcRequestStatus(id, session)));
+    for (const id of requestIdsToRecalc) {
+      await recalcRequestStatus(id, session);
+    }
 
     await commitSafeTransaction(session);
 
@@ -335,7 +468,7 @@ export const markDue = async (req, res, next) => {
       return next(new ErrorResponse(`Invalid dueType. Must be one of: ${VALID_DUE_TYPES.join(', ')}`, 400, 'VALIDATION_ERROR'));
     }
 
-    const approval = await NodueApproval.findOne({ _id: approvalId, facultyId: req.user.userId }).session(session);
+    const approval = await NodueApproval.findOne({ _id: approvalId }).session(session);
     if (!approval) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
@@ -346,10 +479,22 @@ export const markDue = async (req, res, next) => {
       return next(new ErrorResponse('This approval has already been actioned', 400, 'APPROVAL_ALREADY_ACTIONED'));
     }
 
-    const batch = await NodueBatch.findById(approval.batchId).session(session).select('status').lean();
+    const batch = await NodueBatch.findById(approval.batchId).session(session).select('status departmentId').lean();
     if (!batch || batch.status !== 'active') {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
+    }
+
+    if (approval.facultyId.toString() !== req.user.userId.toString()) {
+        if (req.user.role === 'hod' && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
+            if (!['coCurricular', 'subject'].includes(approval.approvalType)) {
+                 await abortSafeTransaction(session);
+                 return next(new ErrorResponse('Access denied', 403));
+            }
+        } else {
+            await abortSafeTransaction(session);
+            return next(new ErrorResponse('Access denied', 403));
+        }
     }
 
     approval.action     = 'due_marked';
@@ -357,6 +502,22 @@ export const markDue = async (req, res, next) => {
     approval.remarks    = remarks ?? null;
     approval.actionedAt = new Date();
     await approval.save({ session });
+
+    // NEW: Update Student Co-Curricular status if applicable (mark as rejected so they can resubmit)
+    if (approval.approvalType === 'coCurricular') {
+      await Student.updateOne(
+        { _id: approval.studentId, 'coCurricular.itemTypeId': approval.itemTypeId },
+        { 
+          $set: { 
+            'coCurricular.$.status': 'rejected',
+            'coCurricular.$.feedback': remarks || 'Documentation insufficient',
+            'coCurricular.$.verifiedBy': req.user.userId,
+            'coCurricular.$.verifiedAt': new Date()
+          } 
+        },
+        { session }
+      );
+    }
 
     await recalcRequestStatus(approval.requestId, session);
 
@@ -396,16 +557,28 @@ export const updateApproval = async (req, res, next) => {
     const { approvalId } = req.params;
     const { action, dueType, remarks } = req.body;
 
-    const approval = await NodueApproval.findOne({ _id: approvalId, facultyId: req.user.userId }).session(session);
+    const approval = await NodueApproval.findOne({ _id: approvalId }).session(session);
     if (!approval) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
     }
 
-    const batch = await NodueBatch.findById(approval.batchId).session(session).select('status').lean();
+    const batch = await NodueBatch.findById(approval.batchId).session(session).select('status departmentId').lean();
     if (!batch || batch.status !== 'active') {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Cannot update approval — batch is closed', 400, 'BATCH_CLOSED'));
+    }
+
+    if (approval.facultyId.toString() !== req.user.userId.toString()) {
+        if (req.user.role === 'hod' && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
+            if (!['coCurricular', 'subject'].includes(approval.approvalType)) {
+                 await abortSafeTransaction(session);
+                 return next(new ErrorResponse('Access denied', 403));
+            }
+        } else {
+            await abortSafeTransaction(session);
+            return next(new ErrorResponse('Access denied', 403));
+        }
     }
 
     const VALID_ACTIONS = ['pending', 'approved', 'due_marked'];
@@ -463,12 +636,18 @@ export const updateApproval = async (req, res, next) => {
 
 // ── Internal helper ────────────────────────────────────────────────────────────
 async function recalcRequestStatus(requestId, session = null) {
-  const query = NodueApproval.find({ requestId }, 'action');
+  const query = NodueApproval.find({ requestId }, 'action isOptional');
   if (session) query.session(session);
   const approvals = await query.lean();
 
   const hasDue     = approvals.some((a) => a.action === 'due_marked');
-  const allCleared = approvals.every((a) => a.action === 'approved');
+  
+  // Mandatory items + Any optional items that have been actioned/rejected
+  const allCleared = approvals.every((a) => {
+    if (a.action === 'approved') return true;
+    if (a.isOptional && a.action !== 'due_marked') return true; // Optional pending/not_submitted counts as "ok" for final status
+    return false;
+  });
 
   const status = hasDue ? 'has_dues' : allCleared ? 'cleared' : 'pending';
 
