@@ -5,11 +5,16 @@ import { toast } from 'react-hot-toast';
 export const useApi = (apiFunc, options = {}) => {
   const queryClient = useQueryClient();
   const [manualLoading, setManualLoading] = React.useState(false);
+  const isRequestInProgress = React.useRef(false);
+  
+  const serializedKey = useMemo(() => 
+    options.queryKey ? JSON.stringify(options.queryKey) : null
+  , [options.queryKey]);
   
   const queryKey = useMemo(() => {
-    if (options.queryKey) return options.queryKey;
-      return ['api', apiFunc.name || 'unnamed'];
-  }, [options.queryKey, apiFunc]);
+    if (serializedKey) return JSON.parse(serializedKey);
+    return ['api', apiFunc.name || 'unnamed'];
+  }, [serializedKey, apiFunc]);
 
   const {
     data,
@@ -35,7 +40,7 @@ export const useApi = (apiFunc, options = {}) => {
     },
     enabled: options.immediate !== false,
     initialData: options.initialData,
-    ...options.queryOptions // Allow passing extra react-query options
+    ...options.queryOptions 
   });
 
   const optionsRef = React.useRef(options);
@@ -45,29 +50,32 @@ export const useApi = (apiFunc, options = {}) => {
 
   const request = useCallback(async (...args) => {
     const currentOptions = optionsRef.current;
-    if (args.length > 0) {
-      try {
+    
+    // Guard against multiple simultaneous manual requests
+    if (isRequestInProgress.current && args.length === 0) return;
+
+    isRequestInProgress.current = true;
+    setManualLoading(true);
+    
+    try {
+      if (args.length > 0) {
         const result = await apiFunc(...args);
         queryClient.setQueryData(queryKey, result);
         currentOptions.onSuccess?.(result);
         return result;
-      } catch (err) {
-        const errorMessage = err?.response?.data?.error?.message || err.message || 'Something went wrong';
-        if (!currentOptions.silent) {
-          toast.error(errorMessage);
-        }
-        currentOptions.onError?.(err);
-        throw err;
-      } finally {
-        setManualLoading(false);
       }
-    }
-    
-    setManualLoading(true);
-    try {
+      
       const { data: refetchedData } = await refetch();
       return refetchedData;
+    } catch (err) {
+      const errorMessage = err?.response?.data?.error?.message || err.message || 'Something went wrong';
+      if (!currentOptions.silent) {
+        toast.error(errorMessage);
+      }
+      currentOptions.onError?.(err);
+      throw err;
     } finally {
+      isRequestInProgress.current = false;
       setManualLoading(false);
     }
   }, [apiFunc, queryKey, queryClient, refetch]);

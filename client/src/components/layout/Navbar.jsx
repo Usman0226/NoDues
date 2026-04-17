@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { User, LogOut, Bell, Menu, ShieldCheck } from 'lucide-react';
@@ -6,6 +6,7 @@ import Inbox from './Inbox';
 
 const Navbar = ({ onMenuToggle }) => {
   const { user, logout } = useAuth();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <nav className="h-16 lg:h-20 flex items-center justify-between px-4 lg:px-8 bg-white border-b border-zinc-200 shadow-sm z-40">
@@ -26,17 +27,32 @@ const Navbar = ({ onMenuToggle }) => {
             <p className="text-[10px] text-zinc-500 font-medium mt-1 capitalize">{user?.role}</p>
           </div>
 
-          <div className="group relative">
+          <div className="relative group">
             <button
               type="button"
-              className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 lg:h-10 lg:w-10 rounded-full bg-navy inline-flex items-center justify-center text-white ring-2 ring-offset-2 ring-transparent group-hover:ring-indigo-200 transition-all"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className={`min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 lg:h-10 lg:w-10 rounded-full bg-navy inline-flex items-center justify-center text-white ring-2 ring-offset-2 transition-all lg:group-hover:ring-indigo-200
+                ${isMenuOpen ? 'ring-indigo-200' : 'ring-transparent hover:ring-indigo-100'}`}
               aria-label="Account menu"
               aria-haspopup="true"
+              aria-expanded={isMenuOpen}
             >
               <User size={18} />
             </button>
 
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-zinc-200 opacity-0 invisible group-hover:opacity-100 group-active:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right scale-95 group-hover:scale-100 overflow-hidden z-50">
+            {/* Backdrop for closing menu - only active when explicitly clicked */}
+            {isMenuOpen && (
+              <div 
+                className="fixed inset-0 z-40 cursor-default" 
+                onClick={() => setIsMenuOpen(false)} 
+              />
+            )}
+            
+            <div className={`absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-zinc-200 transition-all duration-200 transform origin-top-right z-50 overflow-hidden
+              ${isMenuOpen 
+                ? 'opacity-100 visible scale-100' 
+                : 'opacity-0 invisible scale-95 lg:group-hover:opacity-100 lg:group-hover:visible lg:group-hover:scale-100'
+              }`}>
               <div className="p-4 border-b border-zinc-200 bg-zinc-50/70">
                 <p className="text-xs font-black text-navy truncate">{user?.email}</p>
                 <p className="text-[9px] text-zinc-500 uppercase tracking-[0.2em] mt-1 sm:hidden">{user?.role}</p>
@@ -44,13 +60,17 @@ const Navbar = ({ onMenuToggle }) => {
               <div className="py-1">
                 <Link
                   to="/change-password"
+                  onClick={() => setIsMenuOpen(false)}
                   className="w-full text-left px-4 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 flex items-center gap-2 transition-colors"
                 >
                   <ShieldCheck size={16} />
                   <span>Change Password</span>
                 </Link>
                 <button
-                  onClick={logout}
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    logout();
+                  }}
                   className="w-full text-left px-4 py-3 text-sm font-semibold text-status-rejected hover:bg-red-50 flex items-center gap-2 transition-colors"
                 >
                   <LogOut size={16} />

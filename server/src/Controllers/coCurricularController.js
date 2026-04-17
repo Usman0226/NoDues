@@ -12,7 +12,8 @@ import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } fro
 export const getCoCurricularTypes = async (req, res, next) => {
   try {
     const { departmentId } = req.query;
-    const query = {};
+    const query = { isActive: { $ne: false } };
+
 
     if (req.user.role === 'hod') {
       query.departmentId = req.user.departmentId;

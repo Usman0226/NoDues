@@ -9,7 +9,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
-import { getClasses, createClass, updateClass, deleteClass, updateClassTeacher } from '../../api/classes';
+import { getClasses, createClass, updateClass, deleteClass } from '../../api/classes';
 import { getFaculty } from '../../api/faculty';
 import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -52,24 +52,28 @@ const DepartmentClasses = () => {
   const [limit] = useState(50);
   const [includeInactive, setIncludeInactive] = useState(false);
   
-  const { data: response, loading, error, request: fetchClasses } = useApi(getClasses, {
+  const classesOptions = useMemo(() => ({
     queryKey: ['classes', { departmentId: deptId, page, limit, includeInactive }],
     immediate: false
-  });
+  }), [deptId, page, limit, includeInactive]);
+
+  const { data: response, loading, error, request: fetchClasses } = useApi(getClasses, classesOptions);
   const classes = useMemo(() => response?.data || [], [response?.data]);
   const total = response?.total || 0;
 
-  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, {
+  const facultyOptions = useMemo(() => ({
     queryKey: ['faculty', { departmentId: deptId }],
     immediate: false
-  });
+  }), [deptId]);
+
+  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, facultyOptions);
   const facultyList = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
 
   useEffect(() => {
     const params = { departmentId: deptId, page, limit, includeInactive };
     fetchClasses(params);
     if (deptId) {
-      fetchFaculty({ departmentId: deptId });
+      fetchFaculty({ departmentId: deptId, limit: 100, isActive: true });
     }
   }, [fetchClasses, fetchFaculty, deptId, page, limit, includeInactive]);
 
@@ -133,9 +137,6 @@ const DepartmentClasses = () => {
     setSubmitting(true);
     try {
       await updateClass(selectedClass._id, formData);
-      if (formData.classTeacherId !== (selectedClass.classTeacher?._id || '')) {
-        await updateClassTeacher(selectedClass._id, formData.classTeacherId || null);
-      }
       toast.success('Academic group updated');
       setShowEdit(false);
       fetchClasses({ departmentId: deptId, page, limit, includeInactive });
@@ -281,9 +282,13 @@ const DepartmentClasses = () => {
                         <div className="flex justify-between items-start mb-6">
                           <div className="min-w-0">
                             <h4 className="font-black text-navy text-lg group-hover:text-gold transition-colors uppercase tracking-tight truncate">{cls.name}</h4>
+                            <p className="text-[10px] font-bold text-navy uppercase tracking-widest flex items-center gap-2 mt-1 truncate">
+                               CT: {cls.classTeacher?.name || 'Not Assigned'}
+                            </p>
                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2 mt-1 truncate">
                                Batch: {cls.academicYear}
                             </p>
+                            
                           </div>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.preventDefault()}>
                              <button onClick={(e) => handleEditClick(cls, e)} className="p-2 hover:bg-zinc-50 rounded-lg text-muted-foreground hover:text-navy transition-all border border-transparent hover:border-muted">

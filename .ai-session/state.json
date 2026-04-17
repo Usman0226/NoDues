@@ -1,10 +1,11 @@
 {
-  "last_updated": "2026-04-17T06:20:00Z",
+  "last_updated": "2026-04-17T06:56:00Z",
   "completed": [
     "Fixed Co-Curricular API 400 Bad Request by standardizing departmentId handling",
     "Enhanced CoCurricular UI with department selector for Admin and auto-detection for HoD",
     "Implemented filtered coordinator selection based on department scope",
-    "Hardened co-curricular controllers with robust department scope guards"
+    "Hardened co-curricular controllers with robust department scope guards",
+    "Updated Avatar menu to toggle on click for improved mobile responsiveness"
   ],
   "in_progress": [],
   "pending": [
@@ -16,6 +17,11 @@
       "context": "Co-curricular items required departmentId but frontend was not sending it, and HoDs were forced to select it manually.",
       "decision": "Inferred departmentId from req.user on backend for HoDs and added explicit selector for Admin on frontend.",
       "trade_offs": "Adds one extra API call (getDepartments) for Admins on the co-curricular page."
+    },
+    {
+      "context": "Avatar menu only showed on hover, which is unreliable on mobile.",
+      "decision": "Converted menu to state-driven click toggle with backdrop overlay for closing.",
+      "trade_offs": "Adds one click for desktop users who might have preferred hover, but improves mobile and accessibility."
     }
   ],
   "blockers": [

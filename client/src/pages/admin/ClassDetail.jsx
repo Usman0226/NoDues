@@ -84,10 +84,12 @@ const ClassDetail = () => {
     immediate: true,
     queryKey: ['class', classId]
   });
-  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, {
+  const facultyOptions = useMemo(() => ({
     immediate: false,
     queryKey: ['faculty', isHod ? user?.departmentId : 'all']
-  });
+  }), [isHod, user?.departmentId]);
+
+  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, facultyOptions);
 
   useEffect(() => {
     fetchFaculty({ limit: 500 }); 
@@ -131,13 +133,6 @@ const ClassDetail = () => {
   }, [response]);
 
   const departmentId = classData?.departmentId || classData?.department;
-
-  const filteredFaculty = useMemo(() => {
-    if (!facultyList) return [];
-    return facultyList.filter(f => 
-      f.roleTags?.includes('mentor') || f.roleTags?.includes('faculty')
-    );
-  }, [facultyList]);
 
   const [otherClasses, setOtherClasses] = useState([]);
   useEffect(() => {

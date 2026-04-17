@@ -317,7 +317,7 @@ export const updateClass = async (req, res, next) => {
   try {
     await startSafeTransaction(session);
     const { id } = req.params;
-    const { name, academicYear } = req.body;
+    const { name, academicYear, classTeacherId } = req.body;
 
     const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
     if (!cls) {
@@ -332,13 +332,25 @@ export const updateClass = async (req, res, next) => {
 
     if (name)         cls.name         = name;
     if (academicYear) cls.academicYear = academicYear;
+    
+    if (classTeacherId !== undefined) {
+      if (classTeacherId) {
+        const teacher = await Faculty.findOne({ _id: classTeacherId, isActive: true }).session(session).lean();
+        if (!teacher) {
+          await abortSafeTransaction(session);
+          return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
+        }
+      }
+      cls.classTeacherId = classTeacherId || null;
+    }
+
     await cls.save({ session });
 
     await commitSafeTransaction(session);
 
     return res.status(200).json({
       success: true,
-      data: { _id: cls._id, name: cls.name, academicYear: cls.academicYear },
+      data: { _id: cls._id, name: cls.name, academicYear: cls.academicYear, classTeacherId: cls.classTeacherId },
     });
   } catch (err) {
     await abortSafeTransaction(session);
