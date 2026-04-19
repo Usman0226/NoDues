@@ -23,7 +23,7 @@ const departmentSchema = new mongoose.Schema(
 
 departmentSchema.index({ hodId: 1 });
 
-// ── Cache Invalidation Hooks ──────────────────────────────────────────────────
+// ── Cache Invalidation Hooks
 departmentSchema.post('save', function(doc) {
   invalidateEntityCache('department', doc._id);
 });

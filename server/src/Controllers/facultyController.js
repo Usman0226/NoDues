@@ -39,8 +39,24 @@ export const getFaculty = async (req, res, next) => {
     }
 
     const skip = (Number(page) - 1) * Number(limit);
+
+    // Short-lived list cache — 30s, bypassed on search queries (volatile)
+    const scopeKey = departmentId || req.user.departmentId || 'all';
+    const listCacheKey = !search
+      ? `faculty:list:${scopeKey}:r${roleTag ?? ''}:p${page}:l${limit}:inc${includeInactive ?? 'false'}`
+      : null;
+
+    if (listCacheKey) {
+      const cached = cache.get(listCacheKey);
+      if (cached) {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        return res.status(200).json({ success: true, ...cached });
+      }
+    }
+
     const [faculty, total] = await Promise.all([
       Faculty.find(query)
+        .select('_id name email phone employeeId departmentId roleTags isActive lastLoginAt')
         .populate('departmentId', 'name')
         .sort({ name: 1 })
         .skip(skip)
@@ -49,56 +65,38 @@ export const getFaculty = async (req, res, next) => {
       Faculty.countDocuments(query),
     ]);
 
+    // Build classCount map — two targeted queries, both indexed
+    // Note: the Class.aggregate that was here was computing classCounts but the result was never used
     const facultyIds = faculty.map((f) => f._id);
-    const classCounts = await Class.aggregate([
-      {
-        $match: {
-          isActive: true,
-          $or: [
-            { 'subjectAssignments.facultyId': { $in: facultyIds } },
-            { classTeacherId: { $in: facultyIds } },
-          ],
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          records: {
-            $push: {
-              classTeacherId: '$classTeacherId',
-              facultyIds:     '$subjectAssignments.facultyId',
-            },
-          },
-        },
-      },
-    ]);
-
     const classCountMap = {};
-    const [ctClasses, subjClasses] = await Promise.all([
-      Class.find(
-        { classTeacherId: { $in: facultyIds }, isActive: true },
-        '_id classTeacherId'
-      ).lean(),
-      Class.find(
-        { 'subjectAssignments.facultyId': { $in: facultyIds }, isActive: true },
-        '_id subjectAssignments.facultyId'
-      ).lean(),
-    ]);
 
-    for (const c of ctClasses) {
-      const key = c.classTeacherId?.toString();
-      if (key) classCountMap[key] = (classCountMap[key] ?? 0) + 1;
-    }
-    for (const c of subjClasses) {
-      for (const a of c.subjectAssignments ?? []) {
-        const key = a.facultyId?.toString();
+    // Skip classCount lookup during search — saves 2 DB round-trips per keypress.
+    // classCount is irrelevant when the user is filtering by name/email/employeeId.
+    if (!search && facultyIds.length > 0) {
+      const [ctClasses, subjClasses] = await Promise.all([
+        Class.find(
+          { classTeacherId: { $in: facultyIds }, isActive: true },
+          '_id classTeacherId'
+        ).lean(),
+        Class.find(
+          { 'subjectAssignments.facultyId': { $in: facultyIds }, isActive: true },
+          '_id subjectAssignments.facultyId'
+        ).lean(),
+      ]);
+
+      for (const c of ctClasses) {
+        const key = c.classTeacherId?.toString();
         if (key) classCountMap[key] = (classCountMap[key] ?? 0) + 1;
+      }
+      for (const c of subjClasses) {
+        for (const a of c.subjectAssignments ?? []) {
+          const key = a.facultyId?.toString();
+          if (key) classCountMap[key] = (classCountMap[key] ?? 0) + 1;
+        }
       }
     }
 
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    return res.status(200).json({
-      success: true,
+    const payload = {
       data: faculty.map((f) => ({
         _id:            f._id,
         name:           f.name,
@@ -118,7 +116,12 @@ export const getFaculty = async (req, res, next) => {
         total,
         pages: Math.ceil(total / Number(limit)),
       },
-    });
+    };
+
+    if (listCacheKey) cache.set(listCacheKey, payload, 30);
+
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    return res.status(200).json({ success: true, ...payload });
   } catch (err) {
     next(err);
   }
@@ -594,7 +597,7 @@ export const bulkUpdateRoles = async (req, res, next) => {
     const targets = faculties.filter(f => !f.roleTags.includes('hod'));
     
     if (targets.length === 0) {
-      await session.commitTransaction();
+      await commitSafeTransaction(session);
       return res.status(200).json({
         success: true,
         message: 'No eligible faculty members found for update (HoDs skipped).',

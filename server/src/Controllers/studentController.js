@@ -46,21 +46,38 @@ export const getStudents = async (req, res, next) => {
       ];
     }
 
-    const total = await Student.countDocuments(query);
-    const skip  = (Number(page) - 1) * Number(limit);
+    const skip = (Number(page) - 1) * Number(limit);
 
-    const students = await Student.find(query)
-      .populate('classId', 'name semester')
-      .populate('departmentId', 'name')
-      .populate('mentorId', 'name employeeId')
-      .sort({ rollNo: 1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean();
+    // Cache list for non-search requests (search is volatile, skip caching)
+    // Key encodes scope + page so different pages get their own cache entries
+    const scopeKey = classId || departmentId || req.user.departmentId || 'all';
+    const listCacheKey = !search
+      ? `students:list:${scopeKey}:p${page}:l${limit}:inc${includeInactive ?? 'false'}`
+      : null;
 
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    return res.status(200).json({
-      success: true,
+    if (listCacheKey) {
+      const cached = cache.get(listCacheKey);
+      if (cached) {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        return res.status(200).json({ success: true, ...cached });
+      }
+    }
+
+    // Run count + find in parallel — previously sequential (count then find)
+    const [total, students] = await Promise.all([
+      Student.countDocuments(query),
+      Student.find(query)
+        .select('_id rollNo name email classId departmentId semester mentorId isActive')
+        .populate('classId', 'name semester')
+        .populate('departmentId', 'name')
+        .populate('mentorId', 'name employeeId')
+        .sort({ rollNo: 1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+    ]);
+
+    const payload = {
       data: students.map((s) => ({
         _id:            s._id,
         rollNo:         s.rollNo,
@@ -80,7 +97,12 @@ export const getStudents = async (req, res, next) => {
         page: Number(page), limit: Number(limit), total,
         pages: Math.ceil(total / Number(limit)),
       },
-    });
+    };
+
+    if (listCacheKey) cache.set(listCacheKey, payload, 30); // 30s — short enough to see new students
+
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    return res.status(200).json({ success: true, ...payload });
   } catch (err) {
     next(err);
   }

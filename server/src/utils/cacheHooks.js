@@ -53,13 +53,11 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
       break;
 
     case 'request':
-      // entityId = requestId, additionalId = studentId (optional)
-      // We need batchId too to be perfect, but let's assume we pass it if we can.
+      // entityId = requestId, additionalId = studentId
+      // Pass batchId as a third param if available for targeted invalidation
       if (additionalId) keys.push(`student_status:${additionalId}`);
-      // Wildcard for batch status since we don't have batchId easily here without more params
-      const allKeysReq = cache.keys();
-      const batchStatusKeys = allKeysReq.filter(k => k.startsWith('batch_status:'));
-      keys.push(...batchStatusKeys);
+      // Note: callers should pass batchId via a separate direct cache.del call
+      // to avoid O(n) key scan. The hook in NodueRequest.js handles this.
       break;
 
     case 'approval':

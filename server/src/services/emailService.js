@@ -70,6 +70,28 @@ const getTransporter = (index) => {
   return _transporters[index];
 };
 
+const selectBrevoAccountIndex = async () => {
+  if (brevoConfig.accounts.length === 0) return -1;
+
+  const today = new Date().toISOString().split('T')[0];
+  let quota = await EmailQuota.findOne({ date: today });
+  
+  if (!quota) {
+    quota = await EmailQuota.create({ date: today, usage: {} });
+  }
+
+  for (let i = 0; i < brevoConfig.accounts.length; i++) {
+    // Brevo accounts are stored as -1, -2, -3... in usage map
+    const accountId = (-(i + 1)).toString();
+    const sentCount = quota.usage.get(accountId) || 0;
+    if (sentCount < ACCOUNT_LIMIT) {
+      return i; // Returns 0-based index for accounts array
+    }
+  }
+
+  return -1;
+};
+
 const selectAccountIndex = async () => {
   if (_accounts.length === 0) discoverAccounts();
   if (_accounts.length === 0) return -1;
@@ -88,20 +110,23 @@ const selectAccountIndex = async () => {
     }
   }
 
-  return -1; // All quotas exhausted
+  return -1; 
 };
 
-const sendViaBrevo = async (mailOptions) => {
+const sendViaBrevo = async (mailOptions, accountIndex = 0) => {
+  const account = brevoConfig.accounts[accountIndex];
+  if (!account) throw new Error(`No Brevo API configuration found for account index ${accountIndex}`);
+
   try {
     const response = await fetch(brevoConfig.apiUrl, {
       method: 'POST',
       headers: {
         'accept': 'application/json',
-        'api-key': brevoConfig.apiKey,
+        'api-key': account.apiKey,
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        sender: mailOptions.sender || brevoConfig.sender,
+        sender: mailOptions.sender || account.sender,
         to: Array.isArray(mailOptions.to) ? mailOptions.to : [{ email: mailOptions.to }],
         subject: mailOptions.subject,
         htmlContent: mailOptions.html
@@ -114,20 +139,16 @@ const sendViaBrevo = async (mailOptions) => {
     }
     return { success: true, messageId: data.messageId };
   } catch (error) {
-    logger.error('Brevo API Dispatch Failed:', error);
+    logger.error(`Brevo API Dispatch Failed for account ${accountIndex + 1}:`, error);
     throw error;
   }
 };
 
-/**
- * Log email status to database (Fire and forget)
- */
 const writeEmailLog = (logData) => {
   EmailLog.create(logData).catch(err => {
     logger.error('Failed to write email log to database:', err);
   });
 
-  // Increment quota if success
   if (logData.status === 'success') {
     const today = new Date().toISOString().split('T')[0];
     EmailQuota.findOneAndUpdate(
@@ -138,27 +159,30 @@ const writeEmailLog = (logData) => {
   }
 };
 
-/**
- * Diagnostic function to test all configured accounts
- */
 export const testConnection = async () => {
   discoverAccounts();
   const results = [];
   
-  // Test Brevo API if configured
-  if (brevoConfig.apiKey) {
+  for (let i = 0; i < brevoConfig.accounts.length; i++) {
+    const account = brevoConfig.accounts[i];
     try {
-      // Small dummy request to check key validity (account info endpoint is better but smtp check is fine)
       const resp = await fetch('https://api.brevo.com/v3/account', {
-        headers: { 'api-key': brevoConfig.apiKey }
+        headers: { 'api-key': account.apiKey }
       });
+      const data = await resp.json();
       if (resp.ok) {
-        results.push({ index: 'api', user: brevoConfig.sender.email, status: 'connected', type: 'BREVO_API' });
+        results.push({ 
+          index: `brevo_${i + 1}`, 
+          user: data.email || account.sender.email, 
+          status: 'connected', 
+          type: 'BREVO_API',
+          plan: data.plan
+        });
       } else {
-        results.push({ index: 'api', user: brevoConfig.sender.email, status: 'error', error: 'Invalid API Key', type: 'BREVO_API' });
+        results.push({ index: `brevo_${i + 1}`, user: account.sender.email, status: 'error', error: data.message || 'Invalid API Key', type: 'BREVO_API' });
       }
     } catch (err) {
-      results.push({ index: 'api', user: brevoConfig.sender.email, status: 'error', error: err.message, type: 'BREVO_API' });
+      results.push({ index: `brevo_${i + 1}`, user: account.sender.email, status: 'error', error: err.message, type: 'BREVO_API' });
     }
   }
 
@@ -203,26 +227,28 @@ export const sendCredentialEmail = async (to, name, identifier, password, role) 
   `;
 
   // --- Method 1: Brevo API (Preferred for Production/Render) ---
-  if (brevoConfig.apiKey) {
+  const brevoIdx = await selectBrevoAccountIndex();
+  if (brevoIdx !== -1) {
     try {
-      await sendViaBrevo({ to, subject, html });
+      await sendViaBrevo({ to, subject, html }, brevoIdx);
       
       writeEmailLog({
         recipient: to,
         subject,
         role: role || 'system',
         status: 'success',
-        accountIndex: -1, // -1 denotes API delivery
+        accountIndex: -(brevoIdx + 1), // -1, -2, -3...
         triggeredBy: 'SYSTEM'
       });
       return true;
     } catch (error) {
-      logger.error(`Brevo API fallback in effect for ${to}. Error: ${error.message}`);
-      // Fall through to SMTP if API fails
+      logger.error(`Brevo API failed for account ${brevoIdx + 1}. Error: ${error.message}`);
+      // Continue to fallback if Brevo fails
     }
+  } else if (brevoConfig.accounts.length > 0) {
+    logger.warn(`Daily quota exhausted for all ${brevoConfig.accounts.length} Brevo accounts. Falling back to SMTP.`);
   }
 
-  // --- Method 2: SMTP Rotation (Fallback for Local/Legacy) ---
   const accountIndex = await selectAccountIndex();
   if (accountIndex === -1) {
     logger.error('Email aborted: Daily quota exhausted across all accounts.');

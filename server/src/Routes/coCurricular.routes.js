@@ -4,7 +4,8 @@ import {
     createCoCurricularType, 
     updateCoCurricularType, 
     deleteCoCurricularType,
-    submitCoCurricular
+    submitCoCurricular,
+    assignCoCurricularToMentors,
 } from '../Controllers/coCurricularController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -20,6 +21,10 @@ router.route('/')
 router.route('/:id')
     .patch(RoleGuard(['admin', 'hod']), updateCoCurricularType)
     .delete(RoleGuard(['admin', 'hod']), deleteCoCurricularType);
+
+// Idempotent backfill — assigns mentor approvals to all students in active batches
+router.route('/:id/assign-mentors')
+    .post(RoleGuard(['admin', 'hod']), assignCoCurricularToMentors);
 
 router.route('/:typeId/submit')
     .post(RoleGuard(['student']), submitCoCurricular);

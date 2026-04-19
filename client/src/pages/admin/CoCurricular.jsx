@@ -11,11 +11,12 @@ import {
   getCoCurricularTypes, 
   createCoCurricularType, 
   updateCoCurricularType, 
-  deleteCoCurricularType 
+  deleteCoCurricularType,
+  assignCoCurricularToMentors,
 } from '../../api/coCurricular';
 import { getFaculty } from '../../api/faculty';
 import { getDepartments } from '../../api/departments';
-import { Plus, Edit, Trash2, AlertCircle, RefreshCw, X, GripVertical } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertCircle, RefreshCw, X, GripVertical, Users } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
@@ -30,8 +31,13 @@ const CoCurricular = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showAssignMentors, setShowAssignMentors] = useState(false);
+  const [assignMentorsResult, setAssignMentorsResult] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [assigningMentors, setAssigningMentors] = useState(false);
+  const [assignMode, setAssignMode] = useState('per_mentor'); // 'per_mentor' | 'single_faculty'
+  const [assignFacultyId, setAssignFacultyId] = useState('');
   
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -51,8 +57,9 @@ const CoCurricular = () => {
     departmentId: '',
     applicableYears: [1, 2, 3, 4],
     isOptional: false,
+    requiresMentorApproval: false,
     coordinatorId: '',
-    fields: [{ label: '', type: 'text', required: true }]
+    fields: []
   });
 
   const departments = React.useMemo(() => deptResponse?.data || [], [deptResponse?.data]);
@@ -106,11 +113,15 @@ const CoCurricular = () => {
   };
 
   const validateForm = () => {
-    if (!formData.name || !formData.code || (!isAdmin && !user?.departmentId) || (isAdmin && !formData.departmentId) || !formData.coordinatorId) {
-      toast.error('Basic details, department, and coordinator are required');
+    if (!formData.name || !formData.code || (!isAdmin && !user?.departmentId) || (isAdmin && !formData.departmentId)) {
+      toast.error('Basic details and department are required');
       return false;
     }
-    if (formData.fields.some(f => !f.label)) {
+    if (!formData.requiresMentorApproval && !formData.coordinatorId) {
+      toast.error('Please select a Designated Coordinator');
+      return false;
+    }
+    if (formData.fields.length > 0 && formData.fields.some(f => !f.label)) {
       toast.error('All form fields must have a label');
       return false;
     }
@@ -150,6 +161,7 @@ const CoCurricular = () => {
       departmentId: item.departmentId?._id || item.departmentId,
       applicableYears: item.applicableYears,
       isOptional: item.isOptional,
+      requiresMentorApproval: item.requiresMentorApproval || false,
       coordinatorId: item.coordinatorId?._id || item.coordinatorId,
       fields: item.fields.map(f => ({
         label: f.label,
@@ -158,6 +170,39 @@ const CoCurricular = () => {
       }))
     });
     setShowEdit(true);
+  };
+
+  const handleAssignMentorsClick = (item) => {
+    setSelectedItem(item);
+    setAssignMentorsResult(null);
+    setAssignMode('per_mentor');
+    setAssignFacultyId('');
+    setShowAssignMentors(true);
+  };
+
+  const handleAssignMentorsConfirm = async () => {
+    if (!selectedItem) return;
+    if (assignMode === 'single_faculty' && !assignFacultyId) {
+      toast.error('Please select a faculty coordinator');
+      return;
+    }
+    
+    setAssigningMentors(true);
+    try {
+      const payload = {
+        mode: assignMode,
+        ...(assignMode === 'single_faculty' ? { facultyId: assignFacultyId } : {})
+      };
+      const res = await assignCoCurricularToMentors(selectedItem._id, payload);
+      setAssignMentorsResult(res?.data?.data || res?.data || null);
+      toast.success('Mentor approvals assigned successfully');
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to assign mentors';
+      toast.error(msg);
+      setShowAssignMentors(false);
+    } finally {
+      setAssigningMentors(false);
+    }
   };
 
   const handleEditSubmit = async () => {
@@ -203,8 +248,9 @@ const CoCurricular = () => {
       departmentId: '',
       applicableYears: [1, 2, 3, 4],
       isOptional: false,
+      requiresMentorApproval: false,
       coordinatorId: '',
-      fields: [{ label: '', type: 'text', required: true }]
+      fields: []
     });
   };
 
@@ -242,6 +288,15 @@ const CoCurricular = () => {
           <ActionMenu
             actions={[
               { label: 'Modify Template', icon: Edit, onClick: () => handleEditClick(row) },
+              {
+                label: 'Assign to Mentors',
+                icon: Users,
+                onClick: () => handleAssignMentorsClick(row),
+                disabled: !row.requiresMentorApproval,
+                title: !row.requiresMentorApproval
+                  ? 'Enable "Require Mentor Approval" on this item first'
+                  : 'Backfill mentor approvals for all students in active batches',
+              },
               { label: 'Delete', icon: Trash2, onClick: () => { setSelectedItem(row); setShowDelete(true); }, variant: 'danger' },
             ]}
           />
@@ -337,7 +392,7 @@ const CoCurricular = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-5">
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Visibility Type</label>
                 <div className="h-[46px] flex items-center px-4 rounded-lg border border-muted bg-offwhite/50">
@@ -391,17 +446,51 @@ const CoCurricular = () => {
               </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Assigned Coordinator</label>
-              <SearchableSelect 
-                options={[
-                  { value: '', label: 'Select a Faculty Member' },
-                  ...facultyOptions
-                ]}
-                value={formData.coordinatorId}
-                onChange={val => setFormData({...formData, coordinatorId: val})}
-                placeholder="Search faculty by name..."
-              />
+            <div className="bg-navy/5 border border-navy/10 rounded-xl p-4 space-y-4">
+              <label className="block text-[10px] uppercase tracking-widest font-black text-navy">Approval </label>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${formData.requiresMentorApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <input 
+                      type="radio" 
+                      checked={formData.requiresMentorApproval === true}
+                      onChange={() => setFormData({...formData, requiresMentorApproval: true, coordinatorId: ''})}
+                      className="w-3.5 h-3.5 text-navy focus:ring-navy/20"
+                    />
+                    <span className="text-xs font-bold text-navy">Student's Mentor</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pl-5 leading-tight">Routed to each student's specific mentor.</p>
+                </label>
+
+                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${formData.requiresMentorApproval === false ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <input 
+                      type="radio" 
+                      checked={formData.requiresMentorApproval === false}
+                      onChange={() => setFormData({...formData, requiresMentorApproval: false})}
+                      className="w-3.5 h-3.5 text-navy focus:ring-navy/20"
+                    />
+                    <span className="text-xs font-bold text-navy">Single Coordinator</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pl-5 leading-tight">Routed to one designated faculty member.</p>
+                </label>
+              </div>
+
+              {formData.requiresMentorApproval === false && (
+                <div className="pt-2">
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Designated Coordinator</label>
+                  <SearchableSelect 
+                    options={[
+                      { value: '', label: 'Select a Faculty Member' },
+                      ...facultyOptions
+                    ]}
+                    value={formData.coordinatorId}
+                    onChange={val => setFormData({...formData, coordinatorId: val})}
+                    placeholder="Search faculty by name..."
+                  />
+                </div>
+              )}
             </div>
 
             <div className="pt-6 border-t border-muted/30">
@@ -446,7 +535,7 @@ const CoCurricular = () => {
                              </label>
                           </div>
                        </div>
-                       {formData.fields.length > 1 && (
+                       {formData.fields.length > 0 && (
                          <button onClick={() => handleRemoveField(idx)} className="p-2 text-status-due/50 hover:text-status-due">
                             <X size={14} />
                          </button>
@@ -463,7 +552,7 @@ const CoCurricular = () => {
                 onClick={showCreate ? handleCreate : handleEditSubmit} 
                 loading={submitting}
               >
-                {showCreate ? 'Register Clearance Item' : 'Save Changes'}
+                {showCreate ? 'Create' : 'Save Changes'}
               </Button>
             </div>
           </div>
@@ -480,6 +569,130 @@ const CoCurricular = () => {
         isDestructive={true}
         loading={submitting}
       />
+
+      {/* Assign to Mentors Modal */}
+      {showAssignMentors && (
+        <Modal
+          isOpen={showAssignMentors}
+          title="Assign Co-Curricular Clearance"
+          onClose={() => { setShowAssignMentors(false); setAssignMentorsResult(null); }}
+          className="max-w-md"
+        >
+          <div className="space-y-5">
+            {!assignMentorsResult ? (
+              <>
+                <div className="p-4 rounded-lg bg-navy/5 border border-navy/10">
+                  <div className="flex items-start gap-3">
+                    <Users size={18} className="text-navy mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-navy mb-1">{selectedItem?.name}</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        This will create pending approval tasks for every student in an <strong>active clearance batch</strong> for this item.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground">Assignment Strategy</label>
+                  
+                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${assignMode === 'per_mentor' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
+                    <div className="pt-0.5">
+                      <input 
+                        type="radio" 
+                        name="assignMode" 
+                        value="per_mentor" 
+                        checked={assignMode === 'per_mentor'}
+                        onChange={(e) => setAssignMode(e.target.value)}
+                        className="w-4 h-4 text-navy focus:ring-navy/20"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-navy">Each Student's Own Mentor</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">Routes the approval to the faculty assigned as the mentor for each individual student. Students without a mentor are skipped.</p>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${assignMode === 'single_faculty' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
+                    <div className="pt-0.5">
+                      <input 
+                        type="radio" 
+                        name="assignMode" 
+                        value="single_faculty" 
+                        checked={assignMode === 'single_faculty'}
+                        onChange={(e) => setAssignMode(e.target.value)}
+                        className="w-4 h-4 text-navy focus:ring-navy/20"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-navy">Single Faculty Coordinator</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">Routes all approvals to one specific faculty member.</p>
+                      
+                      {assignMode === 'single_faculty' && (
+                        <div className="mt-3">
+                          <SearchableSelect
+                            options={facultyOptions}
+                            value={assignFacultyId}
+                            onChange={(val) => setAssignFacultyId(val)}
+                            placeholder="Search faculty..."
+                            className="w-full"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                </div>
+
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                  <p className="text-[11px] text-amber-700 font-medium">
+                    ⚡ This operation is <strong>idempotent</strong> — calling it multiple times will not create duplicates.
+                  </p>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button variant="ghost" onClick={() => setShowAssignMentors(false)}>Cancel</Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleAssignMentorsConfirm}
+                    loading={assigningMentors}
+                    className="gap-2"
+                  >
+                    <Users size={14} /> Assign Approvals
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-center">
+                      <p className="text-2xl font-black text-green-700">{assignMentorsResult.created ?? 0}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-green-600 font-bold mt-1">Created</p>
+                    </div>
+                    {assignMentorsResult.mode === 'per_mentor' && (
+                      <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-center">
+                        <p className="text-2xl font-black text-amber-700">{assignMentorsResult.skipped ?? 0}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-amber-600 font-bold mt-1">No Mentor</p>
+                      </div>
+                    )}
+                    <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-center">
+                      <p className="text-2xl font-black text-gray-500">{assignMentorsResult.skippedNoRequest ?? 0}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mt-1">No Request</p>
+                    </div>
+                  </div>
+                  {assignMentorsResult.mode === 'per_mentor' && (assignMentorsResult.skipped ?? 0) > 0 && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      ⚠️ {assignMentorsResult.skipped} student(s) have no mentor assigned yet. Assign mentors in Class Detail, then run this again.
+                    </p>
+                  )}
+                </div>
+                <div className="flex justify-end pt-2">
+                  <Button variant="primary" onClick={() => { setShowAssignMentors(false); setAssignMentorsResult(null); }}>Done</Button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
     </PageWrapper>
   );
 };

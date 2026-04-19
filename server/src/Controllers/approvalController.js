@@ -16,10 +16,11 @@ export const getPendingApprovals = async (req, res, next) => {
     const { userId } = req.user;
     const { page = 1, limit = 20, search = '', batchId, action } = req.query;
     
-    // Validate requested batch accessibility
+    // Single batch query — fetch _id, departmentId AND className in one shot
+    // Previously made two separate NodueBatch queries (one for dept scope, one for className)
     const activeBatches = await NodueBatch.find(
       { status: 'active' },
-      '_id departmentId'
+      '_id departmentId className'
     ).lean();
 
     if (!activeBatches.length) {
@@ -85,15 +86,9 @@ export const getPendingApprovals = async (req, res, next) => {
       NodueApproval.countDocuments(query),
     ]);
 
-    // Build a batch className lookup map — single query, O(1) per approval
+    // Build className map directly from the single activeBatches query above — no second DB call needed
     const batchMap = {};
     activeBatches.forEach((b) => { batchMap[b._id.toString()] = b.className || null; });
-
-    const batchesWithName = await NodueBatch.find(
-      { _id: { $in: batchIdSet } },
-      '_id className'
-    ).lean();
-    batchesWithName.forEach((b) => { batchMap[b._id.toString()] = b.className || null; });
 
     // NEW: Fetch submission data for Co-Curricular items
     const ccApprovals = approvals.filter(a => a.approvalType === 'coCurricular');

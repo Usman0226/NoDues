@@ -62,10 +62,13 @@ export const getStudentStatus = async (req, res, next) => {
         return { status: 'not_initiated', batchId: activeBatch._id };
       }
 
-      // 3. Request exists — verify Parent Batch state
-      const batch = await NodueBatch.findById(request.batchId)
-        .select('semester academicYear deadline className status')
-        .lean();
+      // 3. Request exists — fetch batch metadata + approvals in parallel (both independent)
+      const [batch, approvals] = await Promise.all([
+        NodueBatch.findById(request.batchId)
+          .select('semester academicYear deadline className status')
+          .lean(),
+        NodueApproval.find({ requestId: request._id }).lean(),
+      ]);
 
       // IF viewing active status (no requestId) AND (batch is missing OR batch is closed)
       // THEN redirect to no_batch state
@@ -78,9 +81,6 @@ export const getStudentStatus = async (req, res, next) => {
 
       // If viewing history BUT batch was deleted, we still show the request data 
       // with fallback metadata to prevent the "Taking to Home" (no_batch) loop.
-
-      // 3. Fetch all granular approvals for this request
-      const approvals = await NodueApproval.find({ requestId: request._id }).lean();
 
       // NEW: Fetch all Co-Curricular Types involved to get form fields
       const ccTypeIds = approvals

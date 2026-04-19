@@ -108,6 +108,10 @@ const studentSchema = new mongoose.Schema(
   }
 );
 
+// Student login — covers findOne({ rollNo, isActive: true })
+// rollNo has unique:true (single index), but this compound is needed to cover the isActive filter
+studentSchema.index({ rollNo: 1, isActive: 1 });
+
 // Class student list — admin class page
 studentSchema.index({ classId: 1, isActive: 1 });
 
@@ -119,12 +123,28 @@ studentSchema.index({ mentorId: 1 });
 
 studentSchema.post('save', function(doc) {
   invalidateEntityCache('student', doc._id);
+  // Clear scoped list cache entries so new/updated students appear immediately
+  const allKeys = cache.keys();
+  const listKeys = allKeys.filter(k =>
+    k.startsWith(`students:list:${doc.classId}:`) ||
+    k.startsWith(`students:list:${doc.departmentId}:`) ||
+    k.startsWith('students:list:all:')
+  );
+  if (listKeys.length) cache.del(listKeys);
 });
 
 studentSchema.post('findOneAndUpdate', async function() {
   const query = this.getQuery();
   const doc = await this.model.findOne(query);
-  if (doc) invalidateEntityCache('student', doc._id);
+  if (!doc) return;
+  invalidateEntityCache('student', doc._id);
+  const allKeys = cache.keys();
+  const listKeys = allKeys.filter(k =>
+    k.startsWith(`students:list:${doc.classId}:`) ||
+    k.startsWith(`students:list:${doc.departmentId}:`) ||
+    k.startsWith('students:list:all:')
+  );
+  if (listKeys.length) cache.del(listKeys);
 });
 
 export default mongoose.model('Student', studentSchema);

@@ -27,45 +27,29 @@ export const getDepartments = async (req, res, next) => {
       .sort({ name: 1 })
       .lean();
 
-    // Enrich with class & active-batch counts in a single aggregation each
-    const deptIds = departments.map((d) => d._id);
-
-    const [classCounts, batchCounts, facultyCounts, studentCounts] = await Promise.all([
-      Class.aggregate([
-        { $match: { departmentId: { $in: deptIds }, isActive: true } },
-        { $group: { _id: '$departmentId', count: { $sum: 1 } } },
-      ]),
-      NodueBatch.aggregate([
-        { $match: { departmentId: { $in: deptIds }, status: 'active' } },
-        { $group: { _id: '$departmentId', count: { $sum: 1 } } },
-      ]),
-      Faculty.aggregate([
-        { $match: { departmentId: { $in: deptIds }, isActive: true } },
-        { $group: { _id: '$departmentId', count: { $sum: 1 } } },
-      ]),
-      Student.aggregate([
-        { $match: { departmentId: { $in: deptIds }, isActive: true } },
-        { $group: { _id: '$departmentId', count: { $sum: 1 } } },
-      ]),
-    ]);
-
-    const classMap   = Object.fromEntries(classCounts.map((c) => [c._id.toString(), c.count]));
-    const batchMap   = Object.fromEntries(batchCounts.map((b) => [b._id.toString(), b.count]));
-    const facultyMap = Object.fromEntries(facultyCounts.map((f) => [f._id.toString(), f.count]));
-    const studentMap = Object.fromEntries(studentCounts.map((s) => [s._id.toString(), s.count]));
-
-    const data = departments.map((d) => ({
-      _id:              d._id,
-      name:             d.name,
-      hod:              d.hodId
-        ? { _id: d.hodId._id, name: d.hodId.name, email: d.hodId.email }
-        : null,
-      classCount:       classMap[d._id.toString()] ?? 0,
-      activeBatchCount: batchMap[d._id.toString()] ?? 0,
-      facultyCount:     facultyMap[d._id.toString()] ?? 0,
-      studentCount:     studentMap[d._id.toString()] ?? 0,
-      createdAt:        d.createdAt,
-    }));
+    const data = await Promise.all(
+      departments.map(async (d) => {
+        const id = d._id;
+        const [classCount, activeBatchCount, facultyCount, studentCount] = await Promise.all([
+          Class.countDocuments({ departmentId: id, isActive: true }),
+          NodueBatch.countDocuments({ departmentId: id, status: 'active' }),
+          Faculty.countDocuments({ departmentId: id, isActive: true }),
+          Student.countDocuments({ departmentId: id, isActive: true }),
+        ]);
+        return {
+          _id:              d._id,
+          name:             d.name,
+          hod:              d.hodId
+            ? { _id: d.hodId._id, name: d.hodId.name, email: d.hodId.email }
+            : null,
+          classCount,
+          activeBatchCount,
+          facultyCount,
+          studentCount,
+          createdAt: d.createdAt,
+        };
+      })
+    );
 
     cache.set(cacheKey, data, 300); // 5-min cache
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');

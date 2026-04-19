@@ -23,7 +23,6 @@ COPY package*.json ./
 # Install only production dependencies
 RUN npm ci --only=production && npm cache clean --force
 
-# Copy application source code
 COPY . .
 
 # Set specific permissions for security
@@ -43,3 +42,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 5000
 
 CMD ["node", "--max-old-space-size=3072", "server.js"]
+
+# docker run -d -it --name nodues-api -e MONGODB_URI="" -e JWT_SECRET=12345 -p 5000:5000 nodues-server:latest

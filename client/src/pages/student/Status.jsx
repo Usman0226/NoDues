@@ -42,7 +42,6 @@ const CircularProgress = ({ cleared, total, rollNo }) => {
 
   return (
     <div className="flex items-center gap-6 sm:gap-8 relative z-10">
-      {/* Circular SVG Container */}
       <div className="relative h-24 w-24 sm:h-28 sm:w-28 flex items-center justify-center shrink-0">
         <svg className="h-full w-full -rotate-90 transform overflow-visible" viewBox="0 0 96 96">
           <defs>
@@ -58,7 +57,6 @@ const CircularProgress = ({ cleared, total, rollNo }) => {
               </feMerge>
             </filter>
           </defs>
-          {/* Background Track */}
           <circle
             cx="48"
             cy="48"
@@ -215,7 +213,7 @@ const StudentStatus = () => {
     });
   }, [approvals, activeFilter]);
 
-  // ── DYNAMIC GROUPING ENGINE ──────────────────────────────────────────────
+  // ── DYNAMIC GROUPING ENGINE
   const groupedApprovals = React.useMemo(() => {
     const groups = {};
     const seenIds = new Set();

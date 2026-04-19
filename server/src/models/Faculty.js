@@ -86,12 +86,26 @@ facultySchema.pre('save', async function () {
 // ── Cache Invalidation Hooks ──────────────────────────────────────────────────
 facultySchema.post('save', function(doc) {
   invalidateEntityCache('faculty', doc._id);
+  // Clear scoped list cache entries so faculty changes appear immediately
+  const allKeys = cache.keys();
+  const listKeys = allKeys.filter(k =>
+    k.startsWith(`faculty:list:${doc.departmentId}:`) ||
+    k.startsWith('faculty:list:all:')
+  );
+  if (listKeys.length) cache.del(listKeys);
 });
 
 facultySchema.post('findOneAndUpdate', async function() {
   const query = this.getQuery();
   const doc = await this.model.findOne(query);
-  if (doc) invalidateEntityCache('faculty', doc._id);
+  if (!doc) return;
+  invalidateEntityCache('faculty', doc._id);
+  const allKeys = cache.keys();
+  const listKeys = allKeys.filter(k =>
+    k.startsWith(`faculty:list:${doc.departmentId}:`) ||
+    k.startsWith('faculty:list:all:')
+  );
+  if (listKeys.length) cache.del(listKeys);
 });
 
 export default mongoose.model('Faculty', facultySchema);

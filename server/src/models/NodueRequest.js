@@ -42,18 +42,26 @@ const nodueRequestSchema = new mongoose.Schema({
 });
 
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
+import cache from '../config/cache.js';
 
 nodueRequestSchema.index({ batchId: 1, status: 1 });
 nodueRequestSchema.index({ studentId: 1 });
 nodueRequestSchema.index({ batchId: 1, studentId: 1 });
 
 // ── Cache Invalidation Hooks ────────────────────────────────────────────────
+// Direct targeted delete: avoids the O(n) cache.keys() scan that previously
+// iterated all keys to find batch_status:* entries on every request save.
 nodueRequestSchema.post('save', async function (doc) {
   invalidateEntityCache('request', doc._id, doc.studentId);
+  // Directly invalidate this specific batch's status grid
+  if (doc.batchId) cache.del(`batch_status:${doc.batchId}`);
 });
 
 nodueRequestSchema.post('findOneAndUpdate', async function (doc) {
-  if (doc) invalidateEntityCache('request', doc._id, doc.studentId);
+  if (!doc) return;
+  invalidateEntityCache('request', doc._id, doc.studentId);
+  // Directly invalidate this specific batch's status grid
+  if (doc.batchId) cache.del(`batch_status:${doc.batchId}`);
 });
 
 export default mongoose.model('NodueRequest', nodueRequestSchema);

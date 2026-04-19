@@ -30,7 +30,6 @@ const Dues = () => {
   const { data: response, loading, error, request: fetchDues } = useApi(getHodDues);
   const total = response?.pagination?.total || 0;
   
-  // Debounce search input
   React.useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchValue);
@@ -172,7 +171,6 @@ const Dues = () => {
         ]}
       />
 
-      {/* Override Modal */}
       {overrideTarget && (
         <Modal isOpen={!!overrideTarget} title="Manual Clearance Override" onClose={() => setOverrideTarget(null)}>
           <div className="space-y-6">
@@ -220,7 +218,6 @@ const Dues = () => {
         </Modal>
       )}
 
-      {/* Bulk Override Modal */}
       {showBulkOverride && (
         <Modal isOpen={showBulkOverride} title="Bulk Clearance Override" onClose={() => setShowBulkOverride(false)}>
           <div className="space-y-6">

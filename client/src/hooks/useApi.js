@@ -51,7 +51,6 @@ export const useApi = (apiFunc, options = {}) => {
   const request = useCallback(async (...args) => {
     const currentOptions = optionsRef.current;
     
-    // Guard against multiple simultaneous manual requests
     if (isRequestInProgress.current && args.length === 0) return;
 
     isRequestInProgress.current = true;

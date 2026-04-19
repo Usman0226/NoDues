@@ -32,7 +32,6 @@ const coCurricularTypeSchema = new mongoose.Schema(
     coordinatorId: {
       type: mongoose.Schema.ObjectId,
       ref: 'Faculty',
-      required: [true, 'Coordinator is required'],
     },
     fields: [
       {
@@ -52,6 +51,10 @@ const coCurricularTypeSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    requiresMentorApproval: {
+      type: Boolean,
+      default: false,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -61,6 +64,8 @@ const coCurricularTypeSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+
 
 coCurricularTypeSchema.post('save', async function (doc) {
   invalidateEntityCache('coCurricularType', doc.departmentId);

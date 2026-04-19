@@ -3,17 +3,27 @@ import CoCurricularType from '../models/CoCurricularType.js';
 import Faculty from '../models/Faculty.js';
 import Student from '../models/Student.js';
 import NodueApproval from '../models/NodueApproval.js';
+import NodueRequest from '../models/NodueRequest.js';
+import NodueBatch from '../models/NodueBatch.js';
+import Class from '../models/Class.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
+import cache from '../config/cache.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 
 // ── GET /api/co-curricular-types ──────────────────────────────────────────────
+const invalidateCoCurricularCache = (departmentId) => {
+  const keys = cache.keys().filter(
+    (k) => k === `co_curricular:all` || k === `co_curricular:dept:${departmentId}`
+  );
+  if (keys.length) cache.del(keys);
+};
+
 export const getCoCurricularTypes = async (req, res, next) => {
   try {
     const { departmentId } = req.query;
     const query = { isActive: { $ne: false } };
-
 
     if (req.user.role === 'hod') {
       query.departmentId = req.user.departmentId;
@@ -21,11 +31,18 @@ export const getCoCurricularTypes = async (req, res, next) => {
       query.departmentId = departmentId;
     }
 
+    const scopeId = req.user.role === 'hod' ? req.user.departmentId : (departmentId ?? 'all');
+    const cacheKey = `co_curricular:${scopeId === 'all' ? 'all' : `dept:${scopeId}`}`;
+
+    const cached = cache.get(cacheKey);
+    if (cached) return res.status(200).json({ success: true, data: cached });
+
     const types = await CoCurricularType.find(query)
       .populate('coordinatorId', 'name employeeId')
       .populate('departmentId', 'name')
       .lean();
 
+    cache.set(cacheKey, types, 120); // 2-min cache — co-curricular types rarely change
     res.status(200).json({
       success: true,
       data: types,
@@ -38,7 +55,7 @@ export const getCoCurricularTypes = async (req, res, next) => {
 // ── POST /api/co-curricular-types ─────────────────────────────────────────────
 export const createCoCurricularType = async (req, res, next) => {
   try {
-    const { name, code, departmentId: bodyDeptId, applicableYears, coordinatorId, fields, isOptional } = req.body;
+    const { name, code, departmentId: bodyDeptId, applicableYears, coordinatorId, fields, isOptional, requiresMentorApproval } = req.body;
 
     // Determine target departmentId
     let departmentId = bodyDeptId;
@@ -46,8 +63,12 @@ export const createCoCurricularType = async (req, res, next) => {
       departmentId = req.user.departmentId;
     }
 
-    if (!name || !code || !departmentId || !coordinatorId || !applicableYears?.length) {
+    if (!name || !code || !departmentId || !applicableYears?.length) {
       return next(new ErrorResponse('Required fields missing', 400));
+    }
+
+    if (!requiresMentorApproval && !coordinatorId) {
+      return next(new ErrorResponse('Either a Coordinator must be selected or Mentor Approval must be required', 400));
     }
 
     // HoD Scope Check ( redundant if we infer, but kept for explicit validation if admin sends a different deptId)
@@ -55,10 +76,13 @@ export const createCoCurricularType = async (req, res, next) => {
       return next(new ErrorResponse('Access denied: You can only create items for your own department', 403));
     }
 
-    // Verify Coordinator belongs to Department
-    const faculty = await Faculty.findOne({ _id: coordinatorId, departmentId, isActive: true }).lean();
-    if (!faculty) {
-      return next(new ErrorResponse('Invalid coordinator: Faculty member does not belong to the specified department or is inactive', 400));
+    let faculty = null;
+    // Verify Coordinator belongs to Department if coordinatorId is provided
+    if (coordinatorId) {
+      faculty = await Faculty.findOne({ _id: coordinatorId, departmentId, isActive: true }).lean();
+      if (!faculty) {
+        return next(new ErrorResponse('Invalid coordinator: Faculty member does not belong to the specified department or is inactive', 400));
+      }
     }
 
     const type = await CoCurricularType.create({
@@ -66,13 +90,14 @@ export const createCoCurricularType = async (req, res, next) => {
       code,
       departmentId,
       applicableYears,
-      coordinatorId,
+      coordinatorId: coordinatorId || undefined,
       fields: fields || [],
       isOptional: isOptional || false,
+      requiresMentorApproval: requiresMentorApproval || false,
     });
 
     // Add coordinator roleTag if not present
-    if (!faculty.roleTags.includes('coordinator')) {
+    if (faculty && !faculty.roleTags.includes('coordinator')) {
       await Faculty.findByIdAndUpdate(coordinatorId, { $addToSet: { roleTags: 'coordinator' } });
     }
 
@@ -81,6 +106,8 @@ export const createCoCurricularType = async (req, res, next) => {
       resource_id: type._id.toString(),
       details: { name, code }
     });
+
+    invalidateCoCurricularCache(departmentId);
 
     res.status(201).json({
       success: true,
@@ -96,7 +123,25 @@ export const createCoCurricularType = async (req, res, next) => {
 export const updateCoCurricularType = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    // Whitelist mutable fields — prevent direct overwrite of system fields
+    const { name, code, applicableYears, coordinatorId, fields, isOptional, requiresMentorApproval } = req.body;
+    const updates = Object.fromEntries(
+      Object.entries({ 
+        name, 
+        code, 
+        applicableYears, 
+        coordinatorId: coordinatorId || undefined, 
+        fields, 
+        isOptional, 
+        requiresMentorApproval 
+      }).filter(([, v]) => v !== undefined)
+    );
+    
+    // If coordinatorId is explicitly being removed (e.g. switching to mentor mode)
+    if (requiresMentorApproval && !coordinatorId) {
+       updates.$unset = { coordinatorId: 1 };
+       delete updates.coordinatorId;
+    }
 
     const type = await CoCurricularType.findById(id);
     if (!type) return next(new ErrorResponse('Item type not found', 404));
@@ -107,7 +152,7 @@ export const updateCoCurricularType = async (req, res, next) => {
     }
 
     // If changing coordinator, handle roleTags
-    if (updates.coordinatorId && updates.coordinatorId !== type.coordinatorId.toString()) {
+    if (updates.coordinatorId && updates.coordinatorId !== type.coordinatorId?.toString()) {
       const newFaculty = await Faculty.findOne({ _id: updates.coordinatorId, departmentId: type.departmentId.toString(), isActive: true }).lean();
       if (!newFaculty) return next(new ErrorResponse('Invalid coordinator: Faculty must belong to same department and be active', 400));
       
@@ -122,6 +167,8 @@ export const updateCoCurricularType = async (req, res, next) => {
       details: updates
     });
 
+    invalidateCoCurricularCache(type.departmentId);
+
     res.status(200).json({
       success: true,
       data: updatedType,
@@ -130,6 +177,185 @@ export const updateCoCurricularType = async (req, res, next) => {
     next(err);
   }
 };
+
+// ── POST /api/co-curricular-types/:id/assign-mentors ──────────────────────────
+// Idempotent dual-mode assignment:
+//   mode=per_mentor    → each student routes to their own mentorId  (roleTag: mentor)
+//   mode=single_faculty → all students route to one picked faculty  (roleTag: coordinator)
+export const assignCoCurricularToMentors = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { mode = 'per_mentor', facultyId: overrideFacultyId } = req.body;
+
+    if (!['per_mentor', 'single_faculty'].includes(mode)) {
+      return next(new ErrorResponse('mode must be per_mentor or single_faculty', 400));
+    }
+
+    // Validate single-faculty selection upfront
+    let overrideFaculty = null;
+    if (mode === 'single_faculty') {
+      if (!overrideFacultyId) {
+        return next(new ErrorResponse('facultyId is required for single_faculty mode', 400));
+      }
+      overrideFaculty = await Faculty.findOne({ _id: overrideFacultyId, isActive: true })
+        .select('_id name employeeId').lean();
+      if (!overrideFaculty) {
+        return next(new ErrorResponse('Selected faculty not found or inactive', 404));
+      }
+    }
+
+    const type = await CoCurricularType.findOne({ _id: id, isActive: true }).lean();
+    if (!type) return next(new ErrorResponse('Co-curricular type not found', 404));
+
+    // HoD Scope Check
+    if (req.user.role === 'hod' && type.departmentId.toString() !== req.user.departmentId.toString()) {
+      return next(new ErrorResponse('Access denied: You can only manage your department\'s items', 403));
+    }
+
+    // Derive semester set from applicableYears (year Y → semesters 2Y-1, 2Y)
+    const semesterSet = new Set();
+    for (const yr of type.applicableYears) {
+      semesterSet.add(2 * yr - 1);
+      semesterSet.add(2 * yr);
+    }
+
+    const classes = await Class.find({
+      departmentId: type.departmentId,
+      semester: { $in: [...semesterSet] },
+      isActive: true,
+    }).select('_id').lean();
+
+    if (!classes.length) {
+      return res.status(200).json({
+        success: true,
+        data: { created: 0, skipped: 0, skippedNoRequest: 0, message: 'No matching classes found' },
+      });
+    }
+
+    const classIds = classes.map((c) => c._id);
+
+    const activeBatches = await NodueBatch.find({
+      classId: { $in: classIds },
+      status: 'active',
+    }).select('_id classId').lean();
+
+    if (!activeBatches.length) {
+      return res.status(200).json({
+        success: true,
+        data: { created: 0, skipped: 0, skippedNoRequest: 0, message: 'No active batches found for applicable classes' },
+      });
+    }
+
+    const batchIds = activeBatches.map((b) => b._id);
+    const batchByClass = Object.fromEntries(activeBatches.map((b) => [b.classId.toString(), b._id]));
+
+    const students = await Student.find({
+      classId: { $in: classIds },
+      isActive: true,
+    }).select('_id rollNo name classId mentorId').lean();
+
+    const requests = await NodueRequest.find({
+      batchId: { $in: batchIds },
+      studentId: { $in: students.map((s) => s._id) },
+    }).select('_id studentId batchId').lean();
+
+    const requestMap = new Map();
+    for (const r of requests) {
+      requestMap.set(`${r.studentId}:${r.batchId}`, r);
+    }
+
+    let skipped = 0;       // students skipped because no mentor (per_mentor mode only)
+    let skippedNoRequest = 0;
+    const approvalDocs = [];
+
+    for (const student of students) {
+      // Determine which faculty gets the approval
+      let assignedFacultyId;
+      if (mode === 'single_faculty') {
+        assignedFacultyId = overrideFaculty._id;
+      } else {
+        if (!student.mentorId) {
+          skipped++;
+          logger.warn('co_curricular_mentor_assign_skip_no_mentor', {
+            studentId: student._id.toString(),
+            typeId: id,
+          });
+          continue;
+        }
+        assignedFacultyId = student.mentorId;
+      }
+
+      const batchId = batchByClass[student.classId.toString()];
+      if (!batchId) continue;
+
+      const request = requestMap.get(`${student._id}:${batchId}`);
+      if (!request) {
+        skippedNoRequest++;
+        continue;
+      }
+
+      approvalDocs.push({
+        requestId:    request._id,
+        batchId,
+        studentId:    student._id,
+        studentRollNo: student.rollNo,
+        studentName:  student.name,
+        facultyId:    assignedFacultyId,
+        subjectId:    null,
+        subjectName:  mode === 'single_faculty'
+          ? `Coordinator Clearance – ${type.name}`
+          : `Mentor Clearance – ${type.name}`,
+        approvalType: mode === 'single_faculty' ? 'coCurricular' : 'mentor',
+        roleTag:      mode === 'single_faculty' ? 'coordinator' : 'mentor',
+        itemTypeId:   type._id,
+        itemTypeName: type.name,
+        itemCode:     type.code,
+        isOptional:   type.isOptional,
+        action:       'pending',
+      });
+    }
+
+    let created = 0;
+    if (approvalDocs.length) {
+      const result = await NodueApproval.insertMany(approvalDocs, { ordered: false }).catch((err) => {
+        if (err.code === 11000 || err.writeErrors) {
+          return { insertedCount: err.insertedDocs?.length ?? 0 };
+        }
+        throw err;
+      });
+      created = result.insertedCount ?? approvalDocs.length;
+    }
+
+    logger.audit('CO_CURRICULAR_ASSIGNED', {
+      actor: req.user.userId,
+      resource_id: id,
+      timestamp: new Date().toISOString(),
+      details: { mode, overrideFacultyId: overrideFaculty?._id ?? null, created, skipped, skippedNoRequest },
+    });
+
+    const modeLabel = mode === 'single_faculty'
+      ? `single faculty (${overrideFaculty.name})`
+      : `each student\'s own mentor`;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        mode,
+        created,
+        skipped,
+        skippedNoRequest,
+        assignedTo: mode === 'single_faculty'
+          ? { _id: overrideFaculty._id, name: overrideFaculty.name }
+          : null,
+        message: `Done (${modeLabel}). ${created} approval(s) created. ${skipped} skipped (no mentor). ${skippedNoRequest} skipped (no active request).`,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 
 // ── DELETE /api/co-curricular-types/:id ────────────────────────────────────────
 export const deleteCoCurricularType = async (req, res, next) => {
@@ -149,6 +375,8 @@ export const deleteCoCurricularType = async (req, res, next) => {
       actor: req.user.userId,
       resource_id: id
     });
+
+    invalidateCoCurricularCache(type.departmentId);
 
     res.status(200).json({
       success: true,

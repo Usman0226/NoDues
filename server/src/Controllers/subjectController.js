@@ -24,6 +24,7 @@ export const getSubjects = async (req, res, next) => {
     const skip  = (Number(page) - 1) * Number(limit);
     const [subjects, total] = await Promise.all([
       Subject.find(query)
+        .select('_id name code semester isElective createdAt') // project only what the response returns
         .sort({ semester: 1, name: 1 })
         .skip(skip)
         .limit(Number(limit))
@@ -31,7 +32,9 @@ export const getSubjects = async (req, res, next) => {
       Subject.countDocuments(query),
     ]);
 
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    // Subjects change very rarely — allow browser to cache list for 5 min
+    // Student/faculty portals benefit greatly at 500 concurrent users: zero repeat requests
+    res.setHeader('Cache-Control', 'private, max-age=300');
     return res.status(200).json({
       success: true,
       data: subjects.map((s) => ({

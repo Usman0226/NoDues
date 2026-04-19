@@ -6,3 +6,5 @@ export const updateCoCurricularType = (id, data) => api.patch(`/co-curricular/${
 export const deleteCoCurricularType = (id) => api.delete(`/co-curricular/${id}`);
 
 export const submitCoCurricular = (typeId, submittedData) => api.post(`/co-curricular/${typeId}/submit`, { submittedData });
+
+export const assignCoCurricularToMentors = (id, payload) => api.post(`/co-curricular/${id}/assign-mentors`, payload);
