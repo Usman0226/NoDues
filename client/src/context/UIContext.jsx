@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useCallback, useRef } from 'react';
 import { getTasks, deleteTask, clearTasks } from '../api/tasks';
+import { useAuth } from '../hooks/useAuth';
 
 export const UIContext = createContext();
 
@@ -10,8 +11,10 @@ export const UIProvider = ({ children }) => {
   const [backgroundTasks, setBackgroundTasks] = useState([]);
   const timeoutRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const { user } = useAuth();
 
   const fetchTasks = useCallback(async () => {
+    if (!user) return;
     try {
       const res = await getTasks();
       if (res.data?.success) {
@@ -20,12 +23,16 @@ export const UIProvider = ({ children }) => {
     } catch (err) {
       console.error('Failed to sync background tasks:', err);
     }
-  }, []);
+  }, [user]);
 
-  // Sync on mount
+  // Sync on mount or auth change
   React.useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+    if (user) {
+      fetchTasks();
+    } else {
+      setBackgroundTasks([]);
+    }
+  }, [fetchTasks, user]);
 
   // Polling for active tasks
   React.useEffect(() => {

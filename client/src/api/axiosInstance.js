@@ -36,6 +36,7 @@ axiosInstance.interceptors.response.use(
     }
 
     if (status === 401) {
+      localStorage.removeItem('nds_token');
       if (window.location.pathname !== '/login' && !isRedirecting) {
         isRedirecting = true;
         window.location.replace('/login');

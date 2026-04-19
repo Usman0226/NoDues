@@ -207,8 +207,7 @@ const AppContent = () => {
           },
         }}
       />
-      <AuthProvider>
-        <Routes>
+      <Routes>
           {/* Existing Routes ... */}
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RoleRedirect />} />
@@ -271,8 +270,7 @@ const AppContent = () => {
               </div>
             </div>
           } />
-        </Routes>
-      </AuthProvider>
+      </Routes>
     </>
   );
 };
@@ -281,11 +279,13 @@ const App = () => {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <UIProvider>
-          <BrowserRouter>
-            <AppContent />
-          </BrowserRouter>
-        </UIProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <UIProvider>
+              <AppContent />
+            </UIProvider>
+          </AuthProvider>
+        </BrowserRouter>
       </QueryClientProvider>
     </ErrorBoundary>
   );

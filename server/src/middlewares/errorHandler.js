@@ -27,7 +27,7 @@ export const errorHandler = (err, req, res, next) => {
     message    = Object.values(err.errors).map((e) => e.message).join(', ');
   }
 
-  logger.error(message, {
+  const logData = {
     code,
     statusCode,
     path: req.path,
@@ -37,7 +37,13 @@ export const errorHandler = (err, req, res, next) => {
     actor: req.user?.userId ?? 'anonymous',
     action: `${req.method}:${req.path}`,
     resource_id: req.params?.id ?? null,
-  });
+  };
+
+  if (statusCode >= 500) {
+    logger.error(message, logData);
+  } else {
+    logger.warn(message, logData);
+  }
 
   res.status(statusCode).json({
     success: false,

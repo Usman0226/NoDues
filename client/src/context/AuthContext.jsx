@@ -10,15 +10,26 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchUser = async () => {
+    const token = localStorage.getItem('nds_token');
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       // Guide §4.5: GET /api/auth/me returns success:true, data: {...user}
       const response = await authService.getMe();
       if (response?.success) {
         setUser(response.data);
+      } else {
+        setUser(null);
+        localStorage.removeItem('nds_token');
       }
     } catch (error) {
       console.error('Session restore failed:', error);
       setUser(null);
+      localStorage.removeItem('nds_token');
     } finally {
       setLoading(false);
     }
