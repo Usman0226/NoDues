@@ -27,7 +27,6 @@ if [ ! -f .env ]; then
     read -p "Enter MongoDB URI: " mongo_uri
     read -p "Enter JWT Secret: " jwt_secret
     read -p "Enter Client URL (Vercel): " client_url
-    read -p "Enter Cloudflare Tunnel Token: " tunnel_token
     
     cat <<EOF > .env
 NODE_ENV=production
@@ -35,7 +34,6 @@ PORT=5000
 MONGODB_URI=$mongo_uri
 JWT_SECRET=$jwt_secret
 CLIENT_URL=$client_url
-TUNNEL_TOKEN=$tunnel_token
 EOF
     echo "✅ .env created."
 fi

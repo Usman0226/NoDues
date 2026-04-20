@@ -3,25 +3,14 @@ services:
     build: .
     container_name: nodues_api
     restart: always
+    ports:
+      - "5000:5000"
     env_file:
       - .env
     volumes:
       - ./logs:/app/logs
     networks:
       - app_network
-      
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflare_tunnel
-    restart: always
-    command: tunnel run
-    environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
-    networks:
-      - app_network
-    depends_on:
-      api:
-        condition: service_healthy
 
 networks:
   app_network:
