@@ -14,6 +14,7 @@ import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import Task from '../models/Task.js';
 import CoCurricularType from '../models/CoCurricularType.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import { createNotification } from './notification.controller.js';
 
 // ── GET /api/batch ────────────────────────────────────────────────────────────
 export const getBatches = async (req, res, next) => {
@@ -278,6 +279,26 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
     requestsCreated: requestResult.insertedCount,
   });
 
+  // Create notification for HoD if initiated by Admin
+  if (initiator.role === 'admin') {
+    const hod = await Faculty.findOne({ 
+      departmentId: cls.departmentId._id || cls.departmentId, 
+      roleTags: 'hod', 
+      isActive: true 
+    }).select('_id').lean();
+    
+    if (hod) {
+      await createNotification({
+        user: hod._id,
+        userModel: 'Faculty',
+        title: 'New Batch Initiated',
+        message: `A new NoDues batch has been initiated for ${cls.name} by the Admin.`,
+        type: 'info',
+        link: `/hod/batch/${batch._id}`
+      });
+    }
+  }
+
   // SSE Notification
   const studentIdList = students.map((s) => s._id.toString());
   pushEvent(studentIdList, 'BATCH_INITIATED', {
@@ -487,77 +508,90 @@ export const initiateDepartmentWide = async (req, res, next) => {
       }
     });
 
-    // Background processing loop
-    (async () => {
-      const results = {
-        initiated: [],
-        failed: []
-      };
+    // Background processing logic
+    const runBackgroundProcessing = async () => {
+      try {
+        const results = { initiated: [], failed: [] };
 
-      for (let i = 0; i < eligibleClasses.length; i++) {
-        const cls = eligibleClasses[i];
-        const session = await mongoose.startSession();
-        try {
-          await startSafeTransaction(session);
-          const initRes = await _executeInitiation(cls, deadline, { 
-            userId: req.user.userId, 
-            role: req.user.role 
-          }, session);
+        for (let i = 0; i < eligibleClasses.length; i++) {
+          const cls = eligibleClasses[i];
+          const session = await mongoose.startSession();
           
-          await commitSafeTransaction(session);
-          results.initiated.push(initRes);
+          try {
+            await startSafeTransaction(session);
+            const initRes = await _executeInitiation(cls, deadline, { 
+              userId: req.user.userId, 
+              role: req.user.role 
+            }, session);
+            
+            await commitSafeTransaction(session);
+            results.initiated.push(initRes);
 
-          logger.audit('BATCH_INITIATED', {
-            actor: req.user.userId,
-            actor_role: req.user.role,
-            classId: cls._id,
-            departmentId: cls.departmentId?._id ?? cls.departmentId,
-            totalStudents: initRes.totalStudents,
-            context: 'DEPARTMENT_WIDE_INITIATION'
-          });
+            logger.audit('BATCH_INITIATED', {
+              actor: req.user.userId,
+              actor_role: req.user.role,
+              classId: cls._id,
+              departmentId: cls.departmentId?._id ?? cls.departmentId,
+              totalStudents: initRes.totalStudents,
+              context: 'DEPARTMENT_WIDE_INITIATION'
+            });
 
-        } catch (err) {
-          await abortSafeTransaction(session);
-          logger.error('bulk_initiate_single_failure', { 
-            class: cls.name, 
-            error: err.message 
-          });
-          results.failed.push({ 
-            className: cls.name, 
-            reason: err.message 
-          });
-        } finally {
-          session.endSession();
-          
-          const progress = Math.round(((i + 1) / eligibleClasses.length) * 100);
-          await Task.findByIdAndUpdate(task._id, { 
-            progress,
-            message: `Processed ${i + 1} of ${eligibleClasses.length} classes...`
-          });
+          } catch (err) {
+            await abortSafeTransaction(session);
+            logger.error('bulk_initiate_single_failure', { 
+              class: cls.name, 
+              error: err.message 
+            });
+            results.failed.push({ 
+              className: cls.name, 
+              reason: err.message 
+            });
+          } finally {
+            session.endSession();
+            
+            const progress = Math.round(((i + 1) / eligibleClasses.length) * 100);
+            await Task.findByIdAndUpdate(task._id, { 
+              progress,
+              message: `Processed ${i + 1} of ${eligibleClasses.length} classes...`
+            });
+          }
         }
+
+        // Final task update
+        const finalStatus = results.initiated.length > 0 ? 'success' : 'error';
+        await Task.findByIdAndUpdate(task._id, {
+          status: finalStatus,
+          progress: 100,
+          message: `Completed: ${results.initiated.length} succeeded, ${results.failed.length} failed.`,
+          meta: { 
+            ...task.meta,
+            success: results.initiated.length, 
+            failed: results.failed.length,
+            errors: results.failed.slice(0, 10)
+          }
+        });
+        
+        // Notify the actor that the bulk operation is complete
+        await createNotification({
+          user: req.user.userId,
+          userModel: req.user.role === 'admin' ? 'Admin' : 'Faculty',
+          title: 'Bulk Initiation Complete',
+          message: `Processed ${eligibleClasses.length} classes: ${results.initiated.length} succeeded, ${results.failed.length} failed.`,
+          type: results.failed.length === 0 ? 'success' : 'warning',
+          link: '/admin/batches'
+        });
+
+      } catch (err) {
+        logger.error('bulk_initiation_background_crash', { error: err.message, taskId: task._id });
+        await Task.findByIdAndUpdate(task._id, { 
+          status: 'error', 
+          message: `Background process crashed: ${err.message}` 
+        }).catch(() => {});
       }
+    };
 
-      // Final task update
-      const finalStatus = results.initiated.length > 0 ? 'success' : 'error';
-      await Task.findByIdAndUpdate(task._id, {
-        status: finalStatus,
-        progress: 100,
-        message: `Completed: ${results.initiated.length} succeeded, ${results.failed.length} failed.`,
-        meta: { 
-          ...task.meta,
-          success: results.initiated.length, 
-          failed: results.failed.length,
-          errors: results.failed.slice(0, 10)
-        }
-      });
-
-    })().catch(err => {
-      logger.error('bulk_initiation_background_crash', { error: err.message, taskId: task._id });
-      Task.findByIdAndUpdate(task._id, { 
-        status: 'error', 
-        message: `Background process crashed: ${err.message}` 
-      }).catch(() => {});
-    });
+    // Fire and forget background process
+    runBackgroundProcessing();
 
   } catch (err) {
     next(err);

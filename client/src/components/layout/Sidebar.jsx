@@ -117,12 +117,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
         })}
       </nav>
 
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="hidden lg:flex absolute -right-3 top-24 bg-white shadow-lg rounded-full p-1.5 text-navy hover:bg-gold hover:text-white transition-colors z-50"
-      >
-        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-      </button>
+
 
       <div className={`p-6 border-t border-white/10 shrink-0 transition-all duration-300 ${collapsed ? 'opacity-0 invisible' : 'opacity-100 visible'}`}>
         <div className="rounded-xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
@@ -142,10 +137,24 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   );
 
   return (
+  
     <>
-      <aside className={`hidden lg:flex ${collapsed ? 'w-20' : 'w-72'} min-h-screen bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex-col transition-[width] duration-300 ease-in-out relative shrink-0 shadow-2xl shadow-indigo-900/30 overflow-hidden whitespace-nowrap will-change-[width]`}>
-        {sidebarContent}
-      </aside>
+      <div className={`hidden lg:flex flex-col relative shrink-0 transition-[width] duration-300 ease-in-out will-change-[width] min-h-screen ${collapsed ? 'w-20' : 'w-72'}`}>
+        <aside className="absolute inset-y-0 left-0 w-full bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex flex-col shadow-2xl shadow-indigo-900/30 overflow-hidden whitespace-nowrap">
+          {sidebarContent}
+        </aside>
+        
+        {/* Floating Toggle Button */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute -right-4 top-24 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.15)] rounded-full p-2 text-navy hover:bg-gold hover:text-white hover:scale-110 transition-all duration-200 z-[100] flex items-center justify-center border border-indigo-100/10 group"
+          title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        >
+          <div className="transition-transform duration-300">
+            {collapsed ? <ChevronRight size={10} /> : <ChevronLeft size={10} />}
+          </div>
+        </button>
+      </div>
       <AnimatePresence>
         {mobileOpen && (
           <div className="lg:hidden fixed inset-0 z-50 flex">

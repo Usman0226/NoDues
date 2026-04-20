@@ -16,6 +16,7 @@ const SearchableSelect = ({
   className = '',
   size = 'md', // 'sm' | 'md'
   variant = 'outline', // 'outline' | 'ghost'
+  clearable = true,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
@@ -74,7 +75,7 @@ const SearchableSelect = ({
   }, [options, searchValue, labelKey, subLabelKey]);
 
   const triggerClasses = useMemo(() => {
-    const base = "w-full flex items-center justify-between transition-all duration-300 rounded-xl group";
+    const base = "w-full flex items-center justify-between transition-all duration-300 rounded-[inherit] group";
     const padding = size === 'sm' ? 'py-1.5 px-2.5' : 'py-3 px-4';
     
     if (variant === 'ghost') {
@@ -123,7 +124,7 @@ const SearchableSelect = ({
         
         <div className={`flex items-center ml-2 ${size === 'sm' ? 'gap-1' : 'gap-2'}`}>
           {loading && <Loader2 size={size === 'sm' ? 12 : 16} className="animate-spin text-indigo-500" />}
-          {selectedOption && !disabled && (
+          {selectedOption && !disabled && clearable && (
             <button
               type="button"
               onClick={(e) => {

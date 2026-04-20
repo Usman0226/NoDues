@@ -57,7 +57,7 @@ const Overrides = () => {
       rollNo: req.rollNo,
       name: req.name,
       className: req.className,
-      dueCount: req.dues?.length || 1, // Number of dues that were cleared
+      dueCount: req.dues?.length || 1,
       overrideRemark: req.overrideRemark,
       overriddenAt: req.overriddenAt,
       status: 'hod_override'

@@ -30,13 +30,14 @@ import {
   Eye,
   FileText,
   UserCheck,
-  ExternalLink
+  ExternalLink,
+  PlaneTakeoff
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
 import { motion } from 'framer-motion';
 import GuidedTour from '../../components/ui/GuidedTour';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Layers, CheckCircle2 } from 'lucide-react';
 
 const container = {
   hidden: { opacity: 0 },
@@ -381,7 +382,7 @@ const Pending = () => {
     },
   ];
 
-  const batches = useMemo(() => {
+  const classes = useMemo(() => {
     return (classesData?.data || []).map((c) => ({
       id: c._id,
       name: c.name
@@ -407,7 +408,7 @@ const Pending = () => {
           onClick={() => setIsTourActive(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-zinc-200 text-zinc-500 hover:text-indigo-600 hover:border-indigo-100 transition-all text-[10px] font-black uppercase tracking-widest"
         >
-          <Sparkles size={14} /> Start Tour
+          <PlaneTakeoff size={14} /> Take Flight
         </button>
       }
     >
@@ -422,49 +423,63 @@ const Pending = () => {
         
 
         {/* Header Filters */}
-        <motion.div variants={item} className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div id="tour-filters" className="flex items-center gap-1 bg-zinc-200/40 p-1.5 rounded-[20px] w-fit border border-zinc-200/20 backdrop-blur-md">
-            {FILTERS.map((f) => {
-              const count = approvals.filter((a) => f === 'all' || a.action === f).length;
-              const active = filter === f;
-              return (
-                <button
-                  key={f}
-                  onClick={() => { setFilter(f); setSelection([]); }}
-                  className={`px-6 py-2.5 rounded-[14px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-300 relative
-                    ${active ? 'text-indigo-600' : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/40'}`}
-                >
-                  {active && (
-                    <motion.div 
-                      layoutId="activeFilter"
-                      className="absolute inset-0 bg-white rounded-[14px] shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-indigo-50"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                  <span className="relative z-10">
-                    {f === 'all' ? 'Everything' : f === 'due_marked' ? 'Dues' : f}
-                    <span className={`ml-2 opacity-40 font-bold ${active ? 'text-indigo-400' : ''}`}>{count}</span>
-                  </span>
-                </button>
-              );
-            })}
+        <motion.div variants={item} className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          {/* Status Filters Capsule */}
+          <div className="overflow-x-auto no-scrollbar pb-1 -mx-2 px-2 lg:mx-0 lg:px-0">
+            <div id="tour-filters" className="flex items-center gap-1 bg-white border border-zinc-100 p-1 rounded-full w-fit shadow-sm shadow-zinc-200/50">
+              {FILTERS.map((f) => {
+                const count = approvals.filter((a) => f === 'all' || a.action === f).length;
+                const active = filter === f;
+                
+                // Map icons to filters
+                const Icon = f === 'all' ? Layers : 
+                           f === 'pending' ? Clock : 
+                           f === 'approved' ? CheckCircle2 : AlertTriangle;
+
+                return (
+                  <button
+                    key={f}
+                    onClick={() => { setFilter(f); setSelection([]); setPage(1); }}
+                    className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 relative whitespace-nowrap flex items-center gap-2.5
+                      ${active ? 'text-white' : 'text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50/50'}`}
+                  >
+                    {active && (
+                      <motion.div 
+                        layoutId="activeFilter"
+                        className="absolute inset-0 bg-indigo-600 shadow-[0_4px_12px_rgba(79,70,229,0.3)] rounded-full"
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center gap-2">
+                      <Icon size={14} className={active ? 'text-white' : 'text-zinc-400'} />
+                      {f === 'all' ? 'All' : f === 'due_marked' ? 'DUES' : f.toUpperCase()}
+                      {active ? (
+                        <span className="flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-white/20 text-[8px] font-black text-white backdrop-blur-sm">
+                          {total}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] opacity-40 font-bold bg-zinc-100 px-1.5 py-0.5 rounded-md group-hover:bg-indigo-100 transition-colors">{count}</span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div id="tour-class-select" className="flex items-center gap-3">
-               <Settings2 size={16} className="text-zinc-400" />
+          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+            <div id="tour-class-select" className="flex-1 sm:flex-initial flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-zinc-200/50 rounded-full shadow-sm hover:shadow-md transition-all group">
+               <div className="pl-3 text-zinc-400 group-hover:text-indigo-500 transition-colors">
+                <Settings2 size={14} />
+               </div>
                <SearchableSelect 
-                options={[
-                  { value: 'all', label: 'All Academic Classes  ' },
-                  ...batches.map(b => ({
-                    value: b.id,
-                    label: b.name,
-                  }))
-                ]}
+                options={classes}
                 value={selectedBatch}
-                onChange={(val) => { setSelectedBatch(val); setSelection([]); }}
+                onChange={(val) => { setSelectedBatch(val || 'all'); setSelection([]); setPage(1); }}
                 placeholder="Filter by Class"
-                className="min-w-[240px]"
+                variant="ghost"
+                className="min-w-[200px] w-full sm:w-[200px]"
+                clearable={selectedBatch !== 'all'}
               />
             </div>
 
@@ -474,7 +489,7 @@ const Pending = () => {
                 await fetchApprovals();
                 hide();
               }}
-              className={`p-3.5 rounded-2xl bg-white border border-zinc-200 text-zinc-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-500/5 transition-all ${loading ? 'opacity-50' : ''}`}
+              className={`p-3.5 rounded-full bg-white border border-zinc-200 text-zinc-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-500/5 transition-all ${loading ? 'opacity-50' : ''}`}
             >
               <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
             </button>

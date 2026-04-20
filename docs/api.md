@@ -388,3 +388,81 @@ curl -X PATCH http://localhost:5000/api/subject/bulk-deactivate \
 Sample Response (200):
 { "success": true, "data": { "message": "2 subjects deactivated" } }
 
+---
+
+## Notification Endpoints
+
+### GET /api/notifications
+Description: Fetch current user's notifications (last 50).
+
+curl -X GET http://localhost:5000/api/notifications \
+  -H "Authorization: Bearer <token>"
+
+Sample Response (200):
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "6627a3f2e4b0c9d8f0000001",
+      "title": "Batch Initiated",
+      "message": "Batch for CSE-A has been started.",
+      "read": false,
+      "type": "info",
+      "createdAt": "2026-04-20T18:00:00Z"
+    }
+  ]
+}
+
+---
+
+### PATCH /api/notifications/read
+Description: Mark all or specific notifications as read.
+
+curl -X PATCH http://localhost:5000/api/notifications/read \
+  -H "Authorization: Bearer <token>" \
+  -d '{ "id": "6627a3f2e4b0c9d8f0000001" }' (optional)
+
+Sample Response (200):
+{ "success": true, "data": { "message": "Notifications updated" } }
+
+---
+
+### DELETE /api/notifications
+Description: Clear all read notifications or a specific notification.
+
+curl -X DELETE http://localhost:5000/api/notifications \
+  -H "Authorization: Bearer <token>" \
+  -d '{ "id": "6627a3f2e4b0c9d8f0000001" }' (optional)
+
+Sample Response (200):
+{ "success": true, "data": { "message": "Notifications cleared" } }
+
+---
+
+## Feedback Endpoints
+
+### POST /api/feedback
+Description: Submit feedback, bug reports, or suggestions.
+
+curl -X POST http://localhost:5000/api/feedback \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "type": "bug",
+    "description": "The table alignment is slightly off on mobile devices.",
+    "page": "/faculty/pending",
+    "userAgent": "Mozilla/5.0..."
+  }'
+
+Sample Response (201):
+{
+  "success": true,
+  "data": {
+    "_id": "6627a3f2e4b0c9d8f9999000",
+    "type": "bug",
+    "description": "The table alignment is slightly off on mobile devices.",
+    "status": "open"
+  }
+}
+
+Error Codes: 400 (validation), 401 (auth)

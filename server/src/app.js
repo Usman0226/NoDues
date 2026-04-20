@@ -23,6 +23,8 @@ import sseRoutes           from './Routes/sse.routes.js';
 import importRoutes        from './Routes/import.routes.js';
 import taskRoutes          from './Routes/task.routes.js';
 import coCurricularRoutes from './Routes/coCurricular.routes.js';
+import notificationRoutes from './Routes/notification.routes.js';
+import feedbackRoutes     from './Routes/feedback.routes.js';
 
 const app = express();
 
@@ -99,6 +101,8 @@ app.use('/api/sse',         sseRoutes);
 app.use('/api/import',      importRoutes);
 app.use('/api/tasks',       taskRoutes);
 app.use('/api/co-curricular', coCurricularRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/feedback',      feedbackRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({

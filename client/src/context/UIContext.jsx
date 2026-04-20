@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useCallback, useRef } from 'react';
 import { getTasks, deleteTask, clearTasks } from '../api/tasks';
+import { getNotifications, markNotificationRead, deleteNotification } from '../api/notifications';
 import { useAuth } from '../hooks/useAuth';
 
 export const UIContext = createContext();
@@ -9,8 +10,10 @@ export const UIProvider = ({ children }) => {
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [backgroundTasks, setBackgroundTasks] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const timeoutRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const notifPollIntervalRef = useRef(null);
   const { user } = useAuth();
 
   const fetchTasks = useCallback(async () => {
@@ -25,14 +28,28 @@ export const UIProvider = ({ children }) => {
     }
   }, [user]);
 
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await getNotifications();
+      if (res.data?.success) {
+        setNotifications(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to sync notifications:', err);
+    }
+  }, [user]);
+
   // Sync on mount or auth change
   React.useEffect(() => {
     if (user) {
       fetchTasks();
+      fetchNotifications();
     } else {
       setBackgroundTasks([]);
+      setNotifications([]);
     }
-  }, [fetchTasks, user]);
+  }, [fetchTasks, fetchNotifications, user]);
 
   // Polling for active tasks
   React.useEffect(() => {
@@ -45,13 +62,25 @@ export const UIProvider = ({ children }) => {
       pollIntervalRef.current = null;
     }
 
+    // Polling for notifications (less frequent)
+    if (user && !notifPollIntervalRef.current) {
+      notifPollIntervalRef.current = setInterval(fetchNotifications, 15000);
+    } else if (!user && notifPollIntervalRef.current) {
+      clearInterval(notifPollIntervalRef.current);
+      notifPollIntervalRef.current = null;
+    }
+
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
+      if (notifPollIntervalRef.current) {
+        clearInterval(notifPollIntervalRef.current);
+        notifPollIntervalRef.current = null;
+      }
     };
-  }, [backgroundTasks, fetchTasks]);
+  }, [backgroundTasks, fetchTasks, fetchNotifications, user]);
 
   const addBackgroundTask = useCallback((task) => {
     // Optimistically add task (will be overwritten by backend sync)
@@ -95,6 +124,24 @@ export const UIProvider = ({ children }) => {
     // If it's a real task id, we just wait for polling or call fetchTasks
   }, []);
 
+  const markNotifRead = useCallback(async (id) => {
+    try {
+      await markNotificationRead(id);
+      fetchNotifications();
+    } catch (err) {
+      console.error('Mark read failed:', err);
+    }
+  }, [fetchNotifications]);
+
+  const removeNotificationState = useCallback(async (id) => {
+    try {
+      await deleteNotification(id);
+      fetchNotifications();
+    } catch (err) {
+      console.error('Delete notification failed:', err);
+    }
+  }, [fetchNotifications]);
+
   const showGlobalLoader = useCallback((message = 'Syncing Records...', minDuration = 1500) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     
@@ -118,11 +165,15 @@ export const UIProvider = ({ children }) => {
       isGlobalLoading, 
       loadingMessage, 
       backgroundTasks,
+      notifications,
       addBackgroundTask,
       updateBackgroundTask,
       removeTask: removeTaskState,
       clearFinishedTasks: clearFinishedTasksState,
+      markNotificationRead: markNotifRead,
+      removeNotification: removeNotificationState,
       refreshTasks: fetchTasks,
+      refreshNotifications: fetchNotifications,
       showGlobalLoader, 
       hideGlobalLoader 
     }}>

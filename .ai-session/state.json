@@ -1,55 +1,16 @@
 {
-  "last_updated": "2026-04-19T16:51:00Z",
+  "last_updated": "2026-04-20T23:59:00Z",
   "completed": [
-    "Fixed Co-Curricular API 400 Bad Request by standardizing departmentId handling",
-    "Enhanced CoCurricular UI with department selector for Admin and auto-detection for HoD",
-    "Implemented filtered coordinator selection based on department scope",
-    "Hardened co-curricular controllers with robust department scope guards",
-    "Updated Avatar menu to toggle on click for improved mobile responsiveness",
-    "API Performance Optimization Phase 1 (500 concurrent users):",
-    "  - Fixed cache.js stdTTL from 10s to 60s (root cause of almost all cache misses)",
-    "  - Added compound index { rollNo: 1, isActive: 1 } to Student model for faster student login",
-    "  - Merged double NodueBatch queries in getPendingApprovals into a single query",
-    "  - Parallelized NodueBatch.findById + NodueApproval.find in getStudentStatus",
-    "  - Removed unused Class.aggregate() in getFaculty (was computed but never read)",
-    "  - Added .select() projection to subjectController.getSubjects",
-    "  - Changed subjects Cache-Control from no-cache to private,max-age=300",
-    "  - Fixed O(n) cache key scan in cacheHooks 'request' case → targeted cache.del",
-    "  - Updated NodueRequest model hooks to directly invalidate batch_status:{batchId}",
-    "MongoDB transaction audit — all controllers verified to use safeTransaction wrappers"
+    "Feedback System Implementation (Option A)",
+    "Refactored emailService to be generic and support plug-and-play failover"
   ],
   "in_progress": [],
-  "pending": [
-    "Resolve MongoDB Change Stream dependency for standalone instances",
-    "Verify end-to-end clearance flow with actual coordinators",
-    "Pre-warm service (prewarmService.js) to prime caches before clearance deadlines",
-    "Consider bumping bcrypt cost factor awareness — login latency is dominated by bcrypt (~100ms, intentional)"
-  ],
+  "pending": [],
   "decisions": [
     {
-      "context": "Co-curricular items required departmentId but frontend was not sending it.",
-      "decision": "Inferred departmentId from req.user on backend for HoDs; added explicit selector for Admin.",
-      "trade_offs": "Adds one extra API call (getDepartments) for Admins on the co-curricular page."
-    },
-    {
-      "context": "Avatar menu only showed on hover, unreliable on mobile.",
-      "decision": "Converted to state-driven click toggle with backdrop overlay.",
-      "trade_offs": "Adds one click for desktop users who preferred hover, but fixes mobile."
-    },
-    {
-      "context": "Cache stdTTL was 10s — nearly every request was a cache miss at 500 concurrent users.",
-      "decision": "Raised stdTTL to 60s (guide recommendation). Explicit per-key TTLs in withCache() calls remain unchanged.",
-      "trade_offs": "Stale data window increases from 10s to 60s. Acceptable since model-level hooks still invalidate on write."
-    },
-    {
-      "context": "cacheHooks 'request' case was iterating all cache keys (O(n)) to find batch_status:* keys.",
-      "decision": "Added direct cache.del(`batch_status:${doc.batchId}`) in NodueRequest hooks instead of scanning.",
-      "trade_offs": "Requires batchId to be available on doc (it is — it's a required field on NodueRequest schema)."
-    },
-    {
-      "context": "getFaculty was running Class.aggregate() whose result (classCounts) was declared but never used.",
-      "decision": "Removed the dead aggregate call. Kept the two Class.find() queries that ARE used.",
-      "trade_offs": "None — the aggregate output was never consumed by the response handler."
+      "context": "User reminded about existing multi-account email infrastructure.",
+      "decision": "Refactored emailService to extract core logic into sendMail and used it for both credentials and feedback, removing the separate Resend implementation.",
+      "trade_offs": "Sacrificed the standalone Resend request in favor of architectural consistency with the existing 'plug and play' system."
     }
   ],
   "blockers": []

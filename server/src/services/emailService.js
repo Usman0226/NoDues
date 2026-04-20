@@ -199,6 +199,105 @@ export const testConnection = async () => {
   return results;
 };
 
+export const sendMail = async ({ to, subject, html, role = 'system', triggeredBy = 'SYSTEM' }) => {
+  // --- Method 1: Brevo API (Preferred) ---
+  const brevoIdx = await selectBrevoAccountIndex();
+  if (brevoIdx !== -1) {
+    try {
+      await sendViaBrevo({ to, subject, html }, brevoIdx);
+      
+      writeEmailLog({
+        recipient: Array.isArray(to) ? to.map(t => t.email || t).join(', ') : to,
+        subject,
+        role,
+        status: 'success',
+        accountIndex: -(brevoIdx + 1),
+        triggeredBy
+      });
+      return true;
+    } catch (error) {
+      logger.error(`Brevo API failed for account ${brevoIdx + 1}. Error: ${error.message}`);
+    }
+  } else if (brevoConfig.accounts.length > 0) {
+    logger.warn(`Daily quota exhausted for all ${brevoConfig.accounts.length} Brevo accounts. Falling back to SMTP.`);
+  }
+
+  // --- Method 2: SMTP Fallback ---
+  const accountIndex = await selectAccountIndex();
+  if (accountIndex === -1) {
+    logger.error('Email aborted: Daily quota exhausted across all accounts.');
+    return false;
+  }
+
+  const acc = _accounts[accountIndex];
+  const transporter = getTransporter(accountIndex);
+
+  try {
+    const mailOptions = { from: acc.from, to, subject, html };
+    await transporter.sendMail(mailOptions);
+    
+    writeEmailLog({
+      recipient: Array.isArray(to) ? to.join(', ') : to,
+      subject,
+      role,
+      status: 'success',
+      accountIndex,
+      triggeredBy
+    });
+
+    return true;
+  } catch (error) {
+    logger.error(`Failed to send email to ${to} using SMTP Account ${accountIndex + 1}:`, error);
+    
+    writeEmailLog({
+      recipient: Array.isArray(to) ? to.join(', ') : to,
+      subject,
+      role,
+      status: 'failure',
+      accountIndex,
+      error: {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      }
+    });
+
+    return false;
+  }
+};
+
+export const sendFeedbackEmail = async (feedbackData, user) => {
+  const adminEmail = process.env.ADMIN_EMAIL || 'chandrakant@nodues.com';
+  const { type, description, page, userAgent } = feedbackData;
+  
+  const subject = `New Feedback: [${type.toUpperCase()}] from ${user.name}`;
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; color: #333;">
+      <h2 style="color: #2563eb;">New ${type} submitted</h2>
+      <p><strong>From:</strong> ${user.name} (${user.role})</p>
+      <p><strong>Identifier:</strong> ${user.rollNo || user.email}</p>
+      <p><strong>Page:</strong> ${page}</p>
+      <p><strong>User Agent:</strong> ${userAgent || 'Unknown'}</p>
+      <hr style="border: 1px solid #eee;" />
+      <p><strong>Description:</strong></p>
+      <div style="background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
+        ${description.replace(/\n/g, '<br/>')}
+      </div>
+      <p style="font-size: 12px; color: #6b7280; margin-top: 20px;">
+        Submitted at: ${new Date().toLocaleString()}
+      </p>
+    </div>
+  `;
+
+  return sendMail({
+    to: adminEmail,
+    subject,
+    html,
+    role: 'admin',
+    triggeredBy: user._id.toString()
+  });
+};
+
 export const sendCredentialEmail = async (to, name, identifier, password, role) => {
   if (role === 'student' && !process.env.ENABLE_STUDENT_EMAILS) return true;
   
@@ -226,68 +325,5 @@ export const sendCredentialEmail = async (to, name, identifier, password, role) 
     </div>
   `;
 
-  // --- Method 1: Brevo API (Preferred for Production/Render) ---
-  const brevoIdx = await selectBrevoAccountIndex();
-  if (brevoIdx !== -1) {
-    try {
-      await sendViaBrevo({ to, subject, html }, brevoIdx);
-      
-      writeEmailLog({
-        recipient: to,
-        subject,
-        role: role || 'system',
-        status: 'success',
-        accountIndex: -(brevoIdx + 1), // -1, -2, -3...
-        triggeredBy: 'SYSTEM'
-      });
-      return true;
-    } catch (error) {
-      logger.error(`Brevo API failed for account ${brevoIdx + 1}. Error: ${error.message}`);
-      // Continue to fallback if Brevo fails
-    }
-  } else if (brevoConfig.accounts.length > 0) {
-    logger.warn(`Daily quota exhausted for all ${brevoConfig.accounts.length} Brevo accounts. Falling back to SMTP.`);
-  }
-
-  const accountIndex = await selectAccountIndex();
-  if (accountIndex === -1) {
-    logger.error('Email aborted: Daily quota exhausted across all accounts.');
-    return false;
-  }
-
-  const acc = _accounts[accountIndex];
-  const transporter = getTransporter(accountIndex);
-
-  try {
-    const mailOptions = { from: acc.from, to, subject, html };
-    await transporter.sendMail(mailOptions);
-    
-    writeEmailLog({
-      recipient: to,
-      subject,
-      role: role || 'system',
-      status: 'success',
-      accountIndex,
-      triggeredBy: 'SYSTEM'
-    });
-
-    return true;
-  } catch (error) {
-    logger.error(`Failed to send email to ${to} using SMTP Account ${accountIndex + 1}:`, error);
-    
-    writeEmailLog({
-      recipient: to,
-      subject,
-      role: role || 'system',
-      status: 'failure',
-      accountIndex,
-      error: {
-        message: error.message,
-        code: error.code,
-        stack: error.stack
-      }
-    });
-
-    return false;
-  }
+  return sendMail({ to, subject, html, role });
 };

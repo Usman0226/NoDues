@@ -276,7 +276,7 @@ const StudentStatus = () => {
 
   if (clearanceData.status === 'no_batch') {
     return (
-      <PageWrapper title="No-Dues Status">
+      <PageWrapper title="Approval Status">
          <div className="flex flex-col items-center justify-center text-center py-24 px-6 min-h-[60vh]">
             <motion.div 
               initial={{ scale: 0.8, opacity: 0 }}

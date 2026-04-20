@@ -11,6 +11,7 @@ import logger from '../utils/logger.js';
 import cache from '../config/cache.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import { createNotification } from './notification.controller.js';
 
 // ── GET /api/co-curricular-types ──────────────────────────────────────────────
 const invalidateCoCurricularCache = (departmentId) => {
@@ -445,15 +446,26 @@ export const submitCoCurricular = async (req, res, next) => {
     }).session(session).lean();
 
     if (activeBatch) {
-        await NodueApproval.findOneAndUpdate(
+        const approval = await NodueApproval.findOneAndUpdate(
             { 
                 batchId: activeBatch._id, 
                 studentId: student._id, 
                 itemTypeId: type._id 
             },
             { action: 'pending', actionedAt: null, remarks: null },
-            { session }
+            { session, new: true }
         );
+
+        if (approval && approval.facultyId) {
+          await createNotification({
+            user: approval.facultyId,
+            userModel: 'Faculty',
+            title: 'New Submission',
+            message: `${student.name} (${student.rollNo}) has submitted documentation for ${type.name}.`,
+            type: 'info',
+            link: '/faculty/approvals'
+          });
+        }
     }
 
     await commitSafeTransaction(session);

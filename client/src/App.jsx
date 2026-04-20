@@ -17,6 +17,7 @@ import { LayoutDashboard, History } from 'lucide-react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ScrollToTop from './components/ui/ScrollToTop';
+import FeedbackButton from './components/ui/FeedbackButton';
 
 import Login from './pages/auth/Login';
 import ChangePassword from './pages/auth/ChangePassword';
@@ -170,11 +171,13 @@ const queryClient = new QueryClient({
 
 const AppContent = () => {
   const { isGlobalLoading, loadingMessage } = useUI();
+  const { user } = useAuth();
 
   return (
     <>
       {isGlobalLoading && <PageSpinner message={loadingMessage} />}
       <ScrollToTop />
+      {user && <FeedbackButton />}
       <Toaster 
         position="top-right"
         containerStyle={{ top: 40, right: 40 }}

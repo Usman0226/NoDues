@@ -17,7 +17,7 @@ const Navbar = ({ onMenuToggle }) => {
       </div>
 
       <div className="flex items-center gap-3 lg:gap-6 pointer-events-auto">
-        <Inbox />
+        {user?.role !== 'student' && <Inbox />}
 
         <div className="h-6 w-px bg-zinc-200 hidden sm:block"></div>
 
