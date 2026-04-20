@@ -1,7 +1,7 @@
 import React from 'react';
 import BackHeader from '../ui/BackHeader';
 
-const PageWrapper = ({ children, title, subtitle, backTitle, backFallback, isRefreshing }) => {
+const PageWrapper = ({ children, title, subtitle, backTitle, backFallback, isRefreshing, headerActions }) => {
   return (
     <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-10 fade-up max-w-full overflow-x-hidden relative">
       {isRefreshing && (
@@ -28,8 +28,14 @@ const PageWrapper = ({ children, title, subtitle, backTitle, backFallback, isRef
                 </div>
               )}
             </div>
+            {headerActions && (
+              <div className="flex items-center gap-3">
+                {headerActions}
+              </div>
+            )}
           </div>
         </header>
+
         <main>{children}</main>
       </div>
     </div>

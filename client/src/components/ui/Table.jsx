@@ -106,6 +106,8 @@ const Table = ({
   searchValue = '',
   onSearchChange = null,
   fixedLayout = false,
+  searchId = '',
+  bulkActionsId = '',
 }) => {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -172,12 +174,13 @@ const Table = ({
           {searchable && (
             <div className="relative w-full sm:max-w-md">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
-              <input
-                value={onSearchChange ? searchValue : filter}
-                onChange={(e) => onSearchChange ? onSearchChange(e.target.value) : setFilter(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="w-full pl-9 pr-4 py-2.5 text-xs sm:text-sm rounded-full border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all font-semibold" 
-              />
+                <input
+                  id={searchId}
+                  value={onSearchChange ? searchValue : filter}
+                  onChange={(e) => onSearchChange ? onSearchChange(e.target.value) : setFilter(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="w-full pl-9 pr-4 py-2.5 text-xs sm:text-sm rounded-full border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all font-semibold" 
+                />
             </div>
           )}
           
@@ -218,23 +221,24 @@ const Table = ({
       <AnimatePresence>
         {selectable && selection.length > 0 && (
           <motion.div
-            initial={{ y: 100, x: '-50%', opacity: 0 }}
-            animate={{ y: 0, x: '-50%', opacity: 1 }}
-            exit={{ y: 100, x: '-50%', opacity: 0 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1.5 p-1.5 bg-white/80 backdrop-blur-2xl rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-zinc-200/50 border border-white/50 select-none"
+            id={bulkActionsId}
+            initial={{ y: 100, x: 0, opacity: 0 }}
+            animate={{ y: 0, x: 0, opacity: 1 }}
+            exit={{ y: 100, x: 0, opacity: 0 }}
+            className="fixed z-[100] bottom-4 left-4 right-4 sm:left-auto sm:right-10 sm:bottom-10 flex items-center p-1.5 bg-white/90 backdrop-blur-2xl rounded-[2rem] sm:rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-zinc-200/50 border border-white/50 select-none max-w-[calc(100vw-32px)] sm:max-w-fit"
           >
             {/* Selection Info */}
-            <div className="flex items-center gap-2.5 px-4 h-10 bg-zinc-50 border border-zinc-100 rounded-full mr-1">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-black text-white shadow-sm ring-2 ring-indigo-100">
+            <div className="flex items-center gap-2 px-3 sm:px-4 h-10 bg-zinc-50 border border-zinc-100 rounded-full shrink-0 mr-1 sm:mr-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-black text-white shadow-sm ring-2 ring-indigo-100 shrink-0">
                 {selection.length}
               </span>
-              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 whitespace-nowrap">
+              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 whitespace-nowrap hidden sm:inline-block">
                 Selected
               </span>
             </div>
             
             {/* Actions Area */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 px-1 mask-linear-edges">
               {/* Legacy fallback */}
               {selectionActions}
 
@@ -247,7 +251,7 @@ const Table = ({
                     key={idx}
                     onClick={() => action.onClick?.()}
                     className={`
-                      flex items-center gap-2 px-4 h-10 rounded-full transition-all text-[10px] font-black uppercase tracking-[0.10em] whitespace-nowrap
+                      flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 h-10 rounded-full transition-all text-[10px] font-black uppercase tracking-[0.10em] whitespace-nowrap shrink-0
                       ${isDanger 
                         ? 'text-red-500 hover:bg-red-50' 
                         : 'text-zinc-600 hover:text-indigo-600 hover:bg-zinc-50'}
@@ -261,10 +265,10 @@ const Table = ({
             </div>
 
             {/* Close/Clear Button */}
-            <div className="w-[1px] h-6 bg-zinc-200 mx-1" />
+            <div className="w-[1px] h-6 bg-zinc-200 shrink-0 mx-1 sm:mx-2" />
             <button
               onClick={() => onSelectionChange?.([])}
-              className="p-2.5 hover:bg-zinc-50 rounded-full transition-all text-zinc-400 hover:text-zinc-900 group"
+              className="p-2 sm:p-2.5 hover:bg-zinc-50 rounded-full transition-all text-zinc-400 hover:text-zinc-900 group shrink-0"
               title="Clear selection"
             >
               <X size={16} className="group-hover:rotate-90 transition-transform duration-300" />

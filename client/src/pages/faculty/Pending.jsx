@@ -35,6 +35,8 @@ import {
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
 import { motion } from 'framer-motion';
+import GuidedTour from '../../components/ui/GuidedTour';
+import { Sparkles } from 'lucide-react';
 
 const container = {
   hidden: { opacity: 0 },
@@ -79,18 +81,84 @@ const Pending = () => {
 
   const { showGlobalLoader } = useUI();
   const { user } = useAuth();
-
   const { data: response, loading, error, request: fetchApprovals, setData: setResponse } =
     useApi(getPendingApprovals);
 
+  const [isTourActive, setIsTourActive] = useState(false);
+
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('tour_completed_faculty_pending');
+    if (!hasSeenTour && !loading && response) {
+      const timer = setTimeout(() => setIsTourActive(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, response]);
+
+  const tourSteps = [
+    {
+      targetId: 'tour-filters',
+      title: 'Status Filters',
+      content: 'Easily switch between Pending requests, Approved records, and students with Dues marked.'
+    },
+    {
+      targetId: 'tour-class-select',
+      title: 'Class Filtering',
+      content: 'Focus on a specific academic batch by selecting it from this dropdown.'
+    },
+    {
+      targetId: 'tour-search',
+      title: 'Quick Search',
+      content: 'Instantly find students by their Roll Number or Name.'
+    },
+    {
+      targetId: 'tour-table',
+      title: 'Approvals Table',
+      content: 'Review student details and take actions directly from here.'
+    },
+    {
+      targetId: 'tour-bulk-actions',
+      title: 'Bulk Approval',
+      content: 'Select multiple students and approve them all at once to save time.'
+    }
+  ];
+
+
   const { data: classesData } = useApi(getMyClasses, { immediate: true });
   
-  const total = response?.pagination?.total || 0;
+  const baseTotal = response?.pagination?.total || 0;
 
-  const approvals = useMemo(() => {
+  const baseApprovals = useMemo(() => {
     if (Array.isArray(response)) return response;
     return response?.data || [];
   }, [response]);
+
+  const useDummyData = isTourActive && baseApprovals.length === 0;
+
+  const approvals = useDummyData ? [
+    {
+      _id: 'dummy-1',
+      studentId: { rollNumber: 'CS24-001', name: 'Alex Johnson', department: 'Computer Science' },
+      className: 'Computer Science - Year 4',
+      approvalType: 'subject',
+      action: 'pending',
+      dues: [],
+      updatedAt: new Date().toISOString()
+    },
+    {
+      _id: 'dummy-2',
+      studentId: { rollNumber: 'CS24-002', name: 'Sarah Williams', department: 'Computer Science' },
+      className: 'Computer Science - Year 4',
+      approvalType: 'mentor',
+      action: 'pending',
+      dues: [],
+      updatedAt: new Date().toISOString()
+    }
+  ] : baseApprovals;
+
+  const total = useDummyData ? 2 : baseTotal;
+
+  // Force selection for tour if empty
+  const activeSelection = useDummyData ? ['dummy-1', 'dummy-2'] : selection;
 
   const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
   const sseUrl  = `${apiBase}/api/sse/connect`;
@@ -334,14 +402,28 @@ const Pending = () => {
   return (
     <PageWrapper 
       title="Pending Approvals" 
-      // subtitle="Efficiently manage clearance requests"
+      headerActions={
+        <button 
+          onClick={() => setIsTourActive(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-zinc-200 text-zinc-500 hover:text-indigo-600 hover:border-indigo-100 transition-all text-[10px] font-black uppercase tracking-widest"
+        >
+          <Sparkles size={14} /> Start Tour
+        </button>
+      }
     >
+      <GuidedTour 
+        steps={tourSteps} 
+        active={isTourActive} 
+        onComplete={() => setIsTourActive(false)}
+        onSkip={() => setIsTourActive(false)}
+        tourId="faculty_pending"
+      />
       <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
         
 
         {/* Header Filters */}
         <motion.div variants={item} className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-1 bg-zinc-200/40 p-1.5 rounded-[20px] w-fit border border-zinc-200/20 backdrop-blur-md">
+          <div id="tour-filters" className="flex items-center gap-1 bg-zinc-200/40 p-1.5 rounded-[20px] w-fit border border-zinc-200/20 backdrop-blur-md">
             {FILTERS.map((f) => {
               const count = approvals.filter((a) => f === 'all' || a.action === f).length;
               const active = filter === f;
@@ -369,7 +451,7 @@ const Pending = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
+            <div id="tour-class-select" className="flex items-center gap-3">
                <Settings2 size={16} className="text-zinc-400" />
                <SearchableSelect 
                 options={[
@@ -419,28 +501,33 @@ const Pending = () => {
               </p>
             </div>
           ) : (
-            <Table
-              columns={columns}
-              data={approvals}
-              loading={loading}
-              pagination={{
-                total,
-                page,
-                limit,
-                onPageChange: (p) => setPage(p),
-                onLimitChange: (l) => { setLimit(l); setPage(1); }
-              }}
-              searchable
-              searchValue={searchValue}
-              onSearchChange={setSearchValue}
-              searchPlaceholder="Search by roll number or name..."
-              selectable={filter === 'pending'} // Only allow selection in pending view
-              selection={selection}
-              onSelectionChange={setSelection}
-              bulkActions={bulkActionsList}
-              showCount
-            />
+            <div id="tour-table">
+              <Table
+                columns={columns}
+                data={approvals}
+                loading={loading}
+                pagination={{
+                  total,
+                  page,
+                  limit,
+                  onPageChange: (p) => setPage(p),
+                  onLimitChange: (l) => { setLimit(l); setPage(1); }
+                }}
+                searchable
+                searchValue={searchValue}
+                onSearchChange={setSearchValue}
+                searchPlaceholder="Search by roll number or name..."
+                selectable={filter === 'pending'} // Only allow selection in pending view
+                selection={activeSelection}
+                onSelectionChange={setSelection}
+                bulkActions={bulkActionsList}
+                showCount
+                searchId="tour-search"
+                bulkActionsId="tour-bulk-actions"
+              />
+            </div>
           )}
+
         </motion.div>
       </motion.div>
       <Modal

@@ -60,20 +60,20 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
 
   const sidebarContent = (
     <>
-      <div className="h-20 flex items-center px-6 border-b border-white/10 shrink-0 bg-white/[0.02]">
-        {!collapsed && (
-          <div>
-            <h2 className="text-white font-brand text-2xl tracking-tight leading-none">
-              No<span className="text-gold">Dues</span>
-            </h2>
-            <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-200/50 mt-1">Admin Portal</p>
-          </div>
-        )}
-        {collapsed && <span className="text-gold font-brand text-2xl mx-auto">N</span>}
+      <div className="h-20 flex items-center px-6 border-b border-white/10 shrink-0 bg-white/[0.02] relative">
+        <div className={`transition-all duration-300 ${collapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
+          <h2 className="text-white font-brand text-2xl tracking-tight leading-none">
+            No<span className="text-gold">Dues</span>
+          </h2>
+          <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-200/50 mt-1">Admin Portal</p>
+        </div>
+        <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 pointer-events-none ${collapsed ? 'opacity-100' : 'opacity-0'}`}>
+          <span className="text-gold font-brand text-2xl">N</span>
+        </div>
         <button
           type="button"
           onClick={onMobileClose}
-          className="lg:hidden ml-auto min-h-11 min-w-11 inline-flex items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10"
+          className="lg:hidden ml-auto min-h-11 min-w-11 inline-flex items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10 relative z-10"
           aria-label="Close menu"
         >
           <X size={20} />
@@ -108,12 +108,10 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
                   : 'border-transparent text-indigo-100/55 hover:bg-white/7 hover:text-white hover:border-white/10'
                 }`}
             >
-              <Icon size={18} className={isActive ? 'text-white' : 'text-indigo-100/55 group-hover:text-white'} />
-              {!collapsed && (
-                <span className="nav-text text-[10px] truncate">
-                  {item.label}
-                </span>
-              )}
+              <Icon size={18} className={`shrink-0 ${isActive ? 'text-white' : 'text-indigo-100/55 group-hover:text-white'}`} />
+              <div className={`nav-text text-[10px] truncate transition-all duration-300 overflow-hidden ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
+                {item.label}
+              </div>
             </NavLink>
           );
         })}
@@ -126,30 +124,26 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
         {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
-      <div className="p-6 border-t border-white/10 shrink-0">
-        {!collapsed && (
-          <div className="rounded-xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
-            <span className="block text-[8px] text-indigo-100/45 uppercase tracking-[0.3em] font-black mb-1">Account Role</span>
-            <span className="text-[10px] text-gold uppercase tracking-[0.2em] font-black">
-              {user?.role}
-            </span>
-          </div>
-        )}
-        {!collapsed && (
-          <div className="mt-6 text-center">
-            <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-100/20 mb-1">Built by</p>
-            <p className="text-[10px] font-brand text-indigo-100/60 flex items-center justify-center gap-1.5">
-              ARC Club <span className="h-0.5 w-0.5 rounded-full bg-gold/50" /> Community
-            </p>
-          </div>
-        )}
+      <div className={`p-6 border-t border-white/10 shrink-0 transition-all duration-300 ${collapsed ? 'opacity-0 invisible' : 'opacity-100 visible'}`}>
+        <div className="rounded-xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
+          <span className="block text-[8px] text-indigo-100/45 uppercase tracking-[0.3em] font-black mb-1">Account Role</span>
+          <span className="text-[10px] text-gold uppercase tracking-[0.2em] font-black">
+            {user?.role}
+          </span>
+        </div>
+        <div className="mt-6 text-center">
+          <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-100/20 mb-1">Built by</p>
+          <p className="text-[10px] font-brand text-indigo-100/60 flex items-center justify-center gap-1.5">
+            ARC Club <span className="h-0.5 w-0.5 rounded-full bg-gold/50" /> Community
+          </p>
+        </div>
       </div>
     </>
   );
 
   return (
     <>
-      <aside className={`hidden lg:flex ${collapsed ? 'w-20' : 'w-72'} min-h-screen bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex-col transition-all duration-300 ease-in-out relative shrink-0 shadow-2xl shadow-indigo-900/30`}>
+      <aside className={`hidden lg:flex ${collapsed ? 'w-20' : 'w-72'} min-h-screen bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex-col transition-[width] duration-300 ease-in-out relative shrink-0 shadow-2xl shadow-indigo-900/30 overflow-hidden whitespace-nowrap will-change-[width]`}>
         {sidebarContent}
       </aside>
       <AnimatePresence>

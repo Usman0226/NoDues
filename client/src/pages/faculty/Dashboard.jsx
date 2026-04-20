@@ -1,4 +1,4 @@
-import React, {  useMemo } from 'react';
+import React, {  useMemo, useState, useEffect } from 'react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { useApi } from '../../hooks/useApi';
 import { getPendingApprovals } from '../../api/approvals';
@@ -9,18 +9,52 @@ import {
   Calendar,
   Layers,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import useSSE from '../../hooks/useSSE';
 import { useUI } from '../../hooks/useUI';
+import GuidedTour from '../../components/ui/GuidedTour';
 
 const FacultyDashboard = () => {
   const navigate = useNavigate();
   const { showGlobalLoader } = useUI();
+  const [isTourActive, setIsTourActive] = useState(false);
   const { data: response, loading, error, request: fetchApprovals } = useApi(getPendingApprovals, { immediate: true });
+
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('tour_completed_faculty_dashboard');
+    if (!hasSeenTour && !loading && response) {
+      const timer = setTimeout(() => setIsTourActive(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, response]);
+
+  const tourSteps = [
+    {
+      targetId: 'tour-header',
+      title: 'Faculty Dashboard',
+      content: 'Welcome! This is your central hub for managing student clearance requests.'
+    },
+    {
+      targetId: 'tour-queue-status',
+      title: 'Action Queue',
+      content: 'Quickly see how many students are waiting for your approval across all your duties.'
+    },
+    {
+      targetId: 'tour-engagement-summary',
+      title: 'Duty Breakdown',
+      content: 'Manage approvals specifically for each class and subject role assigned to you.'
+    },
+    {
+      targetId: 'tour-process-button',
+      title: 'Start Processing',
+      content: 'Click here to go to the main processing portal and clear your queue in bulk.'
+    }
+  ];
   
   // Real-time synchronization
   const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
@@ -38,7 +72,7 @@ const FacultyDashboard = () => {
   }, [response]);
 
 
-  const summary = useMemo(() => {
+  const baseSummary = useMemo(() => {
     if (!approvals.length) return [];
     
     // Group by batchId
@@ -62,7 +96,28 @@ const FacultyDashboard = () => {
     return Object.values(groups);
   }, [approvals]);
 
-  const totalPending = useMemo(() => approvals.filter(a => a.action === 'pending').length || 0, [approvals]);
+  const baseTotalPending = useMemo(() => approvals.filter(a => a.action === 'pending').length || 0, [approvals]);
+
+  const summary = isTourActive && baseSummary.length === 0 ? [
+    {
+      id: 'dummy-1',
+      class: 'Computer Science - Year 4',
+      role: 'Faculty (Network Security)',
+      pending: 12,
+      total: 60,
+      action: 'pending'
+    },
+    {
+      id: 'dummy-2',
+      class: 'Information Tech - Year 3',
+      role: 'Class Teacher',
+      pending: 0,
+      total: 45,
+      action: 'approved'
+    }
+  ] : baseSummary;
+
+  const totalPending = isTourActive && baseTotalPending === 0 ? 12 : baseTotalPending;
 
   if (loading && !response) {
     return (
@@ -131,7 +186,22 @@ const FacultyDashboard = () => {
     <PageWrapper 
       title="Candidate Approvals" 
       subtitle="Your active duties and pending requests"
+      headerActions={
+        <button 
+          onClick={() => setIsTourActive(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-zinc-200 text-zinc-500 hover:text-indigo-600 hover:border-indigo-100 transition-all text-[10px] font-black uppercase tracking-widest"
+        >
+          <Sparkles size={14} /> Start Tour
+        </button>
+      }
     >
+      <GuidedTour 
+        steps={tourSteps} 
+        active={isTourActive} 
+        onComplete={() => setIsTourActive(false)}
+        onSkip={() => setIsTourActive(false)}
+        tourId="faculty_dashboard"
+      />
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -140,10 +210,11 @@ const FacultyDashboard = () => {
       >
         {/* Minimal Action Header */}
         <motion.div 
+          id="tour-header"
           variants={itemVariants}
           className="lg:px-2"
         >
-          <div className="rounded-3xl premium-card p-6 sm:p-8 bg-gradient-to-br from-white to-indigo-50/30 border-zinc-200/60 shadow-xl shadow-navy/5 relative overflow-hidden group">
+          <div id="tour-queue-status" className="rounded-3xl premium-card p-6 sm:p-8 bg-gradient-to-br from-white to-indigo-50/30 border-zinc-200/60 shadow-xl shadow-navy/5 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full translate-x-32 -translate-y-32 group-hover:scale-110 transition-transform duration-1000"></div>
             <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
               <div className="flex items-center gap-6">
@@ -167,6 +238,7 @@ const FacultyDashboard = () => {
 
               {totalPending > 0 ? (
                 <Button 
+                  id="tour-process-button"
                   variant="primary" 
                   className="w-full md:w-auto px-10 h-14 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-navy/20 hover:shadow-xl transition-all active:scale-95" 
                   onClick={() => navigate('/faculty/pending')}
@@ -184,7 +256,7 @@ const FacultyDashboard = () => {
         </motion.div>
 
         {/* Minimal Engagement Section */}
-        <motion.div variants={itemVariants} className="space-y-6">
+        <motion.div id="tour-engagement-summary" variants={itemVariants} className="space-y-6">
           <div className="flex items-center gap-4 px-2">
             <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">Engagement Summary</h2>
             <div className="h-px flex-1 bg-zinc-100" />

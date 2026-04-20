@@ -1,21 +1,19 @@
 {
-  "last_updated": "2026-04-17T06:54:00Z",
+  "last_updated": "2026-04-20T22:37:00Z",
   "completed": [
-    "Fixed Co-Curricular API 400 Bad Request by standardizing departmentId handling",
-    "Enabled co-curricular data visibility by adding 'not_submitted' and 'rejected' to NodueApproval schema",
-    "Fixed logical precedence bug in batch initiation year calculation",
-    "Updated student portal Status.jsx to correctly filter and sort co-curricular items",
-    "Resolved duplicate schema index warning in EmailLog model"
+    "Faculty Portal Walkthrough implementation",
+    "GuidedTour UI component",
+    "Dashboard tour integration",
+    "Pending approvals tour integration",
+    "PageWrapper and Table component updates for tour support"
   ],
   "in_progress": [],
-  "pending": [
-    "Verify end-to-end clearance flow with actual coordinators"
-  ],
+  "pending": [],
   "decisions": [
     {
-      "context": "Co-curricular items were not appearing because 'not_submitted' wasn't a valid DB status.",
-      "decision": "Expanded NodueApproval enum to accommodate the co-curricular lifecycle (not_submitted -> pending -> approved).",
-      "trade_offs": "Requires any active batches to be re-initiated to correctly populate the new statuses."
+      "context": "Need for a premium tour experience",
+      "decision": "Implemented a custom SVG-mask based spotlight tour instead of using a generic library.",
+      "trade_offs": "Requires more manual coordinate tracking but offers much higher visual quality and brand consistency."
     }
   ],
   "blockers": []
