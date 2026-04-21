@@ -294,7 +294,7 @@ export const sendFeedbackEmail = async (feedbackData, user) => {
     subject,
     html,
     role: 'admin',
-    triggeredBy: user._id.toString()
+    triggeredBy: (user._id || user.userId || 'anonymous').toString()
   });
 };
 

@@ -2,6 +2,7 @@ import Feedback from '../models/Feedback.js';
 import * as emailService from '../services/emailService.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import ErrorResponse from '../utils/errorResponse.js';
+import logger from '../utils/logger.js';
 
 export const submitFeedback = asyncHandler(async (req, res, next) => {
   const { type, description, page, userAgent } = req.body;
@@ -11,10 +12,10 @@ export const submitFeedback = asyncHandler(async (req, res, next) => {
   }
 
   const submittedBy = {
-    userId: req.user._id,
-    name: req.user.name,
+    userId: req.user.userId || req.user._id,
+    name: req.user.name || 'User',
     role: req.user.role,
-    identifier: req.user.rollNo || req.user.email
+    identifier: req.user.rollNo || req.user.email || 'N/A'
   };
 
   const feedback = await Feedback.create({
@@ -26,7 +27,7 @@ export const submitFeedback = asyncHandler(async (req, res, next) => {
   });
 
   emailService.sendFeedbackEmail({ type, description, page, userAgent }, req.user)
-    .catch(err => console.error('Feedback email dispatch failed:', err));
+    .catch(err => logger.error('Feedback email dispatch failed', { error: err.message }));
 
   res.status(201).json({
     success: true,

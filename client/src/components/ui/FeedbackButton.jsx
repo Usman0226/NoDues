@@ -16,6 +16,7 @@ const FeedbackButton = () => {
   });
 
   const { loading, request } = useApi(submitFeedback, {
+    immediate: false,
     silent: true,
     onSuccess: () => {
       setIsSuccess(true);
