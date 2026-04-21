@@ -16,7 +16,8 @@ jobs:
 
       - name: Update vercel.json to Render
         run: |
-          sed -i 's|destination": "http://40.81.243.62:5000/api/:path*"|destination": "https://nodues-jbzp.onrender.com/api/:path*"|' client/vercel.json
+          sed -i 's|destination": ".*/api/:path\*"|destination": "https://nodues-jbzp.onrender.com/api/:path*"|' client/vercel.json
+          cat client/vercel.json # Log the change for debugging
 
       - name: Commit and Push
         run: |

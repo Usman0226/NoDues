@@ -1,4 +1,4 @@
-name: ☀️ Day Mode (Switch to Azure)
+name: Day Mode (Switch to Azure)
 
 on:
   schedule:
@@ -16,7 +16,8 @@ jobs:
 
       - name: Update vercel.json to Azure
         run: |
-          sed -i 's|destination": "https://nodues-jbzp.onrender.com/api/:path*"|destination": "http://40.81.243.62:5000/api/:path*"|' client/vercel.json
+          sed -i 's|destination": ".*/api/:path\*"|destination": "http://40.81.243.62:5000/api/:path*"|' client/vercel.json
+          cat client/vercel.json # Log the change for debugging
 
       - name: Commit and Push
         run: |
