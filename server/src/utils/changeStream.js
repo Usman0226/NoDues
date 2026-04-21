@@ -7,29 +7,52 @@ import logger from './logger.js';
  * This ensures that a database update on Instance A triggers an SSE notification 
  * on Instance B, C, etc.
  */
-export const initChangeStreams = () => {
-    const db = mongoose.connection;
+let isInitialized = false;
 
-    // 1. Watch NodueApproval (Most frequent updates - student dashboard sync)
+/**
+ * Initializes MongoDB Change Streams to synchronize SSE events across multiple server instances.
+ */
+export const initChangeStreams = async () => {
+    if (isInitialized) return;
+
+    const db = mongoose.connection;
+    
+    // Check for Replica Set support before starting
+    try {
+        const admin = db.db.admin();
+        const serverInfo = await admin.command({ hello: 1 });
+        
+        // Standalone instances don't have 'setName' or 'isWritablePrimary' in the same way as replica sets
+        const isReplicaSet = !!(serverInfo.setName || serverInfo.isWritablePrimary);
+        
+        if (!isReplicaSet) {
+            logger.warn('MongoDB Change Stream: Standalone server detected. Real-time SSE sync disabled (Replica Set required).');
+            isInitialized = true; // Mark as "processed" so we don't spam
+            return;
+        }
+    } catch (err) {
+        // If we can't even run 'hello', the connection is unstable. 
+        // We will let the error event handlers handle recovery.
+        logger.debug('ChangeStream: Capability check failed, will attempt opportunistic watch.', { error: err.message });
+    }
+
+    isInitialized = true;
+
+    // 1. Watch NodueApproval
     try {
         const approvalStream = db.collection('nodueapprovals').watch([], { fullDocument: 'updateLookup' });
 
         approvalStream.on('change', (change) => {
             try {
                 const { operationType, fullDocument } = change;
-
                 if (operationType === 'update' || operationType === 'insert') {
                     const { studentId, facultyId, batchId, action } = fullDocument;
-                    
-                    // Notify Student
                     if (studentId) {
                         pushEvent([studentId.toString()], 'approval_update', { 
                             batchId: batchId?.toString(),
                             action 
                         });
                     }
-
-                    // Notify Faculty (if they need live UI updates for their pending list)
                     if (facultyId) {
                         pushEvent([facultyId.toString()], 'pending_list_update', { 
                             batchId: batchId?.toString() 
@@ -42,19 +65,23 @@ export const initChangeStreams = () => {
         });
 
         approvalStream.on('error', (err) => {
-            logger.error('approval_change_stream_error', { error: err.message });
-            // Attempt recovery after a delay if not a Capability error
-            if (!err.message.includes('ChangeStream') && !err.message.includes('ReplicaSet')) {
-                setTimeout(initChangeStreams, 10000);
+            if (err.message.includes('changeStream stage is only supported on replica sets')) {
+                logger.warn('MongoDB Change Stream: Feature disabled (Replica Set required).');
+            } else {
+                logger.error('approval_change_stream_error', { error: err.message });
             }
         });
 
         logger.info('MongoDB Change Stream: NodueApproval watcher active.');
     } catch (err) {
-        logger.warn('MongoDB Change Stream: NodueApproval watcher could not be started (Replica Set required).', { error: err.message });
+        if (err.message.includes('changeStream')) {
+            logger.warn('MongoDB Change Stream: NodueApproval watcher disabled (Replica Set required).');
+        } else {
+            logger.error('MongoDB Change Stream: Failed to start NodueApproval watcher.', { error: err.message });
+        }
     }
 
-    // 2. Watch NodueRequest (Batch level status changes)
+    // 2. Watch NodueRequest
     try {
         const requestStream = db.collection('noduerequests').watch([], { fullDocument: 'updateLookup' });
         requestStream.on('change', (change) => {
@@ -75,13 +102,17 @@ export const initChangeStreams = () => {
         });
 
         requestStream.on('error', (err) => {
-            logger.error('request_change_stream_error', { error: err.message });
+            if (!err.message.includes('changeStream')) {
+                logger.error('request_change_stream_error', { error: err.message });
+            }
         });
 
         logger.info('MongoDB Change Stream: NodueRequest watcher active.');
     } catch (err) {
-        logger.warn('MongoDB Change Stream: NodueRequest watcher could not be started.', { error: err.message });
+        if (!err.message.includes('changeStream')) {
+            logger.warn('MongoDB Change Stream: NodueRequest watcher could not be started.', { error: err.message });
+        }
     }
 
-    logger.info('MongoDB Change Streams initialized for real-time SSE synchronization.');
+    logger.info('MongoDB Change Streams initialized.');
 };

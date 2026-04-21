@@ -27,6 +27,20 @@ export const errorHandler = (err, req, res, next) => {
     message    = Object.values(err.errors).map((e) => e.message).join(', ');
   }
 
+  // MongoDB: Network/Selection issues (Usually DNS or Atlas downtime)
+  if (err.name === 'MongoServerSelectionError' || err.name === 'MongoNetworkError') {
+    statusCode = 503;
+    code       = 'DATABASE_UNAVAILABLE';
+    message    = 'The database is currently unreachable. This is usually temporary. Please try again in a moment.';
+  }
+
+  // Fetch / Network Timeouts
+  if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+    statusCode = 504;
+    code       = 'GATEWAY_TIMEOUT';
+    message    = 'The request took too long to complete. Please try again.';
+  }
+
   const logData = {
     code,
     statusCode,

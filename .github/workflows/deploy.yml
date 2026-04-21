@@ -1,0 +1,23 @@
+name: Remote Update (Azure)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and Update VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.AZURE_VM_IP }}
+          username: azureuser
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          script: |
+            cd ~/NoDues
+            git pull origin main
+            cd server
+            sudo docker-compose up -d --build
+            echo "Deployment successful!"

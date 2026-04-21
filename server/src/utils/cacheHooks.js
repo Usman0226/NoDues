@@ -15,11 +15,27 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
     case 'student':
       keys.push(`user:${entityId}`);
       keys.push(`student_status:${entityId}`);
+      
+      // Invalidate lists where this student might appear
+      const allStudentKeys = cache.keys();
+      const listStudentKeys = allStudentKeys.filter(k =>
+        k.startsWith('students:list:all:') ||
+        (additionalId && k.startsWith(`students:list:${additionalId}:`))
+      );
+      keys.push(...listStudentKeys);
       break;
 
     case 'faculty':
       keys.push(`user:${entityId}`);
       if (additionalId) keys.push(`faculty_pending:${entityId}:${additionalId}`);
+      
+      // Invalidate lists where this faculty might appear
+      const allFacultyKeys = cache.keys();
+      const listFacultyKeys = allFacultyKeys.filter(k =>
+        k.startsWith('faculty:list:all:') ||
+        (additionalId && k.startsWith(`faculty:list:${additionalId}:`))
+      );
+      keys.push(...listFacultyKeys);
       break;
 
     case 'department':

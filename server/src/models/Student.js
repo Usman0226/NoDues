@@ -122,29 +122,14 @@ studentSchema.index({ departmentId: 1, isActive: 1 });
 studentSchema.index({ mentorId: 1 });
 
 studentSchema.post('save', function(doc) {
-  invalidateEntityCache('student', doc._id);
-  // Clear scoped list cache entries so new/updated students appear immediately
-  const allKeys = cache.keys();
-  const listKeys = allKeys.filter(k =>
-    k.startsWith(`students:list:${doc.classId}:`) ||
-    k.startsWith(`students:list:${doc.departmentId}:`) ||
-    k.startsWith('students:list:all:')
-  );
-  if (listKeys.length) cache.del(listKeys);
+  invalidateEntityCache('student', doc._id, doc.classId);
 });
 
 studentSchema.post('findOneAndUpdate', async function() {
   const query = this.getQuery();
   const doc = await this.model.findOne(query);
   if (!doc) return;
-  invalidateEntityCache('student', doc._id);
-  const allKeys = cache.keys();
-  const listKeys = allKeys.filter(k =>
-    k.startsWith(`students:list:${doc.classId}:`) ||
-    k.startsWith(`students:list:${doc.departmentId}:`) ||
-    k.startsWith('students:list:all:')
-  );
-  if (listKeys.length) cache.del(listKeys);
+  invalidateEntityCache('student', doc._id, doc.classId);
 });
 
 export default mongoose.model('Student', studentSchema);

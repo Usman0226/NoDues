@@ -73,20 +73,26 @@ const getTransporter = (index) => {
 const selectBrevoAccountIndex = async () => {
   if (brevoConfig.accounts.length === 0) return -1;
 
-  const today = new Date().toISOString().split('T')[0];
-  let quota = await EmailQuota.findOne({ date: today });
-  
-  if (!quota) {
-    quota = await EmailQuota.create({ date: today, usage: {} });
-  }
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const quota = await EmailQuota.findOneAndUpdate(
+      { date: today },
+      { $setOnInsert: { usage: {} } },
+      { upsert: true, new: true, lean: true }
+    );
+    
+    if (!quota) return 0; // Fallback to first account if something is weird
 
-  for (let i = 0; i < brevoConfig.accounts.length; i++) {
-    // Brevo accounts are stored as -1, -2, -3... in usage map
-    const accountId = (-(i + 1)).toString();
-    const sentCount = quota.usage.get(accountId) || 0;
-    if (sentCount < ACCOUNT_LIMIT) {
-      return i; // Returns 0-based index for accounts array
+    for (let i = 0; i < brevoConfig.accounts.length; i++) {
+      const accountId = (-(i + 1)).toString();
+      const sentCount = (quota.usage && quota.usage[accountId]) || 0;
+      if (sentCount < ACCOUNT_LIMIT) {
+        return i;
+      }
     }
+  } catch (err) {
+    logger.error('selectBrevoAccountIndex failed (DB issue):', err);
+    return 0; // Default to first account if DB fails
   }
 
   return -1;
@@ -96,18 +102,25 @@ const selectAccountIndex = async () => {
   if (_accounts.length === 0) discoverAccounts();
   if (_accounts.length === 0) return -1;
 
-  const today = new Date().toISOString().split('T')[0];
-  let quota = await EmailQuota.findOne({ date: today });
-  
-  if (!quota) {
-    quota = await EmailQuota.create({ date: today, usage: {} });
-  }
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const quota = await EmailQuota.findOneAndUpdate(
+      { date: today },
+      { $setOnInsert: { usage: {} } },
+      { upsert: true, new: true, lean: true }
+    );
+    
+    if (!quota) return 0;
 
-  for (let i = 0; i < _accounts.length; i++) {
-    const sentCount = quota.usage.get(i.toString()) || 0;
-    if (sentCount < ACCOUNT_LIMIT) {
-      return i;
+    for (let i = 0; i < _accounts.length; i++) {
+      const sentCount = (quota.usage && quota.usage[i.toString()]) || 0;
+      if (sentCount < ACCOUNT_LIMIT) {
+        return i;
+      }
     }
+  } catch (err) {
+    logger.error('selectAccountIndex failed (DB issue):', err);
+    return 0;
   }
 
   return -1; 
@@ -116,6 +129,9 @@ const selectAccountIndex = async () => {
 const sendViaBrevo = async (mailOptions, accountIndex = 0) => {
   const account = brevoConfig.accounts[accountIndex];
   if (!account) throw new Error(`No Brevo API configuration found for account index ${accountIndex}`);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
   try {
     const response = await fetch(brevoConfig.apiUrl, {
@@ -130,8 +146,10 @@ const sendViaBrevo = async (mailOptions, accountIndex = 0) => {
         to: Array.isArray(mailOptions.to) ? mailOptions.to : [{ email: mailOptions.to }],
         subject: mailOptions.subject,
         htmlContent: mailOptions.html
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     const data = await response.json();
     if (!response.ok) {

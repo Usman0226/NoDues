@@ -35,12 +35,9 @@ USER nodues
 ENV NODE_ENV=production
 ENV PORT=5000
 
-# Health check to ensure the container is alive
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD node -e "fetch('http://localhost:5000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 EXPOSE 5000
 
 CMD ["node", "--max-old-space-size=3072", "server.js"]
-
-# docker run -d -it --name nodues-api -e MONGODB_URI="" -e JWT_SECRET=12345 -p 5000:5000 nodues-server:latest

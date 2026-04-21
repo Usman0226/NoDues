@@ -32,8 +32,8 @@ export const getFaculty = async (req, res, next) => {
 
     if (search) {
       query.$or = [
-        { name:       { $regex: search, $options: 'i' } },
-        { email:      { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
         { employeeId: { $regex: search, $options: 'i' } },
       ];
     }
@@ -65,13 +65,9 @@ export const getFaculty = async (req, res, next) => {
       Faculty.countDocuments(query),
     ]);
 
-    // Build classCount map — two targeted queries, both indexed
-    // Note: the Class.aggregate that was here was computing classCounts but the result was never used
     const facultyIds = faculty.map((f) => f._id);
     const classCountMap = {};
 
-    // Skip classCount lookup during search — saves 2 DB round-trips per keypress.
-    // classCount is irrelevant when the user is filtering by name/email/employeeId.
     if (!search && facultyIds.length > 0) {
       const [ctClasses, subjClasses] = await Promise.all([
         Class.find(

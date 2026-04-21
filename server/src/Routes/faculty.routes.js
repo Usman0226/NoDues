@@ -13,6 +13,7 @@ import {
 } from '../Controllers/facultyController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
 const router = Router();
 
@@ -20,24 +21,24 @@ router.use(protect);
 router.get('/me/classes', (req, res, next) => {
   req.params.id = req.user.userId;
   next();
-}, getFacultyClasses);
+}, asyncHandler(getFacultyClasses));
 
 router.use(RoleGuard(['admin', 'hod']));
 
 router.route('/')
-  .get(getFaculty)
-  .post(createFaculty);
+  .get(asyncHandler(getFaculty))
+  .post(asyncHandler(createFaculty));
 
 router.route('/:id')
-  .get(getFacultyById)
-  .patch(updateFaculty)
-  .delete(deleteFaculty);
+  .get(asyncHandler(getFacultyById))
+  .patch(asyncHandler(updateFaculty))
+  .delete(asyncHandler(deleteFaculty));
 
-router.get('/:id/classes', getFacultyClasses);
-router.post('/:id/resend-creds', resendCredentials);
+router.get('/:id/classes', asyncHandler(getFacultyClasses));
+router.post('/:id/resend-creds', asyncHandler(resendCredentials));
 
-router.post('/bulk-deactivate', bulkDeactivateFaculty);
-router.post('/bulk-resend-creds', bulkResendCredentials);
-router.post('/bulk-update-roles', bulkUpdateRoles);
+router.post('/bulk-deactivate', asyncHandler(bulkDeactivateFaculty));
+router.post('/bulk-resend-creds', asyncHandler(bulkResendCredentials));
+router.post('/bulk-update-roles', asyncHandler(bulkUpdateRoles));
 
 export default router;
