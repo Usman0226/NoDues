@@ -1,0 +1,31 @@
+name: Switch to Render
+
+on:
+  schedule:
+    - cron: '30 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  switch-to-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Update vercel.json to Render
+        run: |
+          sed -i 's|destination": "http://40.81.243.62:5000/api/:path*"|destination": "https://nodues-jbzp.onrender.com/api/:path*"|' client/vercel.json
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "Deployment automation"
+          git config --global user.email "bot@nodues.com"
+          git add client/vercel.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Night Mode: Switched server to Render"
+            git push
+          fi
