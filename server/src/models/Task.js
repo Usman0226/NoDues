@@ -4,7 +4,7 @@ const taskSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['import_students', 'import_faculty', 'import_electives', 'import_mentors', 'bulk_email', 'sync']
+    enum: ['import_students', 'import_faculty', 'import_electives', 'import_mentors', 'bulk_email', 'sync', 'batch_initiation']
   },
   label: {
     type: String,

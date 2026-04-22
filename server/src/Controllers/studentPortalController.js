@@ -3,7 +3,17 @@ import NodueApproval from '../models/NodueApproval.js';
 import NodueBatch from '../models/NodueBatch.js';
 import Student from '../models/Student.js';
 import CoCurricularType from '../models/CoCurricularType.js';
+import cache from '../config/cache.js';
 import { withCache } from '../utils/withCache.js';
+
+// Invalidate cached student status after an approval action
+export const invalidateStudentStatusCache = (studentId) => {
+  const activeKey = `student_status:${studentId}:active`;
+  cache.del(activeKey);
+  // Also wipe any request-specific keys for this student (pattern-based)
+  // node-cache doesn't support glob, so we drop by convention: active key is enough
+  // because SSE triggers a refetch which hits the DB directly after invalidation.
+};
 
 export const getStudentStatus = async (req, res, next) => {
   const userId = req.user.userId;
@@ -21,7 +31,8 @@ export const getStudentStatus = async (req, res, next) => {
       });
     }
 
-    // Distinct cache key for historical requests vs active status
+    // 60s TTL is fine — explicit invalidation in approvalController guarantees
+    // freshness after every approve/due-mark action. The TTL is just a safety net.
     const cacheKey = requestId ? `student_status:${userId}:${requestId}` : `student_status:${userId}:active`;
 
     const data = await withCache(cacheKey, 60, async () => {

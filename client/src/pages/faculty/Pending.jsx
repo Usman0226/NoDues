@@ -71,6 +71,17 @@ const Pending = () => {
   const location = useLocation();
   const [selectedBatch, setSelectedBatch] = useState(location.state?.classId || 'all');
   const [filter, setFilter]               = useState('pending');
+
+  // Sync with navigation state (from My Classes / Dashboard)
+  useEffect(() => {
+    if (location.state?.classId) {
+      setSelectedBatch(location.state.classId);
+    }
+    // Reset to 'pending' if entering from a summary view (Dashboard/My Classes)
+    if (location.state?.from) {
+      setFilter('pending');
+    }
+  }, [location.state]);
   const [selection, setSelection]         = useState([]);
   const [actionLoading, setActionLoading] = useState(null); 
   const [dueModal, setDueModal]           = useState(null); 
@@ -188,16 +199,40 @@ const Pending = () => {
     useCallback(
       (event) => {
         if (event?.event !== 'APPROVAL_UPDATED') return;
-        // For simplicity and correctness with pagination, refetch is best
-        fetchApprovals({ 
-          page, 
-          limit, 
-          search: debouncedSearch,
-          batchId: selectedBatch !== 'all' ? selectedBatch : undefined,
-          action: filter
-        });
+
+        // If the event carries a specific approvalId+action, apply it in-place.
+        // This avoids a full refetch when OUR OWN approve/mark-due action echoes back via SSE.
+        const { approvalId, action: incomingAction, bulk } = event;
+
+        if (approvalId && incomingAction && !bulk) {
+          setResponse((prev) => {
+            // Check if this row already matches — if so, no-op (we already set it optimistically)
+            const rows = Array.isArray(prev) ? prev : (prev?.data || []);
+            const target = rows.find((a) => a._id === approvalId);
+            if (!target || target.action === incomingAction) return prev; // already up to date
+
+            // Row exists but differs — apply the remote update in-place
+            const update = (a) =>
+              a._id === approvalId
+                ? { ...a, action: incomingAction, dueType: event.dueType ?? null, remarks: event.remarks ?? null }
+                : a;
+
+            if (Array.isArray(prev)) return prev.map(update);
+            if (prev?.data) return { ...prev, data: prev.data.map(update) };
+            return prev;
+          });
+        } else {
+          // Bulk event or cross-session event — do a full refetch
+          fetchApprovals({
+            page,
+            limit,
+            search: debouncedSearch,
+            batchId: selectedBatch !== 'all' ? selectedBatch : undefined,
+            action: filter
+          });
+        }
       },
-      [fetchApprovals, page, limit, debouncedSearch, selectedBatch, filter]
+      [fetchApprovals, setResponse, page, limit, debouncedSearch, selectedBatch, filter]
     )
   );
 
@@ -205,11 +240,17 @@ const Pending = () => {
     setActionLoading(id);
     try {
       await updateApproval(id, { action: 'pending', dueType: null, remarks: null });
-      fetchApprovals();
+      // Optimistic in-place reset — avoids a no-arg refetch that ignores current filter/page/search
+      setResponse((prev) => {
+        const update = (a) =>
+          a._id === id ? { ...a, action: 'pending', dueType: null, remarks: null } : a;
+        if (Array.isArray(prev)) return prev.map(update);
+        if (prev?.data) return { ...prev, data: prev.data.map(update) };
+        return prev;
+      });
       toast.success('Action reversed. Record is back in Pending.', { id: `undo-${id}` });
     } catch (err) {
-      console.warn(err)
-      toast.error('Failed to reverse action');
+      toast.error(err?.response?.data?.error?.message || 'Failed to reverse action');
     } finally {
       setActionLoading(null);
     }
@@ -247,23 +288,45 @@ const Pending = () => {
   const handleBulkApprove = useCallback(async () => {
     if (!selection.length) return;
     setActionLoading('bulk');
+    const approvedIds = new Set(selection);
     try {
       const res = await bulkApproveRecords(selection);
-      toast.success(`Successfully approved ${res.data.processed} students `);
+      toast.success(`Successfully approved ${res.data.processed} students`);
+      // Optimistic update for all selected rows
+      setResponse((prev) => {
+        const update = (a) =>
+          approvedIds.has(a._id) ? { ...a, action: 'approved', dueType: null, remarks: null } : a;
+        if (Array.isArray(prev)) return prev.map(update);
+        if (prev?.data) return { ...prev, data: prev.data.map(update) };
+        return prev;
+      });
       setSelection([]);
-      fetchApprovals(); // Refresh to catch all Recalc effects
     } finally {
       setActionLoading('bulk');
       setTimeout(() => setActionLoading(null), 500);
     }
-  }, [selection, fetchApprovals]);
+  }, [selection, fetchApprovals, setResponse]);
 
   const handleUpdate = async (id, data) => {
     setActionLoading(id);
     try {
       await updateApproval(id, data);
-      fetchApprovals();
-      
+      // Optimistic in-place update — avoids the no-arg fetchApprovals() silent no-op
+      setResponse((prev) => {
+        const update = (a) =>
+          a._id === id
+            ? {
+                ...a,
+                action: data.action ?? a.action,
+                dueType: data.action === 'pending' ? null : (data.dueType ?? a.dueType),
+                remarks: data.action === 'pending' ? null : (data.remarks ?? a.remarks),
+              }
+            : a;
+        if (Array.isArray(prev)) return prev.map(update);
+        if (prev?.data) return { ...prev, data: prev.data.map(update) };
+        return prev;
+      });
+
       if (data.action === 'due_marked') {
         toast((t) => (
           <div className="flex items-center justify-between gap-4 w-full">
@@ -282,6 +345,8 @@ const Pending = () => {
       } else {
         toast.success(data.action === 'pending' ? 'Record reset to pending' : 'Record updated');
       }
+    } catch (err) {
+      toast.error(err?.response?.data?.error?.message || 'Action failed');
     } finally {
       setActionLoading(null);
     }
@@ -477,6 +542,8 @@ const Pending = () => {
                 value={selectedBatch}
                 onChange={(val) => { setSelectedBatch(val || 'all'); setSelection([]); setPage(1); }}
                 placeholder="Filter by Class"
+                labelKey="name"
+                idKey="id"
                 variant="ghost"
                 className="min-w-[200px] w-full sm:w-[200px]"
                 clearable={selectedBatch !== 'all'}

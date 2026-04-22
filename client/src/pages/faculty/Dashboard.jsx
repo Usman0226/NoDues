@@ -241,7 +241,7 @@ const FacultyDashboard = () => {
                   id="tour-process-button"
                   variant="primary" 
                   className="w-full md:w-auto px-10 h-14 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-navy/20 hover:shadow-xl transition-all active:scale-95" 
-                  onClick={() => navigate('/faculty/pending')}
+                  onClick={() => navigate('/faculty/pending', { state: { from: 'faculty-dashboard' } })}
                 >
                   PROCESS QUEUE <ArrowRight size={14} className="ml-2" />
                 </Button>
@@ -321,7 +321,7 @@ const FacultyDashboard = () => {
                           </div>
 
                           <button 
-                            onClick={() => navigate('/faculty/pending', { state: { classId: item.id } })} 
+                            onClick={() => navigate('/faculty/pending', { state: { classId: item.id, from: 'faculty-dashboard' } })} 
                             className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 border group/btn relative z-10 ${
                               item.pending > 0 
                                 ? 'bg-navy text-white border-navy shadow-lg shadow-navy/10 hover:shadow-xl active:scale-[0.97]' 

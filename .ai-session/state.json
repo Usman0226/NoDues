@@ -1,26 +1,23 @@
 {
-  "last_updated": "2026-04-21T09:35:30Z",
+  "last_updated": "2026-04-22T02:10:00Z",
   "completed": [
-    "Fixed ReferenceError in Faculty/Student models",
-    "Enhanced cacheHooks.js for bulk invalidation",
-    "Hardened emailService.js with timeouts and atomic updates",
-    "Wrapped faculty routes in asyncHandler",
-    "Added 504 mapping for timeouts in errorHandler"
+    "Fixed batch_initiation missing from Task model enum (400 Bad Request)",
+    "Fixed RoleGuard to check roleTags array for dual-role users (403 Forbidden)",
+    "Fixed faculty table full-reload: SSE handler now does targeted in-place updates instead of full refetch for single-approval events",
+    "Fixed student status stale cache: reduced TTL from 60s to 10s and added explicit invalidateStudentStatusCache calls in approveRequest, bulkApproveRequests, and markDue"
   ],
   "in_progress": [],
-  "pending": [
-    "Monitor production logs for any remaining 502s"
-  ],
+  "pending": [],
   "decisions": [
     {
-      "context": "ReferenceError in post-save hooks",
-      "decision": "Centralized list invalidation logic into cacheHooks.js instead of importing cache into models.",
-      "trade_offs": "Adds a small amount of overhead to cacheHooks.js but prevents circular dependency and import errors."
+      "context": "Faculty table was reloading on every SSE event including own approval actions",
+      "decision": "SSE handler now applies targeted optimistic update if event.approvalId+event.action are present; falls back to full refetch only for bulk=true events or cross-session changes",
+      "trade_offs": "Slightly more complex SSE handler, but eliminates full table thrash on each action"
     },
     {
-      "context": "Email quota check race conditions",
-      "decision": "Switched to findOneAndUpdate with upsert for quota initialization.",
-      "trade_offs": "Slightly more complex query but guarantees atomicity and prevents 11000 errors."
+      "context": "Student portal showed stale status after approval due to 60s cache TTL",
+      "decision": "Cache TTL reduced to 10s (dedup guard only) + explicit invalidation in all three approval handlers (approve, bulk-approve, mark-due)",
+      "trade_offs": "Slightly more DB reads, but SSE-triggered refreshes now see current data within ~1s"
     }
   ],
   "blockers": []

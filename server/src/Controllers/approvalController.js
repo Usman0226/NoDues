@@ -8,6 +8,7 @@ import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import { invalidateStudentStatusCache } from './studentPortalController.js';
 // Cache invalidation is now handled via Mongoose hooks in the model.
 
 // ── GET /api/approvals/pending ────────────────────────────────────────────────
@@ -20,7 +21,7 @@ export const getPendingApprovals = async (req, res, next) => {
     // Previously made two separate NodueBatch queries (one for dept scope, one for className)
     const activeBatches = await NodueBatch.find(
       { status: 'active' },
-      '_id departmentId className'
+      '_id departmentId className classId'
     ).lean();
 
     if (!activeBatches.length) {
@@ -42,10 +43,17 @@ export const getPendingApprovals = async (req, res, next) => {
       andConditions.push({ action: action || 'pending' });
     }
 
-    // Batch filter: scope to specified batch if valid active batch, otherwise all active batches
-    const targetBatchIds = batchId && batchIdSet.some(id => id.toString() === batchId.toString()) 
-                           ? [batchId] 
-                           : batchIdSet;
+    // Batch filter: support both explicit batchId OR classId (sent from client filters)
+    let targetBatchIds = batchIdSet;
+    if (batchId) {
+      const match = activeBatches.find(b => 
+        b._id.toString() === batchId.toString() || 
+        b.classId?.toString() === batchId.toString()
+      );
+      if (match) {
+        targetBatchIds = [match._id];
+      }
+    }
     andConditions.push({ batchId: { $in: targetBatchIds } });
 
     // Faculty vs HOD-Department Filter
@@ -310,6 +318,9 @@ export const approveRequest = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId, session);
 
+    // Invalidate the student's cached status so SSE-triggered refetch gets fresh data
+    invalidateStudentStatusCache(approval.studentId.toString());
+
     await commitSafeTransaction(session);
 
     logger.info('approval_actioned', {
@@ -411,6 +422,11 @@ export const bulkApproveRequests = async (req, res, next) => {
 
     for (const id of requestIdsToRecalc) {
       await recalcRequestStatus(id, session);
+    }
+
+    // Invalidate cached student statuses for all affected students
+    for (const studentId of studentIdsToNotify) {
+      invalidateStudentStatusCache(studentId);
     }
 
     await commitSafeTransaction(session);
@@ -516,6 +532,9 @@ export const markDue = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId, session);
 
+    // Invalidate the student's cached status so SSE-triggered refetch gets fresh data
+    invalidateStudentStatusCache(approval.studentId.toString());
+
     await commitSafeTransaction(session);
 
     logger.info('due_marked', {
@@ -600,6 +619,9 @@ export const updateApproval = async (req, res, next) => {
     await approval.save({ session });
 
     await recalcRequestStatus(approval.requestId, session);
+
+    // Invalidate student's cached status — covers resets, undos, and manual updates
+    invalidateStudentStatusCache(approval.studentId.toString());
 
     await commitSafeTransaction(session);
 

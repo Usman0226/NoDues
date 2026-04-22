@@ -9,7 +9,11 @@ export const RoleGuard = (roles) => (req, res, next) => {
     return next(new ErrorResponse('Authentication required', 401, 'AUTH_REQUIRED'));
   }
 
-  if (!roles.includes(req.user.role)) {
+  // Support both single role and roleTags array
+  const userRoles = req.user.roleTags || [req.user.role];
+  const hasAccess = roles.some(role => userRoles.includes(role));
+
+  if (!hasAccess) {
     return next(
       new ErrorResponse(
         `Role '${req.user.role}' is not authorized to access this resource`,
