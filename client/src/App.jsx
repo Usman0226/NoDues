@@ -171,7 +171,11 @@ const queryClient = new QueryClient({
 
 const AppContent = () => {
   const { isGlobalLoading, loadingMessage } = useUI();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return <PageSpinner message="Restoring Secure Session..." />;
+  }
 
   return (
     <>
