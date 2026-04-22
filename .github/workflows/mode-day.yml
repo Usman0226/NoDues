@@ -1,8 +1,8 @@
-name: Day Mode (Switch to Azure)
+name: Switch to Azure
 
 on:
   schedule:
-    - cron: '30 2 * * *'
+    - cron: '37 2 * * *'
   workflow_dispatch:
 
 permissions:
@@ -12,12 +12,13 @@ jobs:
   switch-to-azure:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Update vercel.json to Azure
         run: |
-          sed -i 's|destination": ".*/api/:path\*"|destination": "http://40.81.243.62:5000/api/:path*"|' client/vercel.json
-          cat client/vercel.json # Log the change for debugging
+          date
+          sed -i 's|.*destination.*api/:path.*|      "destination": "http://40.81.243.62:5000/api/:path*"|' client/vercel.json
+          cat client/vercel.json
 
       - name: Commit and Push
         run: |
@@ -28,5 +29,5 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Day Mode: Switched server to Azure VM"
-            git push
+            git push origin main || (git pull --rebase origin main && git push origin main)
           fi
