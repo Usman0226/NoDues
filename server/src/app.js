@@ -33,7 +33,9 @@ app.use(responseTimeLogger);
 app.use(helmet());
 const allowedOrigins = [
   process.env.CLIENT_URL,
-  'http://localhost:5173', 
+  'http://localhost:5173',
+  'https://nodues-arcclub.tech',
+  'https://www.nodues-arcclub.tech',    
   /\.vercel\.app$/,        
   /\.trycloudflare\.com$/  
 ];
