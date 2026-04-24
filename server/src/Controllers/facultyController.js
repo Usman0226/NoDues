@@ -184,6 +184,9 @@ export const createFaculty = async (req, res, next) => {
       logger.warn('Email dispatch failed for new faculty:', { email });
     }
 
+    // Invalidate caches to ensure new faculty appears in dropdowns/lists immediately
+    invalidateEntityCache('faculty', faculty[0]._id, departmentId);
+
     return res.status(201).json({
       success: true,
       data: {

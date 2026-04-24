@@ -141,11 +141,32 @@ const ClassDetail = () => {
       .then((res) => setOtherClasses((res?.data || []).filter((c) => c._id !== classId)))
       .catch(() => {}); // silent — non-critical
   }, [departmentId, classId]);
+  
+  const [facultySearchResults, setFacultySearchResults] = useState(null);
+  const [isSearchingFaculty, setIsSearchingFaculty] = useState(false);
 
   useEffect(() => {
     if (!isHod || tab !== 'approval' || !activeBatch?._id) return;
     fetchApprovals({ batchId: activeBatch._id, action: 'all', limit: 200 });
   }, [isHod, tab, activeBatch?._id, fetchApprovals]);
+
+  const handleFacultySearch = async (query) => {
+    if (!query) {
+      setIsSearchingFaculty(false);
+      setFacultySearchResults(null);
+      return;
+    }
+    
+    setIsSearchingFaculty(true);
+    try {
+      const res = await getFaculty({ search: query, departmentId: 'all', limit: 100 });
+      setFacultySearchResults(res?.data || []);
+    } catch (err) {
+      console.error('Faculty search failed', err);
+    }
+  };
+
+  const activeFacultyList = isSearchingFaculty ? (facultySearchResults || []) : (facultyResponse?.data || []);
 
   const { data: deptSubjectsRes, request: fetchGlobalSubjects } = useApi(() => getSubjects({ limit: 100 }), { 
     immediate: true,
@@ -496,13 +517,14 @@ const ClassDetail = () => {
           <SearchableSelect
             size="sm"
             variant="ghost"
-            options={facultyList.map(f => ({
+            options={activeFacultyList.map(f => ({
               value: f._id,
               label: f.name,
               subLabel: `${f.employeeId || 'No ID'} | ${f.departmentId?.name || f.department || 'N/A'}`
             }))}
             value={row.mentorId}
             onChange={(val) => handleMentorChange(row._id, val)}
+            onSearch={handleFacultySearch}
             placeholder={row.mentorName || 'Unassigned'}
             loading={loadingStudentId === row._id}
           />
@@ -544,7 +566,7 @@ const SUBJECT_COLS = [
         <SearchableSelect
           size="sm"
           variant="ghost"
-          options={facultyList.map(f => ({
+          options={activeFacultyList.map(f => ({
             value: f._id,
             label: f.name,
             subLabel: f.employeeId
@@ -556,6 +578,7 @@ const SUBJECT_COLS = [
               .then(() => { toast.success('Faculty updated'); fetchClass(); })
               .catch(err => toast.error(err.message));
           }}
+          onSearch={handleFacultySearch}
           placeholder="Unassigned"
         />
       )

@@ -11,6 +11,7 @@ import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
 import { syncSubjectRemoval, syncSubjectUpdate, syncSubjectAddition } from '../utils/batchSync.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 // Cache invalidation is now handled via Mongoose hooks in the model.
 
@@ -435,6 +436,9 @@ export const assignClassTeacher = async (req, res, next) => {
 
     await commitSafeTransaction(session);
 
+    // Invalidate faculty cache so their 'class count' updates
+    if (classTeacherId) invalidateEntityCache('faculty', classTeacherId);
+
     return res.status(200).json({
       success: true,
       data: {
@@ -516,6 +520,9 @@ export const addSubjectAssignment = async (req, res, next) => {
 
     await commitSafeTransaction(session);
 
+    // Invalidate faculty cache so their 'subject assignment count' updates in faculty lists
+    if (facultyId) invalidateEntityCache('faculty', facultyId);
+
     const saved = cls.subjectAssignments[cls.subjectAssignments.length - 1];
 
     return res.status(201).json({
@@ -591,6 +598,9 @@ export const updateSubjectAssignment = async (req, res, next) => {
 
     await commitSafeTransaction(session);
 
+    // Invalidate faculty cache for the newly assigned faculty
+    if (facultyId) invalidateEntityCache('faculty', facultyId);
+
     return res.status(200).json({
       success: true,
       data: {
@@ -642,6 +652,11 @@ export const removeSubjectAssignment = async (req, res, next) => {
     await syncSubjectRemoval(id, subjectIdToSync);
 
     await commitSafeTransaction(session);
+
+    // Invalidate faculty cache if a faculty was assigned to this removed subject
+    if (assignment.facultyId) {
+      invalidateEntityCache('faculty', assignment.facultyId);
+    }
 
     return res.status(200).json({ success: true, data: { message: 'Subject assignment removed' } });
   } catch (err) {

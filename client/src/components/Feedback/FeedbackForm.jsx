@@ -106,30 +106,6 @@ const FeedbackForm = ({ onSuccess, onCancel }) => {
         </div>
       </div>
 
-      {/* Category Selection */}
-      <div className="space-y-3">
-        <label className="text-sm font-semibold text-slate-700">Category</label>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setCategory(cat.id)}
-              className={`flex flex-col items-center justify-center rounded-xl border-2 p-2 transition-all ${
-                category === cat.id
-                  ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600'
-                  : 'border-slate-100 bg-white hover:border-slate-200'
-              }`}
-            >
-              <cat.icon size={18} className={cat.color} />
-              <span className={`mt-1 text-[10px] font-bold ${category === cat.id ? 'text-indigo-700' : 'text-slate-500'}`}>
-                {cat.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Description */}
       <div className="space-y-2">
         <label htmlFor="description" className="text-sm font-semibold text-slate-700">

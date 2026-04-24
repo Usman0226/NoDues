@@ -6,14 +6,10 @@ import CoCurricularType from '../models/CoCurricularType.js';
 import cache from '../config/cache.js';
 import { withCache } from '../utils/withCache.js';
 
-// Invalidate cached student status after an approval action
 export const invalidateStudentStatusCache = (studentId) => {
   const activeKey = `student_status:${studentId}:active`;
   cache.del(activeKey);
-  // Also wipe any request-specific keys for this student (pattern-based)
-  // node-cache doesn't support glob, so we drop by convention: active key is enough
-  // because SSE triggers a refetch which hits the DB directly after invalidation.
-};
+ };
 
 export const getStudentStatus = async (req, res, next) => {
   const userId = req.user.userId;
@@ -61,18 +57,20 @@ export const getStudentStatus = async (req, res, next) => {
       });
     }
 
-    // 2. If NO request exists (student hasn't been invited to any batch yet)
-    if (!request) {
-      const activeBatch = await NodueBatch.findOne({ 
-        status: 'active',
-        departmentId: student.departmentId 
-      }).lean();
+    // 2. Resolve Active Batch for Student's Class
+    const getActiveBatchForClass = () => NodueBatch.findOne({ 
+      status: 'active',
+      classId: student.classId 
+    }).lean();
 
+    // If NO request exists (student hasn't been invited to any batch yet)
+    if (!request) {
+      const activeBatch = await getActiveBatchForClass();
       if (!activeBatch) return res.status(200).json({ success: true, data: { status: 'no_batch' } });
       return res.status(200).json({ success: true, data: { status: 'not_initiated', batchId: activeBatch._id } });
     }
 
-    // 3. Request exists — fetch batch metadata + approvals in parallel (both independent)
+    // 3. Request exists — fetch batch metadata + approvals in parallel
     const [batch, approvals] = await Promise.all([
       NodueBatch.findById(request.batchId)
         .select('semester academicYear deadline className status')
@@ -81,8 +79,16 @@ export const getStudentStatus = async (req, res, next) => {
     ]);
 
     // IF viewing active status (no requestId) AND (batch is missing OR batch is closed)
-    // THEN redirect to no_batch state
+    // THEN check if a NEWER active batch exists before declaring 'no_batch'
     if (!requestId && (!batch || batch.status !== 'active')) {
+      const newerActiveBatch = await getActiveBatchForClass();
+      if (newerActiveBatch) {
+        return res.status(200).json({ 
+          success: true, 
+          data: { status: 'not_initiated', batchId: newerActiveBatch._id } 
+        });
+      }
+      
       return res.status(200).json({ success: true, data: { 
         status: 'no_batch',
         message: 'Active clearance cycle has concluded.' 
@@ -163,6 +169,11 @@ export const getStudentStatus = async (req, res, next) => {
       } : null,
       approvals: statusRegistry
     };
+
+    return res.status(200).json({
+      success: true,
+      data: finalData
+    });
   } catch (err) {
     next(err);
   }

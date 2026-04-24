@@ -17,9 +17,25 @@ const SearchableSelect = ({
   size = 'md', // 'sm' | 'md'
   variant = 'outline', // 'outline' | 'ghost'
   clearable = true,
+  onSearch = null,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+
+  // Debounce API search if provided - Only call if searchValue is NOT empty
+  useEffect(() => {
+    if (!onSearch || !isOpen) return;
+    
+    if (!searchValue) {
+      onSearch(''); // Call with empty string to notify parent to reset, but parent will handle the 'no-call' logic
+      return;
+    }
+
+    const handler = setTimeout(() => {
+      onSearch(searchValue);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchValue, onSearch, isOpen]);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
   const containerRef = useRef(null);
   const triggerRef = useRef(null);
@@ -66,13 +82,14 @@ const SearchableSelect = ({
   );
 
   const filteredOptions = useMemo(() => {
+    if (onSearch) return options; // Server handles filtering if onSearch is provided
     if (!searchValue) return options;
     const q = searchValue.toLowerCase();
     return options.filter(opt => 
       String(opt[labelKey] || '').toLowerCase().includes(q) ||
       String(opt[subLabelKey] || '').toLowerCase().includes(q)
     );
-  }, [options, searchValue, labelKey, subLabelKey]);
+  }, [options, searchValue, labelKey, subLabelKey, onSearch]);
 
   const triggerClasses = useMemo(() => {
     const base = "w-full flex items-center justify-between transition-all duration-300 rounded-[inherit] group";
