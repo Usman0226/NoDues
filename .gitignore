@@ -1,2 +1,11 @@
 docs
 guides
+.agent
+.gemini
+GSD-STYLE.md
+PROJECT_RULES.md
+STATE.md
+.gsd
+.claude
+.ai-session
+phases

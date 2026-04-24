@@ -160,7 +160,7 @@ export const getClasses = async (req, res, next) => {
       },
     };
 
-    cache.set(cacheKey, responseData, 300); // 5 min cache
+    cache.set(cacheKey, responseData, 30); // 30s cache for consistency in scaled environment
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, ...responseData });
   } catch (err) {
@@ -301,7 +301,7 @@ export const getClassById = async (req, res, next) => {
       createdAt:       cls.createdAt,
     };
 
-    cache.set(cacheKey, data, 60);
+    cache.set(cacheKey, data, 30);
     logger.debug('class_cache_miss', { id, cacheKey });
     
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');

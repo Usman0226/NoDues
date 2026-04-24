@@ -13,7 +13,16 @@ import { Toaster } from 'react-hot-toast';
 
 import Sidebar from './components/layout/Sidebar';
 import Navbar from './components/layout/Navbar';
-import { LayoutDashboard, History } from 'lucide-react';
+import Button from './components/ui/Button';
+import { 
+  LayoutDashboard, History, Menu, X, 
+  ChevronLeft, ChevronRight, LogOut, Bell,
+  MessageSquarePlus,
+  Home
+} from 'lucide-react';
+
+import { useFeedback } from './hooks/useFeedback';
+import FeedbackModal from './components/Feedback/FeedbackModal';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ScrollToTop from './components/ui/ScrollToTop';
@@ -117,6 +126,8 @@ const StudentLayout = () => (
 
 const StudentNavRight = () => {
   const { user, logout } = useAuth();
+  const { isFeedbackOpen, openFeedback, closeFeedback } = useFeedback();
+
   return (
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-2">
@@ -136,6 +147,15 @@ const StudentNavRight = () => {
           <History size={18} />
           <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-navy text-[8px] font-black uppercase tracking-widest text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-white/10">History</span>
         </Link>
+        
+        <button
+          onClick={openFeedback}
+          className="p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-all group relative"
+          title="Give Feedback"
+        >
+          <MessageSquarePlus size={18} />
+          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-navy text-[8px] font-black uppercase tracking-widest text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-white/10">Feedback</span>
+        </button>
       </div>
 
       <div className="h-6 w-px bg-white/10 mx-1" />
@@ -147,6 +167,8 @@ const StudentNavRight = () => {
       <button onClick={logout} className="px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-[0.18em] hover:bg-status-rejected hover:border-status-rejected transition-all active:scale-95 shadow-lg shadow-black/20">
         Logout
       </button>
+
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={closeFeedback} />
     </div>
   );
 };
@@ -175,6 +197,10 @@ const AppContent = () => {
 
   if (authLoading) {
     return <PageSpinner message="Restoring Secure Session..." />;
+  }
+
+  const handleUnauthorized = ()=>{
+      window.location.replace(window.location.origin+'/login')
   }
 
   return (
@@ -262,11 +288,12 @@ const AppContent = () => {
           </Route>
 
           <Route path="/unauthorized" element={
-            <div className="min-h-screen flex items-center justify-center bg-offwhite">
+            <div className="min-h-screen gap-3 flex flex-col items-center justify-center bg-offwhite">
               <div className="text-center">
                 <h1 className="text-4xl font-brand text-navy mb-2">403</h1>
                 <p className="text-muted-foreground">You do not have permission to access this page.</p>
               </div>
+                <div onClick={ ()=> handleUnauthorized()}> <Button> <Home/> Go to Home</Button></div>
             </div>
           } />
           <Route path="*" element={

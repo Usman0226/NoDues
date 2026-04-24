@@ -35,143 +35,134 @@ export const getStudentStatus = async (req, res, next) => {
     // freshness after every approve/due-mark action. The TTL is just a safety net.
     const cacheKey = requestId ? `student_status:${userId}:${requestId}` : `student_status:${userId}:active`;
 
-    const data = await withCache(cacheKey, 60, async () => {
-      // 1. Fetch student and the targeted request (specific ID or latest)
-      const [student, request] = await Promise.all([
-        Student.findById(userId)
-          .select('rollNo name semester classId departmentId coCurricular')
-          .lean(),
-        requestId 
-          ? NodueRequest.findOne({ _id: requestId, studentId: userId })
-              .select('_id batchId status facultySnapshot overriddenBy overrideRemark overriddenAt')
-              .lean()
-          : NodueRequest.findOne({ studentId: userId })
-              .sort({ createdAt: -1 })
-              .select('_id batchId status facultySnapshot overriddenBy overrideRemark overriddenAt')
-              .lean(),
-      ]);
+    // Fetch student and the targeted request (specific ID or latest)
+    const [student, request] = await Promise.all([
+      Student.findById(userId)
+        .select('rollNo name semester classId departmentId coCurricular')
+        .lean(),
+      requestId 
+        ? NodueRequest.findOne({ _id: requestId, studentId: userId })
+            .select('_id batchId status facultySnapshot overriddenBy overrideRemark overriddenAt')
+            .lean()
+        : NodueRequest.findOne({ studentId: userId })
+            .sort({ createdAt: -1 })
+            .select('_id batchId status facultySnapshot overriddenBy overrideRemark overriddenAt')
+            .lean(),
+    ]);
 
-      if (!student) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'STUDENT_NOT_FOUND',
-            message: 'Student profile not found. Please contact support if this is an error.',
-            statusCode: 400
-          }
-        });
-      }
-
-      // 2. If NO request exists (student hasn't been invited to any batch yet)
-      if (!request) {
-        const activeBatch = await NodueBatch.findOne({ 
-          status: 'active',
-          departmentId: student.departmentId 
-        }).lean();
-
-        if (!activeBatch) return { status: 'no_batch' };
-        return { status: 'not_initiated', batchId: activeBatch._id };
-      }
-
-      // 3. Request exists — fetch batch metadata + approvals in parallel (both independent)
-      const [batch, approvals] = await Promise.all([
-        NodueBatch.findById(request.batchId)
-          .select('semester academicYear deadline className status')
-          .lean(),
-        NodueApproval.find({ requestId: request._id }).lean(),
-      ]);
-
-      // IF viewing active status (no requestId) AND (batch is missing OR batch is closed)
-      // THEN redirect to no_batch state
-      if (!requestId && (!batch || batch.status !== 'active')) {
-        return { 
-          status: 'no_batch',
-          message: 'Active clearance cycle has concluded.' 
-        };
-      }
-
-      // If viewing history BUT batch was deleted, we still show the request data 
-      // with fallback metadata to prevent the "Taking to Home" (no_batch) loop.
-
-      // NEW: Fetch all Co-Curricular Types involved to get form fields
-      const ccTypeIds = approvals
-        .filter(a => a.approvalType === 'coCurricular')
-        .map(a => a.itemTypeId)
-        .filter(Boolean);
-      
-      const ccTypes = ccTypeIds.length > 0 
-        ? await CoCurricularType.find({ _id: { $in: ccTypeIds } }).select('fields name code isOptional').lean()
-        : [];
-      const ccTypeMap = new Map(ccTypes.map(t => [t._id.toString(), t]));
-
-      // 4. Map to high-fidelity status registry
-      const statusRegistry = approvals.map(a => {
-        // Resolve lookup against request-time snapshot (handles role changes/deletions)
-        const snapshot = (Array.isArray(request.facultySnapshot) 
-          ? request.facultySnapshot.find(f => 
-              (a.approvalType === 'subject' && f.subjectId?.toString() === a.subjectId?.toString()) ||
-              (a.approvalType === 'coCurricular' && f.itemTypeId?.toString() === a.itemTypeId?.toString()) ||
-              (a.approvalType !== 'subject' && a.approvalType !== 'coCurricular' && f.roleTag === a.roleTag)
-            )
-          : request.facultySnapshot?.[a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag]
-        ) || {};
-
-        let displayContext = snapshot.subjectName || a.subjectName;
-        if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
-        if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Academic Advisor';
-        if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Mentor';
-        if (a.approvalType === 'coCurricular') displayContext = a.itemTypeName || snapshot.itemTypeName || a.subjectName;
-
-        const submission = a.approvalType === 'coCurricular' 
-          ? student.coCurricular?.find(c => c.itemTypeId?.toString() === (a.itemTypeId?.toString() || snapshot.itemTypeId?.toString()))
-          : null;
-
-        const ccType = a.approvalType === 'coCurricular' ? ccTypeMap.get(a.itemTypeId?.toString()) : null;
-
-        return {
-          id: a._id,
-          facultyName: snapshot.facultyName || 'Department Station',
-          itemTypeId: a.itemTypeId,
-          subjectName: displayContext || 'General Appraisal',
-          subjectCode: snapshot.subjectCode || null,
-          action: a.action,
-          dueType: a.dueType,
-          remarks: a.remarks,
-          approvalType: a.approvalType,
-          roleTag: a.roleTag,
-          actionedAt: a.actionedAt,
-          isOptional: a.isOptional || ccType?.isOptional || false,
-          formFields: ccType?.fields || [],
-          submission: submission ? {
-            data: submission.submittedData,
-            status: submission.status,
-            submittedAt: submission.submittedAt
-          } : null
-        };
+    if (!student) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'STUDENT_NOT_FOUND',
+          message: 'Student profile not found. Please contact support if this is an error.',
+          statusCode: 400
+        }
       });
+    }
+
+    // 2. If NO request exists (student hasn't been invited to any batch yet)
+    if (!request) {
+      const activeBatch = await NodueBatch.findOne({ 
+        status: 'active',
+        departmentId: student.departmentId 
+      }).lean();
+
+      if (!activeBatch) return res.status(200).json({ success: true, data: { status: 'no_batch' } });
+      return res.status(200).json({ success: true, data: { status: 'not_initiated', batchId: activeBatch._id } });
+    }
+
+    // 3. Request exists — fetch batch metadata + approvals in parallel (both independent)
+    const [batch, approvals] = await Promise.all([
+      NodueBatch.findById(request.batchId)
+        .select('semester academicYear deadline className status')
+        .lean(),
+      NodueApproval.find({ requestId: request._id }).lean(),
+    ]);
+
+    // IF viewing active status (no requestId) AND (batch is missing OR batch is closed)
+    // THEN redirect to no_batch state
+    if (!requestId && (!batch || batch.status !== 'active')) {
+      return res.status(200).json({ success: true, data: { 
+        status: 'no_batch',
+        message: 'Active clearance cycle has concluded.' 
+      }});
+    }
+
+    // NEW: Fetch all Co-Curricular Types involved to get form fields
+    const ccTypeIds = approvals
+      .filter(a => a.approvalType === 'coCurricular')
+      .map(a => a.itemTypeId)
+      .filter(Boolean);
+    
+    const ccTypes = ccTypeIds.length > 0 
+      ? await CoCurricularType.find({ _id: { $in: ccTypeIds } }).select('fields name code isOptional').lean()
+      : [];
+    const ccTypeMap = new Map(ccTypes.map(t => [t._id.toString(), t]));
+
+    // 4. Map to high-fidelity status registry
+    const statusRegistry = approvals.map(a => {
+      const snapshot = (Array.isArray(request.facultySnapshot) 
+        ? request.facultySnapshot.find(f => 
+            (a.approvalType === 'subject' && f.subjectId?.toString() === a.subjectId?.toString()) ||
+            (a.approvalType === 'coCurricular' && f.itemTypeId?.toString() === a.itemTypeId?.toString()) ||
+            (a.approvalType !== 'subject' && a.approvalType !== 'coCurricular' && f.roleTag === a.roleTag)
+          )
+        : request.facultySnapshot?.[a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag]
+      ) || {};
+
+      let displayContext = snapshot.subjectName || a.subjectName;
+      if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
+      if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Academic Advisor';
+      if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Mentor';
+      if (a.approvalType === 'coCurricular') displayContext = a.itemTypeName || snapshot.itemTypeName || a.subjectName;
+
+      const submission = a.approvalType === 'coCurricular' 
+        ? student.coCurricular?.find(c => c.itemTypeId?.toString() === (a.itemTypeId?.toString() || snapshot.itemTypeId?.toString()))
+        : null;
+
+      const ccType = a.approvalType === 'coCurricular' ? ccTypeMap.get(a.itemTypeId?.toString()) : null;
 
       return {
-        status: request.status,
-        requestId: request._id,
-        batchId: request.batchId,
-        metadata: {
-          batchName:    batch?.className    || 'Legacy Cycle',
-          academicYear: batch?.academicYear || 'Unknown Session',
-          semester:     batch?.semester     || '?',
-          deadline:     batch?.deadline     || null
-        },
-        rollNo: student.rollNo,
-        studentName: student.name,
-        overrides: request.overriddenBy ? {
-          remark: request.overrideRemark,
-          at: request.overriddenAt
-        } : null,
-        approvals: statusRegistry
+        id: a._id,
+        facultyName: snapshot.facultyName || 'Department Station',
+        itemTypeId: a.itemTypeId,
+        subjectName: displayContext || 'General Appraisal',
+        subjectCode: snapshot.subjectCode || null,
+        action: a.action,
+        dueType: a.dueType,
+        remarks: a.remarks,
+        approvalType: a.approvalType,
+        roleTag: a.roleTag,
+        actionedAt: a.actionedAt,
+        isOptional: a.isOptional || ccType?.isOptional || false,
+        formFields: ccType?.fields || [],
+        submission: submission ? {
+          data: submission.submittedData,
+          status: submission.status,
+          submittedAt: submission.submittedAt
+        } : null
       };
     });
 
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    return res.status(200).json({ success: true, data });
+    const finalData = {
+      status: request.status,
+      requestId: request._id,
+      batchId: request.batchId,
+      metadata: {
+        batchName:    batch?.className    || 'Legacy Cycle',
+        academicYear: batch?.academicYear || 'Unknown Session',
+        semester:     batch?.semester     || '?',
+        deadline:     batch?.deadline     || null
+      },
+      rollNo: student.rollNo,
+      studentName: student.name,
+      overrides: request.overriddenBy ? {
+        remark: request.overrideRemark,
+        at: request.overriddenAt
+      } : null,
+      approvals: statusRegistry
+    };
   } catch (err) {
     next(err);
   }

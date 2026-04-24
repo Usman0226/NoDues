@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendCredentialEmail } from '../services/emailService.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 const generateTempPassword = () => crypto.randomBytes(4).toString('hex');
 
@@ -22,10 +23,13 @@ export const getFaculty = async (req, res, next) => {
       query.isActive = true;
     }
 
-    if (req.user.role === 'hod') {
-      query.departmentId = departmentId || req.user.departmentId;
-    } else if (departmentId) {
-      query.departmentId = departmentId;
+    if (departmentId) {
+      if (departmentId !== 'all') {
+        query.departmentId = departmentId;
+      }
+    } else if (req.user.role === 'hod' && !search) {
+      // Default HoDs to their department only when NOT searching globally
+      query.departmentId = req.user.departmentId;
     }
 
     if (roleTag) query.roleTags = roleTag;
@@ -221,13 +225,8 @@ export const getFacultyById = async (req, res, next) => {
       return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
     }
 
-    // HoD can only view faculty in own department
-    if (
-      req.user.role === 'hod' &&
-      faculty.departmentId?._id?.toString() !== req.user.departmentId
-    ) {
-      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
-    }
+    // HoD visibility: Allow viewing any active faculty
+    // Management/Edit remains restricted to department in updateFaculty
 
     const data = {
       _id:               faculty._id,
@@ -244,7 +243,7 @@ export const getFacultyById = async (req, res, next) => {
       createdAt:         faculty.createdAt,
     };
 
-    cache.set(cacheKey, data, 300);
+    cache.set(cacheKey, data, 30);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
   } catch (err) {
@@ -258,7 +257,7 @@ export const updateFaculty = async (req, res, next) => {
   try {
     await startSafeTransaction(session);
     const { id } = req.params;
-    const { name, email, phone, roleTags } = req.body;
+    const { name, email, phone, roleTags, departmentId } = req.body;
 
     const faculty = await Faculty.findOne({ _id: id, isActive: true }).session(session);
     if (!faculty) {
@@ -274,14 +273,24 @@ export const updateFaculty = async (req, res, next) => {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
-    if (name     !== undefined) faculty.name     = name;
-    if (email    !== undefined) faculty.email    = email;
-    if (phone    !== undefined) faculty.phone    = phone;
-    if (roleTags !== undefined) faculty.roleTags = roleTags;
+    const oldDeptId = faculty.departmentId?.toString();
+    const isDeptChanged = departmentId !== undefined && departmentId !== oldDeptId;
+
+    if (name         !== undefined) faculty.name         = name;
+    if (email        !== undefined) faculty.email        = email;
+    if (phone        !== undefined) faculty.phone        = phone;
+    if (roleTags     !== undefined) faculty.roleTags     = roleTags;
+    if (departmentId !== undefined) faculty.departmentId = departmentId;
 
     await faculty.save({ session });
 
     await commitSafeTransaction(session);
+
+    // Invalidate caches using the centralized hook
+    invalidateEntityCache('faculty', id, oldDeptId);
+    if (isDeptChanged) {
+      invalidateEntityCache('faculty', id, departmentId);
+    }
 
     logger.info('faculty_updated', {
       timestamp: new Date().toISOString(),
@@ -324,10 +333,14 @@ export const deleteFaculty = async (req, res, next) => {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
+    const deptId = faculty.departmentId?.toString();
     faculty.isActive = false;
     await faculty.save({ session });
 
     await commitSafeTransaction(session);
+
+    // Invalidate caches
+    invalidateEntityCache('faculty', id, deptId);
 
     logger.info('faculty_deactivated', {
       timestamp: new Date().toISOString(),
@@ -359,13 +372,7 @@ export const getFacultyClasses = async (req, res, next) => {
       return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
     }
 
-    // HoD can only view classes for faculty in own department
-    if (
-      req.user.role === 'hod' &&
-      faculty.departmentId?.toString() !== req.user.departmentId
-    ) {
-      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
-    }
+    // HoD visibility: Allow viewing classes for any faculty to facilitate assignment workflow
 
     const classes = await Class.find({
       isActive: true,
@@ -492,6 +499,9 @@ export const bulkDeactivateFaculty = async (req, res, next) => {
     const result = await Faculty.updateMany(query, { isActive: false }, { session });
 
     await commitSafeTransaction(session);
+
+    // Invalidate caches
+    ids.forEach(id => invalidateEntityCache('faculty', id));
 
     logger.info('faculty_bulk_deactivated', {
       timestamp: new Date().toISOString(),
@@ -624,6 +634,9 @@ export const bulkUpdateRoles = async (req, res, next) => {
 
     await Promise.all(savePromises);
     await commitSafeTransaction(session);
+
+    // Invalidate caches
+    ids.forEach(id => invalidateEntityCache('faculty', id));
 
     logger.info('faculty_bulk_role_updated', {
       timestamp: new Date().toISOString(),

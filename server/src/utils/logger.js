@@ -27,6 +27,10 @@ const level = () => {
 
 const format = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
+  winston.format((info) => {
+    info.hostname = process.env.HOSTNAME || 'unknown';
+    return info;
+  })(),
   winston.format.json()
 );
 
@@ -56,10 +60,9 @@ const transports = [
 const formatAudit = winston.format((info) => {
   if (info.level === 'audit') {
     info.isAudit = true;
-    // Ensure payload is structured for indexing
     if (typeof info.message === 'string') {
       info.action = info.message;
-      delete info.message; // Remove string message to keep it structured
+      delete info.message; 
     }
   }
   return info;
@@ -76,11 +79,6 @@ const logger = winston.createLogger({
   transports,
 });
 
-/**
- * Standardized audit logger for production forensics.
- * @param {string} action - Event identifier (e.g., 'BATCH_INITIATED')
- * @param {Object} metadata - Context (actor, resource_id, diffs, etc.)
- */
 logger.audit = (action, metadata = {}) => {
   logger.log('audit', action, { 
     ...metadata,

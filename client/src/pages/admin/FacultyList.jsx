@@ -48,8 +48,8 @@ const FacultyList = () => {
   const isHod = user?.role === 'hod';
 
   const facultyQueryKey = useMemo(() => 
-    ['faculty', { page, limit, includeInactive, search: debouncedSearch, departmentId: isHod ? user?.departmentId : undefined }],
-    [page, limit, includeInactive, debouncedSearch, isHod, user?.departmentId]
+    ['faculty', { page, limit, includeInactive, search: debouncedSearch }],
+    [page, limit, includeInactive, debouncedSearch]
   );
 
   const { data: response, loading, error, request: fetchFaculty } = useApi(getFaculty, {
@@ -79,9 +79,8 @@ const FacultyList = () => {
 
   useEffect(() => {
     const params = { page, limit, includeInactive, search: debouncedSearch };
-    if (isHod) params.departmentId = user.departmentId;
     fetchFaculty(params);
-  }, [fetchFaculty, isHod, user?.departmentId, page, limit, includeInactive, debouncedSearch]);
+  }, [fetchFaculty, page, limit, includeInactive, debouncedSearch]);
 
   const [formData, setFormData] = useState({
     name: '',

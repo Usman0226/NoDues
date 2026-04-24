@@ -41,8 +41,12 @@ const nodueBatchSchema = new mongoose.Schema({
 
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
-// Optimization indexes
-nodueBatchSchema.index({ classId: 1, status: 1 });
+// Optimization & Safety indexes
+// Ensures only ONE active batch can exist per class at a time (Distributed Lock)
+nodueBatchSchema.index({ classId: 1, status: 1 }, { 
+  unique: true, 
+  partialFilterExpression: { status: 'active' } 
+});
 nodueBatchSchema.index({ departmentId: 1, status: 1 });
 nodueBatchSchema.index({ status: 1 });
 

@@ -124,15 +124,10 @@ const Login = () => {
         }}
         className={`relative z-10 w-full max-w-md bg-white/80 backdrop-blur-3xl rounded-[2.5rem] shadow-[0_48px_96px_-24px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,1)] border border-white/80 p-6 sm:p-10 transition-all duration-500 ${successFlash ? 'scale-[1.02] ring-8 ring-emerald-100 border-emerald-200' : ''}`}
       >
-        <div className="text-center mb-6 min-h-[98px]">
+        <div className="text-center mb-6 min-h-[62px]">
           <h1 className="text-4xl sm:text-5xl font-brand text-navy leading-none tracking-tight">
             No<span className="text-gold">Dues</span>
           </h1>
-          <div className="flex items-center justify-center gap-2 mt-4">
-            <span className="h-px w-4 bg-zinc-200" />
-            <p className="text-[9px] uppercase tracking-[0.4em] font-black text-zinc-500">MITS</p>
-            <span className="h-px w-4 bg-zinc-200" />
-          </div>
         </div>
 
         <div className="relative grid grid-cols-2 bg-zinc-100 p-1 rounded-full mb-5 h-12">
@@ -178,7 +173,7 @@ const Login = () => {
           </button>
         </div>
 
-        <div className="mb-4 min-h-[42px]">
+       <div className="mb-4 min-h-[42px]">
           <div className={`rounded-xl px-3 py-2.5 text-[10px] font-black uppercase tracking-[0.16em] transition-all duration-200 ${
             error ? 'border border-red-100 bg-red-50 text-red-700 opacity-100' : 'border border-transparent opacity-0'
           }`}>

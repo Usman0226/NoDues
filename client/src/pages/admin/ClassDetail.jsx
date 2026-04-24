@@ -92,7 +92,7 @@ const ClassDetail = () => {
   const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, facultyOptions);
 
   useEffect(() => {
-    fetchFaculty({ limit: 500 }); 
+    fetchFaculty({ limit: 500, departmentId: 'all' }); 
   }, [fetchFaculty]);
 
   const classData = useMemo(() => response?.data || {}, [response?.data]);

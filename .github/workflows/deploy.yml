@@ -9,7 +9,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Check VM Reachability
+        id: check_vm
+        run: |
+          # Try to connect to SSH port with a 5-second timeout
+          if nc -z -w 5 ${{ secrets.AZURE_VM_IP }} 22; then
+            echo "VM is online. Proceeding with deployment."
+            echo "reachable=true" >> $GITHUB_OUTPUT
+          else
+            echo "VM is offline (Night Mode?). Skipping Azure deployment."
+            echo "reachable=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: SSH and Update VM
+        if: steps.check_vm.outputs.reachable == 'true'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.AZURE_VM_IP }}
@@ -20,5 +33,5 @@ jobs:
             git pull origin main
             cd server
             sudo docker-compose down --remove-orphans
-            sudo docker-compose up -d --build
+            sudo docker-compose up -d --scale api=3 --build
             echo "Deployment successful!"

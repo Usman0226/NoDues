@@ -23,18 +23,20 @@ router.get('/me/classes', (req, res, next) => {
   next();
 }, asyncHandler(getFacultyClasses));
 
+router.use(RoleGuard(['admin', 'hod', 'faculty']));
+
+router.get('/', asyncHandler(getFaculty));
+router.get('/:id', asyncHandler(getFacultyById));
+router.get('/:id/classes', asyncHandler(getFacultyClasses));
+
 router.use(RoleGuard(['admin', 'hod']));
 
-router.route('/')
-  .get(asyncHandler(getFaculty))
-  .post(asyncHandler(createFaculty));
+router.post('/', asyncHandler(createFaculty));
 
 router.route('/:id')
-  .get(asyncHandler(getFacultyById))
   .patch(asyncHandler(updateFaculty))
   .delete(asyncHandler(deleteFaculty));
 
-router.get('/:id/classes', asyncHandler(getFacultyClasses));
 router.post('/:id/resend-creds', asyncHandler(resendCredentials));
 
 router.post('/bulk-deactivate', asyncHandler(bulkDeactivateFaculty));

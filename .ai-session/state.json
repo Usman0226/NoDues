@@ -1,23 +1,20 @@
 {
-  "last_updated": "2026-04-22T02:10:00Z",
+  "last_updated": "2026-04-24T04:05:00Z",
   "completed": [
-    "Fixed batch_initiation missing from Task model enum (400 Bad Request)",
-    "Fixed RoleGuard to check roleTags array for dual-role users (403 Forbidden)",
-    "Fixed faculty table full-reload: SSE handler now does targeted in-place updates instead of full refetch for single-approval events",
-    "Fixed student status stale cache: reduced TTL from 60s to 10s and added explicit invalidateStudentStatusCache calls in approveRequest, bulkApproveRequests, and markDue"
+    "Expanded faculty visibility for HoDs and faculty roles across all departments",
+    "Updated facultyController.js to support 'all' department filtering for HoDs",
+    "Removed departmental read-only restrictions for HoDs in faculty details and class lists",
+    "Modified faculty.routes.js to allow faculty role access to read-only endpoints",
+    "Updated ClassDetail.jsx to fetch all faculty for subject assignments",
+    "Updated FacultyList.jsx to display comprehensive faculty list for HoDs"
   ],
   "in_progress": [],
   "pending": [],
   "decisions": [
     {
-      "context": "Faculty table was reloading on every SSE event including own approval actions",
-      "decision": "SSE handler now applies targeted optimistic update if event.approvalId+event.action are present; falls back to full refetch only for bulk=true events or cross-session changes",
-      "trade_offs": "Slightly more complex SSE handler, but eliminates full table thrash on each action"
-    },
-    {
-      "context": "Student portal showed stale status after approval due to 60s cache TTL",
-      "decision": "Cache TTL reduced to 10s (dedup guard only) + explicit invalidation in all three approval handlers (approve, bulk-approve, mark-due)",
-      "trade_offs": "Slightly more DB reads, but SSE-triggered refreshes now see current data within ~1s"
+      "context": "Requirement for cross-departmental subject assignment",
+      "decision": "Allow HoDs and faculty to read all faculty data while keeping write operations (create/edit) department-scoped for HoDs",
+      "trade_offs": "HoDs can see more data, but cannot modify it, preserving data integrity while enabling administrative workflows"
     }
   ],
   "blockers": []

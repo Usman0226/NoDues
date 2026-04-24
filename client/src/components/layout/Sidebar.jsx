@@ -6,8 +6,10 @@ import { ROLES } from '../../utils/constants';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardCheck,
   Shield, History, ChevronLeft, ChevronRight,
-  Building2, AlertTriangle, Layers, X, GraduationCap,Inbox
+  Building2, AlertTriangle, Layers, X, GraduationCap, Inbox, MessageSquarePlus
 } from 'lucide-react';
+import { useFeedback } from '../../hooks/useFeedback';
+import FeedbackModal from '../Feedback/FeedbackModal';
 
 const NAV_CONFIG = {
   [ROLES.ADMIN]: [
@@ -45,6 +47,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuth();
   const location = useLocation();
+  const { isFeedbackOpen, openFeedback, closeFeedback } = useFeedback();
   const navItems = React.useMemo(() => NAV_CONFIG[user?.role] || [], [user?.role]);
 
   const lastPath = React.useRef(location.pathname);
@@ -115,9 +118,18 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
             </NavLink>
           );
         })}
+
+        {/* Give Feedback Item */}
+        <button
+          onClick={openFeedback}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group border border-transparent text-indigo-100/55 hover:bg-indigo-500/10 hover:text-white hover:border-indigo-500/20 mt-4`}
+        >
+          <MessageSquarePlus size={18} className="shrink-0 text-indigo-100/55 group-hover:text-white" />
+          <div className={`nav-text text-[10px] text-left truncate transition-all duration-300 overflow-hidden ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
+            Give Feedback
+          </div>
+        </button>
       </nav>
-
-
 
       <div className={`p-6 border-t border-white/10 shrink-0 transition-all duration-300 ${collapsed ? 'opacity-0 invisible' : 'opacity-100 visible'}`}>
         <div className="rounded-xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
@@ -133,6 +145,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
           </p>
         </div>
       </div>
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={closeFeedback} />
     </>
   );
 

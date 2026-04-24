@@ -8,8 +8,8 @@ import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import { invalidateStudentStatusCache } from './studentPortalController.js';
-// Cache invalidation is now handled via Mongoose hooks in the model.
 
 // ── GET /api/approvals/pending ────────────────────────────────────────────────
 export const getPendingApprovals = async (req, res, next) => {
@@ -318,8 +318,9 @@ export const approveRequest = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId, session);
 
-    // Invalidate the student's cached status so SSE-triggered refetch gets fresh data
-    invalidateStudentStatusCache(approval.studentId.toString());
+    // Invalidate caches: Student dashboard + HoD Grid + Faculty pending
+    invalidateEntityCache('request', approval.requestId, approval.studentId);
+    invalidateEntityCache('approval', approval.facultyId, approval.batchId);
 
     await commitSafeTransaction(session);
 
@@ -423,13 +424,12 @@ export const bulkApproveRequests = async (req, res, next) => {
     for (const id of requestIdsToRecalc) {
       await recalcRequestStatus(id, session);
     }
-
-    // Invalidate cached student statuses for all affected students
-    for (const studentId of studentIdsToNotify) {
-      invalidateStudentStatusCache(studentId);
-    }
-
     await commitSafeTransaction(session);
+
+    // Bulk Invalidation
+    studentIdsToNotify.forEach(sId => invalidateEntityCache('student', sId));
+    batchIds.forEach(bId => invalidateEntityCache('batch', bId));
+    invalidateEntityCache('approval', req.user.userId, 'all'); 
 
     logger.info('bulk_approval_actioned', {
       timestamp: now.toISOString(),
@@ -532,8 +532,9 @@ export const markDue = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId, session);
 
-    // Invalidate the student's cached status so SSE-triggered refetch gets fresh data
-    invalidateStudentStatusCache(approval.studentId.toString());
+    // Invalidate caches: Student dashboard + HoD Grid + Faculty pending
+    invalidateEntityCache('request', approval.requestId, approval.studentId);
+    invalidateEntityCache('approval', approval.facultyId, approval.batchId);
 
     await commitSafeTransaction(session);
 
@@ -619,11 +620,11 @@ export const updateApproval = async (req, res, next) => {
     await approval.save({ session });
 
     await recalcRequestStatus(approval.requestId, session);
-
-    // Invalidate student's cached status — covers resets, undos, and manual updates
-    invalidateStudentStatusCache(approval.studentId.toString());
-
     await commitSafeTransaction(session);
+
+    // Invalidate caches: Student dashboard + HoD Grid + Faculty pending
+    invalidateEntityCache('request', approval.requestId, approval.studentId);
+    invalidateEntityCache('approval', approval.facultyId, approval.batchId);
 
     logger.info('approval_updated', {
       timestamp: new Date().toISOString(), actor: req.user.userId,

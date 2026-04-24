@@ -286,24 +286,58 @@ export const sendMail = async ({ to, subject, html, role = 'system', triggeredBy
 
 export const sendFeedbackEmail = async (feedbackData, user) => {
   const adminEmail = process.env.ADMIN_EMAIL || 'chandrakant@nodues.com';
-  const { type, description, page, userAgent } = feedbackData;
+  const { rating, category, description, page, userAgent } = feedbackData;
   
-  const subject = `New Feedback: [${type.toUpperCase()}] from ${user.name}`;
+  const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+  const ratingColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
+  const ratingColor = ratingColors[rating - 1] || '#2563eb';
+
+  const subject = `[Feedback ${rating}/5] ${category.toUpperCase()} - From ${user.name}`;
   const html = `
-    <div style="font-family: sans-serif; padding: 20px; color: #333;">
-      <h2 style="color: #2563eb;">New ${type} submitted</h2>
-      <p><strong>From:</strong> ${user.name} (${user.role})</p>
-      <p><strong>Identifier:</strong> ${user.rollNo || user.email}</p>
-      <p><strong>Page:</strong> ${page}</p>
-      <p><strong>User Agent:</strong> ${userAgent || 'Unknown'}</p>
-      <hr style="border: 1px solid #eee;" />
-      <p><strong>Description:</strong></p>
-      <div style="background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb;">
-        ${description.replace(/\n/g, '<br/>')}
+    <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; color: #1f2937;">
+      <div style="background: #2563eb; padding: 24px; color: white;">
+        <h2 style="margin: 0; font-size: 20px; font-weight: 600;">New Feedback Received</h2>
+        <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">Submitted via No-Due Portal</p>
       </div>
-      <p style="font-size: 12px; color: #6b7280; margin-top: 20px;">
-        Submitted at: ${new Date().toLocaleString()}
-      </p>
+      
+      <div style="padding: 24px; background: white;">
+        <div style="display: flex; align-items: center; margin-bottom: 24px;">
+          <div style="font-size: 24px; color: ${ratingColor}; margin-right: 12px; letter-spacing: 2px;">
+            ${stars}
+          </div>
+          <span style="background: #f3f4f6; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #4b5563;">
+            ${category.replace('_', ' ')}
+          </span>
+        </div>
+
+        <div style="background: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 24px;">
+          <p style="margin: 0; line-height: 1.6; font-size: 15px; white-space: pre-wrap;">${description}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; width: 120px;">Submitted By</td>
+            <td style="padding: 8px 0; font-weight: 500;">${user.name}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280;">Role</td>
+            <td style="padding: 8px 0; font-weight: 500; text-transform: capitalize;">${user.role}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280;">Identifier</td>
+            <td style="padding: 8px 0; font-weight: 500;">${user.rollNo || user.email}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280;">Page</td>
+            <td style="padding: 8px 0; font-weight: 500;">${page}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="padding: 16px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">User Agent: ${userAgent || 'Unknown'}</p>
+        <p style="margin: 4px 0 0 0;">Timestamp: ${new Date().toLocaleString()}</p>
+      </div>
     </div>
   `;
 

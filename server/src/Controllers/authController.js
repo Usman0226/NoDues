@@ -405,8 +405,8 @@ export const getMe = async (req, res, next) => {
       };
     }
 
-    // Cache for 15 minutes
-    cache.set(cacheKey, profile, 900);
+    // Cache for 30 seconds - Short enough to maintain consistency across cluster instances
+    cache.set(cacheKey, profile, 30);
 
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data: profile });

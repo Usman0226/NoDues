@@ -40,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 EXPOSE 5000
 
-CMD ["node", "--max-old-space-size=3072", "server.js"]
+CMD ["node", "--max-old-space-size=1024", "server.js"]

@@ -189,8 +189,6 @@ const StudentStatus = () => {
   }, [fetchStatus, showGlobalLoader]);
 
   React.useEffect(() => { 
-    // Only trigger silent refresh if we don't already have an error
-    // this prevents hammering the server if the profile is missing.
     if (!error) {
       handleRefresh('silent'); 
     }
@@ -231,7 +229,6 @@ const StudentStatus = () => {
 
   const handleOpenSubmission = (item) => {
     setSubmissionModal({ open: true, item });
-    // Initialize form with existing submission data if rejected
     const initialData = {};
     if (item.submission?.data) {
       Object.assign(initialData, item.submission.data);
@@ -285,7 +282,7 @@ const StudentStatus = () => {
             >
               <Calendar size={32} className="text-zinc-300" />
             </motion.div>
-            <h2 className="text-2xl sm:text-3xl font-black text-navy tracking-tight mb-3">Not Active Cycle</h2>
+            <h2 className="text-2xl sm:text-3xl font-black text-navy tracking-tight mb-3">No Active Cycle</h2>
             <p className="max-w-[280px] sm:max-w-[320px] text-xs sm:text-sm font-medium text-muted-foreground mx-auto mb-10 leading-relaxed pb-4">
               There is currently no active no-dues cycle initiated by your department. Please check back later or view your previous records.
             </p>
