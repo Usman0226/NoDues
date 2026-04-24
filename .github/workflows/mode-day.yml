@@ -2,7 +2,7 @@ name: Switch to Azure
 
 on:
   schedule:
-    - cron: '37 2 * * *'
+    - cron: '45 3 * * *' # 9:15 AM IST
   workflow_dispatch:
 
 permissions:

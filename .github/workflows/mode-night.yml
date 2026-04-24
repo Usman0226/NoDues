@@ -2,7 +2,7 @@ name: Switch to Render
 
 on:
   schedule:
-    - cron: '42 12 * * *'
+    - cron: '30 12 * * *' # 6:00 PM IST
   workflow_dispatch:
 
 permissions:

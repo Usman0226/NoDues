@@ -14,7 +14,6 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-// ── Environment Validation ──────────────────────────────────────────────────
 const requiredEnv = ['MONGODB_URI', 'JWT_SECRET', 'NODE_ENV'];
 const missingEnv = requiredEnv.filter(key => !process.env[key]);
 
@@ -26,7 +25,6 @@ if (missingEnv.length > 0) {
 const start = async () => {
   await connectDB();
   
-  // Initialize Real-time synchronization (Change Streams)
   initChangeStreams();
 
   const PORT   = process.env.PORT || 5000;
