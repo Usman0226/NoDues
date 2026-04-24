@@ -16,6 +16,7 @@ import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import useSSE from '../../hooks/useSSE';
+import { getSSEConnectUrl } from '../../api/sse';
 import { useUI } from '../../hooks/useUI';
 import GuidedTour from '../../components/ui/GuidedTour';
 
@@ -57,8 +58,7 @@ const FacultyDashboard = () => {
   ];
   
   // Real-time synchronization
-  const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
-  const sseUrl  = `${apiBase}/api/sse/connect`;
+  const sseUrl = getSSEConnectUrl();
   
   useSSE(sseUrl, (event) => {
     if (event?.event === 'APPROVAL_UPDATED') {
@@ -195,20 +195,22 @@ const FacultyDashboard = () => {
         </button>
       }
     >
-      <GuidedTour 
-        steps={tourSteps} 
-        active={isTourActive} 
-        onComplete={() => setIsTourActive(false)}
-        onSkip={() => setIsTourActive(false)}
-        tourId="faculty_dashboard"
-      />
+      <AnimatePresence>
+        {isTourActive && (
+          <GuidedTour 
+            steps={tourSteps} 
+            onComplete={() => setIsTourActive(false)}
+            onSkip={() => setIsTourActive(false)}
+            tourId="faculty_dashboard"
+          />
+        )}
+      </AnimatePresence>
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
         className="space-y-10"
       >
-        {/* Minimal Action Header */}
         <motion.div 
           id="tour-header"
           variants={itemVariants}

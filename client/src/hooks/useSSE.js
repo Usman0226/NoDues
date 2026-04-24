@@ -14,6 +14,7 @@ const useSSE = (url, onMessage) => {
   const connect = useCallback(() => {
     if (!url) return;
 
+    console.log(`[SSE] Connecting to ${url}...`);
     sourceRef.current?.close();
     sourceRef.current = null;
 
@@ -21,19 +22,23 @@ const useSSE = (url, onMessage) => {
     sourceRef.current = source;
 
     source.onopen = () => {
+      console.log(`[SSE] Connection established to ${url}`);
       retryCountRef.current = 0; // Reset on success
     };
 
     source.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.debug('[SSE] Message received:', data);
         onMessageRef.current?.(data);
       } catch {
+        console.debug('[SSE] Raw message received:', event.data);
         onMessageRef.current?.(event.data);
       }
     };
 
-    source.onerror = () => {
+    source.onerror = (err) => {
+      console.error('[SSE] Connection error:', err);
       source.close();
       sourceRef.current = null;
       
@@ -41,6 +46,7 @@ const useSSE = (url, onMessage) => {
       const delay = Math.min(Math.pow(2, retryCountRef.current) * 1000, 30000);
       retryCountRef.current++;
       
+      console.log(`[SSE] Retrying in ${delay}ms... (Attempt ${retryCountRef.current})`);
       retryTimerRef.current = setTimeout(() => connectRef.current?.(), delay);
     };
   }, [url]);

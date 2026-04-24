@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronUp, ChevronDown, Search, Inbox, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -217,28 +218,30 @@ const Table = ({
         </div>
       )}
 
-      {/* Reusable Premium Bulk Action Bar */}
-      <AnimatePresence>
-        {selectable && selection.length > 0 && (
+      {/* Reusable Premium Bulk Action Bar - Portaled to avoid clipping by transformed parents */}
+      {selectable && selection.length > 0 && createPortal(
+        <AnimatePresence>
           <motion.div
             id={bulkActionsId}
-            initial={{ y: 100, x: 0, opacity: 0 }}
-            animate={{ y: 0, x: 0, opacity: 1 }}
-            exit={{ y: 100, x: 0, opacity: 0 }}
-            className="fixed z-[100] bottom-4 left-4 right-4 sm:left-auto sm:right-10 sm:bottom-10 flex items-center p-1.5 bg-white/90 backdrop-blur-2xl rounded-[2rem] sm:rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-zinc-200/50 border border-white/50 select-none max-w-[calc(100vw-32px)] sm:max-w-fit"
+            initial={{ y: 100, x: '-50%', opacity: 0 }}
+            animate={{ y: 0, x: '-50%', opacity: 1 }}
+            exit={{ y: 100, x: '-50%', opacity: 0 }}
+            className="fixed z-[500] bottom-6 left-1/2 flex items-center p-2 bg-white/95 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_24px_80px_rgba(0,0,0,0.25)] border border-indigo-100/50 select-none w-[calc(100vw-32px)] sm:w-auto sm:min-w-[400px] max-w-[95vw]"
           >
             {/* Selection Info */}
-            <div className="flex items-center gap-2 px-3 sm:px-4 h-10 bg-zinc-50 border border-zinc-100 rounded-full shrink-0 mr-1 sm:mr-2">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-black text-white shadow-sm ring-2 ring-indigo-100 shrink-0">
+            <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 border border-indigo-100/50 rounded-full shrink-0">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-black text-white shadow-lg shadow-indigo-200">
                 {selection.length}
               </span>
-              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500 whitespace-nowrap hidden sm:inline-block">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 whitespace-nowrap hidden sm:inline-block">
                 Selected
               </span>
             </div>
             
+            <div className="h-8 w-px bg-zinc-200 mx-2 hidden sm:block" />
+
             {/* Actions Area */}
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 px-1 mask-linear-edges">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 px-1">
               {/* Legacy fallback */}
               {selectionActions}
 
@@ -251,13 +254,13 @@ const Table = ({
                     key={idx}
                     onClick={() => action.onClick?.()}
                     className={`
-                      flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 h-10 rounded-full transition-all text-[10px] font-black uppercase tracking-[0.10em] whitespace-nowrap shrink-0
+                      flex items-center gap-2 px-4 py-2.5 rounded-full transition-all text-[10px] font-black uppercase tracking-[0.12em] whitespace-nowrap shrink-0 group
                       ${isDanger 
                         ? 'text-red-500 hover:bg-red-50' 
                         : 'text-zinc-600 hover:text-indigo-600 hover:bg-zinc-50'}
                     `}
                   >
-                    {ActionIcon && <ActionIcon size={14} className={isDanger ? 'text-red-500' : 'text-zinc-400'} />}
+                    {ActionIcon && <ActionIcon size={16} className={`${isDanger ? 'text-red-500' : 'text-zinc-400 group-hover:text-indigo-500'} transition-colors`} />}
                     {action.label}
                   </button>
                 );
@@ -265,17 +268,18 @@ const Table = ({
             </div>
 
             {/* Close/Clear Button */}
-            <div className="w-[1px] h-6 bg-zinc-200 shrink-0 mx-1 sm:mx-2" />
+            <div className="w-[1px] h-8 bg-zinc-200 shrink-0 mx-2" />
             <button
               onClick={() => onSelectionChange?.([])}
-              className="p-2 sm:p-2.5 hover:bg-zinc-50 rounded-full transition-all text-zinc-400 hover:text-zinc-900 group shrink-0"
+              className="p-2.5 hover:bg-red-50 hover:text-red-600 rounded-full transition-all text-zinc-400 group shrink-0"
               title="Clear selection"
             >
-              <X size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+              <X size={18} className="group-hover:rotate-90 transition-transform duration-300" />
             </button>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
       <div className="overflow-x-auto" aria-busy={loading}>
         <table className={`w-full text-sm ${fixedLayout ? 'table-fixed' : ''}`}>

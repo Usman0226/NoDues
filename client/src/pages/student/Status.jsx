@@ -506,7 +506,7 @@ const StudentStatus = () => {
                                       <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{isCoCurricular ? 'Coordinator' : 'Faculty'}</span>
                                    </div>
                                    <div className="hidden sm:block h-3 w-px bg-zinc-200" />
-                                   <span className="text-xs sm:text-[13px] font-bold text-navy/70">{item.facultyName || 'Department Station'}</span>
+                                   <span className="text-xs sm:text-[13px] font-bold text-navy/70">{item.facultyName || 'Department'}</span>
                                 </div>
                               </div>
                             </div>

@@ -1,20 +1,23 @@
 {
-  "last_updated": "2026-04-24T04:05:00Z",
+  "last_updated": "2026-04-24T10:53:40Z",
   "completed": [
-    "Expanded faculty visibility for HoDs and faculty roles across all departments",
-    "Updated facultyController.js to support 'all' department filtering for HoDs",
-    "Removed departmental read-only restrictions for HoDs in faculty details and class lists",
-    "Modified faculty.routes.js to allow faculty role access to read-only endpoints",
-    "Updated ClassDetail.jsx to fetch all faculty for subject assignments",
-    "Updated FacultyList.jsx to display comprehensive faculty list for HoDs"
+    "Stabilized Guided Tour UI and eliminated cascading renders",
+    "Removed distracting background blurs and animations from Guided Tour",
+    "Improved bulk action clarity by auto-selecting items during tour steps",
+    "Refactored GuidedTour to use parent-controlled lifecycle for better performance"
   ],
-  "in_progress": [],
-  "pending": [],
+  "in_progress": [
+    "Monitoring faculty portal for any further UI inconsistencies"
+  ],
+  "pending": [
+    "Automated Testing Suite integration",
+    "Responsive audit for static highlight outline"
+  ],
   "decisions": [
     {
-      "context": "Requirement for cross-departmental subject assignment",
-      "decision": "Allow HoDs and faculty to read all faculty data while keeping write operations (create/edit) department-scoped for HoDs",
-      "trade_offs": "HoDs can see more data, but cannot modify it, preserving data integrity while enabling administrative workflows"
+      "context": "React cascading render warning in GuidedTour effect",
+      "decision": "Moved state reset logic to parent via mounting/unmounting with AnimatePresence",
+      "trade_offs": "Requires AnimatePresence in every parent, but guarantees consistent state reset and better performance"
     }
   ],
   "blockers": []

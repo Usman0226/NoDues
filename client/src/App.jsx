@@ -150,8 +150,9 @@ const StudentNavRight = () => {
         
         <button
           onClick={openFeedback}
-          className="p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-all group relative"
+          className="hidden p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-all group relative"
           title="Give Feedback"
+          aria-label="Give Feedback"
         >
           <MessageSquarePlus size={18} />
           <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-navy text-[8px] font-black uppercase tracking-widest text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-white/10">Feedback</span>

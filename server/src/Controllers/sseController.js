@@ -42,12 +42,20 @@ export const pushEvent = (userIds, eventName, payload) => {
 export const sseConnect = (req, res) => {
   const { userId } = req.user;
 
-  // SSE headers
+  // SSE headers - Hardened for production proxies (Nginx, Cloudflare, Load Balancers)
   res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Cache-Control', 'no-cache, no-transform, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
+  res.setHeader('X-Accel-Buffering', 'no'); // Critical for Nginx
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // Ensure headers are sent immediately
   res.flushHeaders();
+
+  // Tell client to reconnect after 10 seconds if connection is lost
+  res.write('retry: 10000\n\n');
 
   // Send initial heartbeat so the browser knows the connection is live
   res.write(`event: connected\ndata: ${JSON.stringify({ userId, ts: Date.now() })}\n\n`);
@@ -61,14 +69,16 @@ export const sseConnect = (req, res) => {
     resource_id: null,
   });
 
-  // Heartbeat every 25s to prevent proxy/firewall timeouts
+  // Heartbeat every 15s (reduced from 25s) to prevent proxy/firewall timeouts
+  // Many cloud load balancers have 30-60s timeouts
   const heartbeat = setInterval(() => {
     if (res.writableEnded) {
       clearInterval(heartbeat);
       return;
     }
+    // Standard SSE comment heartbeat to keep connection alive
     res.write(': heartbeat\n\n');
-  }, 25_000);
+  }, 15_000);
 
   // Clean up on disconnect
   req.on('close', () => {

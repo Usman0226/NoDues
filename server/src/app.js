@@ -33,7 +33,7 @@ app.use(responseTimeLogger);
 app.use(helmet());
 const allowedOrigins = [
   process.env.CLIENT_URL,
-  'http://localhost:5173',
+  'http://localhost:5173',  
   'https://nodues-arcclub.tech',
   'https://www.nodues-arcclub.tech',    
   /\.vercel\.app$/,        
@@ -65,7 +65,10 @@ app.use(compression({
   threshold: 1024,
   filter: (req, res) => {
     // Disable compression for SSE routes to prevent buffering
-    if (req.originalUrl?.startsWith('/api/sse')) return false;
+    // Check both the URL and the Accept header for maximum reliability
+    if (req.originalUrl?.includes('/sse') || req.headers.accept === 'text/event-stream') {
+      return false;
+    }
     return compression.filter(req, res);
   }
 }));

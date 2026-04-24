@@ -131,7 +131,7 @@ export const getStudentStatus = async (req, res, next) => {
 
       return {
         id: a._id,
-        facultyName: snapshot.facultyName || 'Department Station',
+        facultyName: snapshot.facultyName || 'Department Faculty',
         itemTypeId: a.itemTypeId,
         subjectName: displayContext || 'General Appraisal',
         subjectCode: snapshot.subjectCode || null,

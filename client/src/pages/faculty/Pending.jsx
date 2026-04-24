@@ -14,6 +14,7 @@ import {
   updateApproval,
   bulkApproveRecords 
 } from '../../api/approvals';
+import { getSSEConnectUrl } from '../../api/sse';
 import { getMyClasses } from '../../api/faculty';
 import Modal from '../../components/ui/Modal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
@@ -35,7 +36,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import GuidedTour from '../../components/ui/GuidedTour';
 import { Sparkles, Layers, CheckCircle2 } from 'lucide-react';
 
@@ -67,6 +68,65 @@ const getApprovalLabel = (item) => {
     : '—';
 };
 
+const DueModalContent = ({ item, onClose, onSubmit, loading }) => {
+  const [dueType, setDueType] = useState('');
+  const [remarks, setRemarks] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!dueType) {
+      toast.error('Please select a deficiency category');
+      return;
+    }
+    onSubmit({ dueType, remarks });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">Target Candidate</p>
+        <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100">
+           <p className="text-sm font-black text-zinc-900">{item.studentRollNo} · {item.studentName}</p>
+           <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mt-1">{getApprovalLabel(item)}</p>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-900 mb-2 block">Deficiency Category</label>
+          <SearchableSelect 
+            options={DUE_TYPES.map(type => ({
+              value: type.value,
+              label: type.label,
+              subLabel: 'Category'
+            }))}
+            value={dueType}
+            onChange={setDueType}
+            placeholder="Select Category"
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-900 mb-2 block">Specific Remarks</label>
+          <textarea 
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+            required
+            rows={4}
+            placeholder="Explain why the clearance is blocked (e.g., 'Internal exams fee pending', 'Lab equipment damaged')"
+            className="w-full bg-white border border-zinc-200 text-sm font-medium text-zinc-900 px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-red-100 transition-all resize-none"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 pt-4">
+        <Button type="button" variant="ghost" className="flex-1" onClick={onClose}>Cancel</Button>
+        <Button type="submit" variant="danger" className="flex-1" loading={loading}>Confirm Flag</Button>
+      </div>
+    </form>
+  );
+};
+
 const Pending = () => {
   const location = useLocation();
   const [selectedBatch, setSelectedBatch] = useState(location.state?.classId || 'all');
@@ -74,14 +134,14 @@ const Pending = () => {
 
   // Sync with navigation state (from My Classes / Dashboard)
   useEffect(() => {
-    if (location.state?.classId) {
+    if (location.state?.classId && location.state.classId !== selectedBatch) {
       setSelectedBatch(location.state.classId);
     }
     // Reset to 'pending' if entering from a summary view (Dashboard/My Classes)
-    if (location.state?.from) {
+    if (location.state?.from && filter !== 'pending') {
       setFilter('pending');
     }
-  }, [location.state]);
+  }, [location.state, selectedBatch, filter]);
   const [selection, setSelection]         = useState([]);
   const [actionLoading, setActionLoading] = useState(null); 
   const [dueModal, setDueModal]           = useState(null); 
@@ -172,8 +232,7 @@ const Pending = () => {
   // Force selection for tour if empty
   const activeSelection = useDummyData ? ['dummy-1', 'dummy-2'] : selection;
 
-  const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
-  const sseUrl  = `${apiBase}/api/sse/connect`;
+  const sseUrl = getSSEConnectUrl();
   
   // Debounce search input
   useEffect(() => {
@@ -287,11 +346,19 @@ const Pending = () => {
 
   const handleBulkApprove = useCallback(async () => {
     if (!selection.length) return;
+    
+    // Prevent API calls with dummy data during tour
+    if (useDummyData || selection.some(id => id.toString().startsWith('dummy-'))) {
+      toast.error('Actions are disabled in Test Flight mode');
+      return;
+    }
+
     setActionLoading('bulk');
     const approvedIds = new Set(selection);
     try {
       const res = await bulkApproveRecords(selection);
       toast.success(`Successfully approved ${res.data.processed} students`);
+      
       // Optimistic update for all selected rows
       setResponse((prev) => {
         const update = (a) =>
@@ -301,11 +368,12 @@ const Pending = () => {
         return prev;
       });
       setSelection([]);
+    } catch (err) {
+      toast.error(err?.response?.data?.error?.message || 'Bulk approval failed');
     } finally {
-      setActionLoading('bulk');
-      setTimeout(() => setActionLoading(null), 500);
+      setActionLoading(null);
     }
-  }, [selection, fetchApprovals, setResponse]);
+  }, [selection, bulkApproveRecords, setResponse, useDummyData]);
 
   const handleUpdate = async (id, data) => {
     setActionLoading(id);
@@ -473,17 +541,32 @@ const Pending = () => {
           onClick={() => setIsTourActive(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-zinc-200 text-zinc-500 hover:text-indigo-600 hover:border-indigo-100 transition-all text-[10px] font-black uppercase tracking-widest"
         >
-          <PlaneTakeoff size={14} /> Take Flight
+          <PlaneTakeoff size={14} /> Test Flight
         </button>
       }
     >
-      <GuidedTour 
-        steps={tourSteps} 
-        active={isTourActive} 
-        onComplete={() => setIsTourActive(false)}
-        onSkip={() => setIsTourActive(false)}
-        tourId="faculty_pending"
-      />
+      <AnimatePresence>
+        {isTourActive && (
+          <GuidedTour 
+            steps={tourSteps} 
+            onComplete={() => {
+              setIsTourActive(false);
+              setSelection([]);
+            }}
+            onSkip={() => {
+              setIsTourActive(false);
+              setSelection([]);
+            }}
+            onStepChange={(index) => {
+              // Step 4 is Bulk Actions - ensure something is selected so the bar appears
+              if (index === 4 && selection.length === 0 && approvals.length > 0) {
+                setSelection([approvals[0]._id]);
+              }
+            }}
+            tourId="faculty_pending"
+          />
+        )}
+      </AnimatePresence>
       <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
         
 
@@ -574,13 +657,33 @@ const Pending = () => {
           ) : approvals.length === 0 && !loading ? (
             <div className="bg-white border border-dashed border-zinc-200 rounded-3xl p-16 text-center">
               <div className="bg-zinc-50 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Check className="text-zinc-300" size={40} />
+                {searchValue || selectedBatch !== 'all' ? (
+                  <Eye className="text-zinc-300" size={40} />
+                ) : (
+                  <Check className="text-zinc-300" size={40} />
+                )}
               </div>
-              <h3 className="text-navy font-brand text-xl mb-2">Queue Fully Processed</h3>
+              <h3 className="text-navy font-brand text-xl mb-2">
+                {searchValue || selectedBatch !== 'all' ? 'No Matching Records' : 'Queue Fully Processed'}
+              </h3>
               <p className="text-sm text-zinc-500 max-w-sm mx-auto">
-                No student clearance requests are pending for the selected {selectedBatch === 'all' ? 'active batches' : 'class'}. 
-                Check individual status or history for previously actioned records.
+                {searchValue || selectedBatch !== 'all' 
+                  ? "We couldn't find any students matching your current search or filter criteria. Try adjusting your search or clearing filters."
+                  : `No student clearance requests are pending for the selected ${selectedBatch === 'all' ? 'active batches' : 'class'}. Check individual status or history for previously actioned records.`
+                }
               </p>
+              {(searchValue || selectedBatch !== 'all') && (
+                <Button 
+                  variant="ghost" 
+                  className="mt-6 text-indigo-600 font-bold"
+                  onClick={() => {
+                    setSearchValue('');
+                    setSelectedBatch('all');
+                  }}
+                >
+                  Clear All Filters
+                </Button>
+              )}
             </div>
           ) : (
             <div id="tour-table">
@@ -619,69 +722,18 @@ const Pending = () => {
         size="sm"
       >
         {dueModal && (
-          <form 
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const formData = new FormData(e.target);
+          <DueModalContent 
+            item={dueModal} 
+            onClose={() => setDueModal(null)}
+            onSubmit={async (data) => {
               await handleUpdate(dueModal._id, {
                 action: 'due_marked',
-                dueType: formData.get('dueType'),
-                remarks: formData.get('remarks')
+                ...data
               });
               setDueModal(null);
             }}
-            className="space-y-6"
-          >
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">Target Candidate</p>
-              <div className="p-4 rounded-xl bg-offwhite border border-muted/50">
-                 <p className="text-sm font-black text-navy">{dueModal.studentRollNo} · {dueModal.studentName}</p>
-                 <p className="text-[10px] font-bold text-gold uppercase tracking-widest mt-1">{getApprovalLabel(dueModal)}</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-navy mb-2 block">Deficiency Category</label>
-                <SearchableSelect 
-                  options={DUE_TYPES.map(type => ({
-                    value: type.value,
-                    label: type.label,
-                    subLabel: 'Category'
-                  }))}
-                  value={''} // Controlled via native form in this component, but we should probably refactor to state if needed.
-                  // Wait, the parent uses (e) => new FormData(e.target). 
-                  // SearchableSelect doesn't work with native FormData out of the box unless it has a hidden input.
-                  // I'll add a name prop to SearchableSelect or refactor this to state.
-                  onChange={val => {
-                    const select = document.getElementById('dueType-hidden');
-                    if (select) {
-                      select.value = val;
-                      select.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                  }}
-                  placeholder="Select Category"
-                />
-                <input type="hidden" name="dueType" id="dueType-hidden" required />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-navy mb-2 block">Specific Remarks</label>
-                <textarea 
-                  name="remarks"
-                  required
-                  rows={4}
-                  placeholder="Explain why the clearance is blocked (e.g., 'Internal exams fee pending', 'Lab equipment damaged')"
-                  className="w-full bg-white border border-muted text-sm font-medium text-navy px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-red-100 transition-all resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-4">
-              <Button type="button" variant="ghost" className="flex-1" onClick={() => setDueModal(null)}>Cancel</Button>
-              <Button type="submit" variant="danger" className="flex-1" loading={actionLoading === dueModal._id}>Confirm Flag</Button>
-            </div>
-          </form>
+            loading={actionLoading === dueModal._id}
+          />
         )}
       </Modal>
       <Modal
