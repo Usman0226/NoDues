@@ -466,3 +466,44 @@ Sample Response (201):
 }
 
 Error Codes: 400 (validation), 401 (auth)
+
+---
+
+## Co-Curricular Management
+
+### POST /api/cocurricular
+Description: Create a new co-curricular clearance template.
+
+curl -X POST http://localhost:5000/api/cocurricular \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Library Clearance",
+    "code": "LIB001",
+    "departmentId": "6627a3f2e4b0c9d8f0000001",
+    "coordinatorId": "6627a3f2e4b0c9d8f1234567",
+    "requiresMentorApproval": false,
+    "requiresClassTeacherApproval": true,
+    "fields": [
+      { "label": "Books Returned", "type": "boolean", "required": true }
+    ]
+  }'
+
+Sample Response (201):
+{ "success": true, "data": { "_id": "6627a3f2e4b0c9d8f0000abc", "name": "Library Clearance" } }
+
+---
+
+### POST /api/cocurricular/assign
+Description: Manually trigger assignment of co-curricular clearance to students.
+
+curl -X POST http://localhost:5000/api/cocurricular/assign \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cocurricularId": "6627a3f2e4b0c9d8f0000abc",
+    "mode": "per_class_teacher"
+  }'
+
+Modes: `single` (uses default coordinator), `per_mentor` (uses student's mentor), `per_class_teacher` (uses student's class teacher)
+
+Sample Response (200):
+{ "success": true, "data": { "message": "Assignment task initiated for 120 students" } }

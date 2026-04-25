@@ -643,33 +643,49 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
 
     for (const type of ccTypes) {
       const isMentorMode = type.requiresMentorApproval;
-      let assignedFacultyId = isMentorMode ? student.mentorId : type.coordinatorId;
+      const isCTMode = type.requiresClassTeacherApproval;
       
-      // Fallback: If mentor mode but no mentor, use coordinator if available
-      if (isMentorMode && !assignedFacultyId && type.coordinatorId) {
+      let assignedFacultyId = null;
+      let roleTag = 'coCurricular_coordinator';
+
+      if (isMentorMode) {
+        assignedFacultyId = student.mentorId;
+        roleTag = 'coCurricular_mentor';
+      } else if (isCTMode) {
+        assignedFacultyId = cls.classTeacherId;
+        roleTag = 'coCurricular_classTeacher';
+      } else {
         assignedFacultyId = type.coordinatorId;
+        roleTag = 'coCurricular_coordinator';
+      }
+      
+      // Fallback: If mentor/CT mode but no faculty assigned, use coordinator
+      if ((isMentorMode || isCTMode) && !assignedFacultyId && type.coordinatorId) {
+        assignedFacultyId = type.coordinatorId;
+        roleTag = 'coCurricular_coordinator';
       }
 
       if (!assignedFacultyId) continue;
 
-      let facultyName = null;
+      let facultyNameStr = null;
       if (isMentorMode && assignedFacultyId.toString() === student.mentorId?.toString()) {
-        facultyName = mentor?.name || "Student's Mentor";
-      } else if (type.coordinatorId) {
-        // We might need to fetch the coordinator name if not already in memory
+        facultyNameStr = mentor?.name || "Student's Mentor";
+      } else if (isCTMode && assignedFacultyId.toString() === cls.classTeacherId?.toString()) {
+        facultyNameStr = ctInfo?.name || "Class Teacher";
+      } else if (type.coordinatorId && assignedFacultyId.toString() === type.coordinatorId.toString()) {
         const coord = await Faculty.findById(type.coordinatorId).session(session).select('name').lean();
-        facultyName = coord?.name;
+        facultyNameStr = coord?.name;
       }
 
       // Add to snapshot
       snapshot[type._id.toString()] = {
         facultyId: assignedFacultyId,
-        facultyName: isMentorMode ? (mentor?.name || "Student's Mentor") : (facultyName || null),
+        facultyName: facultyNameStr,
         subjectId: null,
         subjectName: type.name,
         subjectCode: type.code,
-        roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
-        approvalType: isMentorMode ? 'mentor' : 'coCurricular',
+        roleTag: roleTag,
+        approvalType: 'coCurricular',
         itemTypeId: type._id,
         itemTypeName: type.name,
         itemCode: type.code,
@@ -685,8 +701,8 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
         facultyId: assignedFacultyId,
         subjectId: null,
         subjectName: type.name,
-        approvalType: isMentorMode ? 'mentor' : 'coCurricular',
-        roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+        approvalType: 'coCurricular',
+        roleTag: roleTag,
         itemTypeId: type._id,
         itemTypeName: type.name,
         itemCode: type.code,
@@ -817,14 +833,19 @@ export const syncCoCurricularAddition = async (typeId) => {
     
     const studentIds = [...new Set(requests.map(r => r.studentId.toString()))];
     const students = await Student.find({ _id: { $in: studentIds } })
-      .session(session).select('_id mentorId yearOfStudy name rollNo').lean();
+      .session(session).select('_id mentorId yearOfStudy name rollNo classId').lean();
     
     const studentMap = new Map(students.map(s => [s._id.toString(), s]));
     
-    // Fetch faculty names for mentors and coordinator
+    const classes = await Class.find({ _id: { $in: activeBatches.map(b => b.classId) } })
+      .session(session).select('_id classTeacherId').lean();
+    const classMap = new Map(classes.map(c => [c._id.toString(), c]));
+
+    // Fetch faculty names for mentors, class teachers, and coordinator
     const mentorIds = [...new Set(students.map(s => s.mentorId?.toString()).filter(Boolean))];
+    const ctIds = [...new Set(classes.map(c => c.classTeacherId?.toString()).filter(Boolean))];
     const faculties = await Faculty.find({ 
-      _id: { $in: [...mentorIds, type.coordinatorId].filter(Boolean) } 
+      _id: { $in: [...mentorIds, ...ctIds, type.coordinatorId].filter(Boolean) } 
     }).session(session).select('name').lean();
     const facultyMap = new Map(faculties.map(f => [f._id.toString(), f.name]));
 
@@ -848,15 +869,33 @@ export const syncCoCurricularAddition = async (typeId) => {
       if (exists) continue;
 
       const isMentorMode = type.requiresMentorApproval;
-      let assignedFacultyId = isMentorMode ? student.mentorId : type.coordinatorId;
+      const isCTMode = type.requiresClassTeacherApproval;
       
-      if (isMentorMode && !assignedFacultyId && type.coordinatorId) {
+      let assignedFacultyId = null;
+      let roleTag = 'coCurricular_coordinator';
+
+      if (isMentorMode) {
+        assignedFacultyId = student.mentorId;
+        roleTag = 'coCurricular_mentor';
+      } else if (isCTMode) {
+        const cls = classMap.get(student.classId.toString());
+        assignedFacultyId = cls?.classTeacherId;
+        roleTag = 'coCurricular_classTeacher';
+      } else {
         assignedFacultyId = type.coordinatorId;
+        roleTag = 'coCurricular_coordinator';
+      }
+      
+      // Fallback
+      if ((isMentorMode || isCTMode) && !assignedFacultyId && type.coordinatorId) {
+        assignedFacultyId = type.coordinatorId;
+        roleTag = 'coCurricular_coordinator';
       }
 
       if (!assignedFacultyId) continue;
 
-      const facultyName = facultyMap.get(assignedFacultyId.toString()) || (isMentorMode ? "Student's Mentor" : null);
+      const facultyName = facultyMap.get(assignedFacultyId.toString()) || 
+                          (isMentorMode ? "Student's Mentor" : (isCTMode ? "Class Teacher" : null));
 
       // 1. Prepare Approval Record
       approvalOps.push({
@@ -867,8 +906,8 @@ export const syncCoCurricularAddition = async (typeId) => {
         studentName: student.name,
         facultyId: assignedFacultyId,
         subjectName: type.name,
-        approvalType: isMentorMode ? 'mentor' : 'coCurricular',
-        roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+        approvalType: 'coCurricular',
+        roleTag: roleTag,
         itemTypeId: type._id,
         itemTypeName: type.name,
         itemCode: type.code,
@@ -884,8 +923,8 @@ export const syncCoCurricularAddition = async (typeId) => {
           subjectId: null,
           subjectName: type.name,
           subjectCode: type.code,
-          roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
-          approvalType: isMentorMode ? 'mentor' : 'coCurricular',
+          roleTag: roleTag,
+          approvalType: 'coCurricular',
           itemTypeId: type._id,
           itemTypeName: type.name,
           itemCode: type.code,
@@ -898,8 +937,8 @@ export const syncCoCurricularAddition = async (typeId) => {
           subjectId: null,
           subjectName: type.name,
           subjectCode: type.code,
-          roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
-          approvalType: isMentorMode ? 'mentor' : 'coCurricular',
+          roleTag: roleTag,
+          approvalType: 'coCurricular',
           itemTypeId: type._id,
           itemTypeName: type.name,
           itemCode: type.code,
@@ -932,7 +971,7 @@ export const syncCoCurricularAddition = async (typeId) => {
 
 // ── syncCoCurricularUpdate ────────────────────────────────────────────────────
 /**
- * Syncs template changes (name, faculty, mode) to all active batches.
+ * Synchronizes co-curricular item updates (name, coordinator, modes) with existing approvals.
  */
 export const syncCoCurricularUpdate = async (typeId) => {
   let succeeded = false;
@@ -974,23 +1013,37 @@ export const syncCoCurricularUpdate = async (typeId) => {
     const allRequests = await NodueRequest.find({ batchId: { $in: batchIds } }).session(session);
     const allStudentIds = [...new Set(allRequests.map(r => r.studentId.toString()))];
     const allStudents = await Student.find({ _id: { $in: allStudentIds } })
-      .session(session).select('_id mentorId yearOfStudy name rollNo').lean();
+      .session(session).select('_id mentorId yearOfStudy name rollNo classId').lean();
     const studentMap = new Map(allStudents.map(s => [s._id.toString(), s]));
+
+    const classes = await Class.find({ _id: { $in: activeBatches.map(b => b.classId) } })
+      .session(session).select('_id classTeacherId').lean();
+    const classMap = new Map(classes.map(c => [c._id.toString(), c]));
 
     // Fetch faculty names
     const mentorIds = [...new Set(allStudents.map(s => s.mentorId?.toString()).filter(Boolean))];
+    const ctIds = [...new Set(classes.map(c => c.classTeacherId?.toString()).filter(Boolean))];
     const faculties = await Faculty.find({ 
-      _id: { $in: [...mentorIds, type.coordinatorId].filter(Boolean) } 
+      _id: { $in: [...mentorIds, ...ctIds, type.coordinatorId].filter(Boolean) } 
     }).session(session).select('name').lean();
     const facultyMap = new Map(faculties.map(f => [f._id.toString(), f.name]));
 
     const ops = [];
 
     // Process removals and updates
+    const processedStudentIds = new Set();
     for (const app of existingApprovals) {
-      const student = studentMap.get(app.studentId.toString());
-      const req = requestMap.get(app.studentId.toString());
+      const studentIdStr = app.studentId.toString();
+      const student = studentMap.get(studentIdStr);
+      const req = requestMap.get(studentIdStr);
       if (!student || !req) continue;
+
+      // DEDUPLICATION: If we have multiple approvals for the same item/student, delete the extra ones
+      if (processedStudentIds.has(studentIdStr)) {
+        ops.push(NodueApproval.deleteOne({ _id: app._id }).session(session));
+        continue;
+      }
+      processedStudentIds.add(studentIdStr);
 
       const isApplicable = type.applicableYears.includes(student.yearOfStudy);
       const isDeactivated = !type.isActive;
@@ -1008,20 +1061,41 @@ export const syncCoCurricularUpdate = async (typeId) => {
       } else {
         // UPDATE
         const isMentorMode = type.requiresMentorApproval;
-        let assignedFacultyId = isMentorMode ? student.mentorId : type.coordinatorId;
-        if (isMentorMode && !assignedFacultyId && type.coordinatorId) {
+        const isCTMode = type.requiresClassTeacherApproval;
+        
+        let assignedFacultyId = null;
+        let roleTag = 'coCurricular_coordinator';
+
+        if (isMentorMode) {
+          assignedFacultyId = student.mentorId;
+          roleTag = 'coCurricular_mentor';
+        } else if (isCTMode) {
+          const cls = classMap.get(student.classId.toString());
+          assignedFacultyId = cls?.classTeacherId;
+          roleTag = 'coCurricular_classTeacher';
+        } else {
           assignedFacultyId = type.coordinatorId;
+          roleTag = 'coCurricular_coordinator';
         }
+        
+        // Fallback
+        if ((isMentorMode || isCTMode) && !assignedFacultyId && type.coordinatorId) {
+          assignedFacultyId = type.coordinatorId;
+          roleTag = 'coCurricular_coordinator';
+        }
+
         if (!assignedFacultyId) continue;
 
-        const facultyName = facultyMap.get(assignedFacultyId.toString()) || (isMentorMode ? "Student's Mentor" : null);
+        const facultyName = facultyMap.get(assignedFacultyId.toString()) || 
+                            (isMentorMode ? "Student's Mentor" : (isCTMode ? "Class Teacher" : null));
 
         app.facultyId = assignedFacultyId;
+        app.facultyName = facultyName;
         app.subjectName = type.name;
         app.itemTypeName = type.name;
         app.itemCode = type.code;
         app.isOptional = type.isOptional;
-        app.roleTag = isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator';
+        app.roleTag = roleTag;
         app.approvalType = 'coCurricular';
         ops.push(app.save({ session }));
 
@@ -1033,7 +1107,7 @@ export const syncCoCurricularUpdate = async (typeId) => {
             subjectId: null,
             subjectName: type.name,
             subjectCode: type.code,
-            roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+            roleTag: roleTag,
             approvalType: 'coCurricular',
             itemTypeId: type._id,
             itemTypeName: type.name,
@@ -1049,7 +1123,7 @@ export const syncCoCurricularUpdate = async (typeId) => {
             subjectId: null,
             subjectName: type.name,
             subjectCode: type.code,
-            roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+            roleTag: roleTag,
             approvalType: 'coCurricular',
             itemTypeId: type._id,
             itemTypeName: type.name,
@@ -1075,13 +1149,33 @@ export const syncCoCurricularUpdate = async (typeId) => {
         if (!req) continue;
 
         const isMentorMode = type.requiresMentorApproval;
-        let assignedFacultyId = isMentorMode ? student.mentorId : type.coordinatorId;
-        if (isMentorMode && !assignedFacultyId && type.coordinatorId) {
+        const isCTMode = type.requiresClassTeacherApproval;
+        
+        let assignedFacultyId = null;
+        let roleTag = 'coCurricular_coordinator';
+
+        if (isMentorMode) {
+          assignedFacultyId = student.mentorId;
+          roleTag = 'coCurricular_mentor';
+        } else if (isCTMode) {
+          const cls = classMap.get(student.classId.toString());
+          assignedFacultyId = cls?.classTeacherId;
+          roleTag = 'coCurricular_classTeacher';
+        } else {
           assignedFacultyId = type.coordinatorId;
+          roleTag = 'coCurricular_coordinator';
         }
+        
+        // Fallback
+        if ((isMentorMode || isCTMode) && !assignedFacultyId && type.coordinatorId) {
+          assignedFacultyId = type.coordinatorId;
+          roleTag = 'coCurricular_coordinator';
+        }
+
         if (!assignedFacultyId) continue;
 
-        const facultyName = facultyMap.get(assignedFacultyId.toString()) || (isMentorMode ? "Student's Mentor" : null);
+        const facultyName = facultyMap.get(assignedFacultyId.toString()) || 
+                            (isMentorMode ? "Student's Mentor" : (isCTMode ? "Class Teacher" : null));
 
         // Create Approval
         ops.push(NodueApproval.create([{
@@ -1093,12 +1187,12 @@ export const syncCoCurricularUpdate = async (typeId) => {
           facultyId: assignedFacultyId,
           subjectName: type.name,
           approvalType: 'coCurricular',
-          roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+          roleTag: roleTag,
           itemTypeId: type._id,
           itemTypeName: type.name,
           itemCode: type.code,
           isOptional: type.isOptional || false,
-          action: 'not_submitted'
+          action: 'pending'
         }], { session }));
 
         // Update Snapshot
@@ -1109,7 +1203,7 @@ export const syncCoCurricularUpdate = async (typeId) => {
             subjectId: null,
             subjectName: type.name,
             subjectCode: type.code,
-            roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+            roleTag: roleTag,
             approvalType: 'coCurricular',
             itemTypeId: type._id,
             itemTypeName: type.name,
@@ -1123,7 +1217,7 @@ export const syncCoCurricularUpdate = async (typeId) => {
             subjectId: null,
             subjectName: type.name,
             subjectCode: type.code,
-            roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+            roleTag: roleTag,
             approvalType: 'coCurricular',
             itemTypeId: type._id,
             itemTypeName: type.name,
@@ -1136,11 +1230,11 @@ export const syncCoCurricularUpdate = async (typeId) => {
       }
     }
 
-    await Promise.all(ops);
+      await Promise.all(ops);
 
     await commitSafeTransaction(session);
     succeeded = true;
-    logger.audit('SYNC_CO_CURRICULAR_UPDATED', { typeId, count: approvals.length });
+    logger.audit('SYNC_CO_CURRICULAR_UPDATED', { typeId, count: existingApprovals.length });
   } catch (err) {
     await abortSafeTransaction(session);
     logger.error('sync_co_curricular_update_failed', { typeId, error: err.message });
@@ -1152,6 +1246,7 @@ export const syncCoCurricularUpdate = async (typeId) => {
     invalidateEntityCache('student', 'all');
   }
 };
+
 
 
 export const syncCoCurricularRemoval = async (departmentId, typeId) => {
@@ -1201,5 +1296,94 @@ export const syncCoCurricularRemoval = async (departmentId, typeId) => {
 
   if (succeeded) {
     invalidateEntityCache('student', 'all');
+  }
+};
+
+/**
+ * Updates all approval records and snapshots when a class teacher is changed for a class.
+ */
+export const bulkSyncClassTeacherUpdate = async (classId, classTeacherId, classTeacherName) => {
+  let succeeded = false;
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+
+    const activeBatch = await NodueBatch.findOne({ classId, status: 'active' }).session(session).lean();
+    if (!activeBatch) {
+      await commitSafeTransaction(session);
+      return;
+    }
+
+    const requests = await NodueRequest.find({ batchId: activeBatch._id }).session(session);
+    
+    for (const req of requests) {
+      let updated = false;
+      
+      if (Array.isArray(req.facultySnapshot)) {
+        // 1. Update core classTeacher approval if it exists
+        const idx = req.facultySnapshot.findIndex(f => f.roleTag === 'classTeacher');
+        if (idx !== -1) {
+          req.facultySnapshot[idx] = { ...req.facultySnapshot[idx], facultyId: classTeacherId, facultyName: classTeacherName };
+          updated = true;
+        }
+        
+        // 2. Update co-curricular items assigned to class teacher
+        req.facultySnapshot.forEach((f, i) => {
+          if (f.roleTag === 'coCurricular_classTeacher') {
+            req.facultySnapshot[i].facultyId = classTeacherId;
+            req.facultySnapshot[i].facultyName = classTeacherName;
+            updated = true;
+          }
+        });
+      } else if (req.facultySnapshot) {
+        // Handle object-based snapshot
+        if (req.facultySnapshot['classTeacher']) {
+          req.facultySnapshot['classTeacher'] = {
+            ...req.facultySnapshot['classTeacher'],
+            facultyId: classTeacherId,
+            facultyName: classTeacherName
+          };
+          updated = true;
+        }
+        
+        Object.keys(req.facultySnapshot).forEach(key => {
+          if (req.facultySnapshot[key].roleTag === 'coCurricular_classTeacher') {
+            req.facultySnapshot[key].facultyId = classTeacherId;
+            req.facultySnapshot[key].facultyName = classTeacherName;
+            updated = true;
+          }
+        });
+        if (updated) req.markModified('facultySnapshot');
+      }
+      
+      if (updated) await req.save({ session });
+    }
+
+    // Update core classTeacher approval records
+    await NodueApproval.updateMany(
+      { batchId: activeBatch._id, roleTag: 'classTeacher' },
+      { facultyId: classTeacherId, facultyName: classTeacherName, action: 'pending', actionedAt: null },
+      { session }
+    );
+
+    // Update co-curricular approval records assigned to class teacher
+    await NodueApproval.updateMany(
+      { batchId: activeBatch._id, roleTag: 'coCurricular_classTeacher' },
+      { facultyId: classTeacherId, facultyName: classTeacherName, action: 'pending', actionedAt: null },
+      { session }
+    );
+
+    await commitSafeTransaction(session);
+    succeeded = true;
+    logger.audit('BULK_SYNC_CLASS_TEACHER_UPDATED', { classId, classTeacherId });
+  } catch (err) {
+    await abortSafeTransaction(session);
+    logger.error('bulk_sync_class_teacher_update_failed', { classId, error: err.message });
+  } finally {
+    session.endSession();
+  }
+
+  if (succeeded) {
+    invalidateEntityCache('class', classId);
   }
 };

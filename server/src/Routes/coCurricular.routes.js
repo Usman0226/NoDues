@@ -25,6 +25,9 @@ router.route('/:id')
 router.route('/:id/assign-mentors')
     .post(RoleGuard(['admin', 'hod']), assignCoCurricularToMentors);
 
+router.route('/:id/assign-class-teachers')
+    .post(RoleGuard(['admin', 'hod']), assignCoCurricularToMentors);
+
 router.route('/:typeId/submit')
     .post(RoleGuard(['student']), submitCoCurricular);
 

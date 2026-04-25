@@ -57,7 +57,7 @@ export const getCoCurricularTypes = async (req, res, next) => {
 // ── POST /api/co-curricular-types ─────────────────────────────────────────────
 export const createCoCurricularType = async (req, res, next) => {
   try {
-    const { name, code, departmentId: bodyDeptId, applicableYears, coordinatorId, fields, isOptional, requiresMentorApproval } = req.body;
+    const { name, code, departmentId: bodyDeptId, applicableYears, coordinatorId, fields, isOptional, requiresMentorApproval, requiresClassTeacherApproval } = req.body;
 
     // Determine target departmentId
     let departmentId = bodyDeptId;
@@ -69,8 +69,8 @@ export const createCoCurricularType = async (req, res, next) => {
       return next(new ErrorResponse('Required fields missing', 400));
     }
 
-    if (!requiresMentorApproval && !coordinatorId) {
-      return next(new ErrorResponse('Either a Coordinator must be selected or Mentor Approval must be required', 400));
+    if (!requiresMentorApproval && !requiresClassTeacherApproval && !coordinatorId) {
+      return next(new ErrorResponse('Either a Coordinator must be selected, Mentor Approval must be required, or Class Teacher Approval must be required', 400));
     }
 
     // HoD Scope Check ( redundant if we infer, but kept for explicit validation if admin sends a different deptId)
@@ -96,6 +96,7 @@ export const createCoCurricularType = async (req, res, next) => {
       fields: fields || [],
       isOptional: isOptional || false,
       requiresMentorApproval: requiresMentorApproval || false,
+      requiresClassTeacherApproval: requiresClassTeacherApproval || false,
     });
 
     // Add coordinator roleTag if not present
@@ -129,24 +130,25 @@ export const createCoCurricularType = async (req, res, next) => {
 export const updateCoCurricularType = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, code, applicableYears, coordinatorId, fields, isOptional, requiresMentorApproval } = req.body;
+    const { name, code, applicableYears, coordinatorId, fields, isOptional, requiresMentorApproval, requiresClassTeacherApproval } = req.body;
     
     const type = await CoCurricularType.findById(id);
     if (!type) return next(new ErrorResponse('Type not found', 404));
-
     const updates = Object.fromEntries(
-      Object.entries({ 
-        name, 
-        code, 
-        applicableYears, 
-        coordinatorId, 
-        fields, 
-        isOptional, 
-        requiresMentorApproval 
+      Object.entries({
+        name,
+        code,
+        applicableYears,
+        coordinatorId,
+        fields,
+        isOptional,
+        requiresMentorApproval,
+        requiresClassTeacherApproval
       }).filter(([, v]) => v !== undefined)
     );
 
-    if (requiresMentorApproval && !coordinatorId) {
+
+    if ((requiresMentorApproval || requiresClassTeacherApproval) && !coordinatorId) {
        updates.$unset = { coordinatorId: 1 };
        delete updates.coordinatorId;
     }
@@ -184,10 +186,17 @@ export const updateCoCurricularType = async (req, res, next) => {
 export const assignCoCurricularToMentors = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { mode = 'per_mentor', facultyId: overrideFacultyId } = req.body;
+    let { mode, facultyId: overrideFacultyId } = req.body;
 
-    if (!['per_mentor', 'single_faculty'].includes(mode)) {
-      return next(new ErrorResponse('mode must be per_mentor or single_faculty', 400));
+    // Auto-detect mode from URL if not explicitly provided in body
+    if (!mode) {
+      if (req.originalUrl.includes('assign-mentors')) mode = 'per_mentor';
+      else if (req.originalUrl.includes('assign-class-teachers')) mode = 'per_class_teacher';
+      else mode = 'per_mentor'; // Default
+    }
+
+    if (!['per_mentor', 'single_faculty', 'per_class_teacher'].includes(mode)) {
+      return next(new ErrorResponse('mode must be per_mentor, single_faculty or per_class_teacher', 400));
     }
 
     let overrideFaculty = null;
@@ -221,7 +230,7 @@ export const assignCoCurricularToMentors = async (req, res, next) => {
       departmentId: type.departmentId,
       semester: { $in: [...semesterSet] },
       isActive: true,
-    }).select('_id').lean();
+    }).select('_id classTeacherId').lean();
 
     if (!classes.length) {
       return res.status(200).json({
@@ -231,6 +240,7 @@ export const assignCoCurricularToMentors = async (req, res, next) => {
     }
 
     const classIds = classes.map((c) => c._id);
+    const classMap = new Map(classes.map(c => [c._id.toString(), c]));
 
     const activeBatches = await NodueBatch.find({
       classId: { $in: classIds },
@@ -262,24 +272,41 @@ export const assignCoCurricularToMentors = async (req, res, next) => {
       requestMap.set(`${r.studentId}:${r.batchId}`, r);
     }
 
-    let skipped = 0;       
+    let skipped = 0;
     let skippedNoRequest = 0;
     const approvalDocs = [];
+    const snapshotUpdates = [];
 
+    // ── 1. PREPARE ASSIGNMENTS ───────────────────────────────────────────
     for (const student of students) {
       let assignedFacultyId;
+      let roleTag;
+      let subjectNameLabel;
+      let facultyName = null;
+
       if (mode === 'single_faculty') {
         assignedFacultyId = overrideFaculty._id;
-      } else {
+        facultyName = overrideFaculty.name;
+        roleTag = 'coCurricular_coordinator';
+        subjectNameLabel = `Coordinator Clearance – ${type.name}`;
+      } else if (mode === 'per_mentor') {
         if (!student.mentorId) {
           skipped++;
-          logger.warn('co_curricular_mentor_assign_skip_no_mentor', {
-            studentId: student._id.toString(),
-            typeId: id,
-          });
           continue;
         }
         assignedFacultyId = student.mentorId;
+        roleTag = 'coCurricular_mentor';
+        subjectNameLabel = `Mentor Clearance – ${type.name}`;
+        // Note: facultyName will be fetched via populate or left as null for snapshot update logic below
+      } else if (mode === 'per_class_teacher') {
+        const cls = classMap.get(student.classId.toString());
+        if (!cls?.classTeacherId) {
+          skipped++;
+          continue;
+        }
+        assignedFacultyId = cls.classTeacherId;
+        roleTag = 'coCurricular_classTeacher';
+        subjectNameLabel = `Class Teacher Clearance – ${type.name}`;
       }
 
       const batchId = batchByClass[student.classId.toString()];
@@ -299,21 +326,48 @@ export const assignCoCurricularToMentors = async (req, res, next) => {
         studentName:  student.name,
         facultyId:    assignedFacultyId,
         subjectId:    null,
-        subjectName:  mode === 'single_faculty'
-          ? `Coordinator Clearance – ${type.name}`
-          : `Mentor Clearance – ${type.name}`,
-        approvalType: mode === 'single_faculty' ? 'coCurricular' : 'mentor',
-        roleTag:      mode === 'single_faculty' ? 'coordinator' : 'mentor',
+        subjectName:  subjectNameLabel,
+        approvalType: 'coCurricular',
+        roleTag:      roleTag,
         itemTypeId:   type._id,
         itemTypeName: type.name,
         itemCode:     type.code,
         isOptional:   type.isOptional,
         action:       'pending',
       });
+
+      // Prepare snapshot update
+      snapshotUpdates.push({
+        requestId: request._id,
+        snapshot: {
+          facultyId: assignedFacultyId,
+          facultyName: facultyName, // will be null for per_mentor/per_class_teacher unless we fetch it
+          subjectId: null,
+          subjectName: type.name,
+          subjectCode: type.code,
+          roleTag: roleTag,
+          approvalType: 'coCurricular',
+          itemTypeId: type._id,
+          itemTypeName: type.name,
+          itemCode: type.code,
+          isOptional: type.isOptional || false
+        }
+      });
     }
 
+    // ── 2. EXECUTE UPDATES ───────────────────────────────────────────────
     let created = 0;
-    if (approvalDocs.length) {
+    if (approvalDocs.length > 0) {
+      // Use a transaction for consistency if possible, or at least delete first
+      // Since we want to avoid duplicates and handle re-assignment:
+      
+      // Delete ALL existing co-curricular approvals for this specific item type in these batches
+      await NodueApproval.deleteMany({
+        batchId: { $in: batchIds },
+        itemTypeId: type._id
+      });
+
+      // Insert new ones
       const result = await NodueApproval.insertMany(approvalDocs, { ordered: false }).catch((err) => {
         if (err.code === 11000 || err.writeErrors) {
           return { insertedCount: err.insertedDocs?.length ?? 0 };
@@ -321,6 +375,27 @@ export const assignCoCurricularToMentors = async (req, res, next) => {
         throw err;
       });
       created = result.insertedCount ?? approvalDocs.length;
+
+      // Update Snapshots in NodueRequests
+      const reqIds = [...new Set(snapshotUpdates.map(u => u.requestId))];
+      const allRequests = await NodueRequest.find({ _id: { $in: reqIds } });
+      
+      const reqOps = [];
+      for (const req of allRequests) {
+        const update = snapshotUpdates.find(u => u.requestId.toString() === req._id.toString());
+        if (!update) continue;
+
+        if (Array.isArray(req.facultySnapshot)) {
+          const idx = req.facultySnapshot.findIndex(f => f.itemTypeId?.toString() === type._id.toString());
+          if (idx !== -1) req.facultySnapshot[idx] = update.snapshot;
+          else req.facultySnapshot.push(update.snapshot);
+        } else if (req.facultySnapshot) {
+          req.facultySnapshot[type._id.toString()] = update.snapshot;
+          req.markModified('facultySnapshot');
+        }
+        reqOps.push(req.save());
+      }
+      await Promise.all(reqOps);
     }
 
     logger.audit('CO_CURRICULAR_ASSIGNED', {
@@ -330,9 +405,9 @@ export const assignCoCurricularToMentors = async (req, res, next) => {
       details: { mode, overrideFacultyId: overrideFaculty?._id ?? null, created, skipped, skippedNoRequest },
     });
 
-    const modeLabel = mode === 'single_faculty'
-      ? `single faculty (${overrideFaculty.name})`
-      : `each student\'s own mentor`;
+    let modeLabel = mode === 'single_faculty' ? `single faculty (${overrideFaculty.name})` : 
+                    mode === 'per_mentor' ? "each student's own mentor" : 
+                    "each student's class teacher";
 
     return res.status(200).json({
       success: true,
@@ -341,10 +416,8 @@ export const assignCoCurricularToMentors = async (req, res, next) => {
         created,
         skipped,
         skippedNoRequest,
-        assignedTo: mode === 'single_faculty'
-          ? { _id: overrideFaculty._id, name: overrideFaculty.name }
-          : null,
-        message: `Done (${modeLabel}). ${created} approval(s) created. ${skipped} skipped (no mentor). ${skippedNoRequest} skipped (no active request).`,
+        assignedTo: mode === 'single_faculty' ? { _id: overrideFaculty._id, name: overrideFaculty.name } : null,
+        message: `Done (${modeLabel}). ${created} approval(s) created. ${skipped} skipped (missing assignment). ${skippedNoRequest} skipped (no active request).`,
       },
     });
   } catch (err) {
@@ -447,14 +520,46 @@ export const submitCoCurricular = async (req, res, next) => {
     if (activeBatch) {
         // Ensure approval record matches latest template settings
         const isMentorMode = type.requiresMentorApproval;
-        let assignedFacultyId = isMentorMode ? student.mentorId : type.coordinatorId;
+        const isCTMode = type.requiresClassTeacherApproval;
         
-        let facultyNameStr = isMentorMode ? "Student's Mentor" : (faculty?.name || 'Department Faculty');
+        let assignedFacultyId = null;
+        let roleTag = 'coCurricular_coordinator';
+        let facultyNameStr = "Department Faculty";
 
-        // Fallback
-        if (isMentorMode && !assignedFacultyId && type.coordinatorId) {
+        if (isMentorMode) {
+            assignedFacultyId = student.mentorId;
+            roleTag = 'coCurricular_mentor';
+            facultyNameStr = "Student's Mentor";
+        } else if (isCTMode) {
+            assignedFacultyId = student.classId?.classTeacherId;
+            roleTag = 'coCurricular_classTeacher';
+            facultyNameStr = "Class Teacher";
+        } else {
             assignedFacultyId = type.coordinatorId;
-            facultyNameStr = faculty?.name || 'Department Faculty';
+            roleTag = 'coCurricular_coordinator';
+        }
+
+        // Fetch actual name if available
+        if (assignedFacultyId) {
+            if (isMentorMode && student.mentorId && assignedFacultyId.toString() === student.mentorId.toString()) {
+                // If it's the mentor, we can try to fetch name if needed, but snapshots usually use placeholders or are updated later
+                const mentor = await Faculty.findById(assignedFacultyId).session(session).select('name').lean();
+                if (mentor) facultyNameStr = mentor.name;
+            } else if (isCTMode && student.classId?.classTeacherId && assignedFacultyId.toString() === student.classId.classTeacherId.toString()) {
+                const ct = await Faculty.findById(assignedFacultyId).session(session).select('name').lean();
+                if (ct) facultyNameStr = ct.name;
+            } else if (!isMentorMode && !isCTMode) {
+                const coordinator = await Faculty.findById(assignedFacultyId).session(session).select('name').lean();
+                if (coordinator) facultyNameStr = coordinator.name;
+            }
+        }
+
+        // Fallback: If mentor/CT mode but no faculty assigned, use coordinator
+        if ((isMentorMode || isCTMode) && !assignedFacultyId && type.coordinatorId) {
+            assignedFacultyId = type.coordinatorId;
+            roleTag = 'coCurricular_coordinator';
+            const fallbackCoord = await Faculty.findById(type.coordinatorId).session(session).select('name').lean();
+            facultyNameStr = fallbackCoord?.name || 'Department Faculty';
         }
 
         const approval = await NodueApproval.findOneAndUpdate(
@@ -470,8 +575,8 @@ export const submitCoCurricular = async (req, res, next) => {
                 // Sync latest settings
                 facultyId: assignedFacultyId,
                 facultyName: facultyNameStr,
-                roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
-                approvalType: isMentorMode ? 'mentor' : 'coCurricular',
+                roleTag: roleTag,
+                approvalType: 'coCurricular',
                 subjectName: type.name,
                 itemTypeName: type.name,
                 itemCode: type.code,
@@ -491,8 +596,8 @@ export const submitCoCurricular = async (req, res, next) => {
                     subjectId: null,
                     subjectName: type.name,
                     subjectCode: type.code,
-                    roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
-                    approvalType: isMentorMode ? 'mentor' : 'coCurricular',
+                    roleTag: roleTag,
+                    approvalType: 'coCurricular',
                     itemTypeId: type._id,
                     itemTypeName: type.name,
                     itemCode: type.code,
@@ -507,8 +612,8 @@ export const submitCoCurricular = async (req, res, next) => {
                     subjectId: null,
                     subjectName: type.name,
                     subjectCode: type.code,
-                    roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
-                    approvalType: isMentorMode ? 'mentor' : 'coCurricular',
+                    roleTag: roleTag,
+                    approvalType: 'coCurricular',
                     itemTypeId: type._id,
                     itemTypeName: type.name,
                     itemCode: type.code,

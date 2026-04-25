@@ -152,6 +152,212 @@ const REGISTRY_GROUPS = [
     gradient: 'from-zinc-400 to-zinc-600'
   }
 ];
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+      delayChildren: 0.1,
+      ease: [0.22, 1, 0.36, 1],
+      duration: 0.6
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  show: { 
+    opacity: 1, 
+    y: 0,
+    transition: {
+      duration: 0.4,
+      ease: [0.16, 1, 0.3, 1]
+    }
+  }
+};
+
+const MemoizedClearanceCard = React.memo(({ 
+  item, 
+  index, 
+  handleOpenSubmission, 
+  canSubmit, 
+  isCoCurricular,
+  isApproved,
+  isRejected,
+  isNotSubmitted,
+  isPendingCoordinator,
+  isDue,
+  isOverride
+}) => {
+  return (
+    <motion.div 
+      variants={itemVariants}
+      whileHover={{ y: -8, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }}
+      className={`rounded-2xl premium-card p-5 sm:p-6 flex flex-col gap-2 border border-zinc-200/50 relative group hover:shadow-xl hover:shadow-navy/5 ${
+        isDue || isRejected ? 'border-l-[6px] border-l-red-500' : 
+        isOverride ? 'border-l-[6px] border-l-indigo-500' : 
+        isApproved ? 'border-l-[6px] border-l-emerald-500' : 
+        isPendingCoordinator ? 'border-l-[6px] border-l-amber-400' : 'border-l-[6px] border-l-zinc-300'
+      }`}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[2rem] pointer-events-none" />
+
+      {/* Top Right Status Logo */}
+      <div className="absolute top-5 right-5 sm:top-6 sm:right-6 z-10 flex items-center justify-center">
+        {isApproved ? (
+          <div className="h-8 w-8 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center border border-emerald-100 shadow-sm" title="Verified">
+            <CheckCircle size={14} strokeWidth={3} />
+          </div>
+        ) : isRejected || isDue ? (
+          <div className="h-8 w-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center border border-red-100 shadow-sm" title={isRejected ? "Rejected" : "Action Required"}>
+            <AlertTriangle size={14} strokeWidth={3} />
+          </div>
+        ) : isPendingCoordinator ? (
+          <div className="h-8 w-8 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center border border-amber-100 shadow-sm" title="Pending Verification">
+            <Clock size={14} strokeWidth={3} />
+          </div>
+        ) : isNotSubmitted ? (
+          <div className="h-8 w-8 rounded-full bg-zinc-50 text-zinc-400 flex items-center justify-center border border-zinc-200 shadow-sm" title={item.formFields?.length > 0 ? "Not Submitted" : "Pending Coordinator"}>
+            <Clock size={14} strokeWidth={3} />
+          </div>
+        ) : (
+          <div className="h-8 w-8 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center border border-amber-100 shadow-sm" title="Pending">
+            <Clock size={14} strokeWidth={3} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-6 relative">
+        <div className="flex items-start gap-4 sm:gap-6 min-w-0 w-full sm:w-auto">
+          <div className="relative shrink-0">
+            {/* Removed Expensive Blur for Mobile Performance */}
+            <div 
+              style={{ transition: 'all 0.8s var(--ease-lux)' }}
+              className={`h-14 w-14 sm:h-16 sm:w-16 rounded-[1.5rem] flex items-center justify-center relative border group-hover:rotate-6 group-hover:scale-110 ${
+              isApproved ? 'bg-emerald-50 border-emerald-100/50 text-emerald-600 shadow-sm shadow-emerald-500/10' : 
+              (isDue || isRejected) ? 'bg-red-50 border-red-100/50 text-red-600 shadow-sm shadow-red-500/10' : 
+              'bg-zinc-50 border-zinc-100 text-zinc-400 shadow-sm'
+            }`}>
+              {item.approvalType === 'subject' ? 
+                <BookOpen size={28} strokeWidth={2.5} /> : 
+                item.approvalType === 'coCurricular' ?
+                <ClipboardCheck size={28} strokeWidth={2.5} /> :
+                <UserCheck size={28} strokeWidth={2.5} />
+              }
+            </div>
+          </div>
+          
+          <div className="min-w-0 flex-1 pt-1 pr-10 sm:pr-12">
+            <div className="flex flex-col gap-2 mb-3">
+              {(item.subjectCode || item.itemCode) && (
+                <div className="flex">
+                  <span className="px-2 py-0.5 rounded-md bg-navy/[0.04] border border-navy/[0.06] text-[9px] font-black text-navy/50 uppercase tracking-[0.2em]">
+                    {item.subjectCode || item.itemCode}
+                  </span>
+                </div>
+              )}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-base sm:text-lg font-black text-navy leading-tight tracking-tight">
+                    {item.subjectName}
+                  </h4>
+                  {item.isOptional && (
+                    <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400 border border-zinc-200 px-1.5 py-0.5 rounded-md">Optional</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+               <div className="flex items-center gap-1.5">
+                  <div className="h-4 w-4 rounded-full bg-zinc-100 flex items-center justify-center">
+                     <Shield size={10} className="text-zinc-400" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                    {item.roleTag === 'coCurricular_classTeacher' ? 'Class Teacher' : (isCoCurricular ? 'Coordinator' : 'Faculty')}
+                  </span>
+               </div>
+               <div className="hidden sm:block h-3 w-px bg-zinc-200" />
+               <span className="text-xs sm:text-[13px] font-bold text-navy/70">{item.facultyName || 'Department'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {(isDue || isOverride || isRejected) && (
+        <motion.div 
+          initial={{ scale: 0.98, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className={`p-4 rounded-2xl border ${isDue || isRejected ? 'bg-red-50/40 border-red-100/60 shadow-inner' : 'bg-indigo-50/40 border-indigo-100/60 shadow-inner'}`}
+        >
+          {(isDue || isRejected) && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-red-600">
+                <AlertTriangle size={14} strokeWidth={3} />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">{isRejected ? 'Submission Rejected' : 'Deficiency Detected'}</span>
+              </div>
+              <div className="space-y-1">
+                 <p className="text-[9px] font-black uppercase text-red-800/30 tracking-wider font-sans">{isRejected ? 'Coordinator Feedback' : 'Type'}</p>
+                 <p className="text-sm font-bold text-red-900/70 leading-snug">{isRejected ? (item.remarks || 'Insufficient documentation provided.') : (item.dueType || 'Pending Dues')}</p>
+              </div>
+              {!isRejected && item.remarks && (
+                <div className="pt-2.5 mt-1 border-t border-red-200/30">
+                   <p className="text-[9px] font-black uppercase text-red-800/30 tracking-wider mb-1">Remarks</p>
+                   <p className="text-xs font-semibold text-red-900/60 italic leading-relaxed">"{item.remarks}"</p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {isOverride && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-indigo-600">
+                <Shield size={14} strokeWidth={3} />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">HoD Authorization</span>
+              </div>
+              <div className="space-y-1">
+                 <p className="text-[9px] font-black uppercase text-indigo-800/30 tracking-wider">Note</p>
+                 <p className="text-sm font-bold text-indigo-900/70 leading-snug">{item.remarks || 'Electronic override authorized by department head.'}</p>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      <div className="flex items-center justify-between pt-4 border-t border-zinc-100/80">
+        <div className="flex items-center gap-4">
+           <div className="flex items-center gap-1.5 text-zinc-400">
+              <Clock size={11} />
+              <p className="text-[9px] font-black uppercase tracking-[0.15em]">
+                {item.actionedAt || item.submission?.submittedAt ? new Date(item.actionedAt || item.submission?.submittedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Pending Update'}
+              </p>
+           </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {canSubmit && (
+            <button 
+              onClick={() => handleOpenSubmission(item)}
+              style={{ transition: 'all 0.6s var(--ease-lux)' }}
+              className="flex items-center gap-1.5 px-3 py-1 bg-navy text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-navy/90 active:scale-95 shadow-lg shadow-navy/20"
+            >
+              {isRejected ? 'Resubmit' : 'Complete Form'}
+              <ExternalLink size={10} />
+            </button>
+          )}
+          {!canSubmit && (
+            <>
+              <p className="text-[9px] font-bold text-zinc-300 uppercase tracking-widest">#{item.id ? (item.id.toString()).slice(-6).toUpperCase() : '----'}</p>
+              <button className="h-6 w-6 rounded-lg border border-zinc-100 flex items-center justify-center text-zinc-300 hover:text-navy hover:border-navy/20 transition-all">
+                <Info size={12} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+
 
 const StudentStatus = () => {
   const { requestId } = useParams();
@@ -204,6 +410,8 @@ const StudentStatus = () => {
     let list = [...approvals];
     if (activeFilter === 'pending') {
       list = list.filter(a => ['pending', 'not_submitted', 'rejected'].includes(a.action));
+    } else if (activeFilter === 'approved') {
+      list = list.filter(a => ['approved', 'hod_override'].includes(a.action));
     }
     return list.sort((a, b) => {
       const order = { rejected: 0, not_submitted: 1, due_marked: 2, pending: 3, approved: 4, hod_override: 5 };
@@ -260,11 +468,23 @@ const StudentStatus = () => {
 
   if (loading && !data) {
     return (
-      <PageWrapper title="Dashboard" subtitle="Syncing clearance data...">
-        <div className="animate-pulse space-y-8 p-4 sm:p-0">
-           <div className="h-48 sm:h-32 bg-zinc-50 rounded-3xl border border-zinc-100" />
-           <div className="grid grid-cols-1 gap-4">
-              {[1, 2, 3].map(i => <div key={i} className="h-24 bg-zinc-50 rounded-2xl border border-zinc-100" />)}
+      <PageWrapper title="Approval Status" subtitle="Syncing clearance data...">
+        <div className="space-y-8 px-4 sm:px-0">
+           {/* Progress Card Skeleton */}
+           <div className="h-48 sm:h-56 bg-zinc-50 rounded-3xl border border-zinc-100 animate-pulse relative overflow-hidden">
+             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-sweep" />
+           </div>
+           
+           {/* Section Skeleton */}
+           <div className="space-y-6">
+              <div className="h-4 w-32 bg-zinc-50 rounded-full animate-pulse" />
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                 {[1, 2, 3, 4].map(i => (
+                   <div key={i} className="h-32 bg-zinc-50 rounded-2xl border border-zinc-100 animate-pulse relative overflow-hidden">
+                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-sweep" />
+                   </div>
+                 ))}
+              </div>
            </div>
         </div>
       </PageWrapper>
@@ -307,7 +527,7 @@ const StudentStatus = () => {
 
   return (
     <PageWrapper title="Approval Status">
-      <div className="flex flex-col gap-6 pb-12 px-4 sm:px-0 mt-4 sm:mt-0">
+      <div className="flex flex-col gap-6 pb-12 px-4 sm:px-0 mt-4 sm:mt-0 touch-pan-y selection:bg-navy/5">
         
         {/* Navigation - Only visible in history mode */}
         {isHistoryMode && (
@@ -329,7 +549,7 @@ const StudentStatus = () => {
           animate={{ opacity: 1, y: 0 }}
           className="premium-card p-6 sm:p-10 relative overflow-hidden group glow-indigo rounded-3xl"
         >
-          <div className="absolute top-0 right-0 w-64 h-64 bg-navy/[0.03] rounded-full translate-x-32 -translate-y-32 group-hover:scale-110 transition-transform duration-1000"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-navy/[0.03] rounded-full translate-x-32 -translate-y-32 group-hover:scale-110 transition-transform duration-1000 pointer-events-none"></div>
           <CircularProgress 
              cleared={clearedCount} 
              total={totalCount} 
@@ -353,7 +573,8 @@ const StudentStatus = () => {
             <div className="flex items-center gap-2 px-1">
               {[
                 { id: 'all', label: 'All' },
-                { id: 'pending', label: 'Pending' }
+                { id: 'pending', label: 'Pending' },
+                { id: 'approved', label: 'Approved' }
               ].map(f => (
                 <button
                   key={f.id}
@@ -406,185 +627,30 @@ const StudentStatus = () => {
                     </div>
                   </div>
 
-                  {/* Grid of Cards */}
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-                    {groupItems.map((item, i) => {
-                      const isCoCurricular = item.approvalType === 'coCurricular';
-                      const isRejected = item.submission?.status === 'rejected';
-                      const isNotSubmitted = !item.submission || item.submission.status === 'not_submitted' || item.submission.status === 'rejected';
-                      const canSubmit = isCoCurricular && isNotSubmitted;
-                      const isPendingCoordinator = item.submission?.status === 'submitted';
-                      const isApproved = item.action === 'approved' || item.submission?.status === 'approved';
-                      const isDue = item.action === 'due';
-                      const isOverride = !!item.overriddenBy;
+                  <motion.div 
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="show"
+                    className="grid grid-cols-1 xl:grid-cols-2 gap-5"
+                  >
+                    {groupItems.map((item, i) => (
+                      <MemoizedClearanceCard 
+                        key={item.id || i}
+                        item={item}
+                        index={i}
+                        handleOpenSubmission={handleOpenSubmission}
+                        canSubmit={item.approvalType === 'coCurricular' && item.formFields?.length > 0 && (!item.submission || item.submission.status === 'not_submitted' || item.submission.status === 'rejected')}
+                        isCoCurricular={item.approvalType === 'coCurricular'}
+                        isRejected={item.submission?.status === 'rejected'}
+                        isNotSubmitted={!item.submission || item.submission.status === 'not_submitted' || item.submission.status === 'rejected'}
+                        isPendingCoordinator={item.submission?.status === 'submitted'}
+                        isApproved={item.action === 'approved' || item.submission?.status === 'approved'}
+                        isDue={item.action === 'due'}
+                        isOverride={!!item.overriddenBy}
+                      />
+                    ))}
+                  </motion.div>
 
-                      return (
-                        <motion.div 
-                          key={item.id || i} 
-                          initial={{ opacity: 0, y: 15 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.05 }}
-                          className={`rounded-2xl premium-card p-5 sm:p-6 flex flex-col gap-2 border border-zinc-200/50 relative group hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-navy/5 transition-all duration-500 ${
-                            isDue || isRejected ? 'border-l-[6px] border-l-red-500' : 
-                            isOverride ? 'border-l-[6px] border-l-indigo-500' : 
-                            isApproved ? 'border-l-[6px] border-l-emerald-500' : 
-                            isPendingCoordinator ? 'border-l-[6px] border-l-amber-400' : 'border-l-[6px] border-l-zinc-300'
-                          }`}
-                        >
-                          <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[2rem] pointer-events-none" />
-
-                          {/* Top Right Status Logo */}
-                          <div className="absolute top-5 right-5 sm:top-6 sm:right-6 z-10 flex items-center justify-center">
-                            {isApproved ? (
-                              <div className="h-8 w-8 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center border border-emerald-100 shadow-sm" title="Verified">
-                                <CheckCircle size={14} strokeWidth={3} />
-                              </div>
-                            ) : isRejected || isDue ? (
-                              <div className="h-8 w-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center border border-red-100 shadow-sm" title={isRejected ? "Rejected" : "Action Required"}>
-                                <AlertTriangle size={14} strokeWidth={3} />
-                              </div>
-                            ) : isPendingCoordinator ? (
-                              <div className="h-8 w-8 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center border border-amber-100 shadow-sm" title="Pending Verification">
-                                <Clock size={14} strokeWidth={3} />
-                              </div>
-                            ) : isNotSubmitted ? (
-                              <div className="h-8 w-8 rounded-full bg-zinc-50 text-zinc-400 flex items-center justify-center border border-zinc-200 shadow-sm" title="Not Submitted">
-                                <Clock size={14} strokeWidth={3} />
-                              </div>
-                            ) : (
-                              <div className="h-8 w-8 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center border border-amber-100 shadow-sm" title="Pending">
-                                <Clock size={14} strokeWidth={3} />
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row items-start justify-between gap-6 relative">
-                            <div className="flex items-start gap-4 sm:gap-6 min-w-0 w-full sm:w-auto">
-                              <div className="relative shrink-0">
-                                <div className={`absolute inset-0 blur-2xl opacity-10 rounded-full transition-all duration-500 group-hover:opacity-20 ${
-                                  isApproved ? 'bg-emerald-500' : (isDue || isRejected) ? 'bg-red-500' : isPendingCoordinator ? 'bg-amber-500' : 'bg-zinc-300'
-                                }`} />
-                                <div className={`h-14 w-14 sm:h-16 sm:w-16 rounded-[1.5rem] flex items-center justify-center relative border transition-all duration-500 group-hover:rotate-6 group-hover:scale-110 ${
-                                  isApproved ? 'bg-emerald-50 border-emerald-100/50 text-emerald-600 shadow-sm shadow-emerald-500/10' : 
-                                  (isDue || isRejected) ? 'bg-red-50 border-red-100/50 text-red-600 shadow-sm shadow-red-500/10' : 
-                                  'bg-zinc-50 border-zinc-100 text-zinc-400 shadow-sm'
-                                }`}>
-                                  {item.approvalType === 'subject' ? 
-                                    <BookOpen size={28} strokeWidth={2.5} /> : 
-                                    item.approvalType === 'coCurricular' ?
-                                    <ClipboardCheck size={28} strokeWidth={2.5} /> :
-                                    <UserCheck size={28} strokeWidth={2.5} />
-                                  }
-                                </div>
-                              </div>
-                              
-                              <div className="min-w-0 flex-1 pt-1 pr-10 sm:pr-12">
-                                <div className="flex flex-col gap-2 mb-3">
-                                  {(item.subjectCode || item.itemCode) && (
-                                    <div className="flex">
-                                      <span className="px-2 py-0.5 rounded-md bg-navy/[0.04] border border-navy/[0.06] text-[9px] font-black text-navy/50 uppercase tracking-[0.2em]">
-                                        {item.subjectCode || item.itemCode}
-                                      </span>
-                                    </div>
-                                  )}
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className="text-base sm:text-lg font-black text-navy leading-tight tracking-tight">
-                                        {item.subjectName}
-                                      </h4>
-                                      {item.isOptional && (
-                                        <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400 border border-zinc-200 px-1.5 py-0.5 rounded-md">Optional</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                                   <div className="flex items-center gap-1.5">
-                                      <div className="h-4 w-4 rounded-full bg-zinc-100 flex items-center justify-center">
-                                         <Shield size={10} className="text-zinc-400" />
-                                      </div>
-                                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{isCoCurricular ? 'Coordinator' : 'Faculty'}</span>
-                                   </div>
-                                   <div className="hidden sm:block h-3 w-px bg-zinc-200" />
-                                   <span className="text-xs sm:text-[13px] font-bold text-navy/70">{item.facultyName || 'Department'}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {(isDue || isOverride || isRejected) && (
-                            <motion.div 
-                              initial={{ scale: 0.98, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              className={`p-4 rounded-2xl border ${isDue || isRejected ? 'bg-red-50/40 border-red-100/60 shadow-inner' : 'bg-indigo-50/40 border-indigo-100/60 shadow-inner'}`}
-                            >
-                              {(isDue || isRejected) && (
-                                <div className="flex flex-col gap-2">
-                                  <div className="flex items-center gap-2 text-red-600">
-                                    <AlertTriangle size={14} strokeWidth={3} />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">{isRejected ? 'Submission Rejected' : 'Deficiency Detected'}</span>
-                                  </div>
-                                  <div className="space-y-1">
-                                     <p className="text-[9px] font-black uppercase text-red-800/30 tracking-wider font-sans">{isRejected ? 'Coordinator Feedback' : 'Type'}</p>
-                                     <p className="text-sm font-bold text-red-900/70 leading-snug">{isRejected ? (item.remarks || 'Insufficient documentation provided.') : (item.dueType || 'Pending Dues')}</p>
-                                  </div>
-                                  {!isRejected && item.remarks && (
-                                    <div className="pt-2.5 mt-1 border-t border-red-200/30">
-                                       <p className="text-[9px] font-black uppercase text-red-800/30 tracking-wider mb-1">Remarks</p>
-                                       <p className="text-xs font-semibold text-red-900/60 italic leading-relaxed">"{item.remarks}"</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {isOverride && (
-                                <div className="flex flex-col gap-2">
-                                  <div className="flex items-center gap-2 text-indigo-600">
-                                    <Shield size={14} strokeWidth={3} />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">HoD Authorization</span>
-                                  </div>
-                                  <div className="space-y-1">
-                                     <p className="text-[9px] font-black uppercase text-indigo-800/30 tracking-wider">Note</p>
-                                     <p className="text-sm font-bold text-indigo-900/70 leading-snug">{item.remarks || 'Electronic override authorized by department head.'}</p>
-                                  </div>
-                                </div>
-                              )}
-                            </motion.div>
-                          )}
-
-                          <div className="flex items-center justify-between pt-4 border-t border-zinc-100/80">
-                            <div className="flex items-center gap-4">
-                               <div className="flex items-center gap-1.5 text-zinc-400">
-                                  <Clock size={11} />
-                                  <p className="text-[9px] font-black uppercase tracking-[0.15em]">
-                                    {item.actionedAt || item.submission?.submittedAt ? new Date(item.actionedAt || item.submission?.submittedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Pending Update'}
-                                  </p>
-                               </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              {canSubmit && (
-                                <button 
-                                  onClick={() => handleOpenSubmission(item)}
-                                  className="flex items-center gap-1.5 px-3 py-1 bg-navy text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-navy/90 transition-all active:scale-95 shadow-lg shadow-navy/20"
-                                >
-                                  {isRejected ? 'Resubmit' : 'Complete Form'}
-                                  <ExternalLink size={10} />
-                                </button>
-                              )}
-                              {!canSubmit && (
-                                <>
-                                  <p className="text-[9px] font-bold text-zinc-300 uppercase tracking-widest">#{item.id ? (item.id.toString()).slice(-6).toUpperCase() : '----'}</p>
-                                  <button className="h-6 w-6 rounded-lg border border-zinc-100 flex items-center justify-center text-zinc-300 hover:text-navy hover:border-navy/20 transition-all">
-                                    <Info size={12} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
                 </div>
               );
             })}
@@ -614,42 +680,48 @@ const StudentStatus = () => {
                 </div>
 
                 <div className="space-y-5">
-                   {submissionModal.item?.formFields?.map((field, idx) => (
-                      <div key={idx}>
-                         <label className="block text-[10px] uppercase tracking-widest font-black text-navy/40 mb-2">
-                            {field.label} {field.isRequired && <span className="text-status-due">*</span>}
-                         </label>
-                         {field.fieldType === 'text' ? (
-                            <input 
-                              type="text"
-                              className="w-full px-4 py-3 rounded-xl border border-zinc-100 bg-zinc-50/50 text-sm font-bold focus:ring-2 focus:ring-navy/5 outline-none transition-all"
-                              placeholder={`Enter ${field.label.toLowerCase()}...`}
-                              value={formData[field.label] || ''}
-                              onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })}
-                            />
-                         ) : field.fieldType === 'date' ? (
-                            <input 
-                              type="date"
-                              className="w-full px-4 py-3 rounded-xl border border-zinc-100 bg-zinc-50/50 text-sm font-bold focus:ring-2 focus:ring-navy/5 outline-none transition-all"
-                              value={formData[field.label] || ''}
-                              onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })}
-                            />
-                         ) : (
-                            <div className="relative group">
-                               <input 
-                                 type="text"
-                                 className="w-full px-4 py-3 rounded-xl border border-zinc-100 bg-zinc-50/50 text-sm font-bold focus:ring-2 focus:ring-navy/5 outline-none transition-all pr-12"
-                                 placeholder="Paste public link to document (Drive/S3)..."
-                                 value={formData[field.label] || ''}
-                                 onChange={(e) => setFormData({ ...formData, [field.label]: e.target.value })}
-                               />
-                               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-300 group-focus-within:text-navy transition-colors">
-                                  <FileUp size={16} />
-                               </div>
-                            </div>
-                         )}
-                      </div>
-                   ))}
+                   {submissionModal.item?.formFields?.map((field, idx) => {
+                      const label = field.label || 'Field';
+                      const type = field.type || 'text';
+                      const required = field.required;
+                      
+                      return (
+                        <div key={idx}>
+                           <label className="block text-[10px] uppercase tracking-widest font-black text-navy/40 mb-2">
+                              {label} {required && <span className="text-status-due">*</span>}
+                           </label>
+                           {type === 'text' ? (
+                              <input 
+                                type="text"
+                                className="w-full px-4 py-3 rounded-xl border border-zinc-100 bg-zinc-50/50 text-sm font-bold focus:ring-2 focus:ring-navy/5 outline-none transition-all"
+                                placeholder={`Enter ${label.toLowerCase()}...`}
+                                value={formData[label] || ''}
+                                onChange={(e) => setFormData({ ...formData, [label]: e.target.value })}
+                              />
+                           ) : type === 'date' ? (
+                              <input 
+                                type="date"
+                                className="w-full px-4 py-3 rounded-xl border border-zinc-100 bg-zinc-50/50 text-sm font-bold focus:ring-2 focus:ring-navy/5 outline-none transition-all"
+                                value={formData[label] || ''}
+                                onChange={(e) => setFormData({ ...formData, [label]: e.target.value })}
+                              />
+                           ) : (
+                              <div className="relative group">
+                                 <input 
+                                   type="text"
+                                   className="w-full px-4 py-3 rounded-xl border border-zinc-100 bg-zinc-50/50 text-sm font-bold focus:ring-2 focus:ring-navy/5 outline-none transition-all pr-12"
+                                   placeholder="Paste public link to document (Drive/S3)..."
+                                   value={formData[label] || ''}
+                                   onChange={(e) => setFormData({ ...formData, [label]: e.target.value })}
+                                 />
+                                 <div className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-300 group-focus-within:text-navy transition-colors">
+                                    <FileUp size={16} />
+                                 </div>
+                              </div>
+                           )}
+                        </div>
+                      );
+                   })}
                 </div>
 
                 <div className="pt-6 border-t border-zinc-100 flex justify-end gap-3">

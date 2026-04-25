@@ -9,7 +9,7 @@ import NodueApproval from '../models/NodueApproval.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
-import { syncSubjectRemoval, syncSubjectUpdate, syncSubjectAddition } from '../utils/batchSync.js';
+import { syncSubjectRemoval, syncSubjectUpdate, syncSubjectAddition, bulkSyncClassTeacherUpdate } from '../utils/batchSync.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
@@ -347,6 +347,9 @@ export const updateClass = async (req, res, next) => {
 
     await cls.save({ session });
 
+    const updatedTeacher = classTeacherId ? await Faculty.findById(classTeacherId).session(session).select('name').lean() : null;
+    await bulkSyncClassTeacherUpdate(id, classTeacherId || null, updatedTeacher?.name || null);
+
     await commitSafeTransaction(session);
 
     return res.status(200).json({
@@ -433,6 +436,8 @@ export const assignClassTeacher = async (req, res, next) => {
 
     cls.classTeacherId = classTeacherId || null;
     await cls.save({ session });
+
+    await bulkSyncClassTeacherUpdate(id, classTeacherId || null, teacher?.name || null);
 
     await commitSafeTransaction(session);
 

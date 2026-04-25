@@ -55,6 +55,10 @@ const coCurricularTypeSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    requiresClassTeacherApproval: {
+      type: Boolean,
+      default: false,
+    },
     isActive: {
       type: Boolean,
       default: true,

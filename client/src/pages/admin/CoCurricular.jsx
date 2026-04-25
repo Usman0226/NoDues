@@ -58,6 +58,7 @@ const CoCurricular = () => {
     applicableYears: [1, 2, 3, 4],
     isOptional: false,
     requiresMentorApproval: false,
+    requiresClassTeacherApproval: false,
     coordinatorId: '',
     fields: []
   });
@@ -117,7 +118,7 @@ const CoCurricular = () => {
       toast.error('Basic details and department are required');
       return false;
     }
-    if (!formData.requiresMentorApproval && !formData.coordinatorId) {
+    if (!formData.requiresMentorApproval && !formData.requiresClassTeacherApproval && !formData.coordinatorId) {
       toast.error('Please select a Designated Coordinator');
       return false;
     }
@@ -162,6 +163,7 @@ const CoCurricular = () => {
       applicableYears: item.applicableYears,
       isOptional: item.isOptional,
       requiresMentorApproval: item.requiresMentorApproval || false,
+      requiresClassTeacherApproval: item.requiresClassTeacherApproval || false,
       coordinatorId: item.coordinatorId?._id || item.coordinatorId,
       fields: item.fields.map(f => ({
         label: f.label,
@@ -175,7 +177,14 @@ const CoCurricular = () => {
   const handleAssignMentorsClick = (item) => {
     setSelectedItem(item);
     setAssignMentorsResult(null);
-    setAssignMode('per_mentor');
+    // Set default mode based on template settings
+    if (item.requiresClassTeacherApproval) {
+      setAssignMode('per_class_teacher');
+    } else if (item.requiresMentorApproval) {
+      setAssignMode('per_mentor');
+    } else {
+      setAssignMode('single_faculty');
+    }
     setAssignFacultyId('');
     setShowAssignMentors(true);
   };
@@ -195,7 +204,7 @@ const CoCurricular = () => {
       };
       const res = await assignCoCurricularToMentors(selectedItem._id, payload);
       setAssignMentorsResult(res?.data?.data || res?.data || null);
-      toast.success('Mentor approvals assigned successfully');
+      toast.success('Clearance approvals assigned successfully');
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || 'Failed to assign mentors';
       toast.error(msg);
@@ -249,6 +258,7 @@ const CoCurricular = () => {
       applicableYears: [1, 2, 3, 4],
       isOptional: false,
       requiresMentorApproval: false,
+      requiresClassTeacherApproval: false,
       coordinatorId: '',
       fields: []
     });
@@ -271,13 +281,23 @@ const CoCurricular = () => {
     {
       key: 'coordinator',
       label: 'Coordinator',
-      render: (_, row) => (
-        row.requiresMentorApproval 
-          ? <span className="text-[10px] font-black uppercase text-navy bg-navy/5 px-2 py-0.5 rounded border border-navy/10 flex items-center gap-1 w-fit">
+      render: (_, row) => {
+        if (row.requiresMentorApproval) {
+          return (
+            <span className="text-[10px] font-black uppercase text-navy bg-navy/5 px-2 py-0.5 rounded border border-navy/10 flex items-center gap-1 w-fit">
               <Users size={10} /> Student's Mentor
             </span>
-          : <span className="text-xs font-medium text-muted-foreground">{row.coordinatorId?.name || row.coordinatorName || 'Unassigned'}</span>
-      )
+          );
+        }
+        if (row.requiresClassTeacherApproval) {
+          return (
+            <span className="text-[10px] font-black uppercase text-navy bg-navy/5 px-2 py-0.5 rounded border border-navy/10 flex items-center gap-1 w-fit">
+              <Users size={10} /> Class Teacher
+            </span>
+          );
+        }
+        return <span className="text-xs font-medium text-muted-foreground">{row.coordinatorId?.name || row.coordinatorName || 'Unassigned'}</span>;
+      }
     },
     {
       key: 'isOptional',
@@ -295,13 +315,13 @@ const CoCurricular = () => {
             actions={[
               { label: 'Modify Template', icon: Edit, onClick: () => handleEditClick(row) },
               {
-                label: 'Assign to Mentors',
+                label: 'Assign Approvals',
                 icon: Users,
                 onClick: () => handleAssignMentorsClick(row),
-                disabled: !row.requiresMentorApproval,
-                title: !row.requiresMentorApproval
-                  ? 'Enable "Require Mentor Approval" on this item first'
-                  : 'Backfill mentor approvals for all students in active batches',
+                disabled: !row.requiresMentorApproval && !row.requiresClassTeacherApproval && !row.coordinatorId,
+                title: (!row.requiresMentorApproval && !row.requiresClassTeacherApproval && !row.coordinatorId)
+                  ? 'Configure approval mode on this item first'
+                  : 'Backfill approvals for all students in active batches',
               },
               { label: 'Delete', icon: Trash2, onClick: () => { setSelectedItem(row); setShowDelete(true); }, variant: 'danger' },
             ]}
@@ -455,13 +475,13 @@ const CoCurricular = () => {
             <div className="bg-navy/5 border border-navy/10 rounded-xl p-4 space-y-4">
               <label className="block text-[10px] uppercase tracking-widest font-black text-navy">Approval </label>
               
-              <div className="grid grid-cols-2 gap-4">
-                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${formData.requiresMentorApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
+              <div className="grid grid-cols-3 gap-3">
+                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${formData.requiresMentorApproval && !formData.requiresClassTeacherApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <input 
                       type="radio" 
-                      checked={formData.requiresMentorApproval === true}
-                      onChange={() => setFormData({...formData, requiresMentorApproval: true, coordinatorId: ''})}
+                      checked={formData.requiresMentorApproval === true && formData.requiresClassTeacherApproval === false}
+                      onChange={() => setFormData({...formData, requiresMentorApproval: true, requiresClassTeacherApproval: false, coordinatorId: ''})}
                       className="w-3.5 h-3.5 text-navy focus:ring-navy/20"
                     />
                     <span className="text-xs font-bold text-navy">Student's Mentor</span>
@@ -469,12 +489,25 @@ const CoCurricular = () => {
                   <p className="text-[10px] text-muted-foreground pl-5 leading-tight">Routed to each student's specific mentor.</p>
                 </label>
 
-                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${formData.requiresMentorApproval === false ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
+                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${formData.requiresClassTeacherApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <input 
                       type="radio" 
-                      checked={formData.requiresMentorApproval === false}
-                      onChange={() => setFormData({...formData, requiresMentorApproval: false})}
+                      checked={formData.requiresClassTeacherApproval === true}
+                      onChange={() => setFormData({...formData, requiresMentorApproval: false, requiresClassTeacherApproval: true, coordinatorId: ''})}
+                      className="w-3.5 h-3.5 text-navy focus:ring-navy/20"
+                    />
+                    <span className="text-xs font-bold text-navy">Class Teacher</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pl-5 leading-tight">Routed to student's class teacher.</p>
+                </label>
+
+                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${!formData.requiresMentorApproval && !formData.requiresClassTeacherApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <input 
+                      type="radio" 
+                      checked={formData.requiresMentorApproval === false && formData.requiresClassTeacherApproval === false}
+                      onChange={() => setFormData({...formData, requiresMentorApproval: false, requiresClassTeacherApproval: false})}
                       className="w-3.5 h-3.5 text-navy focus:ring-navy/20"
                     />
                     <span className="text-xs font-bold text-navy">Single Coordinator</span>
@@ -483,7 +516,7 @@ const CoCurricular = () => {
                 </label>
               </div>
 
-              {formData.requiresMentorApproval === false && (
+              {formData.requiresMentorApproval === false && formData.requiresClassTeacherApproval === false && (
                 <div className="pt-2">
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Designated Coordinator</label>
                   <SearchableSelect 
@@ -619,6 +652,23 @@ const CoCurricular = () => {
                     </div>
                   </label>
 
+                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${assignMode === 'per_class_teacher' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
+                    <div className="pt-0.5">
+                      <input 
+                        type="radio" 
+                        name="assignMode" 
+                        value="per_class_teacher" 
+                        checked={assignMode === 'per_class_teacher'}
+                        onChange={(e) => setAssignMode(e.target.value)}
+                        className="w-4 h-4 text-navy focus:ring-navy/20"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-navy">Each Student's Class Teacher</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">Routes the approval to the class teacher of each student's current class.</p>
+                    </div>
+                  </label>
+
                   <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${assignMode === 'single_faculty' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
                     <div className="pt-0.5">
                       <input 
@@ -674,10 +724,12 @@ const CoCurricular = () => {
                       <p className="text-2xl font-black text-green-700">{assignMentorsResult.created ?? 0}</p>
                       <p className="text-[10px] uppercase tracking-wider text-green-600 font-bold mt-1">Created</p>
                     </div>
-                    {assignMentorsResult.mode === 'per_mentor' && (
+                    {['per_mentor', 'per_class_teacher'].includes(assignMentorsResult.mode) && (
                       <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-center">
                         <p className="text-2xl font-black text-amber-700">{assignMentorsResult.skipped ?? 0}</p>
-                        <p className="text-[10px] uppercase tracking-wider text-amber-600 font-bold mt-1">No Mentor</p>
+                        <p className="text-[10px] uppercase tracking-wider text-amber-600 font-bold mt-1">
+                          {assignMentorsResult.mode === 'per_mentor' ? 'No Mentor' : 'No Teacher'}
+                        </p>
                       </div>
                     )}
                     <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-center">
@@ -688,6 +740,11 @@ const CoCurricular = () => {
                   {assignMentorsResult.mode === 'per_mentor' && (assignMentorsResult.skipped ?? 0) > 0 && (
                     <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                       ⚠️ {assignMentorsResult.skipped} student(s) have no mentor assigned yet. Assign mentors in Class Detail, then run this again.
+                    </p>
+                  )}
+                  {assignMentorsResult.mode === 'per_class_teacher' && (assignMentorsResult.skipped ?? 0) > 0 && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      ⚠️ {assignMentorsResult.skipped} student(s) have no class teacher assigned and no fallback coordinator was found.
                     </p>
                   )}
                 </div>

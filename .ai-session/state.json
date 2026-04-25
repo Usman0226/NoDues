@@ -1,24 +1,20 @@
 {
-  "last_updated": "2026-04-25T05:20:00Z",
+  "last_updated": "2026-04-25T12:24:00Z",
   "completed": [
-    "Co-curricular mentor allocation logic",
-    "Admin UI 'Unassigned' label fix",
-    "Matrix view column key fix",
-    "Retroactive template sync (new items and updates)",
-    "Student portal snapshot lookup fix"
+    "Backend logic for co-curricular class teacher assignment",
+    "Frontend UI for co-curricular template creation with Class Teacher option",
+    "Frontend UI for manual co-curricular assignment to Class Teachers",
+    "Student status page label update for Class Teacher clearances"
   ],
   "in_progress": [],
-  "pending": [],
+  "pending": [
+    "End-to-end verification in browser with live data"
+  ],
   "decisions": [
     {
-      "context": "Matrix column keys for co-curricular items were colliding",
-      "decision": "Switched to using itemTypeId as the matrix key for all co-curricular columns",
-      "trade_offs": "Requires slightly more logic in student portal to map snapshots correctly"
-    },
-    {
-      "context": "Template changes after initiation",
-      "decision": "Implemented retroactive sync to active batches to ensure data consistency",
-      "trade_offs": "Bulk writes to NodueApproval and NodueRequest can be expensive but are necessary for consistency"
+      "context": "Assignment strategy for students without a class teacher",
+      "decision": "Fallback to the default coordinatorId specified in the template",
+      "trade_offs": "Ensures no student is left without an assigned faculty, even if the class hierarchy is incomplete."
     }
   ],
   "blockers": []
