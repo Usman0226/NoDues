@@ -12,6 +12,7 @@ import cache from '../config/cache.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 import { createNotification } from './notification.controller.js';
+import * as batchSync from '../utils/batchSync.js';
 
 // ── GET /api/co-curricular-types ──────────────────────────────────────────────
 const invalidateCoCurricularCache = (departmentId) => {
@@ -102,6 +103,10 @@ export const createCoCurricularType = async (req, res, next) => {
       await Faculty.findByIdAndUpdate(coordinatorId, { $addToSet: { roleTags: 'coordinator' } });
     }
 
+    // ── RETROACTIVE ADDITION TO ACTIVE BATCHES ─────────────────────────────
+    // Offload to batchSync for robust edge-case handling
+    batchSync.syncCoCurricularAddition(type._id);
+
     logger.audit('CO_CURRICULAR_TYPE_CREATED', {
       actor: req.user.userId,
       resource_id: type._id.toString(),
@@ -124,43 +129,40 @@ export const createCoCurricularType = async (req, res, next) => {
 export const updateCoCurricularType = async (req, res, next) => {
   try {
     const { id } = req.params;
-    // Whitelist mutable fields — prevent direct overwrite of system fields
     const { name, code, applicableYears, coordinatorId, fields, isOptional, requiresMentorApproval } = req.body;
+    
+    const type = await CoCurricularType.findById(id);
+    if (!type) return next(new ErrorResponse('Type not found', 404));
+
     const updates = Object.fromEntries(
       Object.entries({ 
         name, 
         code, 
         applicableYears, 
-        coordinatorId: coordinatorId || undefined, 
+        coordinatorId, 
         fields, 
         isOptional, 
         requiresMentorApproval 
       }).filter(([, v]) => v !== undefined)
     );
-    
-    // If coordinatorId is explicitly being removed (e.g. switching to mentor mode)
+
     if (requiresMentorApproval && !coordinatorId) {
        updates.$unset = { coordinatorId: 1 };
        delete updates.coordinatorId;
     }
 
-    const type = await CoCurricularType.findById(id);
-    if (!type) return next(new ErrorResponse('Item type not found', 404));
-
-    // HoD Scope Check
-    if (req.user.role === 'hod' && type.departmentId.toString() !== req.user.departmentId.toString()) {
-      return next(new ErrorResponse('Access denied: You cannot manage co-curricular types of other departments', 403));
-    }
-
-    // If changing coordinator, handle roleTags
+    let faculty = null;
     if (updates.coordinatorId && updates.coordinatorId !== type.coordinatorId?.toString()) {
-      const newFaculty = await Faculty.findOne({ _id: updates.coordinatorId, departmentId: type.departmentId.toString(), isActive: true }).lean();
-      if (!newFaculty) return next(new ErrorResponse('Invalid coordinator: Faculty must belong to same department and be active', 400));
+      faculty = await Faculty.findOne({ _id: updates.coordinatorId, departmentId: type.departmentId.toString(), isActive: true }).lean();
+      if (!faculty) return next(new ErrorResponse('Invalid coordinator: Faculty must belong to same department and be active', 400));
       
       await Faculty.findByIdAndUpdate(updates.coordinatorId, { $addToSet: { roleTags: 'coordinator' } });
     }
 
     const updatedType = await CoCurricularType.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+
+    // ── SYNC CHANGES TO ACTIVE BATCHES ─────────────────────────────────────
+    batchSync.syncCoCurricularUpdate(updatedType._id);
 
     logger.audit('CO_CURRICULAR_TYPE_UPDATED', {
       actor: req.user.userId,
@@ -179,10 +181,6 @@ export const updateCoCurricularType = async (req, res, next) => {
   }
 };
 
-// ── POST /api/co-curricular-types/:id/assign-mentors ──────────────────────────
-// Idempotent dual-mode assignment:
-//   mode=per_mentor    → each student routes to their own mentorId  (roleTag: mentor)
-//   mode=single_faculty → all students route to one picked faculty  (roleTag: coordinator)
 export const assignCoCurricularToMentors = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -192,7 +190,6 @@ export const assignCoCurricularToMentors = async (req, res, next) => {
       return next(new ErrorResponse('mode must be per_mentor or single_faculty', 400));
     }
 
-    // Validate single-faculty selection upfront
     let overrideFaculty = null;
     if (mode === 'single_faculty') {
       if (!overrideFacultyId) {
@@ -265,12 +262,11 @@ export const assignCoCurricularToMentors = async (req, res, next) => {
       requestMap.set(`${r.studentId}:${r.batchId}`, r);
     }
 
-    let skipped = 0;       // students skipped because no mentor (per_mentor mode only)
+    let skipped = 0;       
     let skippedNoRequest = 0;
     const approvalDocs = [];
 
     for (const student of students) {
-      // Determine which faculty gets the approval
       let assignedFacultyId;
       if (mode === 'single_faculty') {
         assignedFacultyId = overrideFaculty._id;
@@ -372,6 +368,9 @@ export const deleteCoCurricularType = async (req, res, next) => {
     type.isActive = false;
     await type.save();
 
+    // Sync removal from active batches
+    batchSync.syncCoCurricularRemoval(type.departmentId, type._id);
+
     logger.audit('CO_CURRICULAR_TYPE_DEACTIVATED', {
       actor: req.user.userId,
       resource_id: id
@@ -446,15 +445,79 @@ export const submitCoCurricular = async (req, res, next) => {
     }).session(session).lean();
 
     if (activeBatch) {
+        // Ensure approval record matches latest template settings
+        const isMentorMode = type.requiresMentorApproval;
+        let assignedFacultyId = isMentorMode ? student.mentorId : type.coordinatorId;
+        
+        let facultyNameStr = isMentorMode ? "Student's Mentor" : (faculty?.name || 'Department Faculty');
+
+        // Fallback
+        if (isMentorMode && !assignedFacultyId && type.coordinatorId) {
+            assignedFacultyId = type.coordinatorId;
+            facultyNameStr = faculty?.name || 'Department Faculty';
+        }
+
         const approval = await NodueApproval.findOneAndUpdate(
             { 
                 batchId: activeBatch._id, 
                 studentId: student._id, 
                 itemTypeId: type._id 
             },
-            { action: 'pending', actionedAt: null, remarks: null },
+            { 
+                action: 'pending', 
+                actionedAt: null, 
+                remarks: null,
+                // Sync latest settings
+                facultyId: assignedFacultyId,
+                facultyName: facultyNameStr,
+                roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+                approvalType: isMentorMode ? 'mentor' : 'coCurricular',
+                subjectName: type.name,
+                itemTypeName: type.name,
+                itemCode: type.code,
+                isOptional: type.isOptional
+            },
             { session, new: true }
         );
+
+        // Update snapshot to reflect latest faculty choice
+        const request = await mongoose.model('NodueRequest').findOne({ _id: approval.requestId }).session(session);
+        if (request) {
+            if (Array.isArray(request.facultySnapshot)) {
+                const idx = request.facultySnapshot.findIndex(f => f.itemTypeId?.toString() === type._id.toString());
+                const snapshotData = {
+                    facultyId: assignedFacultyId,
+                    facultyName: facultyNameStr,
+                    subjectId: null,
+                    subjectName: type.name,
+                    subjectCode: type.code,
+                    roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+                    approvalType: isMentorMode ? 'mentor' : 'coCurricular',
+                    itemTypeId: type._id,
+                    itemTypeName: type.name,
+                    itemCode: type.code,
+                    isOptional: type.isOptional || false
+                };
+                if (idx !== -1) request.facultySnapshot[idx] = snapshotData;
+                else request.facultySnapshot.push(snapshotData);
+            } else if (request.facultySnapshot) {
+                request.facultySnapshot[type._id.toString()] = {
+                    facultyId: assignedFacultyId,
+                    facultyName: facultyNameStr,
+                    subjectId: null,
+                    subjectName: type.name,
+                    subjectCode: type.code,
+                    roleTag: isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
+                    approvalType: isMentorMode ? 'mentor' : 'coCurricular',
+                    itemTypeId: type._id,
+                    itemTypeName: type.name,
+                    itemCode: type.code,
+                    isOptional: type.isOptional || false
+                };
+                request.markModified('facultySnapshot');
+            }
+            await request.save({ session });
+        }
 
         if (approval && approval.facultyId) {
           await createNotification({

@@ -184,7 +184,7 @@ export const createStudent = async (req, res, next) => {
           roleTag: 'classTeacher',
           approvalType: 'classTeacher',
           subjectId: null,
-          subjectName: 'Academic Advisor (Class Teacher)',
+          subjectName: 'Class Teacher',
         };
       }
 

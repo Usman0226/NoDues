@@ -22,7 +22,6 @@ router.route('/:id')
     .patch(RoleGuard(['admin', 'hod']), updateCoCurricularType)
     .delete(RoleGuard(['admin', 'hod']), deleteCoCurricularType);
 
-// Idempotent backfill — assigns mentor approvals to all students in active batches
 router.route('/:id/assign-mentors')
     .post(RoleGuard(['admin', 'hod']), assignCoCurricularToMentors);
 

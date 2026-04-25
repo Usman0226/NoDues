@@ -31,7 +31,7 @@ const nodueApprovalSchema = new mongoose.Schema({
   },
   roleTag: {
     type: String,
-    enum: ['faculty', 'classTeacher', 'mentor', 'hod', 'coordinator']
+    enum: ['faculty', 'classTeacher', 'mentor', 'hod', 'coordinator', 'coCurricular_mentor', 'coCurricular_coordinator']
   },
   action: {
     type: String,

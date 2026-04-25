@@ -22,8 +22,8 @@ const useSSE = (url, onMessage) => {
     sourceRef.current = source;
 
     source.onopen = () => {
-      console.log(`[SSE] Connection established to ${url}`);
-      retryCountRef.current = 0; // Reset on success
+      console.log(`[SSE] Connected to ${url}`);
+      retryCountRef.current = 0; 
     };
 
     source.onmessage = (event) => {
@@ -65,4 +65,4 @@ const useSSE = (url, onMessage) => {
   }, [connect]);
 };
 
-export default useSSE;  
+export default useSSE;

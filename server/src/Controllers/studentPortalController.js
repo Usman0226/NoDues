@@ -97,7 +97,7 @@ export const getStudentStatus = async (req, res, next) => {
 
     // NEW: Fetch all Co-Curricular Types involved to get form fields
     const ccTypeIds = approvals
-      .filter(a => a.approvalType === 'coCurricular')
+      .filter(a => a.itemTypeId)
       .map(a => a.itemTypeId)
       .filter(Boolean);
     
@@ -111,23 +111,23 @@ export const getStudentStatus = async (req, res, next) => {
       const snapshot = (Array.isArray(request.facultySnapshot) 
         ? request.facultySnapshot.find(f => 
             (a.approvalType === 'subject' && f.subjectId?.toString() === a.subjectId?.toString()) ||
-            (a.approvalType === 'coCurricular' && f.itemTypeId?.toString() === a.itemTypeId?.toString()) ||
-            (a.approvalType !== 'subject' && a.approvalType !== 'coCurricular' && f.roleTag === a.roleTag)
+            (a.itemTypeId && f.itemTypeId?.toString() === a.itemTypeId?.toString()) ||
+            (a.approvalType !== 'subject' && !a.itemTypeId && f.roleTag === a.roleTag)
           )
-        : request.facultySnapshot?.[a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag]
+        : request.facultySnapshot?.[a.itemTypeId ? a.itemTypeId.toString() : (a.approvalType === 'subject' ? a.subjectId?.toString() : a.roleTag)]
       ) || {};
 
       let displayContext = snapshot.subjectName || a.subjectName;
       if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
       if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Academic Advisor';
       if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Mentor';
-      if (a.approvalType === 'coCurricular') displayContext = a.itemTypeName || snapshot.itemTypeName || a.subjectName;
+      if (a.itemTypeId) displayContext = a.itemTypeName || snapshot.itemTypeName || a.subjectName;
 
-      const submission = a.approvalType === 'coCurricular' 
+      const submission = a.itemTypeId 
         ? student.coCurricular?.find(c => c.itemTypeId?.toString() === (a.itemTypeId?.toString() || snapshot.itemTypeId?.toString()))
         : null;
 
-      const ccType = a.approvalType === 'coCurricular' ? ccTypeMap.get(a.itemTypeId?.toString()) : null;
+      const ccType = a.itemTypeId ? ccTypeMap.get(a.itemTypeId?.toString()) : null;
 
       return {
         id: a._id,

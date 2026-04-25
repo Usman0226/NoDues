@@ -110,7 +110,7 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
   const coCurricularItems = await CoCurricularType.find({
     departmentId: cls.departmentId._id || cls.departmentId,
     isActive: true
-  }).session(session).lean();
+  }).populate('coordinatorId', 'name').session(session).lean();
 
   // 4. Operation Builder
   const requestOps  = [];
@@ -154,7 +154,7 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
         facultyId:    cls.classTeacherId,
         facultyName:  ctInfo?.name ?? null,
         subjectId:    null,
-        subjectName:  'Academic Advisor (Class Teacher)',
+        subjectName:  'Class Teacher',
         subjectCode:  null,
         roleTag:      'classTeacher',
         approvalType: 'classTeacher',
@@ -198,13 +198,23 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
     );
 
     for (const item of applicableItems) {
+      const isMentorMode = item.requiresMentorApproval;
+      let assignedFacultyId = isMentorMode ? student.mentorId : item.coordinatorId?._id || item.coordinatorId;
+      
+      // Fallback: If mentor mode but no mentor assigned, fallback to coordinator if available
+      if (isMentorMode && !assignedFacultyId && item.coordinatorId) {
+          assignedFacultyId = item.coordinatorId?._id || item.coordinatorId;
+      }
+
+      const facultyName = isMentorMode ? (mentorMap.get(student.mentorId?.toString()) || 'Student\'s Mentor') : (item.coordinatorId?.name || null);
+
       snapshot[item._id.toString()] = {
-        facultyId:    item.coordinatorId,
-        facultyName:  null, // Will be populated if needed, or coordinatorId is sufficient
+        facultyId:    assignedFacultyId,
+        facultyName:  facultyName,
         subjectId:    null,
         subjectName:  item.name,
         subjectCode:  item.code,
-        roleTag:      'coordinator',
+        roleTag:      isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
         approvalType: 'coCurricular',
         itemTypeId:   item._id,
         itemTypeName: item.name,
@@ -233,7 +243,12 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
     });
 
     for (const f of Object.values(snapshot)) {
-      if (!f.facultyId) continue;
+      // Every co-curricular approval MUST have a facultyId (schema requirement).
+      // If still missing (no mentor AND no coordinator), we skip but log it.
+      if (!f.facultyId) {
+        console.error('CRITICAL: Missing faculty for co-curricular approval', f.itemTypeName);
+        continue;
+      }
       approvalOps.push({
         insertOne: {
           document: {
@@ -249,9 +264,9 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
             itemTypeName: f.itemTypeName ?? null,
             itemCode:     f.itemCode     ?? null,
             isOptional:   f.isOptional   ?? false,
-            approvalType: f.approvalType,
+            approvalType: 'coCurricular',
             roleTag:      f.roleTag,
-            action:       f.approvalType === 'coCurricular' ? 'not_submitted' : 'pending',
+            action:       'not_submitted',
             createdAt:    now,
           },
         },
@@ -363,7 +378,6 @@ export const getInitiationPreview = async (req, res, next) => {
       const warnings = [];
       if (!hasCT) warnings.push('No Class Teacher assigned');
       if (subjects.length === 0) warnings.push('No core subjects assigned');
-
       return {
         classId: cls._id,
         className: cls.name,
@@ -378,7 +392,6 @@ export const getInitiationPreview = async (req, res, next) => {
       };
     });
 
-    // Sort: READY first, then warnings, then ineligibles
     preview.sort((a, b) => {
       const order = { READY: 0, ACTIVE: 1, EMPTY: 2 };
       if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
@@ -625,7 +638,7 @@ export const getBatchStatus = async (req, res, next) => {
         .select('studentId studentSnapshot status facultySnapshot')
         .lean(),
       NodueApproval.find({ batchId })
-        .select('studentId facultyId action subjectId approvalType')
+        .select('studentId facultyId action subjectId approvalType roleTag itemTypeId')
         .lean(),
     ]);
 
@@ -634,7 +647,10 @@ export const getBatchStatus = async (req, res, next) => {
     approvals.forEach((a) => {
       const sId = a.studentId.toString();
       // Uniquely identify the clearance task column
-      const colKey = a.approvalType === 'subject' ? (a.subjectId?.toString() || a.subjectName) : a.roleTag;
+      // For subjects, use subjectId. For co-curricular, use itemTypeId. For roles, use roleTag.
+      const colKey = a.itemTypeId 
+        ? a.itemTypeId.toString() 
+        : (a.approvalType === 'subject' ? (a.subjectId?.toString() || a.subjectName) : a.roleTag);
       
       if (!studentApprovalMap[sId]) studentApprovalMap[sId] = {};
       studentApprovalMap[sId][colKey] = {
@@ -680,7 +696,9 @@ export const getBatchStatus = async (req, res, next) => {
       const snapshot = r.facultySnapshot || {};
       if (Array.isArray(snapshot)) {
         snapshot.forEach(f => {
-          const key = f.approvalType === 'subject' ? (f.subjectId?.toString() || f.subjectName) : f.roleTag;
+          const key = f.itemTypeId 
+            ? f.itemTypeId.toString() 
+            : (f.approvalType === 'subject' ? (f.subjectId?.toString() || f.subjectName) : f.roleTag);
           if (!columnsMap.has(key)) columnsMap.set(key, f);
         });
       } else {
@@ -907,7 +925,7 @@ export const addStudentToBatch = async (req, res, next) => {
       snapshot['classTeacher'] = {
         facultyId: cls.classTeacherId, facultyName: ctInfo?.name ?? null,
         roleTag: 'classTeacher', approvalType: 'classTeacher',
-        subjectName: 'Academic Advisor (Class Teacher)',
+        subjectName: 'Class Teacher',
       };
     }
 

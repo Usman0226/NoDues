@@ -271,7 +271,13 @@ const CoCurricular = () => {
     {
       key: 'coordinator',
       label: 'Coordinator',
-      render: (_, row) => <span className="text-xs font-medium text-muted-foreground">{row.coordinatorId?.name || row.coordinatorName || 'Unassigned'}</span>
+      render: (_, row) => (
+        row.requiresMentorApproval 
+          ? <span className="text-[10px] font-black uppercase text-navy bg-navy/5 px-2 py-0.5 rounded border border-navy/10 flex items-center gap-1 w-fit">
+              <Users size={10} /> Student's Mentor
+            </span>
+          : <span className="text-xs font-medium text-muted-foreground">{row.coordinatorId?.name || row.coordinatorName || 'Unassigned'}</span>
+      )
     },
     {
       key: 'isOptional',

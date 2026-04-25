@@ -126,7 +126,7 @@ const REGISTRY_GROUPS = [
   { 
     id: 'mentor', 
     label: 'Mentorship & Advisory', 
-    filter: (a) => ['mentor', 'classTeacher'].includes(a.roleTag), 
+    filter: (a) => ['mentor', 'classTeacher'].includes(a.roleTag) && !a.itemTypeId, 
     icon: UserCheck,
     gradient: 'from-emerald-500 to-teal-600'
   },
@@ -140,7 +140,7 @@ const REGISTRY_GROUPS = [
   {
     id: 'co-curricular',
     label: 'Co-Curricular',
-    filter: (a) => a.approvalType === 'coCurricular',
+    filter: (a) => a.approvalType === 'coCurricular' || !!a.itemTypeId,
     icon: ClipboardCheck, 
     gradient: 'from-amber-500 to-orange-600'
   },

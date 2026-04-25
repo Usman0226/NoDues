@@ -1,23 +1,24 @@
 {
-  "last_updated": "2026-04-24T10:53:40Z",
+  "last_updated": "2026-04-25T05:20:00Z",
   "completed": [
-    "Stabilized Guided Tour UI and eliminated cascading renders",
-    "Removed distracting background blurs and animations from Guided Tour",
-    "Improved bulk action clarity by auto-selecting items during tour steps",
-    "Refactored GuidedTour to use parent-controlled lifecycle for better performance"
+    "Co-curricular mentor allocation logic",
+    "Admin UI 'Unassigned' label fix",
+    "Matrix view column key fix",
+    "Retroactive template sync (new items and updates)",
+    "Student portal snapshot lookup fix"
   ],
-  "in_progress": [
-    "Monitoring faculty portal for any further UI inconsistencies"
-  ],
-  "pending": [
-    "Automated Testing Suite integration",
-    "Responsive audit for static highlight outline"
-  ],
+  "in_progress": [],
+  "pending": [],
   "decisions": [
     {
-      "context": "React cascading render warning in GuidedTour effect",
-      "decision": "Moved state reset logic to parent via mounting/unmounting with AnimatePresence",
-      "trade_offs": "Requires AnimatePresence in every parent, but guarantees consistent state reset and better performance"
+      "context": "Matrix column keys for co-curricular items were colliding",
+      "decision": "Switched to using itemTypeId as the matrix key for all co-curricular columns",
+      "trade_offs": "Requires slightly more logic in student portal to map snapshots correctly"
+    },
+    {
+      "context": "Template changes after initiation",
+      "decision": "Implemented retroactive sync to active batches to ensure data consistency",
+      "trade_offs": "Bulk writes to NodueApproval and NodueRequest can be expensive but are necessary for consistency"
     }
   ],
   "blockers": []
