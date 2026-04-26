@@ -9,9 +9,9 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
-import { getClasses, createClass, updateClass, deleteClass } from '../../api/classes';
+import { getClasses, createClass, updateClass, deleteClass, activateClass } from '../../api/classes';
 import { getFaculty } from '../../api/faculty';
-import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
+import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox, CheckCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import BackHeader from '../../components/ui/BackHeader';
 
@@ -44,8 +44,10 @@ const DepartmentClasses = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showActivate, setShowActivate] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
 
   // Pagination State
   const [page, setPage] = useState(1);
@@ -156,7 +158,31 @@ const DepartmentClasses = () => {
     setShowDelete(true);
   };
 
+  const handleActivateClick = (cls, e) => {
+    if(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    setSelectedClass(cls);
+    setShowActivate(true);
+  };
+
+  const handleActivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await activateClass(selectedClass._id);
+      toast.success('Academic group reactivated');
+      setShowActivate(false);
+      fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reactivate group');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
+
     setSubmitting(true);
     try {
       await deleteClass(selectedClass._id);
@@ -294,10 +320,17 @@ const DepartmentClasses = () => {
                              <button onClick={(e) => handleEditClick(cls, e)} className="p-2 hover:bg-zinc-50 rounded-lg text-muted-foreground hover:text-navy transition-all border border-transparent hover:border-muted">
                                <Edit size={14} />
                              </button>
-                             <button onClick={(e) => handleDeleteClick(cls, e)} className="p-2 hover:bg-status-due/10 rounded-lg text-muted-foreground hover:text-status-due transition-all border border-transparent hover:border-muted">
-                               <Trash2 size={14} />
-                             </button>
+                             {cls.isActive === false ? (
+                               <button onClick={(e) => handleActivateClick(cls, e)} className="p-2 hover:bg-emerald-50 rounded-lg text-muted-foreground hover:text-emerald-600 transition-all border border-transparent hover:border-muted">
+                                 <RefreshCw size={14} />
+                               </button>
+                             ) : (
+                               <button onClick={(e) => handleDeleteClick(cls, e)} className="p-2 hover:bg-status-due/10 rounded-lg text-muted-foreground hover:text-status-due transition-all border border-transparent hover:border-muted">
+                                 <Trash2 size={14} />
+                               </button>
+                             )}
                           </div>
+
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mt-auto">
@@ -461,7 +494,19 @@ const DepartmentClasses = () => {
       )}
 
       <ConfirmModal
+        isOpen={showActivate}
+        onClose={() => setShowActivate(false)}
+        onConfirm={handleActivateConfirm}
+        title="Reactivate Academic Group"
+        description={`Are you sure you want to reactivate ${selectedClass?.name}? This will restore its visibility and accessibility for students and faculty.`}
+        confirmText="Reactivate Group"
+        isDestructive={false}
+        loading={submitting}
+      />
+
+      <ConfirmModal
         isOpen={showDelete}
+
         onClose={() => setShowDelete(false)}
         onConfirm={handleDeleteConfirm}
         title="Deactivate Academic Group"

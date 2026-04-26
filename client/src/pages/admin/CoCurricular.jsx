@@ -12,11 +12,12 @@ import {
   createCoCurricularType, 
   updateCoCurricularType, 
   deleteCoCurricularType,
+  activateCoCurricularType,
   assignCoCurricularToMentors,
 } from '../../api/coCurricular';
 import { getFaculty } from '../../api/faculty';
 import { getDepartments } from '../../api/departments';
-import { Plus, Edit, Trash2, AlertCircle, RefreshCw, X, GripVertical, Users } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertCircle, RefreshCw, X, GripVertical, Users, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
@@ -31,6 +32,7 @@ const CoCurricular = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showActivate, setShowActivate] = useState(false);
   const [showAssignMentors, setShowAssignMentors] = useState(false);
   const [assignMentorsResult, setAssignMentorsResult] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -43,6 +45,8 @@ const CoCurricular = () => {
   const [limit, setLimit] = useState(20);
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [includeInactive, setIncludeInactive] = useState(false);
+
 
   const { data: response, loading, error, request: fetchItems } = useApi(getCoCurricularTypes);
   const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty);
@@ -86,8 +90,8 @@ const CoCurricular = () => {
   }, [searchValue]);
 
   useEffect(() => {
-    fetchItems({ page, limit, search: debouncedSearch });
-  }, [fetchItems, page, limit, debouncedSearch]);
+    fetchItems({ page, limit, search: debouncedSearch, includeInactive: includeInactive || undefined });
+  }, [fetchItems, page, limit, debouncedSearch, includeInactive]);
 
   useEffect(() => {
     fetchFaculty({ limit: 1000, isActive: true });
@@ -145,7 +149,7 @@ const CoCurricular = () => {
       await createCoCurricularType(payload);
       toast.success('Co-Curricular item created');
       setShowCreate(false);
-      fetchItems();
+      fetchItems({ includeInactive });
       resetForm();
     } catch (err) {
       toast.error(err?.message || 'Failed to create item');
@@ -228,9 +232,28 @@ const CoCurricular = () => {
       await updateCoCurricularType(selectedItem._id, payload);
       toast.success('Co-Curricular item updated');
       setShowEdit(false);
-      fetchItems();
+      fetchItems({ includeInactive });
     } catch (err) {
       toast.error(err?.message || 'Failed to update item');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleActivateClick = (item) => {
+    setSelectedItem(item);
+    setShowActivate(true);
+  };
+
+  const handleActivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await activateCoCurricularType(selectedItem._id);
+      toast.success('Item reactivated successfully');
+      setShowActivate(false);
+      fetchItems({ includeInactive });
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reactivate item');
     } finally {
       setSubmitting(false);
     }
@@ -242,13 +265,14 @@ const CoCurricular = () => {
       await deleteCoCurricularType(selectedItem._id);
       toast.success('Item removed successfully');
       setShowDelete(false);
-      fetchItems();
+      fetchItems({ includeInactive });
     } catch (err) {
       toast.error(err?.message || 'Failed to remove item');
     } finally {
       setSubmitting(false);
     }
   };
+
 
   const resetForm = () => {
     setFormData({
@@ -323,7 +347,9 @@ const CoCurricular = () => {
                   ? 'Configure approval mode on this item first'
                   : 'Backfill approvals for all students in active batches',
               },
-              { label: 'Delete', icon: Trash2, onClick: () => { setSelectedItem(row); setShowDelete(true); }, variant: 'danger' },
+              row.isActive === false 
+                ? { label: 'Reactivate', icon: RefreshCw, onClick: () => handleActivateClick(row) }
+                : { label: 'Delete', icon: Trash2, onClick: () => { setSelectedItem(row); setShowDelete(true); }, variant: 'danger' },
             ]}
           />
         </div>
@@ -340,16 +366,24 @@ const CoCurricular = () => {
               <Plus size={14} /> Add 
             </Button>
           )}
+          <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+               onClick={() => setIncludeInactive(!includeInactive)}>
+             <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
+                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
+             </div>
+             <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Archived</span>
+          </div>
         </div>
         <Button 
           variant="ghost" 
           size="sm" 
-          onClick={() => fetchItems()} 
+          onClick={() => fetchItems({ includeInactive })} 
           className="text-muted-foreground"
         >
           <RefreshCw size={14} /> Refresh
         </Button>
       </div>
+
 
       {error ? (
         <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
@@ -599,7 +633,19 @@ const CoCurricular = () => {
       )}
 
       <ConfirmModal
+        isOpen={showActivate}
+        onClose={() => setShowActivate(false)}
+        onConfirm={handleActivateConfirm}
+        title="Reactivate Co-Curricular Item"
+        description={`Are you sure you want to reactivate '${selectedItem?.name}'? This will restore it to the active clearance catalog.`}
+        confirmText="Reactivate"
+        isDestructive={false}
+        loading={submitting}
+      />
+
+      <ConfirmModal
         isOpen={showDelete}
+
         onClose={() => setShowDelete(false)}
         onConfirm={handleDeleteConfirm}
         title="Purge Co-Curricular Item"

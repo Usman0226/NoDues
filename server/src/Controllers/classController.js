@@ -411,6 +411,42 @@ export const deleteClass = async (req, res, next) => {
   }
 };
 
+export const activateClass = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+    const { id } = req.params;
+    const cls = await Class.findById(id).session(session);
+    if (!cls) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+    }
+
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
+    cls.isActive = true;
+    await cls.save({ session });
+
+    await commitSafeTransaction(session);
+
+    logger.info('class_activated', {
+      timestamp: new Date().toISOString(), actor: req.user.userId,
+      action: 'ACTIVATE_CLASS', resource_id: id,
+    });
+
+    return res.status(200).json({ success: true, data: cls });
+  } catch (err) {
+    await abortSafeTransaction(session);
+    next(err);
+  } finally {
+    session.endSession();
+  }
+};
+
+
 // ── PATCH /api/classes/:id/class-teacher ──────────────────────────────────────
 export const assignClassTeacher = async (req, res, next) => {
   const session = await mongoose.startSession();

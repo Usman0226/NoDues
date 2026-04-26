@@ -4,9 +4,11 @@ import {
     createCoCurricularType, 
     updateCoCurricularType, 
     deleteCoCurricularType,
+    activateCoCurricularType,
     submitCoCurricular,
     assignCoCurricularToMentors,
 } from '../Controllers/coCurricularController.js';
+
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
 
@@ -21,6 +23,10 @@ router.route('/')
 router.route('/:id')
     .patch(RoleGuard(['admin', 'hod', 'ao']), updateCoCurricularType)
     .delete(RoleGuard(['admin', 'hod', 'ao']), deleteCoCurricularType);
+
+router.route('/:id/activate')
+    .post(RoleGuard(['admin', 'hod', 'ao']), activateCoCurricularType);
+
 
 router.route('/:id/assign-mentors')
     .post(RoleGuard(['admin', 'hod', 'ao']), assignCoCurricularToMentors);

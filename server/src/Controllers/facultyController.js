@@ -525,6 +525,92 @@ export const bulkDeactivateFaculty = async (req, res, next) => {
   }
 };
 
+export const activateFaculty = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+    const faculty = await Faculty.findById(req.params.id).session(session);
+
+    if (!faculty) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Faculty not found', 404));
+    }
+
+    // RBAC Check for HOD/AO
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && 
+        faculty.departmentId.toString() !== req.user.departmentId.toString()) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Unauthorized: Access denied to other department faculty', 403));
+    }
+
+    faculty.isActive = true;
+    await faculty.save({ session });
+
+    await commitSafeTransaction(session);
+
+    invalidateEntityCache('faculty', faculty._id);
+
+    logger.info('faculty_activated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'ACTIVATE_FACULTY',
+      resource_id: faculty._id
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: faculty
+    });
+  } catch (err) {
+    if (session.inTransaction()) await abortSafeTransaction(session);
+    next(err);
+  } finally {
+    session.endSession();
+  }
+};
+
+export const bulkActivateFaculty = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('IDs array is required', 400));
+    }
+
+    const query = { _id: { $in: ids } };
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
+      query.departmentId = req.user.departmentId;
+    }
+
+    const result = await Faculty.updateMany(query, { isActive: true }, { session });
+
+    await commitSafeTransaction(session);
+
+    // Invalidate caches
+    ids.forEach(id => invalidateEntityCache('faculty', id));
+
+    logger.info('faculty_bulk_activated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_ACTIVATE_FACULTY',
+      details: { count: result.modifiedCount, requested: ids.length }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (err) {
+    if (session.inTransaction()) await abortSafeTransaction(session);
+    next(err);
+  } finally {
+    session.endSession();
+  }
+};
+
+
 export const bulkResendCredentials = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {

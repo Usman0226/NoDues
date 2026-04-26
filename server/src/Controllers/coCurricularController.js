@@ -460,6 +460,36 @@ export const deleteCoCurricularType = async (req, res, next) => {
   }
 };
 
+export const activateCoCurricularType = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const type = await CoCurricularType.findById(id);
+    if (!type) return next(new ErrorResponse('Item type not found', 404));
+
+    if (req.user.role === 'hod' && type.departmentId.toString() !== req.user.departmentId.toString()) {
+      return next(new ErrorResponse('Access denied: You cannot activate items from other departments', 403));
+    }
+
+    type.isActive = true;
+    await type.save();
+
+    logger.audit('CO_CURRICULAR_TYPE_ACTIVATED', {
+      actor: req.user.userId,
+      resource_id: id
+    });
+
+    invalidateCoCurricularCache(type.departmentId);
+
+    res.status(200).json({
+      success: true,
+      data: type
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 // ── Student Submission (to be moved/integrated with Student Portal) ────────
 export const submitCoCurricular = async (req, res, next) => {
   const session = await mongoose.startSession();

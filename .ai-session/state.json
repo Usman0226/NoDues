@@ -1,27 +1,18 @@
 {
-  "last_updated": "2026-04-26T13:45:00Z",
+  "last_updated": "2026-04-26T14:52:30Z",
   "completed": [
-    "AO role implementation in Faculty model",
-    "Role derivation logic in authController",
-    "Audit logging for AO actions in approvalController",
-    "Sidebar and Navbar UI updates for AO role",
-    "Recovery of classController and Navbar regressions",
-    "Database migration to sync faculty roles and fix 'Achivements' typos",
-    "Dynamic AO/HOD Dashboard titles",
-    "Cleaned up student submission labels and placeholders"
+    "Backend activation logic for Faculty, Students, Classes, Subjects, and Co-Curricular",
+    "API endpoints and frontend service updates",
+    "UI integration for reactivation across all administrative lists",
+    "Single and Bulk activation support where applicable"
   ],
   "in_progress": [],
   "pending": [],
   "decisions": [
     {
-      "context": "AOs were being treated as faculty due to stale database fields.",
-      "decision": "Ran a migration script to synchronize the 'role' field with 'roleTags' and invalidated caches.",
-      "trade_offs": "Requires user to relogin to see updated role in existing sessions."
-    },
-    {
-      "context": "UI displayed redundant placeholders like 'Enter submitted in asvico portal (y/n)...'",
-      "decision": "Implemented label cleaning and conditional placeholders in the Student Status component.",
-      "trade_offs": "Relies on string pattern matching for '(y/n)' which handles most but not all edge cases."
+      "context": "Lack of activation feature",
+      "decision": "Implemented soft-delete recovery by adding activation endpoints and UI toggles",
+      "trade_offs": "Added slight complexity to the UI with 'Show Archived' toggles"
     }
   ],
   "blockers": []

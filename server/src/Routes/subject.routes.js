@@ -5,8 +5,11 @@ import {
   getSubjectById,
   updateSubject,
   deleteSubject,
+  activateSubject,
   bulkDeleteSubjects,
+  bulkActivateSubjects,
 } from '../Controllers/subjectController.js';
+
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
 
@@ -24,6 +27,10 @@ router.route('/:id')
   .patch(updateSubject)
   .delete(deleteSubject);
 
+router.post('/:id/activate', activateSubject);
+
 router.post('/bulk-delete', bulkDeleteSubjects);
+router.post('/bulk-activate', bulkActivateSubjects);
+
 
 export default router;

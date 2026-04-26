@@ -10,5 +10,7 @@ export const getMyClasses = () => api.get('/faculty/me/classes');
 export const resendCredentials = (id) => api.post(`/faculty/${id}/resend-creds`);
 
 export const bulkDeactivateFaculty = (ids) => api.post('/faculty/bulk-deactivate', { ids });
+export const bulkActivateFaculty = (ids) => api.post('/faculty/bulk-activate', { ids });
 export const bulkResendCredentials = (ids) => api.post('/faculty/bulk-resend-creds', { ids });
 export const bulkUpdateRoles = (ids, targetRole, action) => api.post('/faculty/bulk-update-roles', { ids, targetRole, action });
+export const activateFaculty = (id) => api.post(`/faculty/${id}/activate`);

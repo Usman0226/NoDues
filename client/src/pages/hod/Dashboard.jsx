@@ -40,6 +40,8 @@ import {
   Cell,
   BarChart,
   Bar,
+  ComposedChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -69,13 +71,28 @@ const HodDashboard = () => {
   const [deadline, setDeadline] = React.useState('');
   const [isInitiating, setIsInitiating] = React.useState(false);
   const [isMounted, setIsMounted] = React.useState(false);
-
   const { data: previewResponse, loading: loadingPreview, request: fetchPreview } = useApi(getInitiationPreview);
   const previewData = useMemo(() => previewResponse?.data || [], [previewResponse?.data]);
 
+  const [resizeKey, setResizeKey] = React.useState(0);
+  const containerRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    // Using ResizeObserver to catch layout shifts (like sidebar toggle)
+    // which window.resize doesn't catch.
+    const observer = new ResizeObserver(() => {
+      setResizeKey(prev => prev + 1);
+    });
+    
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     // Delay mounting charts to ensure container dimensions are calculated
-    const timer = setTimeout(() => setIsMounted(true), 100);
+    const timer = setTimeout(() => setIsMounted(true), 150);
     return () => clearTimeout(timer);
   }, []);
 
@@ -120,42 +137,56 @@ const HodDashboard = () => {
 
 
   const stats = useMemo(() => {
-    const list = overview?.data || [];
-    const total = list.reduce((acc, b) => acc + b.total, 0);
-    const cleared = list.reduce((acc, b) => acc + b.cleared + (b.overridden || 0), 0);
-    const dues = list.reduce((acc, b) => acc + b.hasDues, 0);
-    const pending = list.reduce((acc, b) => acc + b.pending, 0);
+    const dataObj = overview?.data || {};
+    const list = Array.isArray(dataObj.batches) ? dataObj.batches : (Array.isArray(overview?.data) ? overview.data : []);
     
+    const total = list.reduce((acc, b) => acc + (b.total || 0), 0);
+    const cleared = list.reduce((acc, b) => acc + (b.cleared || 0) + (b.overridden || 0), 0);
+    const dues = list.reduce((acc, b) => acc + (b.hasDues || 0), 0);
+    const pending = list.reduce((acc, b) => acc + (b.pending || 0), 0);
+    
+    // Effort-based stats (individual approvals)
+    const totalItems = list.reduce((acc, b) => acc + (b.totalItems || 0), 0);
+    const approvedItems = list.reduce((acc, b) => acc + (b.approvedItems || 0), 0);
+    const effortRate = totalItems > 0 ? Math.round((approvedItems / totalItems) * 100) : 0;
+
     return {
       total,
       cleared,
       dues,
       pending,
+      totalItems,
+      approvedItems,
+      effortRate,
       completionRate: total > 0 ? Math.round((cleared / total) * 100) : 0,
-      activeCycles: list.length
+      activeCycles: list.length,
+      insights: dataObj.insights || null
     };
   }, [overview]);
 
   const chartData = useMemo(() => {
-    const list = overview?.data || [];
+    const dataObj = overview?.data || {};
+    const list = (Array.isArray(dataObj.batches) ? dataObj.batches : (Array.isArray(overview?.data) ? overview.data : []))
+      .filter(b => b.className || b.batchId);
     
-    // 1. Overall Status Distribution
-    const distribution = [
-      { name: 'Cleared', value: list.reduce((acc, b) => acc + b.cleared + (b.overridden || 0), 0), color: '#10b981' },
-      { name: 'Pending', value: list.reduce((acc, b) => acc + b.pending, 0), color: '#f59e0b' },
-      { name: 'Dues', value: list.reduce((acc, b) => acc + b.hasDues, 0), color: '#ef4444' }
-    ].filter(d => d.value > 0);
+    const insights = dataObj.insights || null;
 
-    // 2. Class-wise Progress
+    // 1. Due Type Breakdown (Real Insight)
+    const dueDistribution = insights?.dueBreakdown || [];
+
+    // 2. Class-wise Data with Progress Rate
     const batches = list.map(b => ({
-      name: b.className,
-      cleared: b.cleared + (b.overridden || 0),
-      pending: b.pending,
-      dues: b.hasDues,
+      name: b.className || `Batch ${b.batchId || '?' }`,
+      cleared: (b.cleared || 0) + (b.overridden || 0),
+      pending: b.pending || 0,
+      dues: b.hasDues || 0,
+      total: b.total || 0,
+      progress: b.totalItems > 0 ? Math.round((b.approvedItems / b.totalItems) * 100) : 0,
       batchId: b.batchId
-    }));
+    }))
+    .sort((a, b) => b.progress - a.progress);
 
-    return { distribution, batches };
+    return { dueDistribution, batches, bottlenecks: insights?.bottlenecks || [] };
   }, [overview]);
 
   if (loading && !overview) {
@@ -196,6 +227,7 @@ const HodDashboard = () => {
   return (
     <PageWrapper title={`${formatRole(user?.role)} Dashboard`} subtitle={`Overview — ${user?.department || 'Department'}`}>
       
+      <div ref={containerRef} className="space-y-10">
       {/* Minimal Hero Section */}
       <div className="flex flex-col lg:flex-row gap-6 mb-10">
         {/* Progress Card */}
@@ -205,9 +237,9 @@ const HodDashboard = () => {
           <div className="relative h-44 w-44 shrink-0">
              {/* Progress Circle container */}
              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className="text-4xl font-black text-navy leading-none">{stats.completionRate}%</span>
+                <span className="text-4xl font-black text-navy leading-none">{stats.effortRate}%</span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mt-2 flex items-center gap-1.5">
-                   <ShieldCheck size={12} /> Progress
+                   <ShieldCheck size={12} /> Approvals
                 </span>
              </div>
              {/* Using a simple SVG for the progress circle for a custom feel */}
@@ -224,11 +256,11 @@ const HodDashboard = () => {
                    stroke="currentColor" 
                    strokeWidth="8" 
                    strokeDasharray="283"
-                   strokeDashoffset={283 - (283 * stats.completionRate / 100)}
+                   strokeDashoffset={283 - (283 * stats.effortRate / 100)}
                    strokeLinecap="round"
                    className="text-emerald-500 transition-all duration-1000"
                    initial={{ strokeDashoffset: 283 }}
-                   animate={{ strokeDashoffset: 283 - (283 * stats.completionRate / 100) }}
+                   animate={{ strokeDashoffset: 283 - (283 * stats.effortRate / 100) }}
                 />
              </svg>
           </div>
@@ -256,6 +288,13 @@ const HodDashboard = () => {
               <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-red-500">With Dues</p>
                 <p className="text-xl font-black text-red-500">{stats.dues}</p>
+              </div>
+              <div className="space-y-1 col-span-2 pt-2 border-t border-zinc-100">
+                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Approvals Processed</p>
+                <div className="flex items-center gap-2">
+                   <p className="text-xl font-black text-navy">{stats.approvedItems}</p>
+                   <p className="text-xs font-bold text-zinc-400">/ {stats.totalItems}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -295,8 +334,8 @@ const HodDashboard = () => {
            
            <div className="h-[320px] w-full relative min-h-[320px]">
               {chartData.batches.length > 0 && isMounted ? (
-                <ResponsiveContainer width="100%" height="100%" minHeight={320}>
-                  <BarChart data={chartData.batches} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} barGap={8}>
+                <ResponsiveContainer key={`bar-${resizeKey}`} width="100%" height="100%" minHeight={320}>
+                  <ComposedChart data={chartData.batches} barGap={0}>
                     <defs>
                       <linearGradient id="colorCleared" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
@@ -311,7 +350,7 @@ const HodDashboard = () => {
                         <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="6 6" vertical={false} stroke="#f1f5f9" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis 
                       dataKey="name" 
                       axisLine={false} 
@@ -319,7 +358,8 @@ const HodDashboard = () => {
                       tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }} 
                       dy={15}
                     />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }} />
+                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }} />
+                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }} domain={[0, 100]} />
                     <Tooltip 
                       cursor={{ fill: '#f8fafc', radius: 8 }}
                       contentStyle={{ 
@@ -330,6 +370,7 @@ const HodDashboard = () => {
                         background: 'rgba(255, 255, 255, 0.95)',
                         backdropFilter: 'blur(10px)'
                       }}
+                      formatter={(value, name) => [value, name === 'progress' ? 'Progress %' : name.charAt(0).toUpperCase() + name.slice(1)]}
                     />
                     <Legend 
                       verticalAlign="top" 
@@ -337,10 +378,11 @@ const HodDashboard = () => {
                       iconType="circle" 
                       wrapperStyle={{ paddingBottom: '30px', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#64748b' }} 
                     />
-                    <Bar dataKey="cleared" fill="url(#colorCleared)" radius={[8, 8, 4, 4]} barSize={24} />
-                    <Bar dataKey="pending" fill="url(#colorPending)" radius={[8, 8, 4, 4]} barSize={24} />
-                    <Bar dataKey="dues" fill="url(#colorDues)" radius={[8, 8, 4, 4]} barSize={24} />
-                  </BarChart>
+                    <Bar yAxisId="left" dataKey="cleared" stackId="a" fill="url(#colorCleared)" radius={[0, 0, 0, 0]} barSize={24} />
+                    <Bar yAxisId="left" dataKey="pending" stackId="a" fill="url(#colorPending)" radius={[0, 0, 0, 0]} barSize={24} />
+                    <Bar yAxisId="left" dataKey="dues" stackId="a" fill="url(#colorDues)" radius={[6, 6, 0, 0]} barSize={24} />
+                    <Line yAxisId="right" type="monotone" dataKey="progress" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                  </ComposedChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-50/50 rounded-xl border border-dashed border-zinc-200">
@@ -360,77 +402,64 @@ const HodDashboard = () => {
            </div>
         </div>
 
-        {/* Distribution Doughnut (§10.1) */}
-        <div className="rounded-3xl lg:col-span-4 premium-card bg-white p-8 flex flex-col items-center relative overflow-hidden">
-           {/* <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-indigo-500 to-amber-500 opacity-50" /> */}
+        {/* Pending Bottlenecks & Insights */}
+        <div className="rounded-3xl lg:col-span-4 premium-card bg-white p-8 flex flex-col relative overflow-hidden">
            <div className="w-full text-left mb-8">
-              <h3 className="text-sm font-black text-navy uppercase tracking-[0.2em]">Departmental Stats</h3>
-              <p className="text-[10px] text-zinc-400 font-medium tracking-tight">System-wide status distribution</p>
+              <h3 className="text-sm font-black text-navy uppercase tracking-[0.2em]">Pending Bottlenecks</h3>
+              <p className="text-[10px] text-zinc-400 font-medium tracking-tight">Top 5 faculty with pending approvals</p>
            </div>
            
-           <div className="h-64 w-full relative min-h-[256px]">
-              {chartData.distribution.length > 0 && isMounted ? (
-                <>
-                  <ResponsiveContainer width="100%" height="100%" minHeight={256}>
-                    <PieChart>
-                      <Pie
-                        data={chartData.distribution}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={70}
-                        outerRadius={95}
-                        paddingAngle={10}
-                        cornerRadius={12}
-                        dataKey="value"
-                      >
-                        {chartData.distribution.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ 
-                          borderRadius: '16px', 
-                          border: 'none', 
-                          boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', 
-                          padding: '12px',
-                          background: 'rgba(255, 255, 255, 0.95)',
-                          backdropFilter: 'blur(8px)'
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-3xl font-black text-navy leading-none tracking-tighter">{stats.completionRate}%</span>
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400 mt-2">Certified</span>
+           <div className="flex-1 space-y-4">
+              {chartData.bottlenecks.length > 0 ? (
+                chartData.bottlenecks.map((faculty, idx) => (
+                  <div key={faculty._id} className="flex items-center justify-between p-4 rounded-2xl bg-zinc-50/50 border border-transparent hover:border-indigo-100 hover:bg-white transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs shadow-sm">
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <h4 className="text-[11px] font-black text-navy uppercase tracking-wider">{faculty.name}</h4>
+                        <p className="text-[9px] text-zinc-400 font-medium mt-0.5">Faculty Member</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-black text-amber-600 leading-none">{faculty.count}</span>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mt-1">Pending</p>
+                    </div>
                   </div>
-                </>
+                ))
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center opacity-10 grayscale scale-90 pointer-events-none">
-                   <Activity size={64} className="mb-2" />
-                   <p className="text-[9px] font-black uppercase tracking-widest">Awaiting Pulse</p>
+                <div className="h-full flex flex-col items-center justify-center text-center py-12">
+                  <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mb-4">
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <h4 className="text-[10px] font-black text-navy uppercase tracking-widest">Clear Pipeline</h4>
+                  <p className="text-[9px] text-zinc-400 mt-1">No major pending bottlenecks found</p>
                 </div>
               )}
            </div>
 
-           <div className="w-full space-y-3 mt-6">
-              {chartData.distribution.length > 0 ? chartData.distribution.map((item) => (
-                <div key={item.name} className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-50/50 hover:bg-zinc-50 border border-transparent hover:border-zinc-200/50 transition-all group">
-                  <div className="flex items-center gap-3">
-                    <div className="h-2.5 w-2.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)]" style={{ backgroundColor: item.color }} />
-                    <span className="text-[10px] font-black text-navy uppercase tracking-[0.1em] group-hover:translate-x-0.5 transition-transform">{item.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black text-navy">{Math.round((item.value / stats.total) * 100)}%</span>
-                    <span className="h-1 w-1 rounded-full bg-zinc-200" />
-                    <span className="text-[10px] font-bold text-zinc-400">{item.value} Units</span>
-                  </div>
+           {chartData.dueDistribution.length > 0 && (
+             <div className="mt-8 pt-8 border-t border-zinc-100">
+                <h4 className="text-[9px] font-black text-navy uppercase tracking-[0.2em] mb-6">Due Reasons Breakdown</h4>
+                <div className="grid grid-cols-2 gap-4">
+                   {chartData.dueDistribution.map((due, idx) => (
+                     <div key={idx} className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                           <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">{due.name}</span>
+                           <span className="text-[10px] font-black text-navy">{due.value}</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
+                           <div 
+                             className="h-full bg-indigo-500 rounded-full" 
+                             style={{ width: stats.dues > 0 ? `${(due.value / stats.dues) * 100}%` : '0%' }}
+                           />
+                        </div>
+                     </div>
+                   ))}
                 </div>
-              )) : (
-                <div className="p-4 text-center border border-dashed border-muted rounded-xl opacity-40">
-                   <p className="text-[9px] font-black uppercase tracking-widest">Calibration Pending</p>
-                </div>
-              )}
-           </div>
+             </div>
+           )}
         </div>
       </div>
 
@@ -448,7 +477,7 @@ const HodDashboard = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-             {(Array.isArray(overview?.data) ? overview.data : []).map((batch) => {
+             {(Array.isArray(overview?.data?.batches) ? overview.data.batches : (Array.isArray(overview?.data) ? overview.data : [])).map((batch) => {
                const progress = Math.round((batch.cleared / batch.total) * 100);
                return (
                 <div 
@@ -714,6 +743,7 @@ const HodDashboard = () => {
           </div>
         </div>
       </Modal>
+      </div>
     </PageWrapper>
   );
 };

@@ -5,7 +5,9 @@ import {
   getClassById,
   updateClass,
   deleteClass,
+  activateClass,
   assignClassTeacher,
+
   addSubjectAssignment,
   updateSubjectAssignment,
   removeSubjectAssignment,
@@ -30,6 +32,9 @@ router.route('/:id')
   .get(getClassById)
   .patch(updateClass)
   .delete(deleteClass);
+
+router.post('/:id/activate', activateClass);
+
 
 // Class teacher assignment
 router.patch('/:id/class-teacher', assignClassTeacher);

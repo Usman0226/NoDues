@@ -7,8 +7,8 @@ import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
-import { getSubjects, createSubject, updateSubject, deleteSubject, bulkDeleteSubjects } from '../../api/subjects';
-import { Plus, Upload, Filter, RefreshCw, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { getSubjects, createSubject, updateSubject, deleteSubject, bulkDeleteSubjects, activateSubject, bulkActivateSubjects } from '../../api/subjects';
+import { Plus, Upload, Filter, RefreshCw, AlertCircle, Edit, Trash2, CheckCircle } from 'lucide-react';
 import ImportStepper from '../../components/import/ImportStepper';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
@@ -19,13 +19,17 @@ const Subjects = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showActivate, setShowActivate] = useState(false);
+  // const [showBulkActivate, setShowBulkActivate] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [semesterFilter, setSemesterFilter] = useState('all');
+  const [includeInactive, setIncludeInactive] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isHod = user?.role === 'hod' || user?.role === 'ao';
   const canManage = isAdmin || isHod;
   const [submitting, setSubmitting] = useState(false);
+
   const [showImport, setShowImport] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -58,10 +62,11 @@ const Subjects = () => {
       page, 
       limit, 
       search: debouncedSearch,
-      semester: semesterFilter === 'all' ? undefined : semesterFilter 
+      semester: semesterFilter === 'all' ? undefined : semesterFilter,
+      includeInactive: includeInactive || undefined
     };
     fetchSubjects(params);
-  }, [fetchSubjects, page, limit, debouncedSearch, semesterFilter]);
+  }, [fetchSubjects, page, limit, debouncedSearch, semesterFilter, includeInactive]);
 
   const handleCreate = async () => {
     if (!formData.code || !formData.name) {
@@ -72,7 +77,7 @@ const Subjects = () => {
       await createSubject(formData);
       toast.success('Subject registered with catalog');
       setShowCreate(false);
-      fetchSubjects();
+      fetchSubjects({ includeInactive });
       setFormData({ code: '', name: '', semester: 1, isElective: false });
     } catch (err) {
       toast.error(err?.message || 'Failed to create subject');
@@ -101,7 +106,7 @@ const Subjects = () => {
       await updateSubject(selectedSubject._id, formData);
       toast.success('Subject updated successfully');
       setShowEdit(false);
-      fetchSubjects();
+      fetchSubjects({ includeInactive });
     } catch (err) {
       toast.error(err?.message || 'Failed to update subject');
     } finally {
@@ -114,13 +119,32 @@ const Subjects = () => {
     setShowDelete(true);
   };
 
+  const handleActivateClick = (subject) => {
+    setSelectedSubject(subject);
+    setShowActivate(true);
+  };
+
+  const handleActivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await activateSubject(selectedSubject._id);
+      toast.success('Subject reactivated successfully');
+      setShowActivate(false);
+      fetchSubjects({ includeInactive });
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reactivate subject');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     setSubmitting(true);
     try {
       await deleteSubject(selectedSubject._id);
       toast.success('Subject deactivated successfully');
       setShowDelete(false);
-      fetchSubjects();
+      fetchSubjects({ includeInactive });
     } catch (err) {
       toast.error(err?.message || 'Failed to deactivate subject');
     } finally {
@@ -135,13 +159,29 @@ const Subjects = () => {
       toast.success(`${selectedIds.length} subjects deactivated`);
       setShowBulkDelete(false);
       setSelectedIds([]);
-      fetchSubjects();
+      fetchSubjects({ includeInactive });
     } catch (err) {
       toast.error(err?.message || 'Failed to deactivate subjects');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleBulkActivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await bulkActivateSubjects(selectedIds);
+      toast.success(`${selectedIds.length} subjects reactivated`);
+      setShowBulkActivate(false);
+      setSelectedIds([]);
+      fetchSubjects({ includeInactive });
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reactivate subjects');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
 
   const columns = React.useMemo(() => [
     { key: 'code', label: 'Identity', render: (v) => <span className="font-mono text-[10px] font-black uppercase text-navy bg-offwhite px-2 py-0.5 rounded border border-muted/50">{v}</span> },
@@ -160,7 +200,9 @@ const Subjects = () => {
           <ActionMenu
             actions={[
               { label: 'Edit Subject', icon: Edit, onClick: () => handleEditClick(row) },
-              { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(row), variant: 'danger' },
+              row.isActive === false 
+                ? { label: 'Reactivate', icon: RefreshCw, onClick: () => handleActivateClick(row) }
+                : { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(row), variant: 'danger' },
             ]}
           />
         </div>
@@ -170,6 +212,8 @@ const Subjects = () => {
 
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showBulkActivate, setShowBulkActivate] = useState(false);
+
 
   return (
     <PageWrapper title="Subjects" subtitle="Centralized academic component subject for institution-wide mapping">
@@ -180,7 +224,7 @@ const Subjects = () => {
               setFormData({ code: '', name: '', semester: 1, isElective: false });
               setShowCreate(true);
             }} className="gap-2">
-              <Plus size={14} /> Register Subject
+              <Plus size={14} /> Add Subject
             </Button>
           )}
           {canManage && (
@@ -202,13 +246,20 @@ const Subjects = () => {
                 placeholder="Filter by Session"
              />
           </div>
+          <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+               onClick={() => setIncludeInactive(!includeInactive)}>
+             <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
+                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
+             </div>
+             <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Archived</span>
+          </div>
         </div>
         <Button 
           variant="ghost" 
           size="sm" 
           onClick={async () => {
             const hide = showGlobalLoader('Refreshing Subject Catalog...');
-            await fetchSubjects();
+            await fetchSubjects({ includeInactive });
             hide();
           }} 
           className="text-muted-foreground"
@@ -216,6 +267,7 @@ const Subjects = () => {
           <RefreshCw size={14} /> Reload
         </Button>
       </div>
+
 
       {error ? (
         <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
@@ -242,14 +294,24 @@ const Subjects = () => {
           selection={selectedIds}
           onSelectionChange={setSelectedIds}
           bulkActions={[
-            { 
-              label: 'Delete Subjects', 
-              icon: Trash2, 
-              onClick: () => setShowBulkDelete(true),
-              variant: 'danger'
-            }
+            ...(includeInactive ? [
+              { 
+                label: 'Reactivate Selected', 
+                icon: RefreshCw, 
+                onClick: () => setShowBulkActivate(true),
+                variant: 'primary'
+              }
+            ] : [
+              { 
+                label: 'Delete Subjects', 
+                icon: Trash2, 
+                onClick: () => setShowBulkDelete(true),
+                variant: 'danger'
+              }
+            ])
           ]}
         />
+
       )}
 
       {showCreate && (
@@ -395,7 +457,30 @@ const Subjects = () => {
       )}
 
       <ConfirmModal
+        isOpen={showActivate}
+        onClose={() => setShowActivate(false)}
+        onConfirm={handleActivateConfirm}
+        title="Reactivate Subject"
+        description={`Are you sure you want to reactivate ${selectedSubject?.name}? This will restore its visibility in the academic catalog.`}
+        confirmText="Reactivate"
+        isDestructive={false}
+        loading={submitting}
+      />
+
+      <ConfirmModal
+        isOpen={showBulkActivate}
+        onClose={() => setShowBulkActivate(false)}
+        onConfirm={handleBulkActivateConfirm}
+        title="Reactivate Multiple Subjects"
+        description={`You are about to reactivate ${selectedIds.length} subjects. This will make them available for assignments again.`}
+        confirmText="Reactivate All"
+        isDestructive={false}
+        loading={submitting}
+      />
+
+      <ConfirmModal
         isOpen={showDelete}
+
         onClose={() => setShowDelete(false)}
         onConfirm={handleDeleteConfirm}
         title="Deactivate Subject"

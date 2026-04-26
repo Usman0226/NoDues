@@ -8,7 +8,7 @@ import Modal from '../../components/ui/Modal';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { Upload, UserPlus, RefreshCw, AlertCircle, Edit, Trash2,Users } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
-import { getStudents, createStudent, updateStudent, deleteStudent, bulkDeactivateStudents, bulkAssignMentor } from '../../api/students';
+import { getStudents, createStudent, updateStudent, deleteStudent, bulkDeactivateStudents, bulkActivateStudents, bulkAssignMentor, activateStudent } from '../../api/students';
 import { getFaculty } from '../../api/faculty';
 import { getClasses } from '../../api/classes';
 import ImportStepper from '../../components/import/ImportStepper';
@@ -23,11 +23,14 @@ const StudentList = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showActivate, setShowActivate] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showBulkActivate, setShowBulkActivate] = useState(false);
   const [showBulkMentor, setShowBulkMentor] = useState(false);
+
   const [bulkMentorId, setBulkMentorId] = useState('');
   
   const [page, setPage] = useState(1);
@@ -145,7 +148,42 @@ const StudentList = () => {
     }
   };
 
+  const handleActivateClick = (student) => {
+    setSelectedStudent(student);
+    setShowActivate(true);
+  };
+
+  const handleActivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await activateStudent(selectedStudent._id);
+      toast.success('Student reactivated');
+      setShowActivate(false);
+      fetchStudents(studentQueryParams);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reactivate student');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBulkActivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await bulkActivateStudents(selectedIds);
+      toast.success(`${selectedIds.length} students reactivated`);
+      setShowBulkActivate(false);
+      setSelectedIds([]);
+      fetchStudents(studentQueryParams);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reactivate students');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleBulkDeactivateConfirm = async () => {
+
     setSubmitting(true);
     try {
       await bulkDeactivateStudents(selectedIds);
@@ -208,12 +246,15 @@ const StudentList = () => {
         <ActionMenu 
           actions={[
             { label: 'Edit', icon: Edit, onClick: () => handleEditClick(row) },
-            { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(row), variant: 'danger' }
+            row.isActive === false
+              ? { label: 'Reactivate', icon: RefreshCw, onClick: () => handleActivateClick(row) }
+              : { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(row), variant: 'danger' }
           ]} 
         />
       )
     }
   ];
+
 
   return (
     <PageWrapper title="Students" subtitle="List of all registered students">
@@ -279,13 +320,18 @@ const StudentList = () => {
               icon: Users, 
               onClick: () => setShowBulkMentor(true) 
             },
-            { 
+            includeInactive ? {
+              label: 'Reactivate Selected',
+              icon: RefreshCw,
+              onClick: () => setShowBulkActivate(true)
+            } : { 
               label: 'Archive Students', 
               icon: Trash2, 
               onClick: () => setShowBulkDelete(true),
               variant: 'danger'
             }
           ]}
+
         />
       )}
 
@@ -393,6 +439,27 @@ const StudentList = () => {
         isDestructive={true}
         loading={submitting}
       />
+
+      <ConfirmModal
+        isOpen={showActivate}
+        onClose={() => setShowActivate(false)}
+        onConfirm={handleActivateConfirm}
+        title="Reactivate Student"
+        description={`You are about to reactivate the account for ${selectedStudent?.name}. They will be restored to the active student directory.`}
+        confirmText="Reactivate"
+        loading={submitting}
+      />
+
+      <ConfirmModal
+        isOpen={showBulkActivate}
+        onClose={() => setShowBulkActivate(false)}
+        onConfirm={handleBulkActivateConfirm}
+        title="Reactivate Multiple Students"
+        description={`You are about to reactivate ${selectedIds.length} students. They will be restored to the active student directory.`}
+        confirmText="Reactivate All"
+        loading={submitting}
+      />
+
 
       <Modal isOpen={showBulkMentor} onClose={() => setShowBulkMentor(false)} title="Bulk Mentor Assignment">
         <div className="space-y-4">

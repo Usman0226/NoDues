@@ -8,3 +8,4 @@ export const deleteCoCurricularType = (id) => api.delete(`/co-curricular/${id}`)
 export const submitCoCurricular = (typeId, submittedData) => api.post(`/co-curricular/${typeId}/submit`, { submittedData });
 
 export const assignCoCurricularToMentors = (id, payload) => api.post(`/co-curricular/${id}/assign-mentors`, payload);
+export const activateCoCurricularType = (id) => api.post(`/co-curricular/${id}/activate`);

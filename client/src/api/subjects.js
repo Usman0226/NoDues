@@ -7,3 +7,5 @@ export const updateSubject = (id, data) => api.patch(`/subjects/${id}`, data);
 export const deleteSubject = (id) => api.delete(`/subjects/${id}`);
 
 export const bulkDeleteSubjects = (ids) => api.post('/subjects/bulk-delete', { ids });
+export const bulkActivateSubjects = (ids) => api.post('/subjects/bulk-activate', { ids });
+export const activateSubject = (id) => api.post(`/subjects/${id}/activate`);

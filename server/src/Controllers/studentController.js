@@ -684,6 +684,92 @@ export const removeElective = async (req, res, next) => {
   }
 };
 
+export const activateStudent = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+    const student = await Student.findById(req.params.id).session(session);
+
+    if (!student) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Student not found', 404));
+    }
+
+    // RBAC Check
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && 
+        student.departmentId.toString() !== req.user.departmentId.toString()) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Unauthorized: Access denied to other department students', 403));
+    }
+
+    student.isActive = true;
+    await student.save({ session });
+
+    await commitSafeTransaction(session);
+
+    invalidateEntityCache('student', student._id);
+
+    logger.info('student_activated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'ACTIVATE_STUDENT',
+      resource_id: student._id
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: student
+    });
+  } catch (err) {
+    if (session.inTransaction()) await abortSafeTransaction(session);
+    next(err);
+  } finally {
+    session.endSession();
+  }
+};
+
+export const bulkActivateStudents = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('IDs array is required', 400));
+    }
+
+    const query = { _id: { $in: ids } };
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
+      query.departmentId = req.user.departmentId;
+    }
+
+    const result = await Student.updateMany(query, { isActive: true }, { session });
+
+    await commitSafeTransaction(session);
+
+    // Invalidate caches
+    ids.forEach(id => invalidateEntityCache('student', id));
+
+    logger.info('students_bulk_activated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_ACTIVATE_STUDENT',
+      details: { count: result.modifiedCount, requested: ids.length }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (err) {
+    if (session.inTransaction()) await abortSafeTransaction(session);
+    next(err);
+  } finally {
+    session.endSession();
+  }
+};
+
+
 // ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
 
 export const bulkDeactivateStudents = async (req, res, next) => {

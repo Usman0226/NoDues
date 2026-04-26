@@ -197,6 +197,63 @@ export const deleteSubject = async (req, res, next) => {
   }
 };
 
+export const activateSubject = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const subject = await Subject.findById(id);
+    if (!subject) {
+      return next(new ErrorResponse('Subject not found', 404, 'NOT_FOUND'));
+    }
+
+    subject.isActive = true;
+    await subject.save();
+
+    logger.info('subject_activated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'ACTIVATE_SUBJECT',
+      resource_id: id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: subject,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const bulkActivateSubjects = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return next(new ErrorResponse('IDs array is required', 400));
+    }
+
+    const result = await Subject.updateMany(
+      { _id: { $in: ids } },
+      { isActive: true }
+    );
+
+    logger.info('subjects_bulk_activated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      action: 'BULK_ACTIVATE_SUBJECT',
+      details: { count: result.modifiedCount, requested: ids.length }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 // ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
 
 export const bulkDeleteSubjects = async (req, res, next) => {

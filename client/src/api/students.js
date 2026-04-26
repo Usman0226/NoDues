@@ -11,4 +11,6 @@ export const updateElective = (id, subjectId, data) => api.patch(`/students/${id
 export const removeElective = (id, subjectId) => api.delete(`/students/${id}/electives/${subjectId}`);
 
 export const bulkDeactivateStudents = (ids) => api.post('/students/bulk-deactivate', { ids });
+export const bulkActivateStudents = (ids) => api.post('/students/bulk-activate', { ids });
 export const bulkAssignMentor = (ids, mentorId) => api.post('/students/bulk-assign-mentor', { ids, mentorId });
+export const activateStudent = (id) => api.post(`/students/${id}/activate`);

@@ -14,28 +14,42 @@ import { formatRole } from '../../utils/formatters';
 
 const NAV_CONFIG = {
   [ROLES.ADMIN]: [
-    { label: 'Dashboard', path: '/admin', icon: LayoutDashboard },
-    { label: 'Departments', path: '/admin/departments', icon: Building2 },
-    { label: 'Students', path: '/admin/students', icon: Users },
-    { label: 'Faculty', path: '/admin/faculty', icon: Users },
-    { label: 'Subjects', path: '/admin/subjects', icon: BookOpen },
-    { label: 'Batches', path: '/admin/batches', icon: Layers },
-    { label: 'Co-Curricular', path: '/admin/co-curricular', icon: ClipboardCheck },
-    { label: 'Email Monitor', path: '/admin/email-monitor', icon: Inbox },
+    { label: 'General', icon: LayoutDashboard, items: [
+      { label: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+      { label: 'Email Monitor', path: '/admin/email-monitor', icon: Inbox },
+    ]},
+    { label: 'Management', icon: Building2, items: [
+      { label: 'Departments', path: '/admin/departments', icon: Building2 },
+      { label: 'Faculty', path: '/admin/faculty', icon: Users },
+      { label: 'Students', path: '/admin/students', icon: Users },
+    ]},
+    { label: 'Academic', icon: BookOpen, items: [
+      { label: 'Subjects', path: '/admin/subjects', icon: BookOpen },
+      { label: 'Batches', path: '/admin/batches', icon: Layers },
+      { label: 'Co-Curricular', path: '/admin/co-curricular', icon: ClipboardCheck },
+    ]},
   ],
-  [ROLES.HOD]: [
-    { label: 'Dashboard', path: '/hod', icon: LayoutDashboard },
-    { label: 'Approvals (Dept.)', path: '/faculty/pending', icon: ClipboardCheck },
-    { label: 'Classes', path: '/hod/classes', icon: GraduationCap },
-    { label: 'My Classes', path: '/hod/my-classes', icon: GraduationCap },
-    { label: 'Students', path: '/hod/students', icon: Users },
-    { label: 'Faculty', path: '/hod/faculty', icon: Users },
-    { label: 'Subjects', path: '/hod/subjects', icon: BookOpen },
-    { label: 'Batches', path: '/hod/batches', icon: Layers },
-    { label: 'Co-Curricular', path: '/hod/co-curricular', icon: ClipboardCheck },
-    { label: 'Dues', path: '/hod/dues', icon: AlertTriangle },
-    { label: 'Overrides', path: '/hod/overrides', icon: Shield },
-    { label: 'Action History', path: '/faculty/history', icon: History },
+  [ROLES.HOD || ROLES.AO]: [
+    { label: 'General', icon: LayoutDashboard, items: [
+      { label: 'Dashboard', path: '/hod', icon: LayoutDashboard },
+      { label: 'Action History', path: '/faculty/history', icon: History },
+    ]},
+    { label: 'Academic', icon: BookOpen, items: [
+      { label: 'My Classes', path: '/hod/my-classes', icon: GraduationCap },
+      { label: 'Classes', path: '/hod/classes', icon: GraduationCap },
+      { label: 'Subjects', path: '/hod/subjects', icon: BookOpen },
+      { label: 'Co-Curricular', path: '/hod/co-curricular', icon: ClipboardCheck },
+    ]},
+    { label: 'Management', icon: Users, items: [
+      { label: 'Students', path: '/hod/students', icon: Users },
+      { label: 'Faculty', path: '/hod/faculty', icon: Users },
+    ]},
+    { label: 'No Dues', icon: ClipboardCheck, items: [
+      { label: 'Approvals (Dept.)', path: '/faculty/pending', icon: ClipboardCheck },
+      { label: 'Dues', path: '/hod/dues', icon: AlertTriangle },
+      { label: 'Overrides', path: '/hod/overrides', icon: Shield },
+      { label: 'Batches', path: '/hod/batches', icon: Layers },
+    ]},
   ],
   [ROLES.FACULTY]: [
     { label: 'Pending', path: '/faculty/pending', icon: ClipboardCheck },
@@ -46,12 +60,132 @@ const NAV_CONFIG = {
 
 NAV_CONFIG[ROLES.AO] = NAV_CONFIG[ROLES.HOD];
 
+const SidebarLink = ({ item, collapsed, location, onMobileClose, isSubItem = false }) => {
+  const getIsActive = () => {
+    if (item.path === '/hod/classes') {
+      return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
+    }
+    if (item.path === '/hod/my-classes') {
+      return location.pathname.startsWith('/hod/my-classes');
+    }
+    return location.pathname === item.path ||
+      (item.path.endsWith('/batches') && location.pathname.includes('/batch/')) ||
+      (item.path !== '/' && !['/admin', '/hod', '/faculty'].includes(item.path) && location.pathname.startsWith(item.path + '/'));
+  };
+
+  const isActive = getIsActive();
+  const Icon = item.icon;
+
+  return (
+    <NavLink
+      to={item.path}
+      onClick={() => onMobileClose?.()}
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group border border-transparent
+        ${isActive
+          ? 'bg-white/4 text-white shadow-lg shadow-black/10'
+          : 'text-indigo-100/55 hover:bg-white/7 hover:text-white hover:border-white/10'
+        }`}
+    >
+      <Icon size={18} className={`shrink-0 ${isActive ? 'text-gold' : 'text-indigo-100/55 group-hover:text-white'}`} />
+      <div className={`nav-text text-[10px] truncate transition-all duration-300 overflow-hidden ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
+        {item.label}
+      </div>
+    </NavLink>
+  );
+};
+
+const SidebarSection = ({ section, collapsed, location, onMobileClose, isExpanded, onToggle }) => {
+  const getHasActiveChild = () => {
+    return section.items.some(item => {
+      if (item.path === '/hod/classes') {
+        return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
+      }
+      // Strict matching for base routes to avoid multi-section highlights
+      if (['/admin', '/hod', '/faculty'].includes(item.path)) {
+        return location.pathname === item.path;
+      }
+      return location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+    });
+  };
+
+  const hasActiveChild = getHasActiveChild();
+
+  const Icon = section.icon;
+
+  return (
+    <div className="space-y-1">
+      <button
+        onClick={onToggle}
+        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group border
+          ${hasActiveChild && !collapsed
+            ? 'bg-white/10 border-white/10 text-white shadow-xl shadow-black/10'
+            : 'border-transparent text-indigo-100/55 hover:bg-white/7 hover:text-white hover:border-white/10'
+          }`}
+      >
+        <div className="flex items-center gap-3">
+          <Icon size={18} className={`shrink-0 ${hasActiveChild && !collapsed ? 'text-white' : 'text-indigo-100/55 group-hover:text-white'}`} />
+          <div className={`nav-text text-[10px] truncate transition-all duration-300 overflow-hidden ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
+            {section.label}
+          </div>
+        </div>
+        <div className={`transition-all duration-300 ${collapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
+          <ChevronRight
+            size={14}
+            className={`transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}
+          />
+        </div>
+      </button>
+
+      <div className={`grid transition-all duration-500 ease-in-out 
+        ${isExpanded && !collapsed ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+      >
+        <div className="overflow-hidden">
+          <div className="pl-6 space-y-1 mt-1">
+            {section.items.map((item) => (
+              <SidebarLink 
+                key={item.path} 
+                item={item} 
+                collapsed={collapsed} 
+                location={location} 
+                onMobileClose={onMobileClose}
+                isSubItem={true}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuth();
   const location = useLocation();
   const { isFeedbackOpen, openFeedback, closeFeedback } = useFeedback();
   const navItems = React.useMemo(() => NAV_CONFIG[user?.role] || [], [user?.role]);
+
+  // Accordion state: only one section expanded at a time
+  const [expandedSection, setExpandedSection] = useState(null);
+
+  // Auto-expand section containing active link on location change
+  useEffect(() => {
+    const activeSection = navItems.find(section => 
+      section.items?.some(item => {
+        if (item.path === '/hod/classes') {
+          return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
+        }
+        // Strict matching for base routes to avoid incorrect expansion
+        if (['/admin', '/hod', '/faculty'].includes(item.path)) {
+          return location.pathname === item.path;
+        }
+        return location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+      })
+    );
+    if (activeSection) {
+      setExpandedSection(activeSection.label);
+    }
+  }, [location.pathname, navItems]);
 
   const lastPath = React.useRef(location.pathname);
   
@@ -88,37 +222,28 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
 
       <nav className="flex-1 py-7 px-4 space-y-2 overflow-y-auto no-scrollbar">
         {navItems.map((item) => {
-          // Explicit matching rules for HoD portal to avoid path overlap
-          const getIsActive = () => {
-            if (item.path === '/hod/classes') {
-              return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
-            }
-            if (item.path === '/hod/my-classes') {
-              return location.pathname.startsWith('/hod/my-classes');
-            }
-            return location.pathname === item.path ||
-              (item.path.endsWith('/batches') && location.pathname.includes('/batch/')) ||
-              (item.path !== '/' && !['/admin', '/hod', '/faculty'].includes(item.path) && location.pathname.startsWith(item.path + '/'));
-          };
-
-          const isActive = getIsActive();
-          const Icon = item.icon;
+          if (item.items) {
+            return (
+              <SidebarSection
+                key={item.label}
+                section={item}
+                collapsed={collapsed}
+                location={location}
+                onMobileClose={onMobileClose}
+                isExpanded={expandedSection === item.label}
+                onToggle={() => setExpandedSection(expandedSection === item.label ? null : item.label)}
+              />
+            );
+          }
 
           return (
-            <NavLink
+            <SidebarLink
               key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group border
-                ${isActive
-                  ? 'bg-white/12 border-white/20 text-white shadow-xl shadow-black/20'
-                  : 'border-transparent text-indigo-100/55 hover:bg-white/7 hover:text-white hover:border-white/10'
-                }`}
-            >
-              <Icon size={18} className={`shrink-0 ${isActive ? 'text-white' : 'text-indigo-100/55 group-hover:text-white'}`} />
-              <div className={`nav-text text-[10px] truncate transition-all duration-300 overflow-hidden ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
-                {item.label}
-              </div>
-            </NavLink>
+              item={item}
+              collapsed={collapsed}
+              location={location}
+              onMobileClose={onMobileClose}
+            />
           );
         })}
 

@@ -25,14 +25,15 @@ export const getOverview = async (req, res, next) => {
         departmentId: deptId,
         status: 'active',
       })
-        .select('_id className semester academicYear status initiatedAt')
+        .select('_id classId className semester academicYear status initiatedAt')
+        .populate('classId', 'name')
         .lean();
 
-      if (!activeBatches.length) return [];
+      if (!activeBatches.length) return { batches: [], insights: null };
 
       const batchIds = activeBatches.map((b) => b._id);
 
-      // Single aggregation — counts cleared/hasDues/pending/overridden per batch
+      // Aggregation 1: Student-level status
       const statusCounts = await NodueRequest.aggregate([
         { $match: { batchId: { $in: batchIds } } },
         {
@@ -47,13 +48,69 @@ export const getOverview = async (req, res, next) => {
         },
       ]);
 
-      const countMap = Object.fromEntries(statusCounts.map((s) => [s._id.toString(), s]));
+      // Aggregation 2: Approval-level status (the "Approvals" 142 items)
+      const approvalCounts = await NodueApproval.aggregate([
+        { $match: { batchId: { $in: batchIds } } },
+        {
+          $group: {
+            _id:           '$batchId',
+            totalItems:    { $sum: 1 },
+            approvedItems: { $sum: { $cond: [{ $eq: ['$action', 'approved'] }, 1, 0] } }
+          }
+        }
+      ]);
 
-      return activeBatches.map((b) => {
+      // Aggregation 3: Due Type Breakdown (Insights 1)
+      const dueBreakdown = await NodueApproval.aggregate([
+        { $match: { batchId: { $in: batchIds }, action: 'due_marked' } },
+        {
+          $group: {
+            _id: '$dueType',
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { count: -1 } }
+      ]);
+
+      // Aggregation 4: Faculty Bottlenecks (Insights 2)
+      const bottlenecks = await NodueApproval.aggregate([
+        { $match: { batchId: { $in: batchIds }, action: { $in: ['pending', 'not_submitted'] } } },
+        {
+          $group: {
+            _id: '$facultyId',
+            pendingCount: { $sum: 1 }
+          }
+        },
+        { $sort: { pendingCount: -1 } },
+        { $limit: 5 },
+        {
+          $lookup: {
+            from: 'faculties',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'faculty'
+          }
+        },
+        { $unwind: '$faculty' },
+        {
+          $project: {
+            _id: 1,
+            name: '$faculty.name',
+            count: '$pendingCount'
+          }
+        }
+      ]);
+
+      const countMap = Object.fromEntries(statusCounts.map((s) => [s._id.toString(), s]));
+      const approvalMap = Object.fromEntries(approvalCounts.map((s) => [s._id.toString(), s]));
+
+      const batches = activeBatches.map((b) => {
         const counts = countMap[b._id.toString()] ?? { total: 0, cleared: 0, hasDues: 0, pending: 0, overridden: 0 };
+        const apCounts = approvalMap[b._id.toString()] ?? { totalItems: 0, approvedItems: 0 };
+        
         return {
           batchId:      b._id,
-          className:    b.className,
+          className:    b.className || b.classId?.name || `Batch ${b._id.toString().slice(-4)}`,
           semester:     b.semester,
           academicYear: b.academicYear,
           status:       b.status,
@@ -62,9 +119,22 @@ export const getOverview = async (req, res, next) => {
           hasDues:      counts.hasDues,
           pending:      counts.pending,
           overridden:   counts.overridden,
+          totalItems:    apCounts.totalItems,
+          approvedItems: apCounts.approvedItems,
           initiatedAt:  b.initiatedAt,
         };
       });
+
+      return {
+        batches,
+        insights: {
+          dueBreakdown: dueBreakdown.map(d => ({ 
+            name: d._id ? d._id.charAt(0).toUpperCase() + d._id.slice(1) : 'Other', 
+            value: d.count 
+          })),
+          bottlenecks
+        }
+      };
     });
 
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
@@ -74,8 +144,6 @@ export const getOverview = async (req, res, next) => {
   }
 };
 
-// ── GET /api/hod/activity ─────────────────────────────────────────────────────
-// Last 10 departmental actions: approvals/dues marked by faculty OR overrides by HoD
 export const getActivity = async (req, res, next) => {
   try {
     const deptId = hodDept(req);

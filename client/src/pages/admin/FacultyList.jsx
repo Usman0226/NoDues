@@ -5,7 +5,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { Plus, Upload, Mail, UserPlus, RefreshCw, AlertCircle, Edit, Trash2, Eye } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
-import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getFacultyClasses, resendCredentials, bulkDeactivateFaculty, bulkResendCredentials, bulkUpdateRoles } from '../../api/faculty';
+import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getFacultyClasses, resendCredentials, bulkDeactivateFaculty, bulkResendCredentials, bulkUpdateRoles, activateFaculty, bulkActivateFaculty } from '../../api/faculty';
 import { getDepartments } from '../../api/departments';
 import ImportStepper from '../../components/import/ImportStepper';
 import ActionMenu from '../../components/ui/ActionMenu';
@@ -28,6 +28,7 @@ const FacultyList = () => {
   const [showImport, setShowImport] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showActivate, setShowActivate] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [selectedFaculty, setSelectedFaculty] = useState(null);
   const [facultyClasses, setFacultyClasses] = useState([]);
@@ -35,7 +36,9 @@ const FacultyList = () => {
   const [submitting, setSubmitting] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showBulkActivate, setShowBulkActivate] = useState(false);
   const [showBulkRoleModal, setShowBulkRoleModal] = useState(false);
+
   const [bulkRoleData, setBulkRoleData] = useState({ targetRole: 'mentor', action: 'add' });
   
   // Pagination & Search State
@@ -163,7 +166,27 @@ const FacultyList = () => {
     }
   };
 
+  const handleActivateClick = (faculty) => {
+    setSelectedFaculty(faculty);
+    setShowActivate(true);
+  };
+
+  const handleActivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await activateFaculty(selectedFaculty._id);
+      toast.success('Faculty account reactivated successfully');
+      setShowActivate(false);
+      fetchFaculty();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reactivate faculty');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleViewClasses = async (faculty) => {
+
     setSelectedFaculty(faculty);
     setShowDetails(true);
     setClassesLoading(true);
@@ -210,13 +233,16 @@ const FacultyList = () => {
               { label: 'View Classes', icon: Eye, onClick: () => handleViewClasses(row) },
               { label: 'Edit Account', icon: Edit, onClick: () => handleEditClick(row) },
               { label: 'Resend Login', icon: Mail, onClick: () => handleResendCreds(row) },
-              { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(row), variant: 'danger' },
+              row.isActive === false 
+                ? { label: 'Reactivate', icon: RefreshCw, onClick: () => handleActivateClick(row) }
+                : { label: 'Deactivate', icon: Trash2, onClick: () => handleDeleteClick(row), variant: 'danger' },
             ]}
           />
         </div>
       )
     }
   ];
+
 
   const handleResendCreds = async (faculty) => {
     const toastId = toast.loading('Regenerating credentials...');
@@ -254,7 +280,23 @@ const FacultyList = () => {
     }
   };
 
+  const handleBulkActivateConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await bulkActivateFaculty(selectedIds);
+      toast.success(`${selectedIds.length} faculty accounts reactivated`);
+      setShowBulkActivate(false);
+      setSelectedIds([]);
+      fetchFaculty();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reactivate accounts');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleBulkRoleUpdate = async () => {
+
     setSubmitting(true);
     const toastId = toast.loading('Updating academic roles...');
     try {
@@ -325,13 +367,18 @@ const FacultyList = () => {
               icon: RefreshCw, 
               onClick: handleBulkResendCreds 
             },
-            { 
+            includeInactive ? {
+              label: 'Reactivate Selected',
+              icon: RefreshCw,
+              onClick: () => setShowBulkActivate(true)
+            } : { 
               label: 'Archive Selected', 
               icon: Trash2, 
               onClick: () => setShowBulkDelete(true),
               variant: 'danger'
             }
           ]}
+
         />
       )}
 
@@ -520,6 +567,27 @@ const FacultyList = () => {
         isDestructive={true}
         loading={submitting}
       />
+
+      <ConfirmModal
+        isOpen={showActivate}
+        onClose={() => setShowActivate(false)}
+        onConfirm={handleActivateConfirm}
+        title="Reactivate Faculty"
+        description={`You are about to reactivate the account for ${selectedFaculty?.name}. This will restore their access to the system.`}
+        confirmText="Reactivate"
+        loading={submitting}
+      />
+
+      <ConfirmModal
+        isOpen={showBulkActivate}
+        onClose={() => setShowBulkActivate(false)}
+        onConfirm={handleBulkActivateConfirm}
+        title="Reactivate Multiple Faculty"
+        description={`You are about to reactivate ${selectedIds.length} faculty accounts. This will restore their access to the system.`}
+        confirmText="Reactivate All"
+        loading={submitting}
+      />
+
 
       {showBulkRoleModal && (
         <Modal 

@@ -10,6 +10,8 @@ import {
   bulkDeactivateFaculty,
   bulkResendCredentials,
   bulkUpdateRoles,
+  activateFaculty,
+  bulkActivateFaculty,
 } from '../Controllers/facultyController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -38,9 +40,12 @@ router.route('/:id')
   .delete(asyncHandler(deleteFaculty));
 
 router.post('/:id/resend-creds', asyncHandler(resendCredentials));
+router.post('/:id/activate', asyncHandler(activateFaculty));
 
 router.post('/bulk-deactivate', asyncHandler(bulkDeactivateFaculty));
+router.post('/bulk-activate', asyncHandler(bulkActivateFaculty));
 router.post('/bulk-resend-creds', asyncHandler(bulkResendCredentials));
 router.post('/bulk-update-roles', asyncHandler(bulkUpdateRoles));
+
 
 export default router;
