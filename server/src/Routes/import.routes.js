@@ -20,7 +20,7 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(protect);
-router.use(RoleGuard(['admin', 'hod']));
+router.use(RoleGuard(['admin', 'hod', 'ao']));
 
 // Templates
 router.get('/template/:type', getTemplate);

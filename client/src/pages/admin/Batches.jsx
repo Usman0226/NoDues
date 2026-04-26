@@ -16,7 +16,8 @@ const Batches = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showGlobalLoader } = useUI();
-  const basePath = user?.role === 'hod' ? '/hod' : '/admin';
+  const isStaff = user?.role === 'hod' || user?.role === 'ao';
+  const basePath = isStaff ? '/hod' : '/admin';
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkClose, setShowBulkClose] = useState(false);
@@ -34,7 +35,7 @@ const Batches = () => {
       limit, 
       search: debouncedSearch, 
       status: statusFilter,
-      departmentId: user?.role === 'hod' ? user.departmentId : undefined
+      departmentId: isStaff ? user.departmentId : undefined
     }],
     immediate: false
   });
@@ -57,7 +58,7 @@ const Batches = () => {
       search: debouncedSearch,
       status: statusFilter === 'all' ? undefined : statusFilter
     };
-    if (user?.role === 'hod') params.departmentId = user.departmentId;
+    if (isStaff) params.departmentId = user.departmentId;
     fetchBatches(params);
   }, [fetchBatches, user?.role, user?.departmentId, page, limit, debouncedSearch, statusFilter]);
 

@@ -19,7 +19,7 @@ import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } fro
 const validateEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
 
 const checkDeptScope = (user, deptId) => {
-  if (user.role === 'hod' && deptId.toString() !== user.departmentId) {
+  if (['hod', 'ao'].includes(user.role) && deptId.toString() !== user.departmentId) {
     throw new ErrorResponse('Access denied: Department outside your scope', 403, 'AUTH_DEPARTMENT_SCOPE');
   }
 };

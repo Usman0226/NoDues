@@ -22,7 +22,7 @@ import { useAuth } from '../../hooks/useAuth';
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isHod = user?.role === 'hod';
+  const isHod = user?.role === 'hod' || user?.role === 'ao';
   const basePath = isHod ? '/hod' : '/admin';
   const { showGlobalLoader } = useUI();
 

@@ -18,6 +18,7 @@ import { getPendingApprovals, approveRecord, bulkApproveRecords, markDueRecord, 
 import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2, Search, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
+import { formatRole } from '../../utils/formatters';
 
 
 const BASE_TABS = [
@@ -77,7 +78,7 @@ const ClassDetail = () => {
   const [loadingStudentId, setLoadingStudentId] = useState(null);
 
   const { user } = useAuth();
-  const isHod = user?.role === 'hod';
+  const isHod = user?.role === 'hod' || user?.role === 'ao';
   const basePath = isHod ? '/hod' : '/admin';
 
   const { data: response, loading, refreshing, error, request: fetchClass } = useApi(() => getClass(classId), { 
@@ -617,7 +618,9 @@ const SUBJECT_COLS = [
       width: '180px',
       render: (_, row) => (
         <div className="leading-tight">
-          <p className="text-[10px] font-black uppercase tracking-widest text-navy/50">HoD Approval</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-navy/50">
+            {formatRole(user?.role)} Approval
+          </p>
           <p className="text-xs text-muted-foreground">{row.className || classData?.name || '—'}</p>
         </div>
       )
@@ -716,7 +719,7 @@ const SUBJECT_COLS = [
     setSubmitting(true);
     try {
       await approveRecord(approvalId);
-      toast.success('HoD approval recorded');
+      toast.success(`${formatRole(user?.role)} approval recorded`);
       await refreshHodApprovals();
       fetchClass();
     } catch (err) {
@@ -770,7 +773,7 @@ const SUBJECT_COLS = [
         dueType: hodDueForm.dueType,
         remarks: hodDueForm.remarks?.trim() || null,
       });
-      toast.success('Due marked by HoD');
+      toast.success(`Due marked by ${formatRole(user?.role)}`);
       setHodDueModal(null);
       setHodDueForm({ dueType: 'other', remarks: '' });
       await refreshHodApprovals();

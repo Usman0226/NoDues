@@ -13,7 +13,7 @@ import { RoleGuard } from '../middlewares/RoleGuard.js';
 const router = Router();
 
 router.use(protect);
-router.use(RoleGuard(['admin', 'faculty', 'hod'])); // admin can view, faculty and hod can action approvals
+router.use(RoleGuard(['admin', 'faculty', 'hod', 'ao'])); // admin can view, faculty, hod, and ao can action approvals
 
 router.get('/pending',  getPendingApprovals);
 router.get('/history',  getApprovalHistory);

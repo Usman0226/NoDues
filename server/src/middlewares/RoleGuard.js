@@ -34,7 +34,7 @@ export const DepartmentGuard = async (req, res, next) => {
     const { departmentId, batchId, classId, studentId } = { ...req.params, ...req.query };
     const userDeptId = req.user.departmentId?.toString();
 
-    if (req.user.role === 'hod') {
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
       // 1. Explicit Department Check
       if (departmentId && departmentId !== userDeptId) {
         return next(new ErrorResponse('Access denied: Unauthorized department context', 403, 'AUTH_DEPARTMENT_SCOPE'));

@@ -47,7 +47,7 @@ const StudentList = () => {
   }, [searchTerm]);
 
   const { user } = useAuth();
-  const isHod = user?.role === 'hod';
+  const isHod = user?.role === 'hod' || user?.role === 'ao';
   const studentQueryParams = useMemo(() => ({
     page,
     limit,

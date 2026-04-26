@@ -313,11 +313,15 @@ const MemoizedClearanceCard = React.memo(({
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 text-indigo-600">
                 <Shield size={14} strokeWidth={3} />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em]">HoD Authorization</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                  {item.roleTag === 'ao' ? 'AO Authorization' : 'HoD Authorization'}
+                </span>
               </div>
               <div className="space-y-1">
                  <p className="text-[9px] font-black uppercase text-indigo-800/30 tracking-wider">Note</p>
-                 <p className="text-sm font-bold text-indigo-900/70 leading-snug">{item.remarks || 'Electronic override authorized by department head.'}</p>
+                 <p className="text-sm font-bold text-indigo-900/70 leading-snug">
+                   {item.remarks || ` override authorized by ${item.roleTag === 'ao' ? 'Academic Officer' : 'department head'}.`}
+                 </p>
               </div>
             </div>
           )}
@@ -681,22 +685,24 @@ const StudentStatus = () => {
 
                 <div className="space-y-5">
                    {submissionModal.item?.formFields?.map((field, idx) => {
-                      const label = field.label || 'Field';
+                      const rawLabel = field.label || 'Field';
+                      const label = rawLabel.replace(/\s*\(y\/n\)\s*/gi, '').trim();
+                      const isBooleanType = rawLabel.toLowerCase().includes('(y/n)');
                       const type = field.type || 'text';
                       const required = field.required;
                       
                       return (
                         <div key={idx}>
-                           <label className="block text-[10px] uppercase tracking-widest font-black text-navy/40 mb-2">
+                           <label className="block text-[10px] uppercase tracking-widest font-black text-navy/90 mb-2">
                               {label} {required && <span className="text-status-due">*</span>}
                            </label>
                            {type === 'text' ? (
                               <input 
                                 type="text"
-                                className="w-full px-4 py-3 rounded-xl border border-zinc-100 bg-zinc-50/50 text-sm font-bold focus:ring-2 focus:ring-navy/5 outline-none transition-all"
-                                placeholder={`Enter ${label.toLowerCase()}...`}
-                                value={formData[label] || ''}
-                                onChange={(e) => setFormData({ ...formData, [label]: e.target.value })}
+                                className="w-full px-4 py-3 rounded-xl border border-zinc-300 bg-zinc-50/50 text-sm font-bold focus:ring-2 focus:ring-navy/5 outline-none transition-all"
+                                placeholder={isBooleanType ? 'Yes / No' : 'Enter details...'}
+                                value={formData[rawLabel] || ''}
+                                onChange={(e) => setFormData({ ...formData, [rawLabel]: e.target.value })}
                               />
                            ) : type === 'date' ? (
                               <input 
@@ -711,8 +717,8 @@ const StudentStatus = () => {
                                    type="text"
                                    className="w-full px-4 py-3 rounded-xl border border-zinc-100 bg-zinc-50/50 text-sm font-bold focus:ring-2 focus:ring-navy/5 outline-none transition-all pr-12"
                                    placeholder="Paste public link to document (Drive/S3)..."
-                                   value={formData[label] || ''}
-                                   onChange={(e) => setFormData({ ...formData, [label]: e.target.value })}
+                                   value={formData[rawLabel] || ''}
+                                   onChange={(e) => setFormData({ ...formData, [rawLabel]: e.target.value })}
                                  />
                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-300 group-focus-within:text-navy transition-colors">
                                     <FileUp size={16} />

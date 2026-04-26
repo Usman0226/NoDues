@@ -13,16 +13,16 @@ import {
 } from 'lucide-react';
 
 const getApprovalLabel = (item) => {
-  if (item.type === 'class_teacher') return 'Academic Advisor (Class Teacher)';
+  if (item.type === 'class_teacher') return 'Class Teacher';
   if (item.type === 'mentor') return 'Personal Mentor';
-  if (item.type === 'hodApproval' || item.type === 'office') return 'Department Clearance (HoD)';
+  if (item.type === 'hodApproval' || item.type === 'office') return 'HoD';
   return `${item.subjectName || 'Departmental Component'}${item.subjectCode ? ` (${item.subjectCode})` : ''}`;
 };
 
 const BatchStudentDetail = () => {
   const { batchId, studentId } = useParams();
   const { user } = useAuth();
-  const isHod = user?.role === 'hod';
+  const isHod = user?.role === 'hod' || user?.role === 'ao';
   const basePath = isHod ? '/hod' : '/admin';
 
   const { data: detail, loading, error, request: fetchDetail } = useApi(() => getBatchStudentDetail(batchId, studentId), { immediate: true });

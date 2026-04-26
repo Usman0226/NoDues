@@ -1,20 +1,27 @@
 {
-  "last_updated": "2026-04-25T12:24:00Z",
+  "last_updated": "2026-04-26T13:45:00Z",
   "completed": [
-    "Backend logic for co-curricular class teacher assignment",
-    "Frontend UI for co-curricular template creation with Class Teacher option",
-    "Frontend UI for manual co-curricular assignment to Class Teachers",
-    "Student status page label update for Class Teacher clearances"
+    "AO role implementation in Faculty model",
+    "Role derivation logic in authController",
+    "Audit logging for AO actions in approvalController",
+    "Sidebar and Navbar UI updates for AO role",
+    "Recovery of classController and Navbar regressions",
+    "Database migration to sync faculty roles and fix 'Achivements' typos",
+    "Dynamic AO/HOD Dashboard titles",
+    "Cleaned up student submission labels and placeholders"
   ],
   "in_progress": [],
-  "pending": [
-    "End-to-end verification in browser with live data"
-  ],
+  "pending": [],
   "decisions": [
     {
-      "context": "Assignment strategy for students without a class teacher",
-      "decision": "Fallback to the default coordinatorId specified in the template",
-      "trade_offs": "Ensures no student is left without an assigned faculty, even if the class hierarchy is incomplete."
+      "context": "AOs were being treated as faculty due to stale database fields.",
+      "decision": "Ran a migration script to synchronize the 'role' field with 'roleTags' and invalidated caches.",
+      "trade_offs": "Requires user to relogin to see updated role in existing sessions."
+    },
+    {
+      "context": "UI displayed redundant placeholders like 'Enter submitted in asvico portal (y/n)...'",
+      "decision": "Implemented label cleaning and conditional placeholders in the Student Status component.",
+      "trade_offs": "Relies on string pattern matching for '(y/n)' which handles most but not all edge cases."
     }
   ],
   "blockers": []

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useFeedback } from '../../hooks/useFeedback';
 import FeedbackModal from '../Feedback/FeedbackModal';
+import { formatRole } from '../../utils/formatters';
 
 const NAV_CONFIG = {
   [ROLES.ADMIN]: [
@@ -42,6 +43,8 @@ const NAV_CONFIG = {
     { label: 'History', path: '/faculty/history', icon: History },
   ],
 };
+
+NAV_CONFIG[ROLES.AO] = NAV_CONFIG[ROLES.HOD];
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -135,7 +138,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
         <div className="rounded-xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
           <span className="block text-[8px] text-indigo-100/45 uppercase tracking-[0.3em] font-black mb-1">Account Role</span>
           <span className="text-[10px] text-gold uppercase tracking-[0.2em] font-black">
-            {user?.role}
+            {formatRole(user?.role)}
           </span>
         </div>
         <div className="mt-6 text-center">

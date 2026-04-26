@@ -13,7 +13,7 @@ import { RoleGuard } from '../middlewares/RoleGuard.js';
 const router = Router();
 
 router.use(protect);
-router.use(RoleGuard(['admin', 'hod']));
+router.use(RoleGuard(['admin', 'hod', 'ao']));
 
 router.route('/')
   .get(getSubjects)

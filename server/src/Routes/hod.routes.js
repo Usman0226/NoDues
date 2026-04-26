@@ -6,7 +6,7 @@ import { RoleGuard } from '../middlewares/RoleGuard.js';
 const router = Router();
 
 router.use(protect);
-router.use(RoleGuard(['hod']));
+router.use(RoleGuard(['hod', 'ao']));
 
 router.get('/overview', getOverview);
 router.get('/dues',     getDues);

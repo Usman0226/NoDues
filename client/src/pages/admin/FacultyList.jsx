@@ -20,6 +20,7 @@ const ROLE_TAG_COLORS = {
   classTeacher: 'bg-amber-50 text-amber-700',
   mentor: 'bg-emerald-50 text-emerald-700',
   hod: 'bg-blue-50 text-blue-700',
+  ao: 'bg-indigo-50 text-indigo-700',
 };
 
 const FacultyList = () => {
@@ -45,7 +46,7 @@ const FacultyList = () => {
   const [includeInactive, setIncludeInactive] = useState(false);
 
   const { user } = useAuth();
-  const isHod = user?.role === 'hod';
+  const isHod = user?.role === 'hod' || user?.role === 'ao';
 
   const facultyQueryKey = useMemo(() => 
     ['faculty', { page, limit, includeInactive, search: debouncedSearch }],
@@ -195,7 +196,7 @@ const FacultyList = () => {
         <div className="flex flex-wrap gap-1.5">
           {(tags || row.roleTags || ['faculty']).map((tag) => (
             <span key={tag} className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${ROLE_TAG_COLORS[tag] || ROLE_TAG_COLORS.faculty}`}>
-              {tag === 'classTeacher' ? 'Co-ordinator' : tag === 'hod' ? 'HoD' : tag}
+              {tag === 'classTeacher' ? 'Co-ordinator' : tag === 'hod' ? 'HoD' : tag === 'ao' ? 'AO' : tag}
             </span>
           ))}
         </div>
@@ -396,7 +397,7 @@ const FacultyList = () => {
             <div>
               <label className="block text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 mb-3">Academic Roles</label>
               <div className="flex flex-wrap gap-4 pt-1">
-                {['faculty', 'classTeacher', 'mentor', 'hod'].map((role) => (
+                {['faculty', 'classTeacher', 'mentor', 'hod', 'ao'].map((role) => (
                   <label key={role} className="group flex items-center gap-2 text-xs cursor-pointer select-none">
                     <input 
                       type="checkbox" 
@@ -404,7 +405,7 @@ const FacultyList = () => {
                       onChange={() => toggleRole(role)}
                       className="w-4 h-4 rounded-lg border-muted text-navy focus:ring-navy/20 cursor-pointer" 
                     />
-                    <span className="font-bold text-navy/70 group-hover:text-navy transition-colors">{role === 'classTeacher' ? 'Co-ordinator' : role === 'hod' ? 'HoD' : role.toUpperCase()}</span>
+                    <span className="font-bold text-navy/70 group-hover:text-navy transition-colors">{role === 'classTeacher' ? 'Co-ordinator' : role === 'hod' ? 'HoD' : role === 'ao' ? 'AO' : role.toUpperCase()}</span>
                   </label>
                 ))}
               </div>
@@ -476,7 +477,7 @@ const FacultyList = () => {
             <div>
               <label className="block text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 mb-3">Academic Roles</label>
               <div className="flex flex-wrap gap-4 pt-1">
-                {['faculty', 'classTeacher', 'mentor', 'hod'].map((role) => (
+                {['faculty', 'classTeacher', 'mentor', 'hod', 'ao'].map((role) => (
                   <label key={role} className="group flex items-center gap-2 text-xs cursor-pointer select-none">
                     <input 
                       type="checkbox" 
@@ -484,7 +485,7 @@ const FacultyList = () => {
                       onChange={() => toggleRole(role)}
                       className="w-4 h-4 rounded-lg border-muted text-navy focus:ring-navy/20 cursor-pointer" 
                     />
-                    <span className="font-bold text-navy/70 group-hover:text-navy transition-colors">{role === 'classTeacher' ? 'Co-ordinator' : role === 'hod' ? 'HoD' : role.toUpperCase()}</span>
+                    <span className="font-bold text-navy/70 group-hover:text-navy transition-colors">{role === 'classTeacher' ? 'Co-ordinator' : role === 'hod' ? 'HoD' : role === 'ao' ? 'AO' : role.toUpperCase()}</span>
                   </label>
                 ))}
               </div>

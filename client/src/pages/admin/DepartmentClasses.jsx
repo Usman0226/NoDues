@@ -36,7 +36,7 @@ const itemVariants = {
 const DepartmentClasses = () => {
   const { deptId: urlDeptId } = useParams();
   const { user } = useAuth();
-  const isHod = user?.role === 'hod';
+  const isHod = user?.role === 'hod' || user?.role === 'ao';
   
   // Fall back to user.departmentId for HoD accessing their own classes directly
   const deptId = urlDeptId || user?.departmentId;

@@ -30,6 +30,7 @@ import {
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { formatRole } from '../../utils/formatters';
 import Modal from '../../components/ui/Modal';
 import { initiateDepartmentBatch, getInitiationPreview } from '../../api/batch';
 import { useUI } from '../../hooks/useUI';
@@ -159,7 +160,7 @@ const HodDashboard = () => {
 
   if (loading && !overview) {
     return (
-      <PageWrapper title="HOD Dashboard" subtitle="Loading metrics...">
+      <PageWrapper title={`${formatRole(user?.role)} Dashboard`} subtitle="Loading metrics...">
         <div className="animate-pulse space-y-8">
            <div className="h-20 w-full bg-red-50/20 rounded-xl"></div>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -172,7 +173,7 @@ const HodDashboard = () => {
 
   if (error) {
     return (
-      <PageWrapper title="HOD Dashboard" subtitle="Connection Error">
+      <PageWrapper title={`${formatRole(user?.role)} Dashboard`} subtitle="Connection Error">
         <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Data Load Failed</h2>
@@ -193,7 +194,7 @@ const HodDashboard = () => {
   }
 
   return (
-    <PageWrapper title="Department Dashboard" subtitle={`Overview — ${user?.department || 'Department'}`}>
+    <PageWrapper title={`${formatRole(user?.role)} Dashboard`} subtitle={`Overview — ${user?.department || 'Department'}`}>
       
       {/* Minimal Hero Section */}
       <div className="flex flex-col lg:flex-row gap-6 mb-10">

@@ -44,12 +44,12 @@ const facultySchema = new mongoose.Schema(
     },
     roleTags: {
       type: [String],
-      enum: ['faculty', 'classTeacher', 'mentor', 'hod', 'coordinator'],
+      enum: ['faculty', 'classTeacher', 'mentor', 'hod', 'coordinator','ao'],
       default: ['faculty'],
     },
     role: {
       type: String,
-      enum: ['faculty', 'hod'],
+      enum: ['faculty', 'hod', 'ao'],
       default: 'faculty',
     },
     mustChangePassword: {
@@ -79,11 +79,9 @@ facultySchema.pre('save', async function () {
     this.password = await bcrypt.hash(this.password, salt);
   }
 
-  // Derive primary role from roleTags
-  this.role = this.roleTags.includes('hod') ? 'hod' : 'faculty';
+  this.role = this.roleTags.includes('ao') ? 'ao' : (this.roleTags.includes('hod') ? 'hod' : 'faculty');
 });
 
-// ── Cache Invalidation Hooks ──────────────────────────────────────────────────
 facultySchema.post('save', function(doc) {
   invalidateEntityCache('faculty', doc._id, doc.departmentId);
 });

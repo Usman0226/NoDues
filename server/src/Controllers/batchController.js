@@ -22,7 +22,7 @@ export const getBatches = async (req, res, next) => {
     const { classId, departmentId, semester, academicYear, status, search, page = 1, limit = 20 } = req.query;
 
     const query = {};
-    if (req.user.role === 'hod') query.departmentId = req.user.departmentId;
+    if (req.user.role === 'hod' || req.user.role === 'ao') query.departmentId = req.user.departmentId;
     else if (departmentId)       query.departmentId = departmentId;
 
     if (classId)      query.classId      = classId;
@@ -93,9 +93,9 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
   const [hodAccount, ctInfo] = await Promise.all([
     Faculty.findOne({ 
       departmentId: cls.departmentId._id || cls.departmentId, 
-      roleTags: 'hod', 
+      roleTags: { $in: ['hod', 'ao'] }, 
       isActive: true 
-    }).select('name').session(session).lean(),
+    }).select('name roleTags').session(session).lean(),
     cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() : null
   ]);
 
@@ -124,13 +124,14 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
     // Build Faculty Snapshot for this student
     const snapshot = {};
     if (hodAccount) {
+      const isAO = hodAccount.roleTags.includes('ao');
       snapshot['hod'] = {
         facultyId:    hodAccount._id,
         facultyName:  hodAccount.name,
-        roleTag:      'hod',
+        roleTag:      isAO ? 'ao' : 'hod',
         approvalType: 'hodApproval',
         subjectId:    null,
-        subjectName:  'Department Clearance (HoD)',
+        subjectName:  isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
       };
     }
 
@@ -154,7 +155,7 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
         facultyId:    cls.classTeacherId,
         facultyName:  ctInfo?.name ?? null,
         subjectId:    null,
-        subjectName:  'Class Teacher',
+        subjectName:  'Classteacher',
         subjectCode:  null,
         roleTag:      'classTeacher',
         approvalType: 'classTeacher',
@@ -264,7 +265,7 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
             itemTypeName: f.itemTypeName ?? null,
             itemCode:     f.itemCode     ?? null,
             isOptional:   f.isOptional   ?? false,
-            approvalType: 'coCurricular',
+            approvalType: f.approvalType,
             roleTag:      f.roleTag,
             action:       'not_submitted',
             createdAt:    now,
@@ -296,15 +297,15 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
 
   // Create notification for HoD if initiated by Admin
   if (initiator.role === 'admin') {
-    const hod = await Faculty.findOne({ 
+    const departmentUsers = await Faculty.find({ 
       departmentId: cls.departmentId._id || cls.departmentId, 
-      roleTags: 'hod', 
+      roleTags: { $in: ['hod', 'ao'] }, 
       isActive: true 
     }).select('_id').lean();
     
-    if (hod) {
+    for (const deptUser of departmentUsers) {
       await createNotification({
-        user: hod._id,
+        user: deptUser._id,
         userModel: 'Faculty',
         title: 'New Batch Initiated',
         message: `A new NoDues batch has been initiated for ${cls.name} by the Admin.`,
@@ -428,7 +429,7 @@ export const initiateBatch = async (req, res, next) => {
       return next(new ErrorResponse('Class not found', 404));
     }
 
-    if (req.user.role === 'hod' && cls.departmentId?._id?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?._id?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403));
     }
@@ -621,7 +622,7 @@ export const getBatchStatus = async (req, res, next) => {
       .lean();
     if (!batch) return next(new ErrorResponse('Batch not found', 404, 'NOT_FOUND'));
 
-    if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && batch.departmentId?.toString() !== req.user.departmentId) {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -762,7 +763,7 @@ export const getBatchStudentDetail = async (req, res, next) => {
     if (!request || !batch) return next(new ErrorResponse('Record not found', 404, 'NOT_FOUND'));
 
     // HoD Scope Check
-    if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && batch.departmentId?.toString() !== req.user.departmentId) {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -811,7 +812,7 @@ export const closeBatch = async (req, res, next) => {
       return next(new ErrorResponse('Batch is already closed', 400, 'BATCH_ALREADY_CLOSED'));
     }
 
-    if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && batch.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -871,7 +872,7 @@ export const addStudentToBatch = async (req, res, next) => {
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
 
-    if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && batch.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -896,18 +897,20 @@ export const addStudentToBatch = async (req, res, next) => {
     const [hodAccount, ctInfo] = await Promise.all([
       Faculty.findOne({ 
         departmentId: cls.departmentId._id || cls.departmentId, 
-        roleTags: 'hod', 
+        roleTags: { $in: ['hod', 'ao'] }, 
         isActive: true 
-      }).select('name').session(session).lean(),
+      }).select('name roleTags').session(session).lean(),
       cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() : null
     ]);
 
     const snapshot = {};
     if (hodAccount) {
-      snapshot['hod'] = {
+      const isAO = hodAccount.roleTags.includes('ao');
+      const roleTag = isAO ? 'ao' : 'hod';
+      snapshot[roleTag] = {
         facultyId: hodAccount._id, facultyName: hodAccount.name,
-        roleTag: 'hod', approvalType: 'hodApproval',
-        subjectId: null, subjectName: 'Department Clearance (HoD)',
+        roleTag: roleTag, approvalType: 'hodApproval',
+        subjectId: null, subjectName: isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
       };
     }
 
@@ -1021,7 +1024,7 @@ export const removeFacultyFromBatch = async (req, res, next) => {
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
 
-    if (req.user.role === 'hod' && batch.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && batch.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -1070,7 +1073,7 @@ export const bulkCloseBatches = async (req, res, next) => {
     }
 
     const query = { _id: { $in: ids }, status: 'active' };
-    if (req.user.role === 'hod') {
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
       query.departmentId = req.user.departmentId;
     }
 

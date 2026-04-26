@@ -90,7 +90,7 @@ const History = () => {
                     <div className="flex flex-col items-start sm:items-end gap-1.5">
                       <Badge status={record.status} />
                       {record.overrideRemark && (
-                        <span className="text-[8px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50/50 px-2 py-1 rounded-lg border border-indigo-100/50">HoD Exception</span>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50/50 px-2 py-1 rounded-lg border border-indigo-100/50">Dept. Exception</span>
                       )}
                     </div>
                     <div className="h-11 w-11 bg-zinc-50 rounded-xl flex items-center justify-center text-zinc-300 group-hover:bg-navy group-hover:text-white transition-all duration-500 shadow-sm border border-zinc-100">

@@ -27,7 +27,7 @@ const BatchView = () => {
   const { batchId } = useParams();
   const { user } = useAuth();
   const { showGlobalLoader } = useUI();
-  const isHod = user?.role === 'hod';
+  const isHod = user?.role === 'hod' || user?.role === 'ao';
   const basePath = isHod ? '/hod' : '/admin';
 
   const [filter, setFilter] = useState('all');

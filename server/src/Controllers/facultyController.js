@@ -16,7 +16,7 @@ const generateTempPassword = () => crypto.randomBytes(4).toString('hex');
 export const getFaculty = async (req, res, next) => {
   try {
     const { departmentId, roleTag, search, page = 1, limit = 50, includeInactive } = req.query;
-    const isPrivileged = ['admin', 'hod'].includes(req.user.role);
+    const isPrivileged = ['admin', 'hod', 'ao'].includes(req.user.role);
 
     const query = {};
     if (includeInactive !== 'true' || !isPrivileged) {
@@ -27,7 +27,7 @@ export const getFaculty = async (req, res, next) => {
       if (departmentId !== 'all') {
         query.departmentId = departmentId;
       }
-    } else if (req.user.role === 'hod' && !search) {
+    } else if ((req.user.role === 'hod' || req.user.role === 'ao') && !search) {
       // Default HoDs to their department only when NOT searching globally
       query.departmentId = req.user.departmentId;
     }
@@ -151,7 +151,7 @@ export const createFaculty = async (req, res, next) => {
       return next(new ErrorResponse('Department not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && req.user.departmentId !== departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId !== departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -269,7 +269,7 @@ export const updateFaculty = async (req, res, next) => {
     }
 
     if (
-      req.user.role === 'hod' &&
+      (req.user.role === 'hod' || req.user.role === 'ao') &&
       faculty.departmentId?.toString() !== req.user.departmentId
     ) {
       await abortSafeTransaction(session);
@@ -329,7 +329,7 @@ export const deleteFaculty = async (req, res, next) => {
     }
 
     if (
-      req.user.role === 'hod' &&
+      (req.user.role === 'hod' || req.user.role === 'ao') &&
       faculty.departmentId?.toString() !== req.user.departmentId
     ) {
       await abortSafeTransaction(session);
@@ -441,7 +441,7 @@ export const resendCredentials = async (req, res, next) => {
     }
 
     if (
-      req.user.role === 'hod' &&
+      (req.user.role === 'hod' || req.user.role === 'ao') &&
       faculty.departmentId?.toString() !== req.user.departmentId
     ) {
       await abortSafeTransaction(session);
@@ -495,7 +495,7 @@ export const bulkDeactivateFaculty = async (req, res, next) => {
     }
 
     const query = { _id: { $in: ids }, isActive: true };
-    if (req.user.role === 'hod') {
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
       query.departmentId = req.user.departmentId;
     }
 
@@ -536,7 +536,7 @@ export const bulkResendCredentials = async (req, res, next) => {
     }
 
     const query = { _id: { $in: ids }, isActive: true };
-    if (req.user.role === 'hod') {
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
       query.departmentId = req.user.departmentId;
     }
 
@@ -592,18 +592,18 @@ export const bulkUpdateRoles = async (req, res, next) => {
       return next(new ErrorResponse('IDs, targetRole and action are required', 400));
     }
 
-    if (targetRole === 'hod') {
+    if (targetRole === 'hod' || targetRole === 'ao') {
       await abortSafeTransaction(session);
-      return next(new ErrorResponse('HoD role cannot be managed in bulk', 400));
+      return next(new ErrorResponse('HoD and AO roles cannot be managed in bulk', 400));
     }
 
     const query = { _id: { $in: ids }, isActive: true };
-    if (req.user.role === 'hod') {
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
       query.departmentId = req.user.departmentId;
     }
 
     const faculties = await Faculty.find(query).session(session);
-    const targets = faculties.filter(f => !f.roleTags.includes('hod'));
+    const targets = faculties.filter(f => !f.roleTags.includes('hod') && !f.roleTags.includes('ao'));
     
     if (targets.length === 0) {
       await commitSafeTransaction(session);

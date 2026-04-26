@@ -18,7 +18,7 @@ import { validate, Schemas } from '../utils/validation.js';
 const router = Router();
 
 router.use(protect);
-router.use(RoleGuard(['admin', 'hod']));
+router.use(RoleGuard(['admin', 'hod', 'ao']));
 router.use(DepartmentGuard);
 
 router.route('/').get(getBatches);

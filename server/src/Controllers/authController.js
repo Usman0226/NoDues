@@ -89,7 +89,12 @@ export const login = async (req, res, next) => {
       );
     }
 
-    const role = user.role || userType;
+    let role = user.role || userType;
+    if (userType === 'faculty' && user.roleTags) {
+      if (user.roleTags.includes('ao')) role = 'ao';
+      else if (user.roleTags.includes('hod')) role = 'hod';
+      else role = 'faculty';
+    }
 
     const payload = {
       userId: user._id.toString(),
@@ -97,7 +102,7 @@ export const login = async (req, res, next) => {
       mustChangePassword: user.mustChangePassword ?? false,
     };
 
-    if (role === 'faculty' || role === 'hod') {
+    if (role === 'faculty' || role === 'hod' || role === 'ao') {
       payload.roleTags    = user.roleTags ?? ['faculty'];
       payload.departmentId = user.departmentId?.toString() ?? null;
     }
@@ -396,7 +401,7 @@ export const getMe = async (req, res, next) => {
         userId:            faculty._id,
         name:              faculty.name,
         email:             faculty.email,
-        role:              faculty.role,
+        role:              (faculty.roleTags?.includes('ao') ? 'ao' : (faculty.roleTags?.includes('hod') ? 'hod' : 'faculty')),
         roleTags:          faculty.roleTags,
         departmentId:      faculty.departmentId,
         departmentName:    departmentName ?? null,

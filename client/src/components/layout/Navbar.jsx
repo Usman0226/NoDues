@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { User, LogOut, Bell, Menu, ShieldCheck } from 'lucide-react';
 import Inbox from './Inbox';
+import { formatRole } from '../../utils/formatters';
 
 const Navbar = ({ onMenuToggle }) => {
   const { user, logout } = useAuth();
@@ -21,10 +22,9 @@ const Navbar = ({ onMenuToggle }) => {
 
         <div className="h-6 w-px bg-zinc-200 hidden sm:block"></div>
 
-        <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-black text-navy leading-none">{user?.name}</p>
-            <p className="text-[10px] text-zinc-500 font-medium mt-1 capitalize">{user?.role}</p>
+            <p className="text-[10px] text-zinc-500 font-medium mt-1">{formatRole(user?.role)}</p>
           </div>
 
           <div className="relative group">
@@ -34,7 +34,7 @@ const Navbar = ({ onMenuToggle }) => {
               className={`min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 lg:h-10 lg:w-10 rounded-full bg-navy inline-flex items-center justify-center text-white ring-2 ring-offset-2 transition-all lg:group-hover:ring-indigo-200
                 ${isMenuOpen ? 'ring-indigo-200' : 'ring-transparent hover:ring-indigo-100'}`}
               aria-label="Account menu"
-              aria-haspopup="true"
+              aria-haspopup="true"        
               aria-expanded={isMenuOpen}
             >
               <User size={18} />
@@ -55,7 +55,7 @@ const Navbar = ({ onMenuToggle }) => {
               }`}>
               <div className="p-4 border-b border-zinc-200 bg-zinc-50/70">
                 <p className="text-xs font-black text-navy truncate">{user?.email}</p>
-                <p className="text-[9px] text-zinc-500 uppercase tracking-[0.2em] mt-1 sm:hidden">{user?.role}</p>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-[0.2em] mt-1 sm:hidden">{formatRole(user?.role)}</p>
               </div>
               <div className="py-1">
                 <Link
@@ -80,7 +80,6 @@ const Navbar = ({ onMenuToggle }) => {
             </div>
           </div>
         </div>
-      </div>
     </nav>
   );
 };

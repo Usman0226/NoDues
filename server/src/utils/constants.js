@@ -1,6 +1,7 @@
 export const ROLES = {
   ADMIN: 'admin',
   HOD: 'hod',
+  AO: 'ao',
   FACULTY: 'faculty',
   STUDENT: 'student'
 };
@@ -9,7 +10,8 @@ export const ROLE_TAGS = {
   FACULTY: 'faculty',
   CLASS_TEACHER: 'classTeacher',
   MENTOR: 'mentor',
-  HOD: 'hod'
+  HOD: 'hod',
+  AO: 'ao'
 };
 
 export const DUE_TYPES = {

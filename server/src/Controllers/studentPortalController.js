@@ -106,7 +106,6 @@ export const getStudentStatus = async (req, res, next) => {
       : [];
     const ccTypeMap = new Map(ccTypes.map(t => [t._id.toString(), t]));
 
-    // 4. Map to high-fidelity status registry
     const statusRegistry = approvals.map(a => {
       const snapshot = (Array.isArray(request.facultySnapshot) 
         ? request.facultySnapshot.find(f => 
@@ -118,8 +117,9 @@ export const getStudentStatus = async (req, res, next) => {
       ) || {};
 
       let displayContext = snapshot.subjectName || a.subjectName;
-      if (a.roleTag === 'hod') displayContext = 'Department Clearance (HoD)';
-      if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Academic Advisor';
+      if (a.roleTag === 'hod') displayContext = 'HoD';
+      if (a.roleTag === 'ao') displayContext = 'AO';
+      if (a.roleTag === 'classTeacher' && !displayContext) displayContext = 'Classteacher';
       if (a.roleTag === 'mentor' && !displayContext) displayContext = 'Mentor';
       if (a.itemTypeId) displayContext = a.itemTypeName || snapshot.itemTypeName || a.subjectName;
 

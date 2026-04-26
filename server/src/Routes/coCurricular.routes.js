@@ -16,17 +16,17 @@ router.use(protect);
 
 router.route('/')
     .get(getCoCurricularTypes)
-    .post(RoleGuard(['admin', 'hod']), createCoCurricularType);
+    .post(RoleGuard(['admin', 'hod', 'ao']), createCoCurricularType);
 
 router.route('/:id')
-    .patch(RoleGuard(['admin', 'hod']), updateCoCurricularType)
-    .delete(RoleGuard(['admin', 'hod']), deleteCoCurricularType);
+    .patch(RoleGuard(['admin', 'hod', 'ao']), updateCoCurricularType)
+    .delete(RoleGuard(['admin', 'hod', 'ao']), deleteCoCurricularType);
 
 router.route('/:id/assign-mentors')
-    .post(RoleGuard(['admin', 'hod']), assignCoCurricularToMentors);
+    .post(RoleGuard(['admin', 'hod', 'ao']), assignCoCurricularToMentors);
 
 router.route('/:id/assign-class-teachers')
-    .post(RoleGuard(['admin', 'hod']), assignCoCurricularToMentors);
+    .post(RoleGuard(['admin', 'hod', 'ao']), assignCoCurricularToMentors);
 
 router.route('/:typeId/submit')
     .post(RoleGuard(['student']), submitCoCurricular);

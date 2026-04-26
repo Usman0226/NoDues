@@ -30,7 +30,7 @@ export const getPendingApprovals = async (req, res, next) => {
 
     const batchIdSet = activeBatches.map((b) => b._id);
     let myDeptBatchIds = [];
-    if (req.user.role === 'hod' && req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId) {
         myDeptBatchIds = activeBatches
            .filter(b => b.departmentId && b.departmentId.toString() === req.user.departmentId.toString())
            .map(b => b._id);
@@ -57,7 +57,7 @@ export const getPendingApprovals = async (req, res, next) => {
     andConditions.push({ batchId: { $in: targetBatchIds } });
 
     // Faculty vs HOD-Department Filter
-    if (req.user.role === 'hod' && myDeptBatchIds.length > 0) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && myDeptBatchIds.length > 0) {
         andConditions.push({
             $or: [
                 { facultyId: userId },
@@ -158,7 +158,7 @@ export const getApprovalHistory = async (req, res, next) => {
     const { semester, page = 1, limit = 20, search = '' } = req.query;
 
     let myDeptBatchIds = [];
-    if (req.user.role === 'hod' && req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId) {
        const deptBatches = await NodueBatch.find({ departmentId: req.user.departmentId }, '_id').lean();
        myDeptBatchIds = deptBatches.map(b => b._id);
     }
@@ -167,7 +167,7 @@ export const getApprovalHistory = async (req, res, next) => {
       { action: { $ne: 'pending' } }
     ];
 
-    if (req.user.role === 'hod' && myDeptBatchIds.length > 0) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && myDeptBatchIds.length > 0) {
        andConditions.push({
            $or: [
                { facultyId: userId },
@@ -284,7 +284,7 @@ export const approveRequest = async (req, res, next) => {
     }
 
     if (approval.facultyId.toString() !== req.user.userId.toString()) {
-        if (req.user.role === 'hod' && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
+        if ((req.user.role === 'hod' || req.user.role === 'ao') && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
             if (!['coCurricular', 'subject'].includes(approval.approvalType)) {
                  await abortSafeTransaction(session);
                  return next(new ErrorResponse('Access denied', 403));
@@ -299,6 +299,12 @@ export const approveRequest = async (req, res, next) => {
     approval.dueType    = null;
     approval.remarks    = null;
     approval.actionedAt = new Date();
+    
+    // Persist identity for departmental clearances
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
+      approval.roleTag = req.user.role;
+    }
+    
     await approval.save({ session });
 
     // NEW: Update Student Co-Curricular status if applicable
@@ -324,9 +330,11 @@ export const approveRequest = async (req, res, next) => {
 
     await commitSafeTransaction(session);
 
-    logger.info('approval_actioned', {
-      timestamp: new Date().toISOString(), actor: req.user.userId,
-      action: 'APPROVE', resource_id: approvalId,
+    logger.audit('APPROVAL_ACTIONED', {
+      actor: req.user.userId,
+      role: req.user.role,
+      action: 'APPROVE',
+      resource_id: approvalId,
     });
 
     pushEvent([approval.studentId.toString(), req.user.userId.toString()], 'APPROVAL_UPDATED', {
@@ -375,7 +383,7 @@ export const bulkApproveRequests = async (req, res, next) => {
         if (!batch) return false;
 
         if (a.facultyId.toString() !== req.user.userId.toString()) {
-            if (req.user.role === 'hod' && batch.departmentId?.toString() === req.user.departmentId?.toString()) {
+            if ((req.user.role === 'hod' || req.user.role === 'ao') && batch.departmentId?.toString() === req.user.departmentId?.toString()) {
                 if (!['coCurricular', 'subject'].includes(a.approvalType)) return false;
             } else {
                 return false;
@@ -399,6 +407,12 @@ export const bulkApproveRequests = async (req, res, next) => {
       approval.dueType = null;
       approval.remarks = null;
       approval.actionedAt = now;
+
+      // Persist identity for departmental clearances
+      if (req.user.role === 'hod' || req.user.role === 'ao') {
+        approval.roleTag = req.user.role;
+      }
+
       await approval.save({ session });
 
       // NEW: Update Student Co-Curricular status if applicable
@@ -431,9 +445,9 @@ export const bulkApproveRequests = async (req, res, next) => {
     batchIds.forEach(bId => invalidateEntityCache('batch', bId));
     invalidateEntityCache('approval', req.user.userId, 'all'); 
 
-    logger.info('bulk_approval_actioned', {
-      timestamp: now.toISOString(),
+    logger.audit('BULK_APPROVAL_ACTIONED', {
       actor: req.user.userId,
+      role: req.user.role,
       count: results.length,
       action: 'BULK_APPROVE'
     });
@@ -497,7 +511,7 @@ export const markDue = async (req, res, next) => {
     }
 
     if (approval.facultyId.toString() !== req.user.userId.toString()) {
-        if (req.user.role === 'hod' && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
+        if ((req.user.role === 'hod' || req.user.role === 'ao') && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
             if (!['coCurricular', 'subject'].includes(approval.approvalType)) {
                  await abortSafeTransaction(session);
                  return next(new ErrorResponse('Access denied', 403));
@@ -512,6 +526,12 @@ export const markDue = async (req, res, next) => {
     approval.dueType    = dueType;
     approval.remarks    = remarks ?? null;
     approval.actionedAt = new Date();
+
+    // Persist identity for departmental clearances
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
+      approval.roleTag = req.user.role;
+    }
+
     await approval.save({ session });
 
     // NEW: Update Student Co-Curricular status if applicable (mark as rejected so they can resubmit)
@@ -538,9 +558,12 @@ export const markDue = async (req, res, next) => {
 
     await commitSafeTransaction(session);
 
-    logger.info('due_marked', {
-      timestamp: new Date().toISOString(), actor: req.user.userId,
-      action: 'MARK_DUE', resource_id: approvalId, dueType,
+    logger.audit('DUE_MARKED', {
+      actor: req.user.userId,
+      role: req.user.role,
+      action: 'MARK_DUE',
+      resource_id: approvalId,
+      dueType,
     });
 
     pushEvent([approval.studentId.toString(), req.user.userId.toString()], 'APPROVAL_UPDATED', {
@@ -585,7 +608,7 @@ export const updateApproval = async (req, res, next) => {
     }
 
     if (approval.facultyId.toString() !== req.user.userId.toString()) {
-        if (req.user.role === 'hod' && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
+        if ((req.user.role === 'hod' || req.user.role === 'ao') && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
             if (!['coCurricular', 'subject'].includes(approval.approvalType)) {
                  await abortSafeTransaction(session);
                  return next(new ErrorResponse('Access denied', 403));
@@ -617,6 +640,12 @@ export const updateApproval = async (req, res, next) => {
     if (dueType !== undefined) approval.dueType = dueType;
     if (remarks !== undefined) approval.remarks = remarks;
     approval.actionedAt = new Date();
+
+    // Persist identity for departmental clearances
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
+      approval.roleTag = req.user.role;
+    }
+
     await approval.save({ session });
 
     await recalcRequestStatus(approval.requestId, session);
@@ -626,9 +655,11 @@ export const updateApproval = async (req, res, next) => {
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
 
-    logger.info('approval_updated', {
-      timestamp: new Date().toISOString(), actor: req.user.userId,
-      action: 'UPDATE_APPROVAL', resource_id: approvalId,
+    logger.audit('APPROVAL_UPDATED', {
+      actor: req.user.userId,
+      role: req.user.role,
+      action: 'UPDATE_APPROVAL',
+      resource_id: approvalId,
     });
 
     pushEvent([approval.studentId.toString(), req.user.userId.toString()], 'APPROVAL_UPDATED', {

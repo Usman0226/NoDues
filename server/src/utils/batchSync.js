@@ -556,8 +556,12 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
     }
 
     const [hodAccount, ctInfo, mentor] = await Promise.all([
-      Faculty.findOne({ departmentId: cls.departmentId._id, roleTags: 'hod', isActive: true })
-        .session(session).select('name').lean(),
+      Faculty.findOne({ 
+        departmentId: cls.departmentId._id, 
+        roleTags: { $in: ['hod', 'ao'] }, 
+        isActive: true 
+      })
+        .session(session).select('name roleTags').lean(),
       cls.classTeacherId
         ? Faculty.findById(cls.classTeacherId).session(session).select('name').lean()
         : null,
@@ -570,10 +574,13 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
     const snapshot = {};
 
     if (hodAccount) {
+      const isAO = hodAccount.roleTags.includes('ao') && !hodAccount.roleTags.includes('hod');
       snapshot['hod'] = {
         facultyId: hodAccount._id, facultyName: hodAccount.name,
-        roleTag: 'hod', approvalType: 'hodApproval',
-        subjectId: null, subjectName: 'Department Clearance (HoD)',
+        roleTag: isAO ? 'ao' : 'hod', 
+        approvalType: 'hodApproval',
+        subjectId: null, 
+        subjectName: isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
       };
     }
 

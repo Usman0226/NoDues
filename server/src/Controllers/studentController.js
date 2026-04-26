@@ -26,14 +26,14 @@ import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } fro
 export const getStudents = async (req, res, next) => {
   try {
     const { classId, departmentId, semester, search, page = 1, limit = 50, includeInactive } = req.query;
-    const isPrivileged = ['admin', 'hod'].includes(req.user.role);
+    const isPrivileged = ['admin', 'hod', 'ao'].includes(req.user.role);
 
     const query = {};
     if (includeInactive !== 'true' || !isPrivileged) {
       query.isActive = true;
     }
 
-    if (req.user.role === 'hod') query.departmentId = req.user.departmentId;
+    if (req.user.role === 'hod' || req.user.role === 'ao') query.departmentId = req.user.departmentId;
     else if (departmentId)       query.departmentId = departmentId;
 
     if (classId)   query.classId  = classId;
@@ -124,7 +124,7 @@ export const createStudent = async (req, res, next) => {
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -145,22 +145,23 @@ export const createStudent = async (req, res, next) => {
       const [hodAccount, ctInfo] = await Promise.all([
         Faculty.findOne({
           departmentId: cls.departmentId,
-          roleTags: 'hod',
+          roleTags: { $in: ['hod', 'ao'] },
           isActive: true
-        }).select('name').session(session).lean(),
+        }).select('name roleTags').session(session).lean(),
         cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() : null
       ]);
 
       const snapshot = {};
 
       if (hodAccount) {
+        const isAO = hodAccount.roleTags?.includes('ao');
         snapshot.hod = {
           facultyId: hodAccount._id,
           facultyName: hodAccount.name,
-          roleTag: 'hod',
+          roleTag: isAO ? 'ao' : 'hod',
           approvalType: 'hodApproval',
           subjectId: null,
-          subjectName: 'Department Clearance (HoD)',
+          subjectName: isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
         };
       }
 
@@ -274,7 +275,7 @@ export const getStudentById = async (req, res, next) => {
 
     if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
 
-    if (req.user.role === 'hod' && student.departmentId?._id?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && student.departmentId?._id?.toString() !== req.user.departmentId) {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -319,7 +320,7 @@ export const updateStudent = async (req, res, next) => {
       return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && student.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -337,7 +338,7 @@ export const updateStudent = async (req, res, next) => {
         await abortSafeTransaction(session);
         return next(new ErrorResponse('New Class not found', 404, 'NOT_FOUND'));
       }
-      if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+      if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
         await abortSafeTransaction(session);
         return next(new ErrorResponse('Access denied for new class department', 403, 'AUTH_DEPARTMENT_SCOPE'));
       }
@@ -403,7 +404,7 @@ export const deleteStudent = async (req, res, next) => {
       return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && student.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -459,7 +460,7 @@ export const assignMentor = async (req, res, next) => {
     }
 
     // HoD Scope Check
-    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && student.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -530,7 +531,7 @@ export const addElective = async (req, res, next) => {
     }
 
     // HoD Scope Check
-    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && student.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -601,7 +602,7 @@ export const updateElective = async (req, res, next) => {
     if (!faculty) return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
 
     // HoD Scope Check
-    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && student.departmentId?.toString() !== req.user.departmentId) {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -653,7 +654,7 @@ export const removeElective = async (req, res, next) => {
     }
 
     // HoD Scope Check
-    if (req.user.role === 'hod' && student.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && student.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -696,7 +697,7 @@ export const bulkDeactivateStudents = async (req, res, next) => {
     }
 
     const query = { _id: { $in: ids }, isActive: true };
-    if (req.user.role === 'hod') {
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
       query.departmentId = req.user.departmentId;
     }
 
@@ -745,7 +746,7 @@ export const bulkAssignMentor = async (req, res, next) => {
     }
 
     const query = { _id: { $in: ids }, isActive: true };
-    if (req.user.role === 'hod') {
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
       query.departmentId = req.user.departmentId;
     }
 

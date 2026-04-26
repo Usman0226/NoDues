@@ -23,7 +23,7 @@ const Subjects = () => {
   const [semesterFilter, setSemesterFilter] = useState('all');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const isHod = user?.role === 'hod';
+  const isHod = user?.role === 'hod' || user?.role === 'ao';
   const canManage = isAdmin || isHod;
   const [submitting, setSubmitting] = useState(false);
   const [showImport, setShowImport] = useState(false);

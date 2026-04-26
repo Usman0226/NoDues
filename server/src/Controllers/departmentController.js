@@ -3,6 +3,8 @@ import Class from '../models/Class.js';
 import NodueBatch from '../models/NodueBatch.js';
 import Student from '../models/Student.js';
 import Faculty from '../models/Faculty.js';
+import NodueRequest from '../models/NodueRequest.js';
+import NodueApproval from '../models/NodueApproval.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
@@ -168,10 +170,53 @@ export const updateDepartment = async (req, res, next) => {
     }
 
     if (hodId !== undefined) {
+      const oldHodId = dept.hodId?.toString();
       if (hodId) {
         const hod = await Faculty.findById(hodId).lean();
         if (!hod || !hod.isActive) {
           return next(new ErrorResponse('HoD faculty not found', 404, 'NOT_FOUND'));
+        }
+
+        // If HoD actually changed, propagate to active batches
+        if (hodId !== oldHodId) {
+          const newHodName = hod.name;
+          const propagateHoDChange = async () => {
+            try {
+              const activeBatches = await NodueBatch.find({ departmentId: id, status: 'active' }).select('_id').lean();
+              if (!activeBatches.length) return;
+
+              const batchIds = activeBatches.map(b => b._id);
+
+              // 1. Update NodueApproval records for HoD clearance
+              await NodueApproval.updateMany(
+                { batchId: { $in: batchIds }, approvalType: 'hodApproval' },
+                { $set: { facultyId: hodId } }
+              );
+
+              // 2. Update facultySnapshot in NodueRequest
+              await NodueRequest.updateMany(
+                { batchId: { $in: batchIds } },
+                { 
+                  $set: { 
+                    'facultySnapshot.hod.facultyId': hodId,
+                    'facultySnapshot.hod.facultyName': newHodName 
+                  } 
+                }
+              );
+
+              // 3. Clear relevant caches
+              batchIds.forEach(bId => cache.del(`batch_status:${bId}`));
+
+              logger.info('hod_propagation_complete', {
+                departmentId: id,
+                newHodId: hodId,
+                batchesUpdated: batchIds.length
+              });
+            } catch (err) {
+              logger.error('hod_propagation_failed', { error: err.message, departmentId: id });
+            }
+          };
+          propagateHoDChange();
         }
       }
       dept.hodId = hodId || null;

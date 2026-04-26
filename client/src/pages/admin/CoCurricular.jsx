@@ -25,7 +25,7 @@ const CoCurricular = () => {
   const { showGlobalLoader: _showGlobalLoader } = useUI();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const isHod = user?.role === 'hod';
+  const isHod = user?.role === 'hod' || user?.role === 'ao';
   const canManage = isAdmin || isHod;
 
   const [showCreate, setShowCreate] = useState(false);

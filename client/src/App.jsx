@@ -247,7 +247,7 @@ const AppContent = () => {
           <Route path="/" element={<RoleRedirect />} />
 
           {/* Staff Layout (sidebar) */}
-          <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.HOD, ROLES.FACULTY]}><AppLayout /></ProtectedRoute>}>
+          <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.HOD, ROLES.AO, ROLES.FACULTY]}><AppLayout /></ProtectedRoute>}>
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/departments" element={<Departments />} />
             <Route path="/admin/departments/:deptId/classes" element={<DepartmentClasses />} />

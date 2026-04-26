@@ -16,17 +16,17 @@ import { invalidateEntityCache } from '../utils/cacheHooks.js';
 // Cache invalidation is now handled via Mongoose hooks in the model.
 
 // ── Scope helper — HoD auto-filters to own department ─────────────────────────
-const deptScope = (req) =>
-  req.user.role === 'hod' ? req.user.departmentId : null;
+const deptScope = (req) => 
+  (req.user.role === 'hod' || req.user.role === 'ao') ? req.user.departmentId : null;
 
 const ensureHodApprovalCoverage = async (batch, departmentId) => {
   if (!batch?._id || !departmentId) return;
 
   const hod = await Faculty.findOne({
     departmentId,
-    roleTags: 'hod',
+    roleTags: { $in: ['hod', 'ao'] },
     isActive: true,
-  }).select('_id name').lean();
+  }).select('_id name roleTags').lean();
 
   if (!hod) return;
 
@@ -38,17 +38,21 @@ const ensureHodApprovalCoverage = async (batch, departmentId) => {
 
   const existing = await NodueApproval.find({
     batchId: batch._id,
-    roleTag: 'hod',
+    approvalType: 'hodApproval'
   }).select('requestId').lean();
 
-  const existingRequestIds = new Set(existing.map((row) => row.requestId?.toString()));
-  const approvalDocs = [];
+  const existingRequestIds = new Set(existing.map(a => a.requestId.toString()));
   const snapshotUpdates = [];
+  const approvalDocs = [];
+
+  const isAO = hod.roleTags?.includes('ao');
+  const roleTag = isAO ? 'ao' : 'hod';
+  const subjectName = isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)';
 
   for (const request of requests) {
     const hasSnapshotHod = Array.isArray(request.facultySnapshot)
-      ? request.facultySnapshot.some((entry) => entry?.roleTag === 'hod')
-      : !!request.facultySnapshot?.hod;
+      ? request.facultySnapshot.some((entry) => entry?.roleTag === 'hod' || entry?.roleTag === 'ao')
+      : (!!request.facultySnapshot?.hod || !!request.facultySnapshot?.ao);
 
     if (!hasSnapshotHod) {
       snapshotUpdates.push(
@@ -56,13 +60,13 @@ const ensureHodApprovalCoverage = async (batch, departmentId) => {
           { _id: request._id },
           {
             $set: {
-              'facultySnapshot.hod': {
+              [`facultySnapshot.${roleTag}`]: {
                 facultyId: hod._id,
                 facultyName: hod.name,
-                roleTag: 'hod',
+                roleTag: roleTag,
                 approvalType: 'hodApproval',
                 subjectId: null,
-                subjectName: 'Department Clearance (HoD)',
+                subjectName: subjectName,
               },
             },
           }
@@ -80,9 +84,9 @@ const ensureHodApprovalCoverage = async (batch, departmentId) => {
       studentName: request.studentSnapshot?.name,
       facultyId: hod._id,
       subjectId: null,
-      subjectName: 'Department Clearance (HoD)',
+      subjectName: subjectName,
       approvalType: 'hodApproval',
-      roleTag: 'hod',
+      roleTag: roleTag,
       action: 'pending',
     });
   }
@@ -100,7 +104,7 @@ const ensureHodApprovalCoverage = async (batch, departmentId) => {
 export const getClasses = async (req, res, next) => {
   try {
     const { departmentId, semester, academicYear, page = 1, limit = 50, includeInactive } = req.query;
-    const isPrivileged = ['admin', 'hod'].includes(req.user.role);
+    const isPrivileged = ['admin', 'hod', 'ao'].includes(req.user.role);
 
     const cacheKey = `classes:list:dept_${departmentId || 'all'}:${semester || 'all'}:${academicYear || 'all'}:${page}:${limit}:${includeInactive}`;
     const cachedData = cache.get(cacheKey);
@@ -179,7 +183,7 @@ export const createClass = async (req, res, next) => {
       return next(new ErrorResponse('name, departmentId, semester, academicYear required', 400, 'VALIDATION_ERROR'));
     }
 
-    if (req.user.role === 'hod' && req.user.departmentId !== departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId !== departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -241,7 +245,7 @@ export const getClassById = async (req, res, next) => {
     }
 
     // 2. Departmental security boundary
-    if (req.user.role === 'hod' && cls.departmentId?._id?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?._id?.toString() !== req.user.departmentId) {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
@@ -326,7 +330,7 @@ export const updateClass = async (req, res, next) => {
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -376,7 +380,7 @@ export const deleteClass = async (req, res, next) => {
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -429,7 +433,7 @@ export const assignClassTeacher = async (req, res, next) => {
       return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -490,7 +494,7 @@ export const addSubjectAssignment = async (req, res, next) => {
       return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -564,7 +568,7 @@ export const updateSubjectAssignment = async (req, res, next) => {
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -639,7 +643,7 @@ export const removeSubjectAssignment = async (req, res, next) => {
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
     }
 
-    if (req.user.role === 'hod' && cls.departmentId?.toString() !== req.user.departmentId) {
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
@@ -699,7 +703,7 @@ export const cloneSubjects = async (req, res, next) => {
       return next(new ErrorResponse('Source class not found', 404, 'NOT_FOUND'));
     }
     
-    if (req.user.role === 'hod') {
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
       if (cls.departmentId?.toString() !== req.user.departmentId || source.departmentId?.toString() !== req.user.departmentId) {
          await abortSafeTransaction(session);
          return next(new ErrorResponse('Access denied: cross-department cloning', 403, 'AUTH_DEPARTMENT_SCOPE'));

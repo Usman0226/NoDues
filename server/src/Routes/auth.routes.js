@@ -21,7 +21,7 @@ router.post('/student-login', studentLogin);
 router.post(
   '/change-password',
   protect,
-  RoleGuard(['admin', 'faculty', 'hod']),
+  RoleGuard(['admin', 'faculty', 'hod', 'ao']),
   changePassword
 );
 

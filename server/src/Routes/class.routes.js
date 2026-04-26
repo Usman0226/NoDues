@@ -18,7 +18,7 @@ import { initiateBatch } from '../Controllers/batchController.js';
 const router = Router();
 
 router.use(protect);
-router.use(RoleGuard(['admin', 'hod']));
+router.use(RoleGuard(['admin', 'hod', 'ao']));
 
 // Collection routes
 router.route('/')

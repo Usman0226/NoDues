@@ -23,13 +23,13 @@ router.get('/me/classes', (req, res, next) => {
   next();
 }, asyncHandler(getFacultyClasses));
 
-router.use(RoleGuard(['admin', 'hod', 'faculty']));
+router.use(RoleGuard(['admin', 'hod', 'ao', 'faculty']));
 
 router.get('/', asyncHandler(getFaculty));
 router.get('/:id', asyncHandler(getFacultyById));
 router.get('/:id/classes', asyncHandler(getFacultyClasses));
 
-router.use(RoleGuard(['admin', 'hod']));
+router.use(RoleGuard(['admin', 'hod', 'ao']));
 
 router.post('/', asyncHandler(createFaculty));
 
