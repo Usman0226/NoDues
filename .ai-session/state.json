@@ -1,18 +1,18 @@
 {
-  "last_updated": "2026-04-26T14:52:30Z",
+  "last_updated": "2026-04-27T07:08:00Z",
   "completed": [
-    "Backend activation logic for Faculty, Students, Classes, Subjects, and Co-Curricular",
-    "API endpoints and frontend service updates",
-    "UI integration for reactivation across all administrative lists",
-    "Single and Bulk activation support where applicable"
+    "AO role schema support in NodueBatch and NodueApproval",
+    "DepartmentGuard middleware fix for req.body support",
+    "HOD/AO dashboard visibility expansion to include all clearance types",
+    "HOD/AO action override permission fix"
   ],
   "in_progress": [],
   "pending": [],
   "decisions": [
     {
-      "context": "Lack of activation feature",
-      "decision": "Implemented soft-delete recovery by adding activation endpoints and UI toggles",
-      "trade_offs": "Added slight complexity to the UI with 'Show Archived' toggles"
+      "context": "HOD/AO Visibility Filter",
+      "decision": "Expanded from ['coCurricular', 'subject'] to include ['hodApproval', 'classTeacher', 'mentor']",
+      "trade_offs": "Increases list length but ensures all departmental tasks are visible to both HOD and AO."
     }
   ],
   "blockers": []

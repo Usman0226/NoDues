@@ -31,7 +31,7 @@ export const DepartmentGuard = async (req, res, next) => {
   try {
     if (req.user.role === 'admin') return next();
 
-    const { departmentId, batchId, classId, studentId } = { ...req.params, ...req.query };
+    const { departmentId, batchId, classId, studentId } = { ...req.params, ...req.query, ...req.body };
     const userDeptId = req.user.departmentId?.toString();
 
     if (req.user.role === 'hod' || req.user.role === 'ao') {

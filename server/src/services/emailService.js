@@ -353,7 +353,7 @@ export const sendFeedbackEmail = async (feedbackData, user) => {
 export const sendCredentialEmail = async (to, name, identifier, password, role) => {
   if (role === 'student' && !process.env.ENABLE_STUDENT_EMAILS) return true;
   
-  const loginUrl = process.env.FRONTEND_URL || 'https://no-dues-psi.vercel.app/';
+  const loginUrl = process.env.FRONTEND_URL || 'https://nodues-arcclub.tech';
   const subject = `Your Credentials for ${role === 'student' ? 'Student Portal' : 'Faculty Portal'} - NDS`;
   const html = `
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">

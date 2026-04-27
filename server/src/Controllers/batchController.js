@@ -267,7 +267,7 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
             isOptional:   f.isOptional   ?? false,
             approvalType: f.approvalType,
             roleTag:      f.roleTag,
-            action:       'not_submitted',
+            action:       f.approvalType === 'coCurricular' ? 'not_submitted' : 'pending',
             createdAt:    now,
           },
         },

@@ -17,8 +17,6 @@ export const getPendingApprovals = async (req, res, next) => {
     const { userId } = req.user;
     const { page = 1, limit = 20, search = '', batchId, action } = req.query;
     
-    // Single batch query — fetch _id, departmentId AND className in one shot
-    // Previously made two separate NodueBatch queries (one for dept scope, one for className)
     const activeBatches = await NodueBatch.find(
       { status: 'active' },
       '_id departmentId className classId'
@@ -38,7 +36,6 @@ export const getPendingApprovals = async (req, res, next) => {
 
     const andConditions = [];
 
-    // Action filter: default to 'pending' unless 'all' is explicitly requested
     if (action !== 'all') {
       andConditions.push({ action: action || 'pending' });
     }
@@ -63,7 +60,7 @@ export const getPendingApprovals = async (req, res, next) => {
                 { facultyId: userId },
                 { 
                     batchId: { $in: myDeptBatchIds }, 
-                    approvalType: { $in: ['coCurricular', 'subject'] }
+                    approvalType: { $in: ['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'] }
                 }
             ]
         });
@@ -95,6 +92,7 @@ export const getPendingApprovals = async (req, res, next) => {
     ]);
 
     // Build className map directly from the single activeBatches query above — no second DB call needed
+    // Map the nodues roleTa
     const batchMap = {};
     activeBatches.forEach((b) => { batchMap[b._id.toString()] = b.className || null; });
 
@@ -173,7 +171,7 @@ export const getApprovalHistory = async (req, res, next) => {
                { facultyId: userId },
                { 
                    batchId: { $in: myDeptBatchIds }, 
-                   approvalType: { $in: ['coCurricular', 'subject'] }
+                   approvalType: { $in: ['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'] }
                }
            ]
        });
@@ -285,7 +283,7 @@ export const approveRequest = async (req, res, next) => {
 
     if (approval.facultyId.toString() !== req.user.userId.toString()) {
         if ((req.user.role === 'hod' || req.user.role === 'ao') && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
-            if (!['coCurricular', 'subject'].includes(approval.approvalType)) {
+            if (!['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'].includes(approval.approvalType)) {
                  await abortSafeTransaction(session);
                  return next(new ErrorResponse('Access denied', 403));
             }
@@ -384,7 +382,7 @@ export const bulkApproveRequests = async (req, res, next) => {
 
         if (a.facultyId.toString() !== req.user.userId.toString()) {
             if ((req.user.role === 'hod' || req.user.role === 'ao') && batch.departmentId?.toString() === req.user.departmentId?.toString()) {
-                if (!['coCurricular', 'subject'].includes(a.approvalType)) return false;
+                if (!['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'].includes(a.approvalType)) return false;
             } else {
                 return false;
             }
@@ -512,7 +510,7 @@ export const markDue = async (req, res, next) => {
 
     if (approval.facultyId.toString() !== req.user.userId.toString()) {
         if ((req.user.role === 'hod' || req.user.role === 'ao') && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
-            if (!['coCurricular', 'subject'].includes(approval.approvalType)) {
+            if (!['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'].includes(approval.approvalType)) {
                  await abortSafeTransaction(session);
                  return next(new ErrorResponse('Access denied', 403));
             }
@@ -609,7 +607,7 @@ export const updateApproval = async (req, res, next) => {
 
     if (approval.facultyId.toString() !== req.user.userId.toString()) {
         if ((req.user.role === 'hod' || req.user.role === 'ao') && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
-            if (!['coCurricular', 'subject'].includes(approval.approvalType)) {
+            if (!['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'].includes(approval.approvalType)) {
                  await abortSafeTransaction(session);
                  return next(new ErrorResponse('Access denied', 403));
             }

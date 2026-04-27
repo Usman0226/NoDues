@@ -216,7 +216,7 @@ export const createStudent = async (req, res, next) => {
           subjectName: entry.subjectName ?? null,
           approvalType: entry.approvalType,
           roleTag: entry.roleTag,
-          action: 'pending',
+          action: entry.approvalType === 'coCurricular' ? 'not_submitted' : 'pending',
         }));
 
       if (approvals.length) {

@@ -20,7 +20,7 @@ const nodueBatchSchema = new mongoose.Schema({
   },
   initiatedByRole: {
     type: String,
-    enum: ['admin', 'hod']
+    enum: ['admin', 'hod', 'ao']
   },
   initiatedAt: {
     type: Date,
