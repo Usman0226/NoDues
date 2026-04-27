@@ -25,12 +25,14 @@ const removeClient = (userId, res) => {
  */
 export const pushEvent = (userIds, eventName, payload) => {
   const data = JSON.stringify({ event: eventName, ...payload });
+  const eventId = Date.now();
   for (const uid of userIds) {
     const connections = clients.get(uid);
     if (!connections) continue;
     for (const res of connections) {
       try {
-        res.write(`data: ${data}\n\n`);
+        // Named events let browsers send Last-Event-ID on reconnect (critical for proxied SSE)
+        res.write(`id: ${eventId}\nevent: ${eventName}\ndata: ${data}\n\n`);
       } catch (e) {
         logger.warn('SSE write failed', { userId: uid, error: e.message });
         removeClient(uid, res);

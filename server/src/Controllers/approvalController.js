@@ -322,11 +322,11 @@ export const approveRequest = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId, session);
 
-    // Invalidate caches: Student dashboard + HoD Grid + Faculty pending
+    await commitSafeTransaction(session);
+
+    invalidateStudentStatusCache(approval.studentId.toString());
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
-
-    await commitSafeTransaction(session);
 
     logger.audit('APPROVAL_ACTIONED', {
       actor: req.user.userId,
@@ -438,10 +438,13 @@ export const bulkApproveRequests = async (req, res, next) => {
     }
     await commitSafeTransaction(session);
 
-    // Bulk Invalidation
-    studentIdsToNotify.forEach(sId => invalidateEntityCache('student', sId));
+    // Bulk Invalidation — student portal cache first for fastest UI update
+    studentIdsToNotify.forEach(sId => {
+      invalidateStudentStatusCache(sId);
+      invalidateEntityCache('student', sId);
+    });
     batchIds.forEach(bId => invalidateEntityCache('batch', bId));
-    invalidateEntityCache('approval', req.user.userId, 'all'); 
+    invalidateEntityCache('approval', req.user.userId, 'all');
 
     logger.audit('BULK_APPROVAL_ACTIONED', {
       actor: req.user.userId,
@@ -550,11 +553,12 @@ export const markDue = async (req, res, next) => {
 
     await recalcRequestStatus(approval.requestId, session);
 
+    await commitSafeTransaction(session);
+
     // Invalidate caches: Student dashboard + HoD Grid + Faculty pending
+    invalidateStudentStatusCache(approval.studentId.toString());
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
-
-    await commitSafeTransaction(session);
 
     logger.audit('DUE_MARKED', {
       actor: req.user.userId,
@@ -650,6 +654,7 @@ export const updateApproval = async (req, res, next) => {
     await commitSafeTransaction(session);
 
     // Invalidate caches: Student dashboard + HoD Grid + Faculty pending
+    invalidateStudentStatusCache(approval.studentId.toString());
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
 

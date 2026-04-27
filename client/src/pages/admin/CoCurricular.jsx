@@ -363,25 +363,32 @@ const CoCurricular = () => {
         <div className="flex items-center gap-3">
           {canManage && (
             <Button variant="primary" size="sm" onClick={() => { resetForm(); setShowCreate(true); }} className="gap-2">
-              <Plus size={14} /> Add 
+              <Plus size={14} /> Add Template
             </Button>
           )}
-          <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
-               onClick={() => setIncludeInactive(!includeInactive)}>
-             <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
-                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
-             </div>
-             <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Archived</span>
-          </div>
         </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => fetchItems({ includeInactive })} 
-          className="text-muted-foreground"
-        >
-          <RefreshCw size={14} /> Refresh
-        </Button>
+
+        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+             onClick={() => setIncludeInactive(!includeInactive)}>
+           <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
+           </div>
+           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Inactivated</span>
+           <div className="w-px h-4 bg-muted/50 mx-1" />
+           <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={async (e) => {
+              e.stopPropagation();
+              const hide = showGlobalLoader('Refreshing Co-Curricular Directory...');
+              await fetchItems({ includeInactive });
+              hide();
+            }} 
+            className="text-muted-foreground hover:text-navy p-0 h-auto"
+          >
+            <RefreshCw size={14} className="mr-2" /> Reload
+          </Button>
+        </div>
       </div>
 
 

@@ -321,7 +321,7 @@ const FacultyList = () => {
             setSelectedFaculty(null);
             setShowCreate(true);
           }}><Plus size={14} /> Add Faculty</Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite"><Upload size={14} /> Import List</Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite"><Upload size={14} /> Import list</Button>
         </div>
 
         <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
@@ -329,7 +329,21 @@ const FacultyList = () => {
            <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
               <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
            </div>
-           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Archived</span>
+           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Inactivated</span>
+           <div className="w-px h-4 bg-muted/50 mx-1" />
+           <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={async (e) => {
+                e.stopPropagation();
+                const hide = showGlobalLoader('Refreshing Faculty Directory...');
+                await fetchFaculty({ page, limit, includeInactive, search: debouncedSearch });
+                hide();
+              }} 
+              className="text-muted-foreground hover:text-navy p-0 h-auto"
+            >
+              <RefreshCw size={14} className="mr-2" /> Reload
+            </Button>
         </div>
       </div>
       {error ? (

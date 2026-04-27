@@ -13,8 +13,10 @@ import logger from '../utils/logger.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import { 
   syncMentorUpdate, 
+  syncStudentUpdate,
   syncElectiveAddition, 
   syncElectiveRemoval,
+  syncElectiveUpdate,
   syncStudentDeactivation,
   bulkSyncMentorUpdate,
   bulkSyncStudentDeactivation,
@@ -22,7 +24,6 @@ import {
 } from '../utils/batchSync.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 
-// ── GET /api/students
 export const getStudents = async (req, res, next) => {
   try {
     const { classId, departmentId, semester, search, page = 1, limit = 50, includeInactive } = req.query;
@@ -48,8 +49,6 @@ export const getStudents = async (req, res, next) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    // Cache list for non-search requests (search is volatile, skip caching)
-    // Key encodes scope + page so different pages get their own cache entries
     const scopeKey = classId || departmentId || req.user.departmentId || 'all';
     const listCacheKey = !search
       ? `students:list:${scopeKey}:p${page}:l${limit}:inc${includeInactive ?? 'false'}`
@@ -63,7 +62,6 @@ export const getStudents = async (req, res, next) => {
       }
     }
 
-    // Run count + find in parallel — previously sequential (count then find)
     const [total, students] = await Promise.all([
       Student.countDocuments(query),
       Student.find(query)
@@ -99,7 +97,7 @@ export const getStudents = async (req, res, next) => {
       },
     };
 
-    if (listCacheKey) cache.set(listCacheKey, payload, 30); // 30s — short enough to see new students
+    if (listCacheKey) cache.set(listCacheKey, payload, 30); 
 
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, ...payload });
@@ -108,7 +106,6 @@ export const getStudents = async (req, res, next) => {
   }
 };
 
-// ── POST /api/students ────────────────────────────────────────────────────────
 export const createStudent = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
@@ -259,7 +256,6 @@ export const createStudent = async (req, res, next) => {
   }
 };
 
-// ── GET /api/students/:id ─────────────────────────────────────────────────────
 export const getStudentById = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -306,7 +302,6 @@ export const getStudentById = async (req, res, next) => {
   }
 };
 
-// ── PATCH /api/students/:id ───────────────────────────────────────────────────
 export const updateStudent = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
@@ -352,17 +347,17 @@ export const updateStudent = async (req, res, next) => {
     }
 
     await student.save({ session });
-    
+    await commitSafeTransaction(session);
+
+    // ✅ Sync AFTER commit to ensure database state is visible to sync functions
     const isClassChanged = classId && classId !== oldClassId?.toString();
     if (isClassChanged) {
-        // Note: syncClassChange manages its own session/transaction internally
-        // In Mongoose, sessions can be nested or passed, but batchSync.js currently initializes NEW sessions.
-        // For absolute safety, we should ideally pass this session to syncClassChange.
-        // However, since syncClassChange handles individual transactions, it's safer for now to let it proceed.
-        await syncClassChange(id, oldClassId, student.classId);
+       await syncClassChange(id, oldClassId, student.classId);
     }
 
-    await commitSafeTransaction(session);
+    if (name !== undefined || rollNo !== undefined) {
+      await syncStudentUpdate(id, { name, rollNo });
+    }
 
     // Invalidate class cache to avoid stale student lists in Class Detail
     const oldCidStr = oldClassId ? oldClassId.toString() : null;
@@ -392,7 +387,6 @@ export const updateStudent = async (req, res, next) => {
   }
 };
 
-// ── DELETE /api/students/:id ──────────────────────────────────────────────────
 export const deleteStudent = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
@@ -412,9 +406,10 @@ export const deleteStudent = async (req, res, next) => {
     student.isActive = false;
     await student.save({ session });
 
-    await syncStudentDeactivation(id);
-
     await commitSafeTransaction(session);
+
+    // ✅ Sync AFTER commit
+    await syncStudentDeactivation(id);
 
     logger.info('student_deactivated', {
       timestamp: new Date().toISOString(),
@@ -433,7 +428,6 @@ export const deleteStudent = async (req, res, next) => {
   }
 };
 
-// ── PATCH /api/students/:id/mentor ────────────────────────────────────────────
 export const assignMentor = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
@@ -468,10 +462,12 @@ export const assignMentor = async (req, res, next) => {
     student.mentorId = mentor._id;
     await student.save({ session });
 
+    // ✅ Commit FIRST so the committed student.mentorId is visible to syncMentorUpdate
+    await commitSafeTransaction(session);
+
+    // ✅ Sync runs after commit — reads the correct, committed mentorId
     await syncMentorUpdate(id, mentor._id, mentor.name);
 
-    await commitSafeTransaction(session);
-    
     if (student.classId) {
       invalidateEntityCache('class', student.classId.toString());
     }
@@ -499,7 +495,6 @@ export const assignMentor = async (req, res, next) => {
   }
 };
 
-// ── POST /api/students/:id/electives
 export const addElective = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
@@ -586,33 +581,52 @@ export const addElective = async (req, res, next) => {
   }
 };
 
-// ── PATCH /api/students/:id/electives/:assignmentId ──────────────────────────
 export const updateElective = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
+    await startSafeTransaction(session);
     const { id, assignmentId } = req.params;
     const { facultyId } = req.body;
-    if (!facultyId) return next(new ErrorResponse('facultyId is required', 400, 'VALIDATION_ERROR'));
+    if (!facultyId) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('facultyId is required', 400, 'VALIDATION_ERROR'));
+    }
 
     const [student, faculty] = await Promise.all([
-      Student.findOne({ _id: id, isActive: true }),
-      Faculty.findOne({ _id: facultyId, isActive: true }).lean(),
+      Student.findOne({ _id: id, isActive: true }).session(session),
+      Faculty.findOne({ _id: facultyId, isActive: true }).session(session).lean(),
     ]);
 
-    if (!student) return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
-    if (!faculty) return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
+    if (!student) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Student not found', 404, 'NOT_FOUND'));
+    }
+    if (!faculty) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Faculty not found', 404, 'NOT_FOUND'));
+    }
 
-    // HoD Scope Check
     if ((req.user.role === 'hod' || req.user.role === 'ao') && student.departmentId?.toString() !== req.user.departmentId) {
+      await abortSafeTransaction(session);
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
     const elective = student.electiveSubjects.id(assignmentId);
-    if (!elective) return next(new ErrorResponse('Elective assignment not found', 404, 'NOT_FOUND'));
+    if (!elective) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Elective assignment not found', 404, 'NOT_FOUND'));
+    }
 
+    const subjectId = elective.subjectId;
     elective.facultyId   = faculty._id;
     elective.facultyName = faculty.name;
-    await student.save();
-    // Cache invalidated automatically by Mongoose student save hook
+    await student.save({ session });
+
+    // ✅ Commit before syncing so the active batch reads committed data
+    await commitSafeTransaction(session);
+
+    // ✅ Propagate faculty change to any active batch approval for this elective
+    await syncElectiveUpdate(id, subjectId, { facultyId: faculty._id, facultyName: faculty.name });
 
     logger.info('elective_updated', {
       timestamp: new Date().toISOString(),
@@ -631,11 +645,13 @@ export const updateElective = async (req, res, next) => {
       },
     });
   } catch (err) {
+    if (session.inTransaction()) await abortSafeTransaction(session);
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
-// ── DELETE /api/students/:id/electives/:assignmentId ─────────────────────────
 export const removeElective = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
@@ -695,7 +711,6 @@ export const activateStudent = async (req, res, next) => {
       return next(new ErrorResponse('Student not found', 404));
     }
 
-    // RBAC Check
     if ((req.user.role === 'hod' || req.user.role === 'ao') && 
         student.departmentId.toString() !== req.user.departmentId.toString()) {
       await abortSafeTransaction(session);
@@ -769,9 +784,6 @@ export const bulkActivateStudents = async (req, res, next) => {
   }
 };
 
-
-// ── BATCH OPERATIONS ─────────────────────────────────────────────────────────
-
 export const bulkDeactivateStudents = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
@@ -842,9 +854,10 @@ export const bulkAssignMentor = async (req, res, next) => {
     const updatedStudents = await Student.find(query).select('classId').session(session).lean();
     const affectedClassIds = [...new Set(updatedStudents.map(s => s.classId?.toString()).filter(Boolean))];
 
-    await bulkSyncMentorUpdate(ids, mentor._id, mentor.name);
-
+    // ✅ Commit FIRST — bulkSyncMentorUpdate must see the committed mentorId values
     await commitSafeTransaction(session);
+
+    await bulkSyncMentorUpdate(ids, mentor._id, mentor.name);
 
     // Invalidate class caches to ensure Class Detail page reflects updates
     affectedClassIds.forEach(cid => invalidateEntityCache('class', cid));

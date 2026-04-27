@@ -267,7 +267,7 @@ const StudentList = () => {
           <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite">
             <Upload size={14} /> Import list
           </Button>
-          <Button 
+          {/* <Button 
             variant="ghost" 
             size="sm" 
             onClick={async () => {
@@ -278,7 +278,7 @@ const StudentList = () => {
             className="text-muted-foreground"
           >
             <RefreshCw size={14} /> Reload
-          </Button>
+          </Button> */}
         </div>
 
         <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
@@ -287,6 +287,20 @@ const StudentList = () => {
               <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
            </div>
            <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Inactivated</span>
+           <div className="w-px h-4 bg-muted/50 mx-1" />
+           <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={async (e) => {
+              e.stopPropagation();
+              const hide = showGlobalLoader('Reloading Student Directory...');
+              await fetchStudents(studentQueryParams);
+              hide();
+            }} 
+            className="text-muted-foreground hover:text-navy p-0 h-auto"
+          >
+            <RefreshCw size={14} className="mr-2" /> Reload
+          </Button>
         </div>
       </div>
 

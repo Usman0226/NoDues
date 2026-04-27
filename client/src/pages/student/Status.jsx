@@ -133,7 +133,7 @@ const REGISTRY_GROUPS = [
   { 
     id: 'hod', 
     label: 'Department', 
-    filter: (a) => a.roleTag === 'hod', 
+    filter: (a) => ['hod', 'ao'].includes(a.roleTag) && a.approvalType === 'hodApproval', 
     icon: Shield,
     gradient: 'from-purple-500 to-navy'
   },
@@ -404,11 +404,28 @@ const StudentStatus = () => {
     }
   }, [handleRefresh, requestId, error]);
 
+  // Track the last time an SSE event arrived — used by the polling fallback below
+  const lastSseEventRef = React.useRef(Date.now());
+
   useSSE(clearanceData?.batchId && !isHistoryMode ? getBatchSSEUrl(clearanceData.batchId) : null, (event) => {
-    if (event?.event?.toLowerCase() === 'approval_updated' || event?.event?.toLowerCase() === 'batch_updated') {
+    const name = event?.event?.toUpperCase();
+    if (['APPROVAL_UPDATED', 'BATCH_UPDATED', 'BATCH_CLOSED', 'BATCH_INITIATED'].includes(name)) {
+      lastSseEventRef.current = Date.now();
       handleRefresh('silent');
     }
   });
+
+  // Polling fallback: if SSE has been silent for >30s (Cloudflare/Render proxy drops stream)
+  // poll every 30s so the student always sees fresh data
+  React.useEffect(() => {
+    if (isHistoryMode || !clearanceData?.batchId) return;
+    const interval = setInterval(() => {
+      if (Date.now() - lastSseEventRef.current > 30_000) {
+        handleRefresh('silent');
+      }
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [isHistoryMode, clearanceData?.batchId, handleRefresh]);
 
   const filteredApprovals = React.useMemo(() => {
     let list = [...approvals];
@@ -649,7 +666,7 @@ const StudentStatus = () => {
                         isNotSubmitted={!item.submission || item.submission.status === 'not_submitted' || item.submission.status === 'rejected'}
                         isPendingCoordinator={item.submission?.status === 'submitted'}
                         isApproved={item.action === 'approved' || item.submission?.status === 'approved'}
-                        isDue={item.action === 'due'}
+                        isDue={item.action === 'due_marked' || item.action === 'due'}
                         isOverride={!!item.overriddenBy}
                       />
                     ))}

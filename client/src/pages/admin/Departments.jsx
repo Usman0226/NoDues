@@ -127,12 +127,15 @@ const Departments = () => {
         </div>
       )}
 
-      <div className="flex justify-end gap-3 mb-6">
-        <Button variant="ghost" size="sm" onClick={() => fetchDepts()} className="text-muted-foreground">
-          <RefreshCw size={14} className="mr-2"/> Sync
-        </Button>
-        <Button variant="primary" size="sm" onClick={openCreateModal}>
-          <Plus size={14} className="mr-2"/> New Department
+      <div className="flex items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <Button variant="primary" size="sm" onClick={openCreateModal}>
+            <Plus size={14} className="mr-2"/> New Department
+          </Button>
+        </div>
+
+        <Button variant="ghost" size="sm" onClick={() => fetchDepts()} className="text-muted-foreground border border-muted hover:bg-offwhite rounded-full px-5">
+          <RefreshCw size={14} className="mr-2"/> Reload
         </Button>
       </div>
 

@@ -197,7 +197,7 @@ const Batches = () => {
           }} 
           className="text-muted-foreground"
         >
-          <RefreshCw size={14} /> Refetch
+          <RefreshCw size={14} /> Reload
         </Button>
       </div>
 

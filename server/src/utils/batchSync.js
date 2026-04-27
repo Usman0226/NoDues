@@ -143,6 +143,69 @@ export const syncSubjectUpdate = async (classId, subjectId, facultyData) => {
   }
 };
 
+// ── syncStudentUpdate ─────────────────────────────────────────────────────────
+/**
+ * Propagate changes to a student's basic details (Name, RollNo) to all
+ * active batch requests and approvals.
+ */
+export const syncStudentUpdate = async (studentId, { name, rollNo }) => {
+  let succeeded = false;
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+
+    // 1. Update the studentSnapshot in all active NodueRequests for this student
+    const activeRequests = await NodueRequest.find({ studentId }).session(session);
+    if (!activeRequests.length) {
+      await commitSafeTransaction(session);
+      return;
+    }
+
+    const batchIds = [...new Set(activeRequests.map(r => r.batchId.toString()))];
+    const activeBatches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' })
+      .session(session).select('_id').lean();
+    const activeBatchIds = new Set(activeBatches.map(b => b._id.toString()));
+
+    let requestsModified = 0;
+    for (const req of activeRequests) {
+      if (!activeBatchIds.has(req.batchId.toString())) continue;
+
+      if (name) req.studentSnapshot.name = name;
+      if (rollNo) req.studentSnapshot.rollNo = rollNo;
+      
+      req.markModified('studentSnapshot');
+      await req.save({ session });
+      requestsModified++;
+    }
+
+    // 2. Update the studentName/studentRollNo in all corresponding NodueApprovals
+    const updateFields = {};
+    if (name) updateFields.studentName = name;
+    if (rollNo) updateFields.studentRollNo = rollNo;
+
+    if (Object.keys(updateFields).length > 0 && activeBatchIds.size > 0) {
+      await NodueApproval.updateMany(
+        { studentId, batchId: { $in: Array.from(activeBatchIds) } },
+        { $set: updateFields },
+        { session }
+      );
+    }
+
+    await commitSafeTransaction(session);
+    succeeded = true;
+    logger.audit('SYNC_STUDENT_UPDATED', { studentId, requestsModified, name, rollNo });
+  } catch (err) {
+    await abortSafeTransaction(session);
+    logger.error('sync_student_update_failed', { studentId, error: err.message });
+  } finally {
+    session.endSession();
+  }
+
+  if (succeeded) {
+    invalidateEntityCache('student', studentId.toString());
+  }
+};
+
 // ── syncMentorUpdate ──────────────────────────────────────────────────────────
 export const syncMentorUpdate = async (studentId, mentorId, mentorName) => {
   let succeeded = false;
@@ -343,10 +406,15 @@ export const syncElectiveRemoval = async (studentId, subjectId) => {
   }
 };
 
-// ── syncStudentDeactivation ───────────────────────────────────────────────────
-export const syncStudentDeactivation = async (studentId) => {
+// ── syncElectiveUpdate ────────────────────────────────────────────────────────
+/**
+ * When a student's elective faculty is changed while a batch is active, update
+ * the existing NodueApproval record and the facultySnapshot on the request.
+ * This ensures the old faculty no longer sees a pending approval and the new
+ * faculty immediately sees it.
+ */
+export const syncElectiveUpdate = async (studentId, subjectId, { facultyId, facultyName }) => {
   let succeeded = false;
-  let activeBatchClassId = null;
   const session = await mongoose.startSession();
   try {
     await startSafeTransaction(session);
@@ -363,17 +431,100 @@ export const syncStudentDeactivation = async (studentId) => {
       await commitSafeTransaction(session);
       return;
     }
-    activeBatchClassId = activeBatch.classId;
 
-    // Delete all approval records for this student in this batch
-    await NodueApproval.deleteMany({ requestId: request._id }, { session });
+    // Update the approval record to point to the new faculty
+    await NodueApproval.findOneAndUpdate(
+      { requestId: request._id, subjectId, approvalType: 'subject' },
+      {
+        $set: {
+          facultyId,
+          facultyName,
+          // Reset to pending so the new faculty sees it as actionable
+          action: 'pending',
+          actionedAt: null,
+          remarks: null,
+        }
+      },
+      { session }
+    );
 
-    // Delete the request itself
-    await NodueRequest.deleteOne({ _id: request._id }, { session });
+    // Update the facultySnapshot on the request
+    if (Array.isArray(request.facultySnapshot)) {
+      const entry = request.facultySnapshot.find(
+        f => f.subjectId?.toString() === subjectId.toString()
+      );
+      if (entry) {
+        entry.facultyId   = facultyId;
+        entry.facultyName = facultyName;
+        request.markModified('facultySnapshot');
+      }
+    } else if (request.facultySnapshot?.[subjectId.toString()]) {
+      request.facultySnapshot[subjectId.toString()].facultyId   = facultyId;
+      request.facultySnapshot[subjectId.toString()].facultyName = facultyName;
+      request.markModified('facultySnapshot');
+    }
+    await request.save({ session });
 
     await commitSafeTransaction(session);
     succeeded = true;
-    logger.audit('SYNC_STUDENT_DEACTIVATED', { studentId, batchId: activeBatch._id });
+    logger.audit('SYNC_ELECTIVE_UPDATED', { studentId, subjectId, newFacultyId: facultyId });
+  } catch (err) {
+    await abortSafeTransaction(session);
+    logger.error('sync_elective_update_failed', { studentId, error: err.message });
+  } finally {
+    session.endSession();
+  }
+
+  if (succeeded) {
+    invalidateEntityCache('student', studentId.toString());
+  }
+};
+
+// ── syncStudentDeactivation ───────────────────────────────────────────────────
+export const syncStudentDeactivation = async (studentId) => {
+  let succeeded = false;
+  const affectedClassIds = [];
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+
+    // Fetch ALL requests for this student, not just the latest.
+    // Only remove requests from active batches; historical (closed-batch) records are preserved.
+    const allRequests = await NodueRequest.find({ studentId }).session(session).lean();
+    if (!allRequests.length) {
+      await commitSafeTransaction(session);
+      return;
+    }
+
+    const batchIds = [...new Set(allRequests.map(r => r.batchId.toString()))];
+    const activeBatches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' })
+      .session(session).select('_id classId').lean();
+    const activeBatchMap = new Map(activeBatches.map(b => [b._id.toString(), b]));
+
+    if (!activeBatches.length) {
+      // No active batches — nothing to clean up in live data
+      await commitSafeTransaction(session);
+      return;
+    }
+
+    activeBatches.forEach(b => { if (b.classId) affectedClassIds.push(b.classId.toString()); });
+
+    const activeRequestIds = allRequests
+      .filter(r => activeBatchMap.has(r.batchId.toString()))
+      .map(r => r._id);
+
+    if (activeRequestIds.length > 0) {
+      await NodueApproval.deleteMany({ requestId: { $in: activeRequestIds } }, { session });
+      await NodueRequest.deleteMany({ _id: { $in: activeRequestIds } }, { session });
+    }
+
+    await commitSafeTransaction(session);
+    succeeded = true;
+    logger.audit('SYNC_STUDENT_DEACTIVATED', {
+      studentId,
+      removedRequests: activeRequestIds.length,
+      preservedHistorical: allRequests.length - activeRequestIds.length,
+    });
   } catch (err) {
     await abortSafeTransaction(session);
     logger.error('sync_student_deactivation_failed', { studentId, error: err.message });
@@ -383,7 +534,7 @@ export const syncStudentDeactivation = async (studentId) => {
 
   if (succeeded) {
     invalidateEntityCache('student', 'all');
-    if (activeBatchClassId) invalidateEntityCache('class', activeBatchClassId);
+    [...new Set(affectedClassIds)].forEach(cid => invalidateEntityCache('class', cid));
   }
 };
 

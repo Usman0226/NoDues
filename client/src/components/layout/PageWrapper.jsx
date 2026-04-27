@@ -22,7 +22,7 @@ const PageWrapper = ({ children, title, subtitle, backTitle, backFallback, isRef
               {subtitle && (
                 <div className="flex items-center gap-2">
                   <div className="h-0.5 w-6 bg-gold/40 rounded-full" />
-                  <div className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">
+                  <div className="hidden text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-zinc-400">
                     {subtitle}
                   </div>
                 </div>

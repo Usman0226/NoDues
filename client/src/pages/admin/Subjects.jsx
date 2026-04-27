@@ -218,7 +218,7 @@ const Subjects = () => {
   return (
     <PageWrapper title="Subjects" subtitle="Centralized academic component subject for institution-wide mapping">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap gap-3 items-center">
           {canManage && (
             <Button variant="primary" size="sm" onClick={() => {
               setFormData({ code: '', name: '', semester: 1, isElective: false });
@@ -229,7 +229,7 @@ const Subjects = () => {
           )}
           {canManage && (
             <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite gap-2">
-              <Upload size={14} /> Import Subjects
+              <Upload size={14} /> Import list
             </Button>
           )}
           <div className="w-[180px]">
@@ -246,26 +246,29 @@ const Subjects = () => {
                 placeholder="Filter by Session"
              />
           </div>
-          <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
-               onClick={() => setIncludeInactive(!includeInactive)}>
-             <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
-                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
-             </div>
-             <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Archived</span>
-          </div>
         </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={async () => {
-            const hide = showGlobalLoader('Refreshing Subject Catalog...');
-            await fetchSubjects({ includeInactive });
-            hide();
-          }} 
-          className="text-muted-foreground"
-        >
-          <RefreshCw size={14} /> Reload
-        </Button>
+
+        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+             onClick={() => setIncludeInactive(!includeInactive)}>
+           <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
+           </div>
+           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Inactivated</span>
+           <div className="w-px h-4 bg-muted/50 mx-1" />
+           <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={async (e) => {
+                e.stopPropagation();
+                const hide = showGlobalLoader('Refreshing Subject Catalog...');
+                await fetchSubjects({ includeInactive });
+                hide();
+              }} 
+              className="text-muted-foreground hover:text-navy p-0 h-auto"
+            >
+              <RefreshCw size={14} className="mr-2" /> Reload
+            </Button>
+        </div>
       </div>
 
 

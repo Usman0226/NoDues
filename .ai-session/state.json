@@ -1,18 +1,23 @@
 {
-  "last_updated": "2026-04-27T07:08:00Z",
+  "last_updated": "2026-04-27T16:03:00Z",
   "completed": [
-    "AO role schema support in NodueBatch and NodueApproval",
-    "DepartmentGuard middleware fix for req.body support",
-    "HOD/AO dashboard visibility expansion to include all clearance types",
-    "HOD/AO action override permission fix"
+    "Bug 1: Fixed isDue flag logic in Status.jsx",
+    "Bug 2: Fixed AO role access in Status.jsx",
+    "Bug 3 & 6: Fixed mentor assignment race conditions by moving sync after commit",
+    "Bug 4: SSE reliability improvements (client-side polling + server-side named events)",
+    "Bug 5: Immediate student status cache invalidation after approvals",
+    "Bug 8: updateElective transaction + sync support",
+    "Bug 9: syncStudentDeactivation history preservation",
+    "Bug 10: Fixed student Name/RollNo sync — created syncStudentUpdate and integrated into updateStudent",
+    "System Integrity: Moved all class-level and student-level sync calls after commitSafeTransaction in controllers to eliminate race conditions"
   ],
   "in_progress": [],
   "pending": [],
   "decisions": [
     {
-      "context": "HOD/AO Visibility Filter",
-      "decision": "Expanded from ['coCurricular', 'subject'] to include ['hodApproval', 'classTeacher', 'mentor']",
-      "trade_offs": "Increases list length but ensures all departmental tasks are visible to both HOD and AO."
+      "context": "Sync calls were executing before transactions committed",
+      "decision": "Moved all sync calls in studentController and classController to AFTER commitSafeTransaction",
+      "trade_offs": "Small window where DB is updated but batch sync hasn't run yet. However, this is safer as it guarantees sync functions read the correct committed data."
     }
   ],
   "blockers": []

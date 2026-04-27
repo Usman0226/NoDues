@@ -350,11 +350,11 @@ export const updateClass = async (req, res, next) => {
     }
 
     await cls.save({ session });
-
-    const updatedTeacher = classTeacherId ? await Faculty.findById(classTeacherId).session(session).select('name').lean() : null;
-    await bulkSyncClassTeacherUpdate(id, classTeacherId || null, updatedTeacher?.name || null);
-
     await commitSafeTransaction(session);
+
+    // ✅ Sync AFTER commit
+    const updatedTeacher = classTeacherId ? await Faculty.findById(classTeacherId).select('name').lean() : null;
+    await bulkSyncClassTeacherUpdate(id, classTeacherId || null, updatedTeacher?.name || null);
 
     return res.status(200).json({
       success: true,
@@ -477,9 +477,10 @@ export const assignClassTeacher = async (req, res, next) => {
     cls.classTeacherId = classTeacherId || null;
     await cls.save({ session });
 
-    await bulkSyncClassTeacherUpdate(id, classTeacherId || null, teacher?.name || null);
-
     await commitSafeTransaction(session);
+
+    // ✅ Sync AFTER commit
+    await bulkSyncClassTeacherUpdate(id, classTeacherId || null, teacher?.name || null);
 
     // Invalidate faculty cache so their 'class count' updates
     if (classTeacherId) invalidateEntityCache('faculty', classTeacherId);
@@ -555,6 +556,9 @@ export const addSubjectAssignment = async (req, res, next) => {
     cls.subjectAssignments.push(assignment);
     await cls.save({ session });
 
+    await commitSafeTransaction(session);
+
+    // ✅ Sync AFTER commit
     await syncSubjectAddition(id, {
         subjectId: assignment.subjectId,
         subjectName: assignment.subjectName,
@@ -562,8 +566,6 @@ export const addSubjectAssignment = async (req, res, next) => {
         facultyId: assignment.facultyId,
         facultyName: assignment.facultyName
     });
-
-    await commitSafeTransaction(session);
 
     // Invalidate faculty cache so their 'subject assignment count' updates in faculty lists
     if (facultyId) invalidateEntityCache('faculty', facultyId);
@@ -635,13 +637,14 @@ export const updateSubjectAssignment = async (req, res, next) => {
 
     await cls.save({ session });
 
+    await commitSafeTransaction(session);
+
+    // ✅ Sync AFTER commit
     await syncSubjectUpdate(id, assignment.subjectId, {
       facultyId: assignment.facultyId,
       facultyName: assignment.facultyName,
       subjectCode: assignment.subjectCode
     });
-
-    await commitSafeTransaction(session);
 
     // Invalidate faculty cache for the newly assigned faculty
     if (facultyId) invalidateEntityCache('faculty', facultyId);
@@ -694,9 +697,10 @@ export const removeSubjectAssignment = async (req, res, next) => {
     assignment.deleteOne();
     await cls.save({ session });
 
-    await syncSubjectRemoval(id, subjectIdToSync);
-
     await commitSafeTransaction(session);
+
+    // ✅ Sync AFTER commit
+    await syncSubjectRemoval(id, subjectIdToSync);
 
     // Invalidate faculty cache if a faculty was assigned to this removed subject
     if (assignment.facultyId) {
