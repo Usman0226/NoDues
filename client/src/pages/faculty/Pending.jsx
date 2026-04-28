@@ -131,29 +131,49 @@ const DueModalContent = ({ item, onClose, onSubmit, loading }) => {
   );
 };
 
+const PENDING_CTX_KEY = 'pending_nav_ctx';
+
 const Pending = () => {
   const location = useLocation();
-  const [selectedBatch, setSelectedBatch] = useState(location.state?.classId || 'all');
-  const [approvalType, setApprovalType]   = useState(location.state?.approvalType || null);
-  const [itemTypeId, setItemTypeId]       = useState(location.state?.itemTypeId || null);
-  const [facultyId, setFacultyId]         = useState(location.state?.facultyId || null);
+
+  // Resolve initial state: prefer live navigation state, fall back to sessionStorage (survives refresh)
+  const resolveInitial = (field, fallback) => {
+    if (location.state?.[field] !== undefined && location.state[field] !== null) {
+      return location.state[field];
+    }
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(PENDING_CTX_KEY) || 'null');
+      return saved?.[field] ?? fallback;
+    } catch { return fallback; }
+  };
+
+  const [selectedBatch, setSelectedBatch] = useState(() => resolveInitial('classId', 'all'));
+  const [approvalType, setApprovalType]   = useState(() => resolveInitial('approvalType', null));
+  const [itemTypeId, setItemTypeId]       = useState(() => resolveInitial('itemTypeId', null));
+  const [facultyId, setFacultyId]         = useState(() => resolveInitial('facultyId', null));
   const [filter, setFilter]               = useState('pending');
 
-  // Sync with navigation state (from My Classes / Dashboard)
-  // Only apply when location key changes (i.e., on actual navigation)
+  // When navigation state arrives (My Classes click), persist it to sessionStorage
   useEffect(() => {
-    if (location.state?.classId) {
-      setSelectedBatch(location.state.classId);
-    }
-    // Reset to 'pending' if entering from a summary view (Dashboard/My Classes)
-    if (location.state?.from) {
-      setFilter('pending');
-    }
+    if (location.state?.classId || location.state?.facultyId) {
+      // Save the navigation context so refresh can restore it
+      sessionStorage.setItem(PENDING_CTX_KEY, JSON.stringify({
+        classId:      location.state.classId      ?? null,
+        approvalType: location.state.approvalType ?? null,
+        itemTypeId:   location.state.itemTypeId   ?? null,
+        facultyId:    location.state.facultyId    ?? null,
+      }));
 
-    if (location.state?.approvalType) setApprovalType(location.state.approvalType);
-    if (location.state?.itemTypeId) setItemTypeId(location.state.itemTypeId);
-    if (location.state?.facultyId) setFacultyId(location.state.facultyId);
-  }, [location.key]); // Only run on navigation events
+      if (location.state.classId)      setSelectedBatch(location.state.classId);
+      if (location.state.approvalType) setApprovalType(location.state.approvalType);
+      if (location.state.itemTypeId)   setItemTypeId(location.state.itemTypeId);
+      if (location.state.facultyId)    setFacultyId(location.state.facultyId);
+      if (location.state.from)         setFilter('pending');
+    } else if (!location.state) {
+      // User navigated here fresh (not from My Classes) — clear the persisted context
+      sessionStorage.removeItem(PENDING_CTX_KEY);
+    }
+  }, [location.key]);
   const [selection, setSelection]         = useState([]);
   const [actionLoading, setActionLoading] = useState(null); 
   const [dueModal, setDueModal]           = useState(null); 
@@ -727,6 +747,8 @@ const Pending = () => {
                     setSelectedBatch('all');
                     setApprovalType(null);
                     setItemTypeId(null);
+                    setFacultyId(null);
+                    sessionStorage.removeItem(PENDING_CTX_KEY);
                   }}
                 >
                   Clear All Filters

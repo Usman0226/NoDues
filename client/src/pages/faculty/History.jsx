@@ -116,6 +116,8 @@ const getColumns = (user, setReviewModal) => [
   }
 ];
 
+const HISTORY_CTX_KEY = 'history_nav_ctx';
+
 const FacultyHistory = () => {
   const location = useLocation();
   const [page, setPage] = useState(1);
@@ -123,12 +125,30 @@ const FacultyHistory = () => {
   const [semesterFilter, setSemesterFilter] = useState('all');
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [facultyId, setFacultyId] = useState(location.state?.facultyId || null);
   const [reviewModal, setReviewModal] = useState(null);
+
+  // Resolve facultyId: prefer live navigation state, fall back to sessionStorage on refresh
+  const [facultyId, setFacultyId] = useState(() => {
+    if (location.state?.facultyId != null) return location.state.facultyId;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(HISTORY_CTX_KEY) || 'null');
+      return saved?.facultyId ?? null;
+    } catch { return null; }
+  });
 
   const { showGlobalLoader } = useUI();
   const { user } = useAuth();
   const { data: response, loading, error, request: fetchHistory } = useApi(getApprovalHistory);
+
+  // Persist / clear context on navigation
+  useEffect(() => {
+    if (location.state?.facultyId) {
+      sessionStorage.setItem(HISTORY_CTX_KEY, JSON.stringify({ facultyId: location.state.facultyId }));
+      setFacultyId(location.state.facultyId);
+    } else if (!location.state) {
+      sessionStorage.removeItem(HISTORY_CTX_KEY);
+    }
+  }, [location.key]);
 
   // Debounce search input
   useEffect(() => {

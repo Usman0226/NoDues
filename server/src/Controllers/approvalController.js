@@ -64,7 +64,11 @@ export const getPendingApprovals = async (req, res, next) => {
         targetBatchIds = [match._id];
       }
     }
-    andConditions.push({ batchId: { $in: targetBatchIds } });
+    // Ensure all batchIds are ObjectIds
+    const targetBatchObjectIds = targetBatchIds.map(id => 
+        id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(id)
+    );
+    andConditions.push({ batchId: { $in: targetBatchObjectIds } });
 
     // ── Faculty vs HOD-Department Filter ────────────────────────────────────
     // Priority 1: Explicit facultyId filter (for HoDs acting as Faculty or Admin views)
@@ -74,18 +78,22 @@ export const getPendingApprovals = async (req, res, next) => {
         const isAuthorized = req.user.role === 'admin' || req.user.role === 'hod' || req.user.role === 'ao' || facultyId === req.user.userId;
         
         if (!isAuthorized) {
-            andConditions.push({ facultyId: userId }); // Fallback to self for security
+            andConditions.push({ facultyId: new mongoose.Types.ObjectId(userId) }); // Fallback to self for security
         } else {
             andConditions.push({ facultyId: targetId });
         }
     } 
     // Priority 2: Standard HOD/AO departmental view
     else if ((req.user.role === 'hod' || req.user.role === 'ao') && myDeptBatchIds.length > 0) {
+        // Ensure myDeptBatchIds are also ObjectIds
+        const myDeptBatchObjectIds = myDeptBatchIds.map(id => 
+            id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(id)
+        );
         andConditions.push({
             $or: [
-                { facultyId: userId },
+                { facultyId: new mongoose.Types.ObjectId(userId) },
                 { 
-                    batchId: { $in: myDeptBatchIds }, 
+                    batchId: { $in: myDeptBatchObjectIds }, 
                     approvalType: { $in: ['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'] }
                 }
             ]
@@ -93,7 +101,7 @@ export const getPendingApprovals = async (req, res, next) => {
     } 
     // Priority 3: Standard Faculty view
     else {
-        andConditions.push({ facultyId: userId });
+        andConditions.push({ facultyId: new mongoose.Types.ObjectId(userId) });
     }
 
     if (search) {
@@ -115,6 +123,7 @@ export const getPendingApprovals = async (req, res, next) => {
     }
 
     const query = andConditions.length > 0 ? { $and: andConditions } : {};
+    console.log('[DEBUG] getPendingApprovals query:', JSON.stringify(query, null, 2));
     
     const skip = (Number(page) - 1) * Number(limit);
     const [approvals, total] = await Promise.all([
