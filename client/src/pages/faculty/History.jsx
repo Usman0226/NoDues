@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
@@ -116,11 +117,13 @@ const getColumns = (user, setReviewModal) => [
 ];
 
 const FacultyHistory = () => {
+  const location = useLocation();
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [semesterFilter, setSemesterFilter] = useState('all');
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [facultyId, setFacultyId] = useState(location.state?.facultyId || null);
   const [reviewModal, setReviewModal] = useState(null);
 
   const { showGlobalLoader } = useUI();
@@ -141,9 +144,10 @@ const FacultyHistory = () => {
       semester: semesterFilter !== 'all' ? semesterFilter : undefined,
       page,
       limit,
-      search: debouncedSearch
+      search: debouncedSearch,
+      facultyId: facultyId || undefined
     });
-  }, [fetchHistory, semesterFilter, page, limit, debouncedSearch]);
+  }, [fetchHistory, semesterFilter, page, limit, debouncedSearch, facultyId]);
 
   const rows = React.useMemo(() => response?.data || [], [response?.data]);
   const total = response?.pagination?.total || 0;

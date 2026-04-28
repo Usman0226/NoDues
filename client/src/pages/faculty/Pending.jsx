@@ -136,21 +136,24 @@ const Pending = () => {
   const [selectedBatch, setSelectedBatch] = useState(location.state?.classId || 'all');
   const [approvalType, setApprovalType]   = useState(location.state?.approvalType || null);
   const [itemTypeId, setItemTypeId]       = useState(location.state?.itemTypeId || null);
+  const [facultyId, setFacultyId]         = useState(location.state?.facultyId || null);
   const [filter, setFilter]               = useState('pending');
 
   // Sync with navigation state (from My Classes / Dashboard)
+  // Only apply when location key changes (i.e., on actual navigation)
   useEffect(() => {
-    if (location.state?.classId && location.state.classId !== selectedBatch) {
+    if (location.state?.classId) {
       setSelectedBatch(location.state.classId);
     }
     // Reset to 'pending' if entering from a summary view (Dashboard/My Classes)
-    if (location.state?.from && filter !== 'pending') {
+    if (location.state?.from) {
       setFilter('pending');
     }
 
     if (location.state?.approvalType) setApprovalType(location.state.approvalType);
     if (location.state?.itemTypeId) setItemTypeId(location.state.itemTypeId);
-  }, [location.state, selectedBatch, filter]);
+    if (location.state?.facultyId) setFacultyId(location.state.facultyId);
+  }, [location.key]); // Only run on navigation events
   const [selection, setSelection]         = useState([]);
   const [actionLoading, setActionLoading] = useState(null); 
   const [dueModal, setDueModal]           = useState(null); 
@@ -275,9 +278,10 @@ const Pending = () => {
       batchId: selectedBatch !== 'all' ? selectedBatch : undefined,
       action: filter,
       approvalType: approvalType || undefined,
-      itemTypeId: itemTypeId || undefined
+      itemTypeId: itemTypeId || undefined,
+      facultyId: facultyId || undefined
     });
-  }, [fetchApprovals, page, limit, debouncedSearch, selectedBatch, filter, approvalType, itemTypeId]);
+  }, [fetchApprovals, page, limit, debouncedSearch, selectedBatch, filter, approvalType, itemTypeId, facultyId]);
 
   useSSE(
     sseUrl,

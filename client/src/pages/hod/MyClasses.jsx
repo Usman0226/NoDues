@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../hooks/useAuth';
 import { getMyClasses } from '../../api/faculty';
 import { GraduationCap, BookOpen, UserCheck, ChevronRight, AlertCircle } from 'lucide-react';
 import Button from '../../components/ui/Button';
@@ -9,6 +10,7 @@ import { PageSpinner } from '../../components/ui/Spinner';
 
 const MyClasses = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data, loading, error } = useApi(getMyClasses, { immediate: true });
 
   const classes = data?.data || [];
@@ -100,7 +102,9 @@ const MyClasses = () => {
                     onClick={() => navigate('/faculty/pending', { 
                       state: { 
                         classId: c._id,
-                        from: 'hod-my-classes'
+                        from: 'hod-my-classes',
+                        facultyId: user?.userId,
+                        approvalType: c.roleTag === 'classTeacher' ? 'classTeacher' : 'subject'
                       } 
                     })}
                     className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 transition-colors"

@@ -23,7 +23,8 @@ export const getPendingApprovals = async (req, res, next) => {
       batchId, 
       action = 'pending',
       approvalType,
-      itemTypeId 
+      itemTypeId,
+      facultyId
     } = req.query;
     
     const activeBatches = await NodueBatch.find(
@@ -65,8 +66,21 @@ export const getPendingApprovals = async (req, res, next) => {
     }
     andConditions.push({ batchId: { $in: targetBatchIds } });
 
-    // Faculty vs HOD-Department Filter
-    if ((req.user.role === 'hod' || req.user.role === 'ao') && myDeptBatchIds.length > 0) {
+    // ── Faculty vs HOD-Department Filter ────────────────────────────────────
+    // Priority 1: Explicit facultyId filter (for HoDs acting as Faculty or Admin views)
+    if (facultyId) {
+        const targetId = new mongoose.Types.ObjectId(facultyId);
+        // Permission check: only HOD/Admin/AO can view others
+        const isAuthorized = req.user.role === 'admin' || req.user.role === 'hod' || req.user.role === 'ao' || facultyId === req.user.userId;
+        
+        if (!isAuthorized) {
+            andConditions.push({ facultyId: userId }); // Fallback to self for security
+        } else {
+            andConditions.push({ facultyId: targetId });
+        }
+    } 
+    // Priority 2: Standard HOD/AO departmental view
+    else if ((req.user.role === 'hod' || req.user.role === 'ao') && myDeptBatchIds.length > 0) {
         andConditions.push({
             $or: [
                 { facultyId: userId },
@@ -76,7 +90,9 @@ export const getPendingApprovals = async (req, res, next) => {
                 }
             ]
         });
-    } else {
+    } 
+    // Priority 3: Standard Faculty view
+    else {
         andConditions.push({ facultyId: userId });
     }
 
@@ -180,7 +196,7 @@ export const getPendingApprovals = async (req, res, next) => {
 export const getApprovalHistory = async (req, res, next) => {
   try {
     const { userId } = req.user;
-    const { semester, page = 1, limit = 20, search = '' } = req.query;
+    const { semester, page = 1, limit = 20, search = '', facultyId } = req.query;
 
     let myDeptBatchIds = [];
     if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId) {
@@ -192,10 +208,21 @@ export const getApprovalHistory = async (req, res, next) => {
       { action: { $nin: ['pending', 'not_submitted'] } }
     ];
 
-    if ((req.user.role === 'hod' || req.user.role === 'ao') && myDeptBatchIds.length > 0) {
+    // ── Faculty vs HOD-Department Filter ────────────────────────────────────
+    if (facultyId) {
+        const targetId = new mongoose.Types.ObjectId(facultyId);
+        const isAuthorized = req.user.role === 'admin' || req.user.role === 'hod' || req.user.role === 'ao' || facultyId === req.user.userId;
+        
+        if (!isAuthorized) {
+            andConditions.push({ facultyId: new mongoose.Types.ObjectId(userId) });
+        } else {
+            andConditions.push({ facultyId: targetId });
+        }
+    } 
+    else if ((req.user.role === 'hod' || req.user.role === 'ao') && myDeptBatchIds.length > 0) {
        andConditions.push({
            $or: [
-               { facultyId: userId },
+               { facultyId: new mongoose.Types.ObjectId(userId) },
                { 
                    batchId: { $in: myDeptBatchIds }, 
                    approvalType: { $in: ['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'] }
@@ -203,7 +230,7 @@ export const getApprovalHistory = async (req, res, next) => {
            ]
        });
     } else {
-       andConditions.push({ facultyId: userId });
+       andConditions.push({ facultyId: new mongoose.Types.ObjectId(userId) });
     }
 
     if (search) {
