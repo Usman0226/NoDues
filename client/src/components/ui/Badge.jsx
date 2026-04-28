@@ -7,6 +7,7 @@ const STATUS_MAP = {
   cleared:      { bg: 'bg-emerald-400/10', text: 'text-emerald-600', dot: 'bg-emerald-500', border: 'border-emerald-500/20', label: 'Cleared' },
   has_dues:     { bg: 'bg-red-400/10', text: 'text-red-600', dot: 'bg-red-500', border: 'border-red-500/20', label: 'Has Dues' },
   hod_override: { bg: 'bg-indigo-400/10', text: 'text-indigo-600', dot: 'bg-indigo-500', border: 'border-indigo-500/20', label: 'HoD Cleared' },
+  not_submitted: { bg: 'bg-slate-400/10', text: 'text-slate-600', dot: 'bg-slate-500', border: 'border-slate-500/20', label: 'Not Submitted' },
 };
 
 const Badge = ({ status, children, className = '' }) => {

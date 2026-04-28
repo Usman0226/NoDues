@@ -76,27 +76,33 @@ const FacultyDashboard = () => {
     if (!approvals.length) return [];
     
     // Group by batchId
+    // Group by batchId + type + itemTypeId
     const groups = approvals.reduce((acc, curr) => {
-      if (!acc[curr.batchId]) {
-        acc[curr.batchId] = {
-          id: curr.batchId,
+      const key = `${curr.batchId}-${curr.approvalType}-${curr.itemTypeId || ''}`;
+      if (!acc[key]) {
+        acc[key] = {
+          id: key,
+          batchId: curr.batchId,
+          itemTypeId: curr.itemTypeId,
+          approvalType: curr.approvalType,
           class: curr.className || 'Unknown Class',
           role: curr.approvalType === 'subject' ? `Faculty (${curr.subjectName})` : 
-                curr.approvalType === 'mentor' ? 'Mentor' : 'Class Teacher',
+                curr.approvalType === 'mentor' ? 'Mentor' : 
+                curr.approvalType === 'coCurricular' ? (curr.itemTypeName || 'Co-Curricular') : 'Class Teacher',
           pending: 0,
-          total: 0, // In real world, we'd need total from batch, but for now we count current queue
+          total: 0,
           action: curr.action
         };
       }
-      acc[curr.batchId].total++;
-      if (curr.action === 'pending') acc[curr.batchId].pending++;
+      acc[key].total++;
+      if (curr.action === 'pending' || curr.action === 'not_submitted') acc[key].pending++;
       return acc;
     }, {});
 
     return Object.values(groups);
   }, [approvals]);
 
-  const baseTotalPending = useMemo(() => approvals.filter(a => a.action === 'pending').length || 0, [approvals]);
+  const baseTotalPending = useMemo(() => approvals.filter(a => a.action === 'pending' || a.action === 'not_submitted').length || 0, [approvals]);
 
   const summary = isTourActive && baseSummary.length === 0 ? [
     {
@@ -323,7 +329,14 @@ const FacultyDashboard = () => {
                           </div>
 
                           <button 
-                            onClick={() => navigate('/faculty/pending', { state: { classId: item.id, from: 'faculty-dashboard' } })} 
+                            onClick={() => navigate('/faculty/pending', { 
+                              state: { 
+                                classId: item.batchId, 
+                                approvalType: item.approvalType,
+                                itemTypeId: item.itemTypeId,
+                                from: 'faculty-dashboard' 
+                              } 
+                            })} 
                             className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 border group/btn relative z-10 ${
                               item.pending > 0 
                                 ? 'bg-navy text-white border-navy shadow-lg shadow-navy/10 hover:shadow-xl active:scale-[0.97]' 

@@ -316,7 +316,9 @@ const DepartmentClasses = () => {
                             </p>
                             
                           </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.preventDefault()}>
+                        </div>
+                        
+                        <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.preventDefault()}>
                              <button onClick={(e) => handleEditClick(cls, e)} className="p-2 hover:bg-zinc-50 rounded-lg text-muted-foreground hover:text-navy transition-all border border-transparent hover:border-muted">
                                <Edit size={14} />
                              </button>
@@ -330,9 +332,6 @@ const DepartmentClasses = () => {
                                </button>
                              )}
                           </div>
-
-                        </div>
-
                         <div className="grid grid-cols-2 gap-3 mt-auto">
                           <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100/50">
                             <p className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-tighter mb-1">Subjects</p>
@@ -345,8 +344,10 @@ const DepartmentClasses = () => {
                         </div>
                         
                         <div className="mt-4 pt-4 border-t border-muted/30 flex items-center justify-between">
-                           <span className="text-[9px] font-black text-navy/40 uppercase tracking-widest group-hover:text-navy transition-colors">Open Analytics</span>
-                           <ArrowRight size={14} className="text-muted-foreground group-hover:text-gold group-hover:translate-x-1 transition-all" />
+                           <span className="text-[9px] font-black text-navy/40 uppercase tracking-widest group-hover:text-navy transition-colors">Academic Oversight</span>
+                           <div className="flex items-center gap-1.5 text-navy font-black text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
+                             View Details <ArrowRight size={14} />
+                           </div>
                         </div>
                       </Link>
                     </motion.div>

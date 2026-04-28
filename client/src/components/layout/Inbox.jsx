@@ -27,7 +27,6 @@ const Inbox = () => {
     removeNotification
   } = useUI();
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('notifications'); // 'notifications' or 'tasks'
 
   const unreadNotifications = useMemo(() => 
     notifications.filter(n => !n.read), 
@@ -36,6 +35,14 @@ const Inbox = () => {
   const activeTasks = useMemo(() => 
     backgroundTasks.filter(t => t.status === 'processing'), 
   [backgroundTasks]);
+
+  const combinedActivity = useMemo(() => {
+    const items = [
+      ...notifications.map(n => ({ ...n, itemType: 'notification', date: new Date(n.createdAt) })),
+      ...backgroundTasks.map(t => ({ ...t, itemType: 'task', date: new Date(t.timestamp || t.createdAt) }))
+    ];
+    return items.sort((a, b) => b.date - a.date);
+  }, [notifications, backgroundTasks]);
 
   const hasUnread = unreadNotifications.length > 0;
   const hasProcessingTasks = activeTasks.length > 0;
@@ -89,75 +96,68 @@ const Inbox = () => {
               <div>
                 <h3 className="text-sm font-black text-navy uppercase tracking-wider">Activity Center</h3>
               </div>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="p-1.5 hover:bg-zinc-200 rounded-full transition-colors"
-              >
-                <X size={14} className="text-zinc-400" />
-              </button>
+              <div className="flex items-center gap-2">
+                {combinedActivity.length > 0 && (
+                  <button 
+                    onClick={() => {
+                      markNotificationRead();
+                      clearFinishedTasks();
+                    }}
+                    className="text-[9px] font-black text-navy uppercase tracking-widest hover:text-gold transition-colors"
+                  >
+                    Clear All
+                  </button>
+                )}
+                <button 
+                  onClick={() => setIsOpen(false)}
+                  className="p-1.5 hover:bg-zinc-200 rounded-full transition-colors"
+                >
+                  <X size={14} className="text-zinc-400" />
+                </button>
+              </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-zinc-100 bg-white">
-              <button
-                onClick={() => setActiveTab('notifications')}
-                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all relative
-                  ${activeTab === 'notifications' ? 'text-navy' : 'text-zinc-400 hover:text-zinc-600'}`}
-              >
-                Notifications {notifications.length > 0 && `(${notifications.length})`}
-                {activeTab === 'notifications' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-navy" />}
-              </button>
-              <button
-                onClick={() => setActiveTab('tasks')}
-                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all relative
-                  ${activeTab === 'tasks' ? 'text-navy' : 'text-zinc-400 hover:text-zinc-600'}`}
-              >
-                Operations {backgroundTasks.length > 0 && `(${backgroundTasks.length})`}
-                {activeTab === 'tasks' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-navy" />}
-              </button>
-            </div>
-
-            <div className="max-h-[400px] overflow-y-auto no-scrollbar">
-              {activeTab === 'notifications' ? (
-                notifications.length === 0 ? (
-                  <div className="py-12 px-6 text-center">
-                    <div className="h-12 w-12 rounded-full bg-zinc-50 flex items-center justify-center mx-auto mb-3 border border-zinc-100">
-                      <Bell size={20} className="text-zinc-300" />
-                    </div>
-                    <p className="text-xs font-bold text-zinc-400">No new notifications</p>
-                    <p className="text-[10px] text-zinc-300 mt-1">You're all caught up!</p>
+            <div className="max-h-[450px] overflow-y-auto no-scrollbar">
+              {combinedActivity.length === 0 ? (
+                <div className="py-12 px-6 text-center">
+                  <div className="h-12 w-12 rounded-full bg-zinc-50 flex items-center justify-center mx-auto mb-3 border border-zinc-100">
+                    <History size={20} className="text-zinc-300" />
                   </div>
-                ) : (
-                  <div className="divide-y divide-zinc-100">
-                    {notifications.map((notif) => (
+                  <p className="text-xs font-bold text-zinc-400">No activity yet</p>
+                  <p className="text-[10px] text-zinc-300 mt-1">Updates and tasks will appear here</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-100">
+                  {combinedActivity.map((item) => (
+                    item.itemType === 'notification' ? (
                       <div 
-                        key={notif._id} 
-                        className={`p-4 transition-colors group relative ${notif.read ? 'opacity-60' : 'bg-indigo-50/30'}`}
-                        onClick={() => markNotificationRead(notif._id)}
+                        key={item._id} 
+                        className={`p-4 transition-colors group relative cursor-pointer ${item.read ? 'opacity-60 hover:opacity-100' : 'bg-indigo-50/30'}`}
+                        onClick={() => markNotificationRead(item._id)}
                       >
                         <div className="flex items-start gap-3">
                           <div className={`mt-1 p-1.5 rounded-lg shrink-0 bg-white border border-zinc-100 shadow-sm`}>
-                            {getStatusIcon(notif.type)}
+                            {getStatusIcon(item.type)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-0.5">
-                              <p className={`text-[11px] font-black uppercase tracking-tight truncate ${notif.read ? 'text-zinc-500' : 'text-navy'}`}>
-                                {notif.title}
+                              <p className={`text-[11px] font-black uppercase tracking-tight truncate ${item.read ? 'text-zinc-500' : 'text-navy'}`}>
+                                {item.title}
                               </p>
                               <span className="text-[9px] text-zinc-400 font-bold whitespace-nowrap ml-2">
-                                {getTimeLabel(notif.createdAt)}
+                                {getTimeLabel(item.date)}
                               </span>
                             </div>
                             <p className="text-[10px] font-medium text-zinc-500 leading-relaxed">
-                              {notif.message}
+                              {item.message}
                             </p>
-                            {notif.link && (
+                            {item.link && (
                               <Link 
-                                to={notif.link}
+                                to={item.link}
                                 className="inline-flex items-center gap-1 mt-2 text-[9px] font-black text-navy uppercase tracking-widest hover:text-gold transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  markNotificationRead(notif._id);
+                                  markNotificationRead(item._id);
                                   setIsOpen(false);
                                 }}
                               >
@@ -168,60 +168,46 @@ const Inbox = () => {
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              removeNotification(notif._id);
+                              removeNotification(item._id);
                             }}
                             className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all text-zinc-300"
                           >
                             <Trash2 size={12} />
                           </button>
                         </div>
-                        {!notif.read && (
+                        {!item.read && (
                           <div className="absolute left-0 top-0 bottom-0 w-1 bg-navy" />
                         )}
                       </div>
-                    ))}
-                  </div>
-                )
-              ) : (
-                backgroundTasks.length === 0 ? (
-                  <div className="py-12 px-6 text-center">
-                    <div className="h-12 w-12 rounded-full bg-zinc-50 flex items-center justify-center mx-auto mb-3 border border-zinc-100">
-                      <InboxIcon size={20} className="text-zinc-300" />
-                    </div>
-                    <p className="text-xs font-bold text-zinc-400">No active operations</p>
-                    <p className="text-[10px] text-zinc-300 mt-1">Bulk tasks progress will appear here</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-zinc-100">
-                    {backgroundTasks.map((task) => (
-                      <div key={task._id} className="p-4 hover:bg-zinc-50/80 transition-colors group">
+                    ) : (
+                      <div key={item._id} className="p-4 hover:bg-zinc-50/80 transition-colors group">
                         <div className="flex items-start gap-3">
                           <div className={`mt-0.5 p-2 rounded-xl shrink-0
-                            ${task.status === 'processing' ? 'bg-navy/5 text-navy' : 
-                              task.status === 'success' ? 'bg-emerald-50 text-emerald-600' : 
+                            ${item.status === 'processing' ? 'bg-navy/5 text-navy' : 
+                              item.status === 'success' ? 'bg-emerald-50 text-emerald-600' : 
                               'bg-red-50 text-red-600'}`}>
-                            {task.status === 'processing' ? <Loader2 size={16} className="animate-spin" /> :
-                             task.status === 'success' ? <CheckCircle size={16} /> :
+                            {item.status === 'processing' ? <Loader2 size={16} className="animate-spin" /> :
+                             item.status === 'success' ? <CheckCircle size={16} /> :
                              <XCircle size={16} />}
                           </div>
                           
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-0.5">
                               <p className="text-[11px] font-black text-navy uppercase tracking-tight truncate">
-                                {task.label}
+                                {item.label}
                               </p>
                               <span className="text-[9px] text-zinc-400 font-bold whitespace-nowrap ml-2">
-                                {getTimeLabel(task.timestamp)}
+                                {getTimeLabel(item.date)}
                               </span>
                             </div>
                             
                             <p className="text-[10px] font-medium text-zinc-500 leading-relaxed line-clamp-2">
-                              {task.message || (task.status === 'processing' ? 'Processing data...' : 'Completed')}
+                              {item.message || (item.status === 'processing' ? 'Processing data...' : 'Completed')}
                             </p>
 
-                            {task.status === 'processing' && (
+                            {item.status === 'processing' && (
                               <div className="mt-2 h-1 w-full bg-zinc-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-navy animate-[shimmer_2s_infinite] transition-all duration-1000" style={{ width: `${task.progress || 40}%` }} />
+                                <div className="h-full bg-navy animate-[shimmer_2s_infinite] transition-all duration-1000" style={{ width: `${item.progress || 40}%` }} />
                               </div>
                             )}
                           </div>
@@ -229,7 +215,7 @@ const Inbox = () => {
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              removeTask(task._id);
+                              removeTask(item._id);
                             }}
                             className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all text-zinc-300"
                           >
@@ -237,21 +223,15 @@ const Inbox = () => {
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )
+                    )
+                  ))}
+                </div>
               )}
             </div>
 
             {/* Footer */}
-            {(activeTab === 'notifications' ? notifications.length : backgroundTasks.length) > 0 && (
-              <div className="px-5 py-3 bg-zinc-50/50 border-t border-zinc-100 flex items-center justify-between">
-                <button 
-                  onClick={activeTab === 'notifications' ? () => markNotificationRead() : clearFinishedTasks}
-                  className="text-[9px] font-black text-navy uppercase tracking-widest hover:text-gold transition-colors"
-                >
-                  {activeTab === 'notifications' ? 'Mark all as read' : 'Clear completed'}
-                </button>
+            {combinedActivity.length > 0 && (
+              <div className="px-5 py-3 bg-zinc-50/50 border-t border-zinc-100 text-center">
                 <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">
                   End of feed
                 </p>

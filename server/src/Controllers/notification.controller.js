@@ -5,7 +5,7 @@ import ErrorResponse from '../utils/errorResponse.js';
 export const getMyNotifications = asyncHandler(async (req, res) => {
   const notifications = await Notification.find({ user: req.user.userId })
     .sort({ createdAt: -1 })
-    .limit(50);
+    .limit(200);
 
   res.status(200).json({
     success: true,
@@ -21,7 +21,7 @@ export const markAsRead = asyncHandler(async (req, res) => {
       { _id: id, user: req.user.userId },
       { read: true },
       { new: true }
-    );
+    );``
 
     if (!notification) {
       throw new ErrorResponse('Notification not found', 404);

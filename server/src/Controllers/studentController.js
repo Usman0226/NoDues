@@ -22,7 +22,7 @@ import {
   bulkSyncStudentDeactivation,
   syncClassChange
 } from '../utils/batchSync.js';
-import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction, getSessionOptions } from '../utils/safeTransaction.js';
 
 export const getStudents = async (req, res, next) => {
   try {
@@ -132,9 +132,9 @@ export const createStudent = async (req, res, next) => {
       semester:     cls.semester,
       academicYear: cls.academicYear,
       yearOfStudy:  yearOfStudy ?? null,
-    }], { session });
+    }], getSessionOptions(session));
 
-    await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student[0]._id } }, { session });
+    await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student[0]._id } }, getSessionOptions(session));
 
     const activeBatch = await NodueBatch.findOne({ classId, status: 'active' }).session(session).lean();
     if (activeBatch) {
@@ -198,7 +198,7 @@ export const createStudent = async (req, res, next) => {
         },
         facultySnapshot: snapshot,
         status: 'pending',
-      }], { session });
+      }], getSessionOptions(session));
 
       const approvals = Object.values(snapshot)
         .filter((entry) => entry?.facultyId)
@@ -217,10 +217,10 @@ export const createStudent = async (req, res, next) => {
         }));
 
       if (approvals.length) {
-        await NodueApproval.insertMany(approvals, { session });
+        await NodueApproval.insertMany(approvals, getSessionOptions(session));
       }
 
-      await NodueBatch.findByIdAndUpdate(activeBatch._id, { $inc: { totalStudents: 1 } }, { session });
+      await NodueBatch.findByIdAndUpdate(activeBatch._id, { $inc: { totalStudents: 1 } }, getSessionOptions(session));
     }
     
     await commitSafeTransaction(session);
@@ -342,11 +342,11 @@ export const updateStudent = async (req, res, next) => {
       student.semester = cls.semester;
       student.academicYear = cls.academicYear;
       
-      await Class.findByIdAndUpdate(oldClassId, { $pull: { studentIds: student._id } }, { session });
-      await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student._id } }, { session });
+      await Class.findByIdAndUpdate(oldClassId, { $pull: { studentIds: student._id } }, getSessionOptions(session));
+      await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: student._id } }, getSessionOptions(session));
     }
 
-    await student.save({ session });
+    await student.save(getSessionOptions(session));
     await commitSafeTransaction(session);
 
     // ✅ Sync AFTER commit to ensure database state is visible to sync functions
@@ -404,7 +404,7 @@ export const deleteStudent = async (req, res, next) => {
     }
 
     student.isActive = false;
-    await student.save({ session });
+    await student.save(getSessionOptions(session));
 
     await commitSafeTransaction(session);
 
@@ -460,7 +460,7 @@ export const assignMentor = async (req, res, next) => {
     }
 
     student.mentorId = mentor._id;
-    await student.save({ session });
+    await student.save(getSessionOptions(session));
 
     // ✅ Commit FIRST so the committed student.mentorId is visible to syncMentorUpdate
     await commitSafeTransaction(session);
@@ -543,7 +543,7 @@ export const addElective = async (req, res, next) => {
       subjectId: subject._id, subjectName: subject.name, subjectCode: subject.code,
       facultyId: faculty._id, facultyName: faculty.name,
     });
-    await student.save({ session });
+    await student.save(getSessionOptions(session));
 
     const newest = student.electiveSubjects[student.electiveSubjects.length - 1];
     
@@ -620,7 +620,7 @@ export const updateElective = async (req, res, next) => {
     const subjectId = elective.subjectId;
     elective.facultyId   = faculty._id;
     elective.facultyName = faculty.name;
-    await student.save({ session });
+    await student.save(getSessionOptions(session));
 
     // ✅ Commit before syncing so the active batch reads committed data
     await commitSafeTransaction(session);
@@ -677,7 +677,7 @@ export const removeElective = async (req, res, next) => {
 
     const subjectIdToSync = elective.subjectId;
     elective.deleteOne();
-    await student.save({ session });
+    await student.save(getSessionOptions(session));
 
     await syncElectiveRemoval(id, subjectIdToSync);
 
@@ -718,7 +718,7 @@ export const activateStudent = async (req, res, next) => {
     }
 
     student.isActive = true;
-    await student.save({ session });
+    await student.save(getSessionOptions(session));
 
     await commitSafeTransaction(session);
 
@@ -758,7 +758,7 @@ export const bulkActivateStudents = async (req, res, next) => {
       query.departmentId = req.user.departmentId;
     }
 
-    const result = await Student.updateMany(query, { isActive: true }, { session });
+    const result = await Student.updateMany(query, { isActive: true }, getSessionOptions(session));
 
     await commitSafeTransaction(session);
 
@@ -802,7 +802,7 @@ export const bulkDeactivateStudents = async (req, res, next) => {
     const students = await Student.find(query).session(session).select('_id');
     const studentIds = students.map(s => s._id);
 
-    const result = await Student.updateMany(query, { isActive: false }, { session });
+    const result = await Student.updateMany(query, { isActive: false }, getSessionOptions(session));
 
     await bulkSyncStudentDeactivation(studentIds);
 
@@ -848,7 +848,7 @@ export const bulkAssignMentor = async (req, res, next) => {
       query.departmentId = req.user.departmentId;
     }
 
-    const result = await Student.updateMany(query, { mentorId: mentor._id }, { session });
+    const result = await Student.updateMany(query, { mentorId: mentor._id }, getSessionOptions(session));
 
     // Fetch affected students to find their classIds for cache invalidation
     const updatedStudents = await Student.find(query).select('classId').session(session).lean();

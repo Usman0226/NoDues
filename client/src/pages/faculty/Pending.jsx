@@ -32,7 +32,8 @@ import {
   FileText,
   UserCheck,
   ExternalLink,
-  PlaneTakeoff
+  PlaneTakeoff,
+  Filter
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
@@ -56,6 +57,8 @@ const item = {
 };
 
 const FILTERS = ['all', 'pending', 'approved', 'due_marked'];
+
+
 
 const getApprovalLabel = (item) => {
   if (item.roleTag === 'ao') return 'AO Approval';
@@ -131,6 +134,8 @@ const DueModalContent = ({ item, onClose, onSubmit, loading }) => {
 const Pending = () => {
   const location = useLocation();
   const [selectedBatch, setSelectedBatch] = useState(location.state?.classId || 'all');
+  const [approvalType, setApprovalType]   = useState(location.state?.approvalType || null);
+  const [itemTypeId, setItemTypeId]       = useState(location.state?.itemTypeId || null);
   const [filter, setFilter]               = useState('pending');
 
   // Sync with navigation state (from My Classes / Dashboard)
@@ -142,6 +147,9 @@ const Pending = () => {
     if (location.state?.from && filter !== 'pending') {
       setFilter('pending');
     }
+
+    if (location.state?.approvalType) setApprovalType(location.state.approvalType);
+    if (location.state?.itemTypeId) setItemTypeId(location.state.itemTypeId);
   }, [location.state, selectedBatch, filter]);
   const [selection, setSelection]         = useState([]);
   const [actionLoading, setActionLoading] = useState(null); 
@@ -154,6 +162,21 @@ const Pending = () => {
 
   const { showGlobalLoader } = useUI();
   const { user } = useAuth();
+
+  const requestTypeOptions = useMemo(() => {
+    const baseOptions = [
+      { id: 'subject', name: 'Subject' },
+      { id: 'mentor', name: 'Mentor' },
+      { id: 'classTeacher', name: 'Class Teacher' },
+      { id: 'coCurricular', name: 'Co-Curricular' }
+    ];
+    // Only show HoD Approval and Office filters if the user has corresponding roles.
+    if (user?.role === 'hod' || user?.role === 'ao' || user?.role === 'admin') {
+      baseOptions.push({ id: 'hodApproval', name: 'HoD Approval' });
+      baseOptions.push({ id: 'office', name: 'Office' });
+    }
+    return baseOptions;
+  }, [user?.role]);
   const { data: response, loading, error, request: fetchApprovals, setData: setResponse } =
     useApi(getPendingApprovals);
 
@@ -250,9 +273,11 @@ const Pending = () => {
       limit, 
       search: debouncedSearch,
       batchId: selectedBatch !== 'all' ? selectedBatch : undefined,
-      action: filter
+      action: filter,
+      approvalType: approvalType || undefined,
+      itemTypeId: itemTypeId || undefined
     });
-  }, [fetchApprovals, page, limit, debouncedSearch, selectedBatch, filter]);
+  }, [fetchApprovals, page, limit, debouncedSearch, selectedBatch, filter, approvalType, itemTypeId]);
 
   useSSE(
     sseUrl,
@@ -472,7 +497,7 @@ const Pending = () => {
         const isActioning = actionLoading === row._id;
         const isCoCurricular = row.approvalType === 'coCurricular';
         
-        if (row.action === 'pending') {
+        if (row.action === 'pending' || row.action === 'not_submitted') {
           return (
             <div className="flex items-center gap-1.5">
               {isCoCurricular && (
@@ -577,7 +602,7 @@ const Pending = () => {
           <div className="overflow-x-auto no-scrollbar pb-1 -mx-2 px-2 lg:mx-0 lg:px-0">
             <div id="tour-filters" className="flex items-center gap-1 bg-white border border-zinc-100 p-1 rounded-full w-fit shadow-sm shadow-zinc-200/50">
               {FILTERS.map((f) => {
-                const count = approvals.filter((a) => f === 'all' || a.action === f).length;
+                const count = approvals.filter((a) => f === 'all' || (f === 'pending' ? (a.action === 'pending' || a.action === 'not_submitted') : a.action === f)).length;
                 const active = filter === f;
                 
                 // Map icons to filters
@@ -617,6 +642,22 @@ const Pending = () => {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+            <div id="tour-request-type-select" className="flex-1 sm:flex-initial flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-zinc-200/50 rounded-full shadow-sm hover:shadow-md transition-all group">
+               <div className="pl-3 text-zinc-400 group-hover:text-indigo-500 transition-colors">
+                <Filter size={14} />
+               </div>
+               <SearchableSelect 
+                options={requestTypeOptions}
+                value={approvalType || ''}
+                onChange={(val) => { setApprovalType(val || null); setSelection([]); setPage(1); }}
+                placeholder="Request Type"
+                labelKey="name"
+                idKey="id"
+                variant="ghost"
+                className="min-w-[150px] w-full sm:w-[150px]"
+                clearable={!!approvalType}
+              />
+            </div>
             <div id="tour-class-select" className="flex-1 sm:flex-initial flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-zinc-200/50 rounded-full shadow-sm hover:shadow-md transition-all group">
                <div className="pl-3 text-zinc-400 group-hover:text-indigo-500 transition-colors">
                 <Settings2 size={14} />
@@ -680,6 +721,8 @@ const Pending = () => {
                   onClick={() => {
                     setSearchValue('');
                     setSelectedBatch('all');
+                    setApprovalType(null);
+                    setItemTypeId(null);
                   }}
                 >
                   Clear All Filters

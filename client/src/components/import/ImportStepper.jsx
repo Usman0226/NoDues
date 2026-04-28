@@ -64,9 +64,7 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       message: 'Initializing background sync...'
     });
 
-    // Close modal immediately
-    onComplete?.();
-    toast.success('Sync started in background');
+    // toast.success('Sync started in background'); // Removed to stay in modal
 
     try {
       const payload = type === 'students' 
@@ -91,6 +89,7 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       }
       
       toast.success(`${type} sync finished`);
+      onComplete?.(); // Close only on success
     } catch (err) {
       const errorMsg = err?.message || 'Connection lost during sync';
       updateBackgroundTask(taskId, { 
@@ -98,6 +97,9 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
         message: errorMsg 
       });
       toast.error(`${type} sync failed`);
+      // Don't close modal on error so user can see it
+    } finally {
+      setLoading(false);
     }
   }, [type, previewData, classId, onComplete, addBackgroundTask, updateBackgroundTask]);
 
@@ -214,7 +216,7 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
               <p className="text-sm text-muted-foreground">Select a clean .xlsx or .csv file following the academic template.</p>
             </div>
             
-            <FileDropzone onFileSelect={handleFileUpload} />
+            <FileDropzone onFileSelect={handleFileUpload} loading={loading} />
             
             {error && (
               <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-100 flex items-center gap-3 animate-pulse">
@@ -313,40 +315,58 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
 
         {currentStep === 2 && (
           <div className="animate-in zoom-in-95 duration-300 text-center py-8">
-            <div className="h-16 w-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-6 border border-emerald-100 shadow-sm shadow-emerald-100/50">
-              <Check size={32} strokeWidth={2.5} />
-            </div>
-            <h3 className="text-2xl font-black text-navy mb-2 tracking-tight">System Ready</h3>
-            <p className="text-muted-foreground text-sm max-w-[280px] mx-auto font-medium leading-relaxed">
-              <span className="text-navy font-bold">{validCount}</span> compliant record{validCount > 1 ? 's' : ''} will be committed to the directory.
-            </p>
+            {loading ? (
+              <div className="flex flex-col items-center py-10">
+                <div className="relative mb-6">
+                  <div className="h-20 w-20 rounded-full border-4 border-navy/10 border-t-navy animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <RefreshCw size={24} className="text-navy/40 animate-pulse" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-black text-navy mb-2 uppercase tracking-tight">Syncing Records</h3>
+                <p className="text-muted-foreground text-sm max-w-[280px] mx-auto font-medium">
+                  Updating the directory with <span className="text-navy font-bold">{validCount}</span> new entries.
+                  This may take a moment.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="h-16 w-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-6 border border-emerald-100 shadow-sm shadow-emerald-100/50">
+                  <Check size={32} strokeWidth={2.5} />
+                </div>
+                <h3 className="text-2xl font-black text-navy mb-2 tracking-tight">System Ready</h3>
+                <p className="text-muted-foreground text-sm max-w-[280px] mx-auto font-medium leading-relaxed">
+                  <span className="text-navy font-bold">{validCount}</span> compliant record{validCount > 1 ? 's' : ''} will be committed to the directory.
+                </p>
 
-            {errorCount > 0 && (
-              <p className="text-[11px] text-amber-700 font-semibold mt-2 mb-6 max-w-[280px] mx-auto">
-                <AlertTriangle size={11} className="inline mr-1 mb-0.5" />
-                {errorCount} row{errorCount > 1 ? 's' : ''} with errors will be skipped.
-              </p>
+                {errorCount > 0 && (
+                  <p className="text-[11px] text-amber-700 font-semibold mt-2 mb-6 max-w-[280px] mx-auto">
+                    <AlertTriangle size={11} className="inline mr-1 mb-0.5" />
+                    {errorCount} row{errorCount > 1 ? 's' : ''} with errors will be skipped.
+                  </p>
+                )}
+                {errorCount === 0 && <div className="mb-6" />}
+                
+                <div className="flex flex-col gap-3 max-w-[240px] mx-auto">
+                  <Button 
+                    variant="primary" 
+                    className="w-full h-12 text-sm gap-2" 
+                    onClick={handleCommit}
+                    loading={loading}
+                  >
+                    Commit {validCount} Record{validCount > 1 ? 's' : ''}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full text-[10px] font-black" 
+                    onClick={() => setCurrentStep(1)}
+                    disabled={loading}
+                  >
+                    Review Data Again
+                  </Button>
+                </div>
+              </>
             )}
-            {errorCount === 0 && <div className="mb-6" />}
-            
-            <div className="flex flex-col gap-3 max-w-[240px] mx-auto">
-              <Button 
-                variant="primary" 
-                className="w-full h-12 text-sm gap-2" 
-                onClick={handleCommit}
-                loading={loading}
-              >
-                Commit {validCount} Record{validCount > 1 ? 's' : ''}
-              </Button>
-              <Button 
-                variant="ghost" 
-                className="w-full text-[10px] font-black" 
-                onClick={() => setCurrentStep(1)}
-                disabled={loading}
-              >
-                Review Data Again
-              </Button>
-            </div>
           </div>
         )}
       </div>

@@ -21,36 +21,126 @@ export const getBatches = async (req, res, next) => {
   try {
     const { classId, departmentId, semester, academicYear, status, search, page = 1, limit = 20 } = req.query;
 
-    const query = {};
-    if (req.user.role === 'hod' || req.user.role === 'ao') query.departmentId = req.user.departmentId;
-    else if (departmentId)       query.departmentId = departmentId;
+    const matchQuery = {};
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
+      matchQuery.departmentId = new mongoose.Types.ObjectId(req.user.departmentId);
+    } else if (departmentId) {
+      matchQuery.departmentId = new mongoose.Types.ObjectId(departmentId);
+    }
 
-    if (classId)      query.classId      = classId;
-    if (semester)     query.semester     = Number(semester);
-    if (academicYear) query.academicYear = academicYear;
-    if (status)       query.status       = status;
+    if (classId)      matchQuery.classId      = new mongoose.Types.ObjectId(classId);
+    if (semester)     matchQuery.semester     = Number(semester);
+    if (academicYear) matchQuery.academicYear = academicYear;
+    if (status)       matchQuery.status       = status;
 
     if (search) {
-      query.className = { $regex: search, $options: 'i' };
+      matchQuery.className = { $regex: search, $options: 'i' };
     }
 
     const skip = (Number(page) - 1) * Number(limit);
-    const [batches, total] = await Promise.all([
-      NodueBatch.find(query)
-        .select('_id classId className departmentId semester academicYear status totalStudents initiatedAt deadline initiatedBy')
-        .populate('departmentId', 'name')
-        .populate('initiatedBy', 'name')
-        .sort({ initiatedAt: -1 })
-        .skip(skip)
-        .limit(Number(limit))
-        .lean(),
-      NodueBatch.countDocuments(query),
+
+    const pipeline = [
+      { $match: matchQuery },
+      { $sort: { initiatedAt: -1 } },
+      { $skip: skip },
+      { $limit: Number(limit) },
+      // Join with Department
+      {
+        $lookup: {
+          from: 'departments',
+          localField: 'departmentId',
+          foreignField: '_id',
+          as: 'department'
+        }
+      },
+      { $unwind: { path: '$department', preserveNullAndEmptyArrays: true } },
+      // Join with Faculty (initiator)
+      {
+        $lookup: {
+          from: 'faculties',
+          localField: 'initiatedBy',
+          foreignField: '_id',
+          as: 'initiator'
+        }
+      },
+      { $unwind: { path: '$initiator', preserveNullAndEmptyArrays: true } },
+      // Join with NodueRequests to count cleared students
+      {
+        $lookup: {
+          from: 'noduerequests',
+          let: { batchId: '$_id' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$batchId', '$$batchId'] } } },
+            { $group: {
+                _id: '$batchId',
+                clearedCount: {
+                  $sum: {
+                    $cond: [
+                      { $in: ['$status', ['cleared', 'hod_override']] },
+                      1,
+                      0
+                    ]
+                  }
+                },
+                duesCount: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ['$status', 'has_dues'] },
+                      1,
+                      0
+                    ]
+                  }
+                }
+            }}
+          ],
+          as: 'stats'
+        }
+      },
+      { $unwind: { path: '$stats', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1,
+          classId: 1,
+          className: 1,
+          departmentId: { _id: '$department._id', name: '$department.name' },
+          semester: 1,
+          academicYear: 1,
+          status: 1,
+          totalStudents: 1,
+          initiatedAt: 1,
+          deadline: 1,
+          initiatedBy: { _id: '$initiator._id', name: '$initiator.name' },
+          clearedCount: { $ifNull: ['$stats.clearedCount', 0] },
+          duesCount: { $ifNull: ['$stats.duesCount', 0] }
+        }
+      }
+    ];
+
+    // Summary stats for the view
+    const summaryMatch = {};
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
+      summaryMatch.departmentId = new mongoose.Types.ObjectId(req.user.departmentId);
+    }
+
+    const [batches, total, summary] = await Promise.all([
+      NodueBatch.aggregate(pipeline),
+      NodueBatch.countDocuments(matchQuery),
+      NodueBatch.aggregate([
+        { $match: summaryMatch },
+        { $group: {
+            _id: null,
+            active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+            closed: { $sum: { $cond: [{ $eq: ['$status', 'closed'] }, 1, 0] } },
+            totalStudents: { $sum: '$totalStudents' }
+        }}
+      ])
     ]);
 
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
       data: batches,
+      summary: summary[0] || { active: 0, closed: 0, totalStudents: 0 },
       pagination: {
         page: Number(page), limit: Number(limit), total,
         pages: Math.ceil(total / Number(limit)),
@@ -323,6 +413,35 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
     semester:     cls.semester,
     academicYear: cls.academicYear,
   });
+
+  // Create notification for the initiator (Admin or HoD)
+  await createNotification({
+    user: initiator.userId,
+    userModel: initiator.role === 'admin' ? 'Admin' : 'Faculty',
+    title: 'Batch Initiated',
+    message: `Clearance batch for ${cls.name} has been successfully initiated with ${students.length} students.`,
+    type: 'success',
+    link: initiator.role === 'admin' ? `/admin/batch/${batch._id}` : `/hod/batch/${batch._id}`
+  });
+
+  // Create notifications for all students in the batch
+  const studentNotifications = students.map(student => ({
+    user: student._id,
+    userModel: 'Student',
+    title: 'New Clearance Batch',
+    message: `A new NoDues clearance batch has been initiated for your class (${cls.name}).`,
+    type: 'info',
+    link: '/student/dashboard'
+  }));
+  
+  // We use insertMany for student notifications to avoid individual DB calls in a loop
+  // But we use the utility createNotification's logic (via direct model call here for performance)
+  if (studentNotifications.length > 0) {
+    import('../models/Notification.js').then(m => {
+        const Notification = m.default;
+        Notification.insertMany(studentNotifications).catch(err => console.error('Student bulk notification failed:', err));
+    });
+  }
 
   return {
     batchId: batch._id,
@@ -604,7 +723,6 @@ export const initiateDepartmentWide = async (req, res, next) => {
       }
     };
 
-    // Fire and forget background process
     runBackgroundProcessing();
 
   } catch (err) {
@@ -647,8 +765,6 @@ export const getBatchStatus = async (req, res, next) => {
     const studentApprovalMap = {};
     approvals.forEach((a) => {
       const sId = a.studentId.toString();
-      // Uniquely identify the clearance task column
-      // For subjects, use subjectId. For co-curricular, use itemTypeId. For roles, use roleTag.
       const colKey = a.itemTypeId 
         ? a.itemTypeId.toString() 
         : (a.approvalType === 'subject' ? (a.subjectId?.toString() || a.subjectName) : a.roleTag);

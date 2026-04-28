@@ -89,14 +89,16 @@ const AdminDashboard = () => {
       key: 'action',
       label: '',
       sortable: false,
+      align: 'right',
       render: (_, row) => (
         <button
           type="button"
           onClick={() => navigate(`${basePath}/batch/${row._id}`)}
-          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 inline-flex items-center justify-center rounded-full hover:bg-muted/30 transition-colors touch-manipulation"
+          className="px-3 py-1.5 rounded-lg hover:bg-navy/5 text-navy/40 hover:text-navy transition-all border border-transparent hover:border-navy/10 group flex items-center gap-2"
           aria-label="Open batch"
         >
-          <ArrowRight size={14} className="text-muted-foreground/40" />
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">View Details</span>
+          <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
         </button>
       )
     }

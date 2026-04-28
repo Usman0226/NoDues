@@ -1,18 +1,21 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, X } from 'lucide-react';
+import { Upload, FileText, X, Loader2 } from 'lucide-react';
 
-const FileDropzone = ({ onFileSelect, accept = '.csv,.xlsx', label = 'Upload File' }) => {
+
+const FileDropzone = ({ onFileSelect, accept = '.csv,.xlsx', label = 'Upload File', loading = false }) => {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState(null);
   const inputRef = useRef(null);
 
   const handleDrag = (e) => {
+    if (loading) return;
     e.preventDefault();
     e.stopPropagation();
     setDragActive(e.type === 'dragenter' || e.type === 'dragover');
   };
 
   const handleDrop = (e) => {
+    if (loading) return;
     e.preventDefault();
     setDragActive(false);
     const dropped = e.dataTransfer.files?.[0];
@@ -20,11 +23,12 @@ const FileDropzone = ({ onFileSelect, accept = '.csv,.xlsx', label = 'Upload Fil
   };
 
   const handleChange = (e) => {
+    if (loading) return;
     const selected = e.target.files?.[0];
     if (selected) { setFile(selected); onFileSelect?.(selected); }
   };
 
-  const clearFile = () => { setFile(null); onFileSelect?.(null); };
+  const clearFile = () => { if (loading) return; setFile(null); onFileSelect?.(null); };
 
   return (
     <div
@@ -32,13 +36,19 @@ const FileDropzone = ({ onFileSelect, accept = '.csv,.xlsx', label = 'Upload Fil
       onDragLeave={handleDrag}
       onDragOver={handleDrag}
       onDrop={handleDrop}
-      onClick={() => !file && inputRef.current?.click()}
+      onClick={() => !file && !loading && inputRef.current?.click()}
       className={`relative border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200
         ${dragActive ? 'border-gold bg-gold/5 scale-[1.01]' : 'border-muted hover:border-navy/30 hover:bg-navy/[0.02]'}
-        ${file ? 'cursor-default' : ''}`}
+        ${file || loading ? 'cursor-default' : ''}`}
     >
       <input ref={inputRef} type="file" accept={accept} onChange={handleChange} className="hidden" />
-      {!file ? (
+      {loading ? (
+        <div className="flex flex-col items-center animate-in fade-in duration-300">
+          <Loader2 size={32} className="text-navy animate-spin mb-3" />
+          <p className="text-sm font-bold text-navy mb-1">Analyzing File...</p>
+          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">Parsing academic records</p>
+        </div>
+      ) : !file ? (
         <>
           <Upload size={32} className={`mx-auto mb-3 ${dragActive ? 'text-gold' : 'text-muted-foreground'}`} />
           <p className="text-sm font-semibold text-navy mb-1">{label}</p>

@@ -15,16 +15,6 @@ const __dirname = path.dirname(__filename);
 // Load environment variables from server/.env
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-/**
- * CLEANUP SCRIPT: DELETES ALL INITIATED BATCHES AND RELATED DATA
- * This script will:
- * 1. Delete all NodueApproval records
- * 2. Delete all NodueRequest records
- * 3. Delete all NodueBatch records (both 'active' and 'closed')
- * 4. Delete related background Tasks (batch_initiation)
- * 
- * CORE DATA REMAINING: Students, Faculty, Classes, Departments, Subjects, Admin.
- */
 const cleanupBatches = async () => {
   try {
     console.log('\n--- NoDues Batch Cleanup Script ---');

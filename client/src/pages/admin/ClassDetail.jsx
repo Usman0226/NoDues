@@ -998,7 +998,16 @@ const SUBJECT_COLS = [
                         {b.clearedCount}/{b.totalStudents} Success · {b.duesCount} Flags
                       </p>
                     </div>
-                    <Badge status="cleared">Archived</Badge>
+                    <div className="flex items-center gap-4">
+                      <Badge status="cleared">Archived</Badge>
+                      <button 
+                        onClick={() => navigate(`${basePath}/batch/${b._id}`)}
+                        className="p-2 rounded-full hover:bg-navy/5 text-navy/40 hover:text-navy transition-all border border-transparent hover:border-navy/10 group"
+                        title="View Historical Matrix"
+                      >
+                        <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { Plus, Upload, Mail, UserPlus, RefreshCw, AlertCircle, Edit, Trash2, Eye } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
+import { useUI } from '../../hooks/useUI';
 import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getFacultyClasses, resendCredentials, bulkDeactivateFaculty, bulkResendCredentials, bulkUpdateRoles, activateFaculty, bulkActivateFaculty } from '../../api/faculty';
 import { getDepartments } from '../../api/departments';
 import ImportStepper from '../../components/import/ImportStepper';
@@ -24,6 +25,7 @@ const ROLE_TAG_COLORS = {
 };
 
 const FacultyList = () => {
+  const { showGlobalLoader } = useUI();
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showEdit, setShowEdit] = useState(false);

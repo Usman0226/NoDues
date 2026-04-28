@@ -1,23 +1,25 @@
 {
-  "last_updated": "2026-04-27T16:03:00Z",
+  "last_updated": "2026-04-28T12:12:00Z",
   "completed": [
-    "Bug 1: Fixed isDue flag logic in Status.jsx",
-    "Bug 2: Fixed AO role access in Status.jsx",
-    "Bug 3 & 6: Fixed mentor assignment race conditions by moving sync after commit",
-    "Bug 4: SSE reliability improvements (client-side polling + server-side named events)",
-    "Bug 5: Immediate student status cache invalidation after approvals",
-    "Bug 8: updateElective transaction + sync support",
-    "Bug 9: syncStudentDeactivation history preservation",
-    "Bug 10: Fixed student Name/RollNo sync — created syncStudentUpdate and integrated into updateStudent",
-    "System Integrity: Moved all class-level and student-level sync calls after commitSafeTransaction in controllers to eliminate race conditions"
+    "Fixed faculty dashboard visibility for co-curricular items",
+    "Resolved duplicate React keys in dashboard summary map",
+    "Implemented item-specific filtering for faculty pending portal",
+    "Enhanced approvalController with precise query filters",
+    "Changed default approval sorting to Roll Number in faculty portal",
+    "Restricted Request Type filter options dynamically based on user role in Pending.jsx"
   ],
   "in_progress": [],
   "pending": [],
   "decisions": [
     {
-      "context": "Sync calls were executing before transactions committed",
-      "decision": "Moved all sync calls in studentController and classController to AFTER commitSafeTransaction",
-      "trade_offs": "Small window where DB is updated but batch sync hasn't run yet. However, this is safer as it guarantees sync functions read the correct committed data."
+      "context": "Dashboard cards were being hidden",
+      "decision": "Use unique key (batchId + type + itemId) instead of just batchId in Dashboard.jsx",
+      "trade_offs": "Slightly more complex grouping logic in frontend"
+    },
+    {
+      "context": "Unnecessary filter options cluttering UI for normal faculty",
+      "decision": "Calculate request type options dynamically based on user role using useMemo",
+      "trade_offs": "None, improves UX by hiding non-applicable filter options"
     }
   ],
   "blockers": []

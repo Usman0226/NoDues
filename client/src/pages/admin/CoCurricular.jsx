@@ -23,7 +23,7 @@ import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
 
 const CoCurricular = () => {
-  const { showGlobalLoader: _showGlobalLoader } = useUI();
+  const { showGlobalLoader } = useUI();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isHod = user?.role === 'hod' || user?.role === 'ao';
@@ -363,7 +363,7 @@ const CoCurricular = () => {
         <div className="flex items-center gap-3">
           {canManage && (
             <Button variant="primary" size="sm" onClick={() => { resetForm(); setShowCreate(true); }} className="gap-2">
-              <Plus size={14} /> Add Template
+              <Plus size={14} /> Add
             </Button>
           )}
         </div>

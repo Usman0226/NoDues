@@ -393,7 +393,7 @@ Sample Response (200):
 ## Notification Endpoints
 
 ### GET /api/notifications
-Description: Fetch current user's notifications (last 50).
+Description: Fetch current user's notifications (last 200).
 
 curl -X GET http://localhost:5000/api/notifications \
   -H "Authorization: Bearer <token>"

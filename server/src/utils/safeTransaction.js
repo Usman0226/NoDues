@@ -9,7 +9,47 @@
  *
  * On Atlas M2+ or any replica set deployment, full transactions are used.
  */
+import mongoose from 'mongoose';
 import logger from './logger.js';
+
+/**
+ * Checks if the current MongoDB connection supports transactions.
+ * Transactions require a replica set or sharded cluster.
+ * Standalone instances (common in local dev) do not support them.
+ * 
+ * @returns {boolean}
+ */
+export const isTransactionSupported = () => {
+  try {
+    const topologyType = mongoose.connection.getClient()?.topology?.description?.type;
+    logger.info('safeTransaction: Detected topology type:', { topologyType });
+    // Transactions are supported on ReplicaSetNoPrimary, ReplicaSetWithPrimary, and Sharded topologies.
+    // They are NOT supported on Single (standalone) or Unknown.
+    const supported = topologyType && topologyType !== 'Single' && topologyType !== 'Unknown';
+    if (!supported) {
+      logger.warn('safeTransaction: Transactions NOT supported on this topology. Falling back to non-atomic mode.');
+    }
+    return supported;
+  } catch (err) {
+    logger.error('safeTransaction: Error checking topology support', { error: err.message });
+    return false;
+  }
+};
+
+/**
+ * Returns the session options object only if a transaction is supported and active.
+ * Use this for write operations (save, findOneAndUpdate, etc.) to prevent 
+ * "transaction number mismatch" errors on standalone instances.
+ * 
+ * @param {ClientSession} session 
+ * @returns {Object} { session } or {}
+ */
+export const getSessionOptions = (session) => {
+  if (session && session.inTransaction()) {
+    return { session };
+  }
+  return {};
+};
 
 /**
  * Try to start a transaction on an existing session.
@@ -20,6 +60,10 @@ import logger from './logger.js';
  */
 export const startSafeTransaction = async (session) => {
   try {
+    if (!isTransactionSupported()) {
+      // Standalone detected, skipping startTransaction to prevent txnNumber errors on writes
+      return;
+    }
     session.startTransaction();
   } catch (err) {
     if (

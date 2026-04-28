@@ -10,12 +10,21 @@ import { pushEvent } from './sseController.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import { invalidateStudentStatusCache } from './studentPortalController.js';
+import { createNotification } from './notification.controller.js';
 
 // ── GET /api/approvals/pending ────────────────────────────────────────────────
 export const getPendingApprovals = async (req, res, next) => {
   try {
-    const { userId } = req.user;
-    const { page = 1, limit = 20, search = '', batchId, action } = req.query;
+    const userId = new mongoose.Types.ObjectId(req.user.userId);
+    const { 
+      page = 1, 
+      limit = 20, 
+      search = '', 
+      batchId, 
+      action = 'pending',
+      approvalType,
+      itemTypeId 
+    } = req.query;
     
     const activeBatches = await NodueBatch.find(
       { status: 'active' },
@@ -37,7 +46,10 @@ export const getPendingApprovals = async (req, res, next) => {
     const andConditions = [];
 
     if (action !== 'all') {
-      andConditions.push({ action: action || 'pending' });
+      const statusFilter = (action === 'pending' || !action) 
+        ? { $in: ['pending', 'not_submitted'] } 
+        : action;
+      andConditions.push({ action: statusFilter });
     }
 
     // Batch filter: support both explicit batchId OR classId (sent from client filters)
@@ -77,19 +89,34 @@ export const getPendingApprovals = async (req, res, next) => {
       });
     }
 
-    const query = andConditions.length > 0 ? { $and: andConditions } : {};
+    if (approvalType) {
+      const types = approvalType.split(',');
+      andConditions.push({ approvalType: { $in: types } });
+    }
 
+    if (itemTypeId) {
+      andConditions.push({ itemTypeId: new mongoose.Types.ObjectId(itemTypeId) });
+    }
+
+    const query = andConditions.length > 0 ? { $and: andConditions } : {};
+    
     const skip = (Number(page) - 1) * Number(limit);
     const [approvals, total] = await Promise.all([
       NodueApproval.find(query)
         .select('_id batchId studentId studentRollNo studentName subjectName subjectId approvalType roleTag action createdAt itemTypeId itemTypeName itemCode facultyId')
         .populate('facultyId', 'name')
-        .sort({ createdAt: 1 })
+        .sort({ studentRollNo: 1 })
         .skip(skip)
         .limit(Number(limit))
         .lean(),
       NodueApproval.countDocuments(query),
     ]);
+
+    logger.info('Results found:', { count: approvals.length });
+    if (approvals.length > 0) {
+      logger.info('Sample approval types:', { types: [...new Set(approvals.map(a => a.approvalType))] });
+    }
+    logger.info('---------------------------------');
 
     // Build className map directly from the single activeBatches query above — no second DB call needed
     // Map the nodues roleTa
@@ -162,7 +189,7 @@ export const getApprovalHistory = async (req, res, next) => {
     }
 
     const andConditions = [
-      { action: { $ne: 'pending' } }
+      { action: { $nin: ['pending', 'not_submitted'] } }
     ];
 
     if ((req.user.role === 'hod' || req.user.role === 'ao') && myDeptBatchIds.length > 0) {
@@ -270,7 +297,7 @@ export const approveRequest = async (req, res, next) => {
       return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
     }
 
-    if (approval.action !== 'pending') {
+    if (approval.action !== 'pending' && approval.action !== 'not_submitted') {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('This approval has already been actioned', 400, 'APPROVAL_ALREADY_ACTIONED'));
     }
@@ -342,6 +369,16 @@ export const approveRequest = async (req, res, next) => {
       action:     'approved',
     });
 
+    // Create persistent notification for student
+    await createNotification({
+      user: approval.studentId,
+      userModel: 'Student',
+      title: 'Clearance Approved',
+      message: `Your clearance for ${approval.subjectName || approval.itemTypeName || approval.roleTag} has been approved.`,
+      type: 'success',
+      link: '/student/dashboard'
+    });
+
     return res.status(200).json({ success: true, data: { approvalId, action: 'approved' } });
   } catch (err) {
     if (session.inTransaction()) await abortSafeTransaction(session);
@@ -364,7 +401,7 @@ export const bulkApproveRequests = async (req, res, next) => {
 
     const approvals = await NodueApproval.find({
       _id: { $in: approvalIds },
-      action: 'pending'
+      action: { $in: ['pending', 'not_submitted'] }
     }).session(session);
 
     if (!approvals.length) {
@@ -500,7 +537,7 @@ export const markDue = async (req, res, next) => {
       return next(new ErrorResponse('Approval record not found', 404, 'NOT_FOUND'));
     }
 
-    if (approval.action !== 'pending') {
+    if (approval.action !== 'pending' && approval.action !== 'not_submitted') {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('This approval has already been actioned', 400, 'APPROVAL_ALREADY_ACTIONED'));
     }
@@ -575,6 +612,16 @@ export const markDue = async (req, res, next) => {
       action:     'due_marked',
       dueType,
       remarks:    approval.remarks,
+    });
+
+    // Create persistent notification for student
+    await createNotification({
+      user: approval.studentId,
+      userModel: 'Student',
+      title: 'Due Marked',
+      message: `A due (${dueType}) has been marked for ${approval.subjectName || approval.itemTypeName || approval.roleTag}. Remark: ${remarks || 'No remarks'}`,
+      type: 'due',
+      link: '/student/dashboard'
     });
 
     return res.status(200).json({

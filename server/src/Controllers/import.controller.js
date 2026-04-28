@@ -34,12 +34,14 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
   if (!targetClass) return next(new ErrorResponse('Target class not found', 404));
   checkDeptScope(req.user, targetClass.departmentId);
 
-  const rows = parseBuffer(req.file.buffer);
-  const results = { valid: [], errors: [], summary: { total: rows.length, valid: 0, errors: 0 } };
+  // 1. Extract all roll numbers for bulk duplicate check
+  const rollNos = rows.map(r => getRowValue(r, ['Roll No', 'rollNo'])?.toString().toUpperCase()).filter(Boolean);
+  const existingStudents = await Student.find({ rollNo: { $in: rollNos } }).select('rollNo').lean();
+  const existingRollSet = new Set(existingStudents.map(s => s.rollNo));
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rollNo = getRowValue(row, ['Roll No', 'rollNo']);
+    let rollNo = getRowValue(row, ['Roll No', 'rollNo']);
     const name = getRowValue(row, ['Name', 'name']);
     const email = getRowValue(row, ['Email', 'email']);
 
@@ -55,14 +57,14 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const existing = await Student.findOne({ rollNo }).select('_id').lean();
-    if (existing) {
+    rollNo = rollNo.toString().toUpperCase();
+    if (existingRollSet.has(rollNo)) {
       results.errors.push({ row: i + 1, data: row, reason: `Roll number ${rollNo} already exists` });
       results.summary.errors++;
       continue;
     }
 
-    results.valid.push({ rollNo: rollNo.toUpperCase(), name, email: email.toLowerCase() });
+    results.valid.push({ rollNo, name, email: email.toLowerCase() });
     results.summary.valid++;
   }
 
@@ -111,10 +113,6 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
         }], { session });
         createdIds.push(studentArray[0]._id);
       } catch (err) {
-        // If we want total atomicity, we'd throw here. 
-        // But for imports, we often prefer reporting errors.
-        // HOWEVER, to "harden consistency", atomic is better.
-        // Let's stick to atomic for now: one fail = all roll back.
         throw new Error(`${stud.rollNo}: ${err.message}`);
       }
     }
@@ -175,11 +173,25 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
   const rows = parseBuffer(req.file.buffer);
   const results = { valid: [], errors: [], summary: { total: rows.length, valid: 0, errors: 0 } };
 
+  // 1. Bulk lookup for IDs and Emails
+  const empIds = rows.map(r => getRowValue(r, ['Employee ID', 'employeeId'])?.toString().toUpperCase()).filter(Boolean);
+  const emails = rows.map(r => getRowValue(r, ['Email', 'email'])?.toString().toLowerCase()).filter(Boolean);
+  
+  const [existingFacultyIds, existingFacultyEmails, allDepts] = await Promise.all([
+    Faculty.find({ employeeId: { $in: empIds } }).select('employeeId').lean(),
+    Faculty.find({ email: { $in: emails } }).select('email').lean(),
+    Department.find({ isActive: { $ne: false } }).select('_id name').lean()
+  ]);
+
+  const idSet = new Set(existingFacultyIds.map(f => f.employeeId));
+  const emailSet = new Set(existingFacultyEmails.map(f => f.email));
+  const deptMap = new Map(allDepts.map(d => [d.name.toUpperCase(), d._id]));
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const employeeId = getRowValue(row, ['Employee ID', 'employeeId']);
+    let employeeId = getRowValue(row, ['Employee ID', 'employeeId']);
     const name = getRowValue(row, ['Name', 'name']);
-    const email = getRowValue(row, ['Email', 'email']);
+    let email = getRowValue(row, ['Email', 'email']);
     const deptName = getRowValue(row, ['Department', 'department']);
 
     const errors = [];
@@ -195,44 +207,42 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const dept = await Department.findOne({ name: deptName.toUpperCase() }).select('_id').lean();
-    if (!dept) {
+    const deptId = deptMap.get(deptName.toUpperCase());
+    if (!deptId) {
       results.errors.push({ row: i + 1, data: row, reason: `Department '${deptName}' not found` });
       results.summary.errors++;
       continue;
     }
 
     try {
-      checkDeptScope(req.user, dept._id);
+      checkDeptScope(req.user, deptId);
     } catch (e) {
       results.errors.push({ row: i + 1, data: row, reason: e.message });
       results.summary.errors++;
       continue;
     }
 
-    const [existingId, existingEmail] = await Promise.all([
-      Faculty.findOne({ employeeId: employeeId.toUpperCase() }).select('_id').lean(),
-      Faculty.findOne({ email: email.toLowerCase() }).select('_id').lean()
-    ]);
+    employeeId = employeeId.toString().toUpperCase();
+    email = email.toString().toLowerCase();
 
-    if (existingId) {
+    if (idSet.has(employeeId)) {
       results.errors.push({ row: i + 1, data: row, reason: `Employee ID ${employeeId} already exists` });
       results.summary.errors++;
       continue;
     }
 
-    if (existingEmail) {
+    if (emailSet.has(email)) {
       results.errors.push({ row: i + 1, data: row, reason: `Email ${email} already exists` });
       results.summary.errors++;
       continue;
     }
 
     results.valid.push({ 
-      employeeId: employeeId.toUpperCase(), 
+      employeeId, 
       name, 
-      email: email.toLowerCase(), 
+      email, 
       departmentName: deptName,
-      departmentId: dept._id 
+      departmentId: deptId 
     });
     results.summary.valid++;
   }
@@ -280,9 +290,6 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
 
         const member = memberArray[0];
 
-        // Fire-and-forget email dispatch (outside transaction context for SMTP safety, but triggered only on success)
-        // We'll collect and send after commit OR handle via post-commit hooks if we had them.
-        // For now, fire-and-forget is fine, it won't break the DB if SMTP fails.
         sendCredentialEmail(member.email, member.name, member.email, tempPassword, 'faculty')
           .catch(err => logger.error('Credential email failed in batch import', { email: member.email, error: err.message }));
 
@@ -334,16 +341,41 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
   }
 });
 
-/**
- * @desc    Preview elective assignments
- * @route   POST /api/import/electives/preview
- * @access  Admin, HoD
- */
 export const previewElectives = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
   const rows = parseBuffer(req.file.buffer);
   const results = { valid: [], errors: [], summary: { total: 0, valid: 0, errors: 0 } };
 
+  // 1. Pre-process all rows to collect IDs for bulk lookup
+  const allRollNos = new Set();
+  const allSubjectCodes = new Set();
+  const allEmpIds = new Set();
+
+  for (const row of rows) {
+    const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
+    const subjectCode = getRowValue(row, ['Subject Code', 'subjectCode']);
+    const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
+
+    if (rawRoll) {
+      const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
+      if (rolls) rolls.forEach(r => allRollNos.add(r.toUpperCase()));
+    }
+    if (subjectCode) allSubjectCodes.add(subjectCode.toUpperCase());
+    if (empId) allEmpIds.add(empId.toUpperCase());
+  }
+
+  // 2. Bulk Database Queries
+  const [students, subjects, faculty] = await Promise.all([
+    Student.find({ rollNo: { $in: Array.from(allRollNos) }, isActive: true }).select('_id rollNo name departmentId').lean(),
+    Subject.find({ code: { $in: Array.from(allSubjectCodes) }, isElective: true, isActive: true }).select('_id code name').lean(),
+    Faculty.find({ employeeId: { $in: Array.from(allEmpIds) }, isActive: true }).select('_id employeeId name').lean()
+  ]);
+
+  const studentMap = new Map(students.map(s => [s.rollNo, s]));
+  const subjectMap = new Map(subjects.map(s => [s.code, s]));
+  const facultyMap = new Map(faculty.map(f => [f.employeeId, f]));
+
+  // 3. Process validation in-memory
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
@@ -357,7 +389,6 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    // Expansion Logic
     const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
     if (!rolls || rolls.length === 0) {
       results.errors.push({ row: i + 1, data: row, reason: `Invalid range format: ${rawRoll}` });
@@ -368,18 +399,17 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
 
     for (const rollNo of rolls) {
       results.summary.total++;
-      const [student, subject, faculty] = await Promise.all([
-        Student.findOne({ rollNo: rollNo.toUpperCase(), isActive: true }).select('_id rollNo name departmentId').lean(),
-        Subject.findOne({ code: subjectCode.toUpperCase(), isElective: true, isActive: true }).select('_id code name').lean(),
-        Faculty.findOne({ employeeId: empId.toUpperCase(), isActive: true }).select('_id employeeId name').lean()
-      ]);
+      const upperRoll = rollNo.toUpperCase();
+      const student = studentMap.get(upperRoll);
+      const subject = subjectMap.get(subjectCode.toUpperCase());
+      const mentor = facultyMap.get(empId.toUpperCase());
 
       let reason = null;
       if (!student) {
         reason = `Student ${rollNo} not found or inactive`;
       } else if (!subject) {
         reason = `Subject ${subjectCode} not found or inactive`;
-      } else if (!faculty) {
+      } else if (!mentor) {
         reason = `Faculty ${empId} not found or inactive`;
       } else {
         try {
@@ -406,9 +436,9 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
           subjectId: subject._id, 
           subjectCode: subject.code,
           subjectName: subject.name,
-          facultyId: faculty._id, 
-          employeeId: faculty.employeeId,
-          facultyName: faculty.name,
+          facultyId: mentor._id, 
+          employeeId: mentor.employeeId,
+          facultyName: mentor.name,
           studentDeptId: student.departmentId,
           isExpanded: rolls.length > 1,
           originalRange: rolls.length > 1 ? rawRoll : null
@@ -516,8 +546,31 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
   const rows = parseBuffer(req.file.buffer);
   const results = { valid: [], errors: [], summary: { total: 0, valid: 0, errors: 0 } };
 
+  // 1. Pre-process to collect IDs
+  const allRollNos = new Set();
+  const allEmpIds = new Set();
   const seenRolls = new Set();
 
+  for (const row of rows) {
+    const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
+    const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
+    if (rawRoll) {
+      const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
+      if (rolls) rolls.forEach(r => allRollNos.add(r.toUpperCase()));
+    }
+    if (empId) allEmpIds.add(empId.toUpperCase());
+  }
+
+  // 2. Bulk Database Queries
+  const [students, faculty] = await Promise.all([
+    Student.find({ rollNo: { $in: Array.from(allRollNos) }, isActive: true }).select('_id rollNo name departmentId').lean(),
+    Faculty.find({ employeeId: { $in: Array.from(allEmpIds) }, isActive: true }).select('_id employeeId name departmentId roleTags').lean()
+  ]);
+
+  const studentMap = new Map(students.map(s => [s.rollNo, s]));
+  const facultyMap = new Map(faculty.map(f => [f.employeeId, f]));
+
+  // 3. Process Validation
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
@@ -530,7 +583,6 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    // Expansion Logic
     const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
     if (!rolls || rolls.length === 0) {
       results.errors.push({ row: i + 1, data: row, reason: `Invalid range format: ${rawRoll}` });
@@ -542,6 +594,7 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
     for (const rollNo of rolls) {
       results.summary.total++;
       const upperRoll = rollNo.toUpperCase();
+      
       if (seenRolls.has(upperRoll)) {
         results.errors.push({ 
           row: i + 1, 
@@ -555,22 +608,20 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
       }
       seenRolls.add(upperRoll);
 
-      const [student, faculty] = await Promise.all([
-        Student.findOne({ rollNo: upperRoll, isActive: true }).select('_id rollNo name departmentId').lean(),
-        Faculty.findOne({ employeeId: empId.toUpperCase(), isActive: true }).select('_id employeeId name departmentId roleTags').lean()
-      ]);
+      const student = studentMap.get(upperRoll);
+      const mentor = facultyMap.get(empId.toUpperCase());
 
       let reason = null;
       if (!student) {
         reason = `Student ${rollNo} not found or inactive`;
-      } else if (!faculty) {
+      } else if (!mentor) {
         reason = `Faculty ${empId} not found or inactive`;
       } else {
-          try {
-            checkDeptScope(req.user, student.departmentId);
-          } catch (e) {
-            reason = `Access denied for Student ${rollNo}: ${e.message}`;
-          }
+        try {
+          checkDeptScope(req.user, student.departmentId);
+        } catch (e) {
+          reason = `Access denied for Student ${rollNo}: ${e.message}`;
+        }
       }
 
       if (reason) {
@@ -587,9 +638,9 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
           studentId: student._id, 
           rollNo: student.rollNo, 
           studentName: student.name,
-          mentorId: faculty._id, 
-          employeeId: faculty.employeeId,
-          facultyName: faculty.name,
+          mentorId: mentor._id, 
+          employeeId: mentor.employeeId,
+          facultyName: mentor.name,
           studentDeptId: student.departmentId,
           isExpanded: rolls.length > 1,
           originalRange: rolls.length > 1 ? rawRoll : null
@@ -695,6 +746,11 @@ export const previewSubjects = asyncHandler(async (req, res, next) => {
   const rows = parseBuffer(req.file.buffer);
   const results = { valid: [], errors: [], summary: { total: rows.length, valid: 0, errors: 0 } };
 
+  // 1. Bulk check for existing subjects
+  const codes = rows.map(r => getRowValue(r, ['Code', 'subjectCode', 'code'])?.toString().toUpperCase()).filter(Boolean);
+  const existingSubjects = await Subject.find({ code: { $in: codes } }).select('code').lean();
+  const existingCodeSet = new Set(existingSubjects.map(s => s.code));
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const name = getRowValue(row, ['Name', 'subjectName', 'name']);
@@ -715,8 +771,8 @@ export const previewSubjects = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const existing = await Subject.findOne({ code: code.toUpperCase() }).select('_id').lean();
-    if (existing) {
+    const upperCode = code.toString().toUpperCase();
+    if (existingCodeSet.has(upperCode)) {
       results.errors.push({ row: i + 1, data: row, reason: `Subject code ${code} already exists` });
       results.summary.errors++;
       continue;
