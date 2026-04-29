@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Faculty from '../models/Faculty.js';
+import Student from '../models/Student.js';
 import Department from '../models/Department.js';
 import Class from '../models/Class.js';
 import ErrorResponse from '../utils/errorResponse.js';
@@ -288,6 +289,23 @@ export const updateFaculty = async (req, res, next) => {
     await faculty.save({ session });
 
     await commitSafeTransaction(session);
+
+    if (name !== undefined) {
+      // 1. Update Class subject assignments
+      // 2. Update Student elective subjects
+      Promise.all([
+        Class.updateMany(
+          { 'subjectAssignments.facultyId': id },
+          { $set: { 'subjectAssignments.$[elem].facultyName': name } },
+          { arrayFilters: [{ 'elem.facultyId': id }] }
+        ),
+        Student.updateMany(
+          { 'electiveSubjects.facultyId': id },
+          { $set: { 'electiveSubjects.$[elem].facultyName': name } },
+          { arrayFilters: [{ 'elem.facultyId': id }] }
+        )
+      ]).catch(err => logger.error('faculty_name_propagation_failed', { facultyId: id, error: err.message }));
+    }
 
     // Invalidate caches using the centralized hook
     invalidateEntityCache('faculty', id, oldDeptId);

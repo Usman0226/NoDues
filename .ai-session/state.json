@@ -1,36 +1,13 @@
 {
-  "last_updated": "2026-04-28T08:06:45Z",
-  "completed": [
-    "Fixed faculty dashboard visibility for co-curricular items",
-    "Resolved duplicate React keys in dashboard summary map",
-    "Implemented item-specific filtering for faculty pending portal",
-    "Enhanced approvalController with precise query filters",
-    "Changed default approval sorting to Roll Number in faculty portal",
-    "Restricted Request Type filter options dynamically based on user role in Pending.jsx",
-    "HoD My Classes navigation: pass facultyId in route state so Pending page filters to that class's approvals",
-    "approvalController: support optional facultyId query param with role-based permission check",
-    "approvalController: cast all IDs to mongoose.Types.ObjectId to prevent string/ObjectId mismatch",
-    "Pending.jsx: persist My Classes navigation context in sessionStorage (survives page refresh)",
-    "History.jsx: persist My Classes navigation context in sessionStorage (survives page refresh)",
-    "Pending.jsx: Clear All Filters also wipes sessionStorage context and resets facultyId"
-  ],
+  "last_updated": "2026-04-29T04:04:00Z",
+  "completed": ["Implement Forgot Password feature"],
   "in_progress": [],
   "pending": [],
   "decisions": [
-    {
-      "context": "Dashboard cards were being hidden",
-      "decision": "Use unique key (batchId + type + itemId) instead of just batchId in Dashboard.jsx",
-      "trade_offs": "Slightly more complex grouping logic in frontend"
-    },
-    {
-      "context": "Unnecessary filter options cluttering UI for normal faculty",
-      "decision": "Calculate request type options dynamically based on user role using useMemo",
-      "trade_offs": "None, improves UX by hiding non-applicable filter options"
-    },
-    {
-      "context": "Refresh from My Classes queue view reset all filters to defaults",
-      "decision": "Use sessionStorage with key 'pending_nav_ctx' / 'history_nav_ctx' to persist navigation context; clear it on fresh navigation or when user explicitly clears filters",
-      "trade_offs": "State persists only for the browser tab session, cleared when the tab is closed — this is intentional to avoid stale cross-session context"
+    { 
+      "context": "UI transition for Forgot Password", 
+      "decision": "Use a 'view' state with Framer Motion in Login.jsx", 
+      "trade_offs": "Slightly more complex state management in Login.jsx but significantly better UX and animations." 
     }
   ],
   "blockers": []

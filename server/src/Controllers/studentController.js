@@ -20,8 +20,10 @@ import {
   syncStudentDeactivation,
   bulkSyncMentorUpdate,
   bulkSyncStudentDeactivation,
-  syncClassChange
+  syncClassChange,
+  generateStudentSnapshotData
 } from '../utils/batchSync.js';
+import CoCurricularType from '../models/CoCurricularType.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction, getSessionOptions } from '../utils/safeTransaction.js';
 
 export const getStudents = async (req, res, next) => {
@@ -138,53 +140,26 @@ export const createStudent = async (req, res, next) => {
 
     const activeBatch = await NodueBatch.findOne({ classId, status: 'active' }).session(session).lean();
     if (activeBatch) {
-      const department = await Department.findById(cls.departmentId).select('name').session(session).lean();
-      const [hodAccount, ctInfo] = await Promise.all([
+      const [hodAccount, ctInfo, coCurricularItems] = await Promise.all([
         Faculty.findOne({
           departmentId: cls.departmentId,
           roleTags: { $in: ['hod', 'ao'] },
           isActive: true
         }).select('name roleTags').session(session).lean(),
-        cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() : null
+        cls.classTeacherId 
+          ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() 
+          : null,
+        CoCurricularType.find({
+          departmentId: cls.departmentId,
+          isActive: true
+        }).populate('coordinatorId', 'name').session(session).lean()
       ]);
 
-      const snapshot = {};
-
-      if (hodAccount) {
-        const isAO = hodAccount.roleTags?.includes('ao');
-        snapshot.hod = {
-          facultyId: hodAccount._id,
-          facultyName: hodAccount.name,
-          roleTag: isAO ? 'ao' : 'hod',
-          approvalType: 'hodApproval',
-          subjectId: null,
-          subjectName: isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
-        };
-      }
-
-      for (const s of cls.subjectAssignments ?? []) {
-        if (!s.facultyId || s.isElective) continue;
-        snapshot[s.subjectId.toString()] = {
-          facultyId: s.facultyId,
-          facultyName: s.facultyName,
-          subjectId: s.subjectId,
-          subjectName: s.subjectName,
-          subjectCode: s.subjectCode,
-          roleTag: 'faculty',
-          approvalType: 'subject',
-        };
-      }
-
-      if (cls.classTeacherId) {
-        snapshot.classTeacher = {
-          facultyId: cls.classTeacherId,
-          facultyName: ctInfo?.name ?? null,
-          roleTag: 'classTeacher',
-          approvalType: 'classTeacher',
-          subjectId: null,
-          subjectName: 'Class Teacher',
-        };
-      }
+      const snapshot = generateStudentSnapshotData(student[0], cls, {
+        hodAccount,
+        ctInfo,
+        coCurricularItems
+      });
 
       const requestId = new mongoose.Types.ObjectId();
       await NodueRequest.create([{
@@ -194,29 +169,31 @@ export const createStudent = async (req, res, next) => {
         studentSnapshot: {
           rollNo: student[0].rollNo,
           name: student[0].name,
-          departmentName: department?.name ?? null,
+          departmentName: cls.departmentId?.name ?? null,
         },
         facultySnapshot: snapshot,
         status: 'pending',
       }], getSessionOptions(session));
 
-      const approvals = Object.values(snapshot)
-        .filter((entry) => entry?.facultyId)
-        .map((entry) => ({
-          requestId,
-          batchId: activeBatch._id,
-          studentId: student[0]._id,
-          studentRollNo: student[0].rollNo,
-          studentName: student[0].name,
-          facultyId: entry.facultyId,
-          subjectId: entry.subjectId ?? null,
-          subjectName: entry.subjectName ?? null,
-          approvalType: entry.approvalType,
-          roleTag: entry.roleTag,
-          action: entry.approvalType === 'coCurricular' ? 'not_submitted' : 'pending',
-        }));
+      const approvals = Object.values(snapshot).map((f) => ({
+        requestId,
+        batchId: activeBatch._id,
+        studentId: student[0]._id,
+        studentRollNo: student[0].rollNo,
+        studentName: student[0].name,
+        facultyId: f.facultyId,
+        subjectId: f.subjectId ?? null,
+        subjectName: f.subjectName ?? null,
+        itemTypeId: f.itemTypeId ?? null,
+        itemTypeName: f.itemTypeName ?? null,
+        itemCode: f.itemCode ?? null,
+        isOptional: f.isOptional ?? false,
+        approvalType: f.approvalType,
+        roleTag: f.roleTag,
+        action: f.approvalType === 'coCurricular' ? 'not_submitted' : 'pending',
+      }));
 
-      if (approvals.length) {
+      if (approvals.length > 0) {
         await NodueApproval.insertMany(approvals, getSessionOptions(session));
       }
 

@@ -8,15 +8,19 @@ import {
   getEmailStats,
   getEmailLogs,
   runEmailDiag,
+  forgotPassword,
 } from '../Controllers/authController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
 
+import { authLimiter } from '../middlewares/rateLimiter.js';
+
 const router = Router();
 
-router.post('/login', login);
+router.post('/login', authLimiter, login);
 
-router.post('/student-login', studentLogin);
+router.post('/student-login', authLimiter, studentLogin);
+router.post('/forgot-password', authLimiter, forgotPassword);
 
 router.post(
   '/change-password',

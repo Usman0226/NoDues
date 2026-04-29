@@ -51,6 +51,11 @@ const nodueApprovalSchema = new mongoose.Schema({
   },
   remarks: String,
   actionedAt: Date,
+  actionedByRole: {
+    type: String,
+    enum: ['faculty', 'classTeacher', 'mentor', 'hod', 'ao', 'coordinator',
+           'coCurricular_mentor', 'coCurricular_coordinator', 'coCurricular_classTeacher', 'admin']
+  },
   createdAt: {
     type: Date,
     default: Date.now

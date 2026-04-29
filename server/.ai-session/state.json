@@ -1,7 +1,7 @@
 {
-  "last_updated": "2026-04-12T01:05:00+05:30",
+  "last_updated": "2026-04-28T09:31:00Z",
   "completed": [
-    "Add all critical MongoDB indexes (NodueApproval ×6, NodueRequest ×3, Student rollNo unique + compound, Faculty departmentId+roleTags)",
+    "Add all critical MongoDB indexes (NodueApproval x6, NodueRequest x3, Student rollNo unique + compound, Faculty departmentId+roleTags)",
     "Upgrade cache config: useClones:false, stdTTL 60s",
     "Upgrade DB config: minPoolSize:2, serverSelectionTimeoutMS, socketTimeoutMS",
     "Create utils/withCache.js (cache-aside helper + invalidateKeys)",
@@ -9,9 +9,11 @@
     "Install compression middleware; wire into app.js",
     "Rewrite studentPortalController.js: withCache(30s), Promise.all, .lean(), .select()",
     "Rewrite approvalController.js: surgical cache invalidation after every action, .select() on all queries",
-    "Rewrite batchController.js: bulkWrite for initiation (~30x faster), getBatchStatus cached 60s, cache primed after initiation, addStudentToBatch/closeBatch invalidate correctly",
+    "Rewrite batchController.js: bulkWrite for initiation, getBatchStatus cached 60s",
     "Rewrite hodController.js: getOverview cached 60s, overrideDues invalidates 3 keys",
-    "Fix server.js: await connectDB() before app.listen()"
+    "Fix server.js: await connectDB() before app.listen()",
+    "Implemented rate limiting middleware with tiers: apiLimiter, authLimiter, importLimiter, healthLimiter.",
+    "Fixed HoD portal not reflecting class-teacher/mentor/subject approvals — all approval actions now invalidate hod_overview:<deptId> cache key immediately after commit (approveRequest, markDue, updateApproval, bulkApproveRequests, overrideDues, bulkOverrideDues)"
   ],
   "in_progress": [],
   "pending": [
@@ -22,7 +24,7 @@
     {
       "context": "batchController initiateBatch used per-student session loop",
       "decision": "Replace with two parallel bulkWrite calls (requests + approvals collection)",
-      "trade_offs": "Loses per-document Mongoose middleware (no pre/post save hooks), but those weren't used here anyway. Gains ~30x speed."
+      "trade_offs": "Loses per-document Mongoose middleware, but those were not used here. Gains ~30x speed."
     },
     {
       "context": "Cache invalidation strategy",
@@ -33,6 +35,11 @@
       "context": "studentPortalController: populate('facultyId') on approvals",
       "decision": "Removed populate — use denormalized facultyName field stored on NodueApproval at creation time",
       "trade_offs": "No extra Faculty collection query on the hot path. Name must be kept in sync on faculty rename (rare)."
+    },
+    {
+      "context": "HoD overview cache not busting after class-teacher/mentor/faculty approvals",
+      "decision": "All approval mutations now call invalidateKeys('hod_overview:<deptId>') immediately after transaction commit",
+      "trade_offs": "Requires batch.departmentId in every approval function — already fetched for auth checks, so zero extra DB round-trips."
     }
   ],
   "blockers": []

@@ -1,5 +1,31 @@
 # No-Due Clearance System API Documentation
 
+## Rate Limiting
+
+The API implements rate limiting to ensure stability and security. Different tiers of rate limiting are applied based on the sensitivity and resource intensity of the endpoints.
+
+### Global API Limit
+- **Scope**: All `/api/*` endpoints (unless overridden by a stricter tier).
+- **Limit**: 500 requests per 15 minutes per IP.
+- **Headers**: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`.
+- **Response**: 429 Too Many Requests.
+
+### Authentication Tier
+- **Scope**: `/api/auth/login`, `/api/auth/student-login`.
+- **Limit**: 10 attempts per 15 minutes per IP.
+- **Response**: 429 Too Many Requests with code `AUTH_RATE_LIMIT_EXCEEDED`.
+
+### Import Tier
+- **Scope**: All `/api/import/*` endpoints.
+- **Limit**: 30 requests per hour per IP.
+- **Response**: 429 Too Many Requests with code `IMPORT_RATE_LIMIT_EXCEEDED`.
+
+### Health Check Tier
+- **Scope**: `/api/health`.
+- **Limit**: 60 requests per minute per IP.
+
+---
+
 ## Administrative Endpoints
 
 ### POST /api/import/students/commit

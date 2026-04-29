@@ -30,12 +30,10 @@ const NAV_CONFIG = {
     ]},
   ],
   [ROLES.HOD || ROLES.AO]: [
-    { label: 'General', icon: LayoutDashboard, items: [
-      { label: 'Dashboard', path: '/hod', icon: LayoutDashboard },
-      { label: 'Action History', path: '/faculty/history', icon: History },
-    ]},
+    { label: 'Dashboard', path: '/hod', icon: LayoutDashboard },
+    { label: 'My Classes', path: '/hod/my-classes', icon: GraduationCap },
+    { label: 'Approvals (Dept.)', path: '/faculty/pending', icon: ClipboardCheck },
     { label: 'Academic', icon: BookOpen, items: [
-      { label: 'My Classes', path: '/hod/my-classes', icon: GraduationCap },
       { label: 'Classes', path: '/hod/classes', icon: GraduationCap },
       { label: 'Subjects', path: '/hod/subjects', icon: BookOpen },
       { label: 'Co-Curricular', path: '/hod/co-curricular', icon: ClipboardCheck },
@@ -45,10 +43,12 @@ const NAV_CONFIG = {
       { label: 'Faculty', path: '/hod/faculty', icon: Users },
     ]},
     { label: 'No Dues', icon: ClipboardCheck, items: [
-      { label: 'Approvals (Dept.)', path: '/faculty/pending', icon: ClipboardCheck },
       { label: 'Dues', path: '/hod/dues', icon: AlertTriangle },
       { label: 'Overrides', path: '/hod/overrides', icon: Shield },
       { label: 'Batches', path: '/hod/batches', icon: Layers },
+    ]},
+    {label: 'System', icon: LayoutDashboard, items: [
+      { label: 'Action History', path: '/faculty/history', icon: History },
     ]},
   ],
   [ROLES.FACULTY]: [

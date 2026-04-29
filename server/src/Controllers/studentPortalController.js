@@ -131,7 +131,7 @@ export const getStudentStatus = async (req, res, next) => {
 
       return {
         id: a._id,
-        facultyName: snapshot.facultyName || 'Department Faculty',
+        facultyName: snapshot.facultyName || (a.roleTag === 'mentor' ? 'Unassigned Mentor' : (a.roleTag === 'classTeacher' ? 'Unassigned Class Teacher' : 'Pending Assignment')),
         itemTypeId: a.itemTypeId,
         subjectName: displayContext || 'General Appraisal',
         subjectCode: snapshot.subjectCode || null,

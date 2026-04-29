@@ -708,6 +708,20 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
 
     await commitSafeTransaction(session);
 
+    // ── Post-Commit Synchronization ──
+    // Group students by mentor to optimize sync calls
+    const mentorGroups = mentors.reduce((acc, curr) => {
+      const key = curr.mentorId.toString();
+      if (!acc[key]) acc[key] = { name: curr.facultyName, ids: [] };
+      acc[key].ids.push(curr.studentId);
+      return acc;
+    }, {});
+
+    // Run syncs in parallel background
+    Promise.all(Object.entries(mentorGroups).map(([mid, data]) => 
+      bulkSyncMentorUpdate(data.ids, mid, data.name)
+    )).catch(err => logger.error('bulk_mentor_sync_background_failed', { error: err.message }));
+
     affectedClassIds.forEach(cid => invalidateEntityCache('class', cid));
 
     logger.audit('MENTOR_IMPORT_COMMIT', {

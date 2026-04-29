@@ -76,6 +76,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const handlePassChange = async (email)=>{
+      try{
+        if(!email) {
+          toast.error('Please enter your email first');
+          return;
+        }
+        const response = await authService.forgotPassword(email);
+        if(response.success) {
+          toast.success(response.message || 'Temporary password sent if email exists');
+        }
+      }catch(err){
+          toast.error(err.message || 'Failed to request password reset');
+      } 
+  }
+
   const logout = async () => {
     try {
       await authService.logout();
@@ -89,7 +104,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, studentLogin, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, studentLogin, handlePassChange,logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

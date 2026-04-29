@@ -5,3 +5,4 @@ export const studentLogin = (rollNo) => api.post('/auth/student-login', { rollNo
 export const getMe = () => api.get('/auth/me');
 export const changePassword = (data) => api.post('/auth/change-password', data);
 export const logout = () => api.post('/auth/logout');
+export const forgotPassword = (email) => api.post('/auth/forgot-password', { email });

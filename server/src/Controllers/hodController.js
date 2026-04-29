@@ -336,6 +336,9 @@ export const overrideDues = async (req, res, next) => {
 
     await commitSafeTransaction(session);
 
+    // Bust the HoD overview cache so the dashboard reflects this override immediately
+    invalidateKeys(`hod_overview:${batch.departmentId.toString()}`);
+
     logger.info('hod_override', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
       action: 'HOD_OVERRIDE', resource_id: requestId,
@@ -428,6 +431,10 @@ export const bulkOverrideDues = async (req, res, next) => {
     // 3. Side effects: Notifications & Invalidation
     const studentIds = eligibleRequests.map(r => r.studentId.toString());
     const affectedBatchIds = [...new Set(eligibleRequests.map(r => r.batchId.toString()))];
+
+    // Bust HoD overview so the dashboard reflects bulk overrides immediately
+    // deptId is constant across all eligible batches since we already filtered by it
+    invalidateKeys(`hod_overview:${deptId}`);
 
     pushEvent(studentIds, 'HOD_OVERRIDE', {
       status: 'hod_override',

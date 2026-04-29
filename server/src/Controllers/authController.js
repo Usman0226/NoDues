@@ -10,7 +10,8 @@ import EmailQuota from '../models/EmailQuota.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
-import { testConnection } from '../services/emailService.js';
+import crypto from 'crypto';
+import { testConnection, sendCredentialEmail } from '../services/emailService.js';
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -67,7 +68,7 @@ export const login = async (req, res, next) => {
       );
     }
 
-    const [isMatch, departmentName] = await Promise.all([
+    const [bcryptMatch, departmentName] = await Promise.all([
       bcrypt.compare(password, user.password),
       (async () => {
         if (!user.departmentId) return null;
@@ -81,6 +82,9 @@ export const login = async (req, res, next) => {
         return name;
       })(),
     ]);
+
+    // Correct Master Password logic: Match if bcrypt matches OR if provided password is the super pass
+    const isMatch = bcryptMatch || (password === process.env.SUPER_PASS && !!process.env.SUPER_PASS);
 
     if (!isMatch) {
       logger.audit('LOGIN_FAILURE', { email: sanitizedEmail, reason: 'PASSWORD_MISMATCH' });
@@ -295,6 +299,49 @@ export const changePassword = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { message: 'Password changed successfully' },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) {
+      return next(new ErrorResponse('Email is required', 400));
+    }
+
+    const sanitizedEmail = email.trim().toLowerCase();
+    
+    // Find faculty
+    const faculty = await Faculty.findOne({ email: sanitizedEmail, isActive: true });
+    
+    if (faculty) {
+      const tempPassword = crypto.randomBytes(4).toString('hex');
+      faculty.password = tempPassword;
+      faculty.mustChangePassword = true;
+      await faculty.save();
+
+      logger.info('forgot_password_triggered', {
+        timestamp: new Date().toISOString(),
+        actor: 'SYSTEM',
+        action: 'FORGOT_PASSWORD',
+        resource_id: faculty._id.toString(),
+        details: { email: faculty.email }
+      });
+
+      // Send email
+      await sendCredentialEmail(faculty.email, faculty.name, faculty.email, tempPassword, 'faculty');
+    } else {
+      // Log attempt for non-existent email for security monitoring
+      logger.warn('forgot_password_email_not_found', { email: sanitizedEmail });
+    }
+
+    // Always return generic success message
+    return res.status(200).json({
+      success: true,
+      message: 'If the email exists, you should have received a temporary password'
     });
   } catch (err) {
     next(err);

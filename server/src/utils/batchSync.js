@@ -26,6 +26,7 @@ import {
   abortSafeTransaction,
   getSessionOptions,
 } from './safeTransaction.js';
+import { recalcRequestStatus } from '../Controllers/approvalController.js';
 
 // ── syncSubjectRemoval ────────────────────────────────────────────────────────
 export const syncSubjectRemoval = async (classId, subjectId) => {
@@ -694,8 +695,141 @@ export const bulkSyncStudentDeactivation = async (studentIds) => {
   }
 };
 
+/**
+ * Generates faculty snapshot and approval records for a single student.
+ * Used during batch initiation, student creation, and class changes.
+ */
+export const generateStudentSnapshotData = (student, cls, {
+  hodAccount,
+  ctInfo,
+  mentorMap, // Map<facultyId, name>
+  coCurricularItems
+}) => {
+  const snapshot = {};
+
+  // 1. HOD/AO
+  if (hodAccount) {
+    const isAO = hodAccount.roleTags?.includes('ao') && !hodAccount.roleTags?.includes('hod');
+    snapshot['hod'] = {
+      facultyId: hodAccount._id,
+      facultyName: hodAccount.name,
+      roleTag: isAO ? 'ao' : 'hod',
+      approvalType: 'hodApproval',
+      subjectId: null,
+      subjectName: isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
+    };
+  }
+
+  // 2. Class Subjects
+  for (const s of cls.subjectAssignments ?? []) {
+    if (!s.facultyId || s.isElective) continue;
+    snapshot[s.subjectId.toString()] = {
+      facultyId: s.facultyId,
+      facultyName: s.facultyName,
+      subjectId: s.subjectId,
+      subjectName: s.subjectName,
+      subjectCode: s.subjectCode,
+      roleTag: 'faculty',
+      approvalType: 'subject',
+    };
+  }
+
+  // 3. Class Teacher
+  if (cls.classTeacherId) {
+    snapshot['classTeacher'] = {
+      facultyId: cls.classTeacherId,
+      facultyName: ctInfo?.name ?? null,
+      roleTag: 'classTeacher',
+      approvalType: 'classTeacher',
+      subjectId: null,
+      subjectName: 'Class Teacher',
+    };
+  }
+
+  // 4. Mentor
+  if (student.mentorId) {
+    snapshot['mentor'] = {
+      facultyId: student.mentorId,
+      facultyName: mentorMap instanceof Map 
+        ? mentorMap.get(student.mentorId.toString()) 
+        : (mentorMap?.[student.mentorId.toString()] || null),
+      roleTag: 'mentor',
+      approvalType: 'mentor',
+      subjectId: null,
+      subjectName: 'Mentor',
+    };
+  }
+
+  // 5. Electives
+  for (const e of student.electiveSubjects ?? []) {
+    if (!e.facultyId) continue;
+    snapshot[e.subjectId.toString()] = {
+      facultyId: e.facultyId,
+      facultyName: e.facultyName,
+      subjectId: e.subjectId,
+      subjectName: e.subjectName,
+      subjectCode: e.subjectCode,
+      roleTag: 'faculty',
+      approvalType: 'subject',
+    };
+  }
+
+  // 6. Co-Curricular
+  const activeStudentYear = student.yearOfStudy || (cls.semester > 2 ? Math.ceil(cls.semester / 2) : 1);
+  const applicableItems = coCurricularItems?.filter(item => 
+    item.applicableYears.includes(activeStudentYear)
+  ) ?? [];
+
+  for (const item of applicableItems) {
+    const isMentorMode = item.requiresMentorApproval;
+    const isCTMode = item.requiresClassTeacherApproval;
+    
+    let assignedFacultyId = null;
+    let roleTag = 'coCurricular_coordinator';
+
+    if (isMentorMode) {
+      assignedFacultyId = student.mentorId;
+      roleTag = 'coCurricular_mentor';
+    } else if (isCTMode) {
+      assignedFacultyId = cls.classTeacherId;
+      roleTag = 'coCurricular_classTeacher';
+    } else {
+      assignedFacultyId = item.coordinatorId?._id || item.coordinatorId;
+      roleTag = 'coCurricular_coordinator';
+    }
+
+    // Fallback: If mentor/CT mode but no faculty assigned, use coordinator
+    if ((isMentorMode || isCTMode) && !assignedFacultyId && item.coordinatorId) {
+        assignedFacultyId = item.coordinatorId?._id || item.coordinatorId;
+        roleTag = 'coCurricular_coordinator';
+    }
+
+    if (!assignedFacultyId) continue;
+
+    const facultyName = isMentorMode ? (mentorMap instanceof Map ? mentorMap.get(student.mentorId?.toString()) : (mentorMap?.[student.mentorId?.toString()] || null)) : 
+                        (isCTMode ? (ctInfo?.name || null) : (item.coordinatorId?.name || null));
+
+    snapshot[item._id.toString()] = {
+      facultyId: assignedFacultyId,
+      facultyName,
+      subjectId: null,
+      subjectName: item.name,
+      subjectCode: item.code,
+      roleTag,
+      approvalType: 'coCurricular',
+      itemTypeId: item._id,
+      itemTypeName: item.name,
+      itemCode: item.code,
+      isOptional: item.isOptional || false
+    };
+  }
+
+  return snapshot;
+};
+
 // ── syncClassChange ───────────────────────────────────────────────────────────
 export const syncClassChange = async (studentId, oldClassId, newClassId) => {
+
   let succeeded = false;
   const session = await mongoose.startSession();
   try {
@@ -733,7 +867,7 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
       return;
     }
 
-    const [hodAccount, ctInfo, mentor] = await Promise.all([
+    const [hodAccount, ctInfo, mentor, coCurricularItems] = await Promise.all([
       Faculty.findOne({ 
         departmentId: cls.departmentId._id, 
         roleTags: { $in: ['hod', 'ao'] }, 
@@ -746,65 +880,40 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
       student.mentorId
         ? Faculty.findById(student.mentorId).session(session).select('name').lean()
         : null,
+      CoCurricularType.find({
+        departmentId: cls.departmentId._id,
+        isActive: true
+      }).populate('coordinatorId', 'name').session(session).lean()
     ]);
 
+    const mentorMap = new Map();
+    if (student.mentorId && mentor) {
+      mentorMap.set(student.mentorId.toString(), mentor.name);
+    }
+
+    const snapshot = generateStudentSnapshotData(student, cls, {
+      hodAccount,
+      ctInfo,
+      mentorMap,
+      coCurricularItems
+    });
+
     const requestId = new mongoose.Types.ObjectId();
-    const snapshot = {};
-
-    if (hodAccount) {
-      const isAO = hodAccount.roleTags.includes('ao') && !hodAccount.roleTags.includes('hod');
-      snapshot['hod'] = {
-        facultyId: hodAccount._id, facultyName: hodAccount.name,
-        roleTag: isAO ? 'ao' : 'hod', 
-        approvalType: 'hodApproval',
-        subjectId: null, 
-        subjectName: isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
-      };
-    }
-
-    for (const s of cls.subjectAssignments ?? []) {
-      if (!s.facultyId || s.isElective) continue;
-      snapshot[s.subjectId.toString()] = {
-        facultyId: s.facultyId, facultyName: s.facultyName,
-        subjectId: s.subjectId, subjectName: s.subjectName, subjectCode: s.subjectCode,
-        roleTag: 'faculty', approvalType: 'subject',
-      };
-    }
-
-    if (cls.classTeacherId) {
-      snapshot['classTeacher'] = {
-        facultyId: cls.classTeacherId, facultyName: ctInfo?.name ?? null,
-        roleTag: 'classTeacher', approvalType: 'classTeacher',
-        subjectName: 'Class Teacher',
-      };
-    }
-
-    if (student.mentorId) {
-      snapshot['mentor'] = {
-        facultyId: student.mentorId, facultyName: mentor?.name ?? null,
-        roleTag: 'mentor', approvalType: 'mentor', subjectName: 'Mentor',
-      };
-    }
-
-    for (const e of student.electiveSubjects ?? []) {
-      if (!e.facultyId) continue;
-      snapshot[e.subjectId.toString()] = {
-        facultyId: e.facultyId, facultyName: e.facultyName,
-        subjectId: e.subjectId, subjectName: e.subjectName, subjectCode: e.subjectCode,
-        roleTag: 'faculty', approvalType: 'subject',
-      };
-    }
 
     await NodueRequest.create([{
       _id: requestId,
       batchId: activeBatch._id,
       studentId,
-      studentSnapshot: { rollNo: student.rollNo, name: student.name, departmentName: cls.departmentId?.name },
+      studentSnapshot: { 
+        rollNo: student.rollNo, 
+        name: student.name, 
+        departmentName: cls.departmentId?.name 
+      },
       facultySnapshot: snapshot,
       status: 'pending',
     }], { session });
 
-    const approvalOps = Object.values(snapshot).map(f => ({
+    const approvals = Object.values(snapshot).map(f => ({
       requestId,
       batchId: activeBatch._id,
       studentId,
@@ -813,91 +922,17 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
       facultyId: f.facultyId,
       subjectId: f.subjectId ?? null,
       subjectName: f.subjectName ?? null,
+      itemTypeId: f.itemTypeId ?? null,
+      itemTypeName: f.itemTypeName ?? null,
+      itemCode: f.itemCode ?? null,
+      isOptional: f.isOptional ?? false,
       approvalType: f.approvalType,
       roleTag: f.roleTag,
-      action: 'pending',
+      action: f.approvalType === 'coCurricular' ? 'not_submitted' : 'pending',
     }));
 
-    // ── CO-CURRICULAR SYNC ──────────────────────────────────────────────────
-    // Fetch co-curricular items for this student's year and department
-    const ccTypes = await CoCurricularType.find({
-      departmentId: cls.departmentId._id,
-      applicableYears: student.yearOfStudy,
-      isActive: true, // Only active items
-    }).session(session).lean();
-
-    for (const type of ccTypes) {
-      const isMentorMode = type.requiresMentorApproval;
-      const isCTMode = type.requiresClassTeacherApproval;
-      
-      let assignedFacultyId = null;
-      let roleTag = 'coCurricular_coordinator';
-
-      if (isMentorMode) {
-        assignedFacultyId = student.mentorId;
-        roleTag = 'coCurricular_mentor';
-      } else if (isCTMode) {
-        assignedFacultyId = cls.classTeacherId;
-        roleTag = 'coCurricular_classTeacher';
-      } else {
-        assignedFacultyId = type.coordinatorId;
-        roleTag = 'coCurricular_coordinator';
-      }
-      
-      // Fallback: If mentor/CT mode but no faculty assigned, use coordinator
-      if ((isMentorMode || isCTMode) && !assignedFacultyId && type.coordinatorId) {
-        assignedFacultyId = type.coordinatorId;
-        roleTag = 'coCurricular_coordinator';
-      }
-
-      if (!assignedFacultyId) continue;
-
-      let facultyNameStr = null;
-      if (isMentorMode && assignedFacultyId.toString() === student.mentorId?.toString()) {
-        facultyNameStr = mentor?.name || "Student's Mentor";
-      } else if (isCTMode && assignedFacultyId.toString() === cls.classTeacherId?.toString()) {
-        facultyNameStr = ctInfo?.name || "Class Teacher";
-      } else if (type.coordinatorId && assignedFacultyId.toString() === type.coordinatorId.toString()) {
-        const coord = await Faculty.findById(type.coordinatorId).session(session).select('name').lean();
-        facultyNameStr = coord?.name;
-      }
-
-      // Add to snapshot
-      snapshot[type._id.toString()] = {
-        facultyId: assignedFacultyId,
-        facultyName: facultyNameStr,
-        subjectId: null,
-        subjectName: type.name,
-        subjectCode: type.code,
-        roleTag: roleTag,
-        approvalType: 'coCurricular',
-        itemTypeId: type._id,
-        itemTypeName: type.name,
-        itemCode: type.code,
-        isOptional: type.isOptional || false
-      };
-
-      approvalOps.push({
-        requestId,
-        batchId: activeBatch._id,
-        studentId,
-        studentRollNo: student.rollNo,
-        studentName: student.name,
-        facultyId: assignedFacultyId,
-        subjectId: null,
-        subjectName: type.name,
-        approvalType: 'coCurricular',
-        roleTag: roleTag,
-        itemTypeId: type._id,
-        itemTypeName: type.name,
-        itemCode: type.code,
-        isOptional: type.isOptional || false,
-        action: 'pending',
-      });
-    }
-
-    if (approvalOps.length > 0) {
-      await NodueApproval.insertMany(approvalOps, { session });
+    if (approvals.length > 0) {
+      await NodueApproval.insertMany(approvals, { session });
     }
 
     await commitSafeTransaction(session);
@@ -1570,5 +1605,115 @@ export const bulkSyncClassTeacherUpdate = async (classId, classTeacherId, classT
 
   if (succeeded) {
     invalidateEntityCache('class', classId);
+  }
+};
+
+/**
+ * Comprehensive repair and sync for all active batches.
+ * Ensures every student in an active class has a NodueRequest and all required NodueApproval records.
+ */
+export const syncAllActiveBatches = async () => {
+  try {
+    const activeBatches = await NodueBatch.find({ status: 'active' });
+    logger.info('sync_all_active_batches_started', { count: activeBatches.length });
+
+    for (const batch of activeBatches) {
+      const cls = await Class.findById(batch.classId).lean();
+      if (!cls) continue;
+
+      const students = await Student.find({ classId: batch.classId, isActive: true }).lean();
+      
+      const [hodAccount, ctInfo, coCurricularItems, mentors] = await Promise.all([
+        Faculty.findOne({ departmentId: cls.departmentId, roleTags: 'hod' }).lean(),
+        cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').lean() : null,
+        CoCurricularType.find({ departmentId: cls.departmentId, isActive: true }).populate('coordinatorId', 'name').lean(),
+        Faculty.find({ _id: { $in: students.map(s => s.mentorId).filter(Boolean) } }).select('name').lean()
+      ]);
+
+      const mentorMap = new Map(mentors.map(m => [m._id.toString(), m.name]));
+
+      for (const student of students) {
+        try {
+          let request = await NodueRequest.findOne({ batchId: batch._id, studentId: student._id });
+          
+          const freshSnapshot = generateStudentSnapshotData(student, cls, {
+            hodAccount,
+            ctInfo,
+            mentorMap,
+            coCurricularItems
+          });
+
+          if (!request) {
+            request = await NodueRequest.create({
+              batchId: batch._id,
+              studentId: student._id,
+              studentSnapshot: {
+                rollNo: student.rollNo,
+                name: student.name,
+                departmentName: cls.departmentId?.name ?? null,
+              },
+              facultySnapshot: freshSnapshot,
+              status: 'pending'
+            });
+          } else {
+            request.facultySnapshot = freshSnapshot;
+            request.markModified('facultySnapshot');
+            await request.save();
+          }
+
+          // Ensure all approval records from snapshot exist
+          for (const f of Object.values(freshSnapshot)) {
+            const query = {
+              requestId: request._id,
+              roleTag: f.roleTag,
+              itemTypeId: f.itemTypeId ?? null,
+              subjectId: f.subjectId ?? null
+            };
+
+            const existing = await NodueApproval.findOne(query);
+
+            if (!existing) {
+              await NodueApproval.create({
+                requestId: request._id,
+                batchId: batch._id,
+                studentId: student._id,
+                studentRollNo: student.rollNo,
+                studentName: student.name,
+                facultyId: f.facultyId,
+                subjectId: f.subjectId ?? null,
+                subjectName: f.subjectName ?? null,
+                itemTypeId: f.itemTypeId ?? null,
+                itemTypeName: f.itemTypeName ?? null,
+                itemCode: f.itemCode ?? null,
+                isOptional: f.isOptional ?? false,
+                approvalType: f.approvalType,
+                roleTag: f.roleTag,
+                action: f.approvalType === 'coCurricular' ? 'not_submitted' : 'pending'
+              });
+            }
+          }
+          
+          await recalcRequestStatus(request._id);
+          
+          // Invalidate student status cache to ensure immediate visibility
+          invalidateEntityCache('student', student._id);
+          
+          // Throttling to avoid overwhelming M0 cluster/connection pool
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } catch (err) {
+          logger.error('sync_individual_student_failed', { 
+            studentId: student._id, 
+            rollNo: student.rollNo,
+            error: err.message 
+          });
+        }
+      }
+    }
+
+    logger.audit('SYNC_ALL_ACTIVE_BATCHES_COMPLETE', { timestamp: new Date() });
+    invalidateEntityCache('student', 'all');
+    invalidateEntityCache('batch', 'all');
+  } catch (err) {
+    logger.error('sync_all_active_batches_failed', { error: err.message });
   }
 };

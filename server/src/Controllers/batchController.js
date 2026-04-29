@@ -15,6 +15,7 @@ import Task from '../models/Task.js';
 import CoCurricularType from '../models/CoCurricularType.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 import { createNotification } from './notification.controller.js';
+import { generateStudentSnapshotData } from '../utils/batchSync.js';
 
 // ── GET /api/batch ────────────────────────────────────────────────────────────
 export const getBatches = async (req, res, next) => {
@@ -211,108 +212,13 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
   for (const student of students) {
     const requestId = new mongoose.Types.ObjectId();
     
-    // Build Faculty Snapshot for this student
-    const snapshot = {};
-    if (hodAccount) {
-      const isAO = hodAccount.roleTags.includes('ao');
-      snapshot['hod'] = {
-        facultyId:    hodAccount._id,
-        facultyName:  hodAccount.name,
-        roleTag:      isAO ? 'ao' : 'hod',
-        approvalType: 'hodApproval',
-        subjectId:    null,
-        subjectName:  isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
-      };
-    }
-
-    // Regular subjects
-    for (const s of cls.subjectAssignments ?? []) {
-      if (!s.facultyId || s.isElective) continue;
-      snapshot[s.subjectId.toString()] = {
-        facultyId:    s.facultyId,
-        facultyName:  s.facultyName,
-        subjectId:    s.subjectId,
-        subjectName:  s.subjectName,
-        subjectCode:  s.subjectCode,
-        roleTag:      'faculty',
-        approvalType: 'subject',
-      };
-    }
-
-    // Class teacher
-    if (cls.classTeacherId) {
-      snapshot['classTeacher'] = {
-        facultyId:    cls.classTeacherId,
-        facultyName:  ctInfo?.name ?? null,
-        subjectId:    null,
-        subjectName:  'Classteacher',
-        subjectCode:  null,
-        roleTag:      'classTeacher',
-        approvalType: 'classTeacher',
-      };
-    }
-
-    // Mentor
-    if (student.mentorId) {
-      const mentorName = mentorMap.get(student.mentorId.toString());
-      snapshot['mentor'] = {
-        facultyId:    student.mentorId,
-        facultyName:  mentorName ?? null,
-        subjectId:    null,
-        subjectName:  'Mentor',
-        subjectCode:  null,
-        roleTag:      'mentor',
-        approvalType: 'mentor',
-      };
-    }
-
-    // Elective subjects (student-specific)
-    for (const e of student.electiveSubjects ?? []) {
-      if (!e.facultyId) continue;
-      snapshot[e.subjectId.toString()] = {
-        facultyId:    e.facultyId,
-        facultyName:  e.facultyName,
-        subjectId:    e.subjectId,
-        subjectName:  e.subjectName,
-        subjectCode:  e.subjectCode,
-        roleTag:      'faculty',
-        approvalType: 'subject',
-      };
-    }
-
-    // Co-Curricular items (based on student year)
-    const activeStudentYear = student.yearOfStudy || (cls.semester > 2 ? Math.ceil(cls.semester / 2) : 1); // Fallback if not set
-    const studentYear = student.yearOfStudy || activeStudentYear;
-
-    const applicableItems = coCurricularItems.filter(item => 
-      item.applicableYears.includes(studentYear)
-    );
-
-    for (const item of applicableItems) {
-      const isMentorMode = item.requiresMentorApproval;
-      let assignedFacultyId = isMentorMode ? student.mentorId : item.coordinatorId?._id || item.coordinatorId;
-      
-      // Fallback: If mentor mode but no mentor assigned, fallback to coordinator if available
-      if (isMentorMode && !assignedFacultyId && item.coordinatorId) {
-          assignedFacultyId = item.coordinatorId?._id || item.coordinatorId;
-      }
-
-      const facultyName = isMentorMode ? (mentorMap.get(student.mentorId?.toString()) || 'Student\'s Mentor') : (item.coordinatorId?.name || null);
-
-      snapshot[item._id.toString()] = {
-        facultyId:    assignedFacultyId,
-        facultyName:  facultyName,
-        subjectId:    null,
-        subjectName:  item.name,
-        subjectCode:  item.code,
-        roleTag:      isMentorMode ? 'coCurricular_mentor' : 'coCurricular_coordinator',
-        approvalType: 'coCurricular',
-        itemTypeId:   item._id,
-        itemTypeName: item.name,
-        itemCode:     item.code,
-        isOptional:   item.isOptional || false
-      };
-    }
+    // Build Faculty Snapshot for this student using the unified helper
+    const snapshot = generateStudentSnapshotData(student, cls, {
+      hodAccount,
+      ctInfo,
+      mentorMap,
+      coCurricularItems
+    });
 
     requestOps.push({
       insertOne: {
@@ -334,12 +240,14 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
     });
 
     for (const f of Object.values(snapshot)) {
-      // Every co-curricular approval MUST have a facultyId (schema requirement).
-      // If still missing (no mentor AND no coordinator), we skip but log it.
       if (!f.facultyId) {
-        console.error('CRITICAL: Missing faculty for co-curricular approval', f.itemTypeName);
+        logger.error('CRITICAL: Missing faculty for student approval item', { 
+          studentRollNo: student.rollNo, 
+          item: f.subjectName || f.itemTypeName 
+        });
         continue;
       }
+
       approvalOps.push({
         insertOne: {
           document: {

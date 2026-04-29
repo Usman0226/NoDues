@@ -26,11 +26,17 @@ import coCurricularRoutes from './Routes/coCurricular.routes.js';
 import notificationRoutes from './Routes/notification.routes.js';
 import feedbackRoutes     from './Routes/feedback.routes.js';
 
+import { apiLimiter, healthLimiter } from './middlewares/rateLimiter.js';
+
 const app = express();
+
+// Trust proxy if behind Nginx/Cloudflare
+app.set('trust proxy', 1);
 
 app.use(responseTimeLogger);
 
 app.use(helmet());
+
 const allowedOrigins = [
   process.env.CLIENT_URL,
   'http://localhost:5173',  
@@ -81,7 +87,8 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-app.get('/api/health', (_req, res) => {
+// Apply health check limiter specifically
+app.get('/api/health', healthLimiter, (_req, res) => {
   res.status(200).json({
     success: true,
     data: {
@@ -91,6 +98,10 @@ app.get('/api/health', (_req, res) => {
     },
   });
 });
+
+// Apply global API rate limiter to all routes starting with /api
+// except for health check which has its own above
+app.use('/api', apiLimiter);
 
 app.use('/api/auth',        authRoutes);
 app.use('/api/departments', departmentRoutes);

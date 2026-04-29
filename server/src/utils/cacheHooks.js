@@ -12,18 +12,23 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
   }
 
   switch (entityType) {
-    case 'student':
+    case 'student': {
       keys.push(`user:${entityId}`);
-      keys.push(`student_status:${entityId}`);
+      keys.push(`student_status:${entityId}:active`);
       
+      const allKeys = cache.keys();
+      // Invalidate specific request status keys for this student
+      const requestStatusKeys = allKeys.filter(k => k.startsWith(`student_status:${entityId}:`));
+      keys.push(...requestStatusKeys);
+
       // Invalidate lists where this student might appear
-      const allStudentKeys = cache.keys();
-      const listStudentKeys = allStudentKeys.filter(k =>
+      const listStudentKeys = allKeys.filter(k =>
         k.startsWith('students:list:all:') ||
         (additionalId && k.startsWith(`students:list:${additionalId}:`))
       );
       keys.push(...listStudentKeys);
       break;
+    }
 
     case 'faculty':
       keys.push(`user:${entityId}`);

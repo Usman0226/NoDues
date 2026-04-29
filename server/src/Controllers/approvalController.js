@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+﻿import mongoose from 'mongoose';
 import NodueApproval from '../models/NodueApproval.js';
 import NodueRequest from '../models/NodueRequest.js';
 import NodueBatch from '../models/NodueBatch.js';
@@ -9,6 +9,7 @@ import logger from '../utils/logger.js';
 import { pushEvent } from './sseController.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
+import { invalidateKeys } from '../utils/withCache.js';
 import { invalidateStudentStatusCache } from './studentPortalController.js';
 import { createNotification } from './notification.controller.js';
 
@@ -362,9 +363,11 @@ export const approveRequest = async (req, res, next) => {
     approval.actionedAt = new Date();
     
     // Persist identity for departmental clearances
-    if (req.user.role === 'hod' || req.user.role === 'ao') {
-      approval.roleTag = req.user.role;
-    }
+    // if (req.user.role === 'hod' || req.user.role === 'ao') {
+    //   approval.roleTag = req.user.role;
+    // }
+
+    approval.actionedByRole = req.user.role;
     
     await approval.save({ session });
 
@@ -390,6 +393,10 @@ export const approveRequest = async (req, res, next) => {
     invalidateStudentStatusCache(approval.studentId.toString());
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
+    // Bust HoD overview so the dashboard reflects this approval immediately
+    if (batch?.departmentId) {
+      invalidateKeys(`hod_overview:${batch.departmentId.toString()}`);
+    }
 
     logger.audit('APPROVAL_ACTIONED', {
       actor: req.user.userId,
@@ -479,10 +486,8 @@ export const bulkApproveRequests = async (req, res, next) => {
       approval.remarks = null;
       approval.actionedAt = now;
 
-      // Persist identity for departmental clearances
-      if (req.user.role === 'hod' || req.user.role === 'ao') {
-        approval.roleTag = req.user.role;
-      }
+      // Track actor role without mutating roleTag (it is part of the unique index)
+      approval.actionedByRole = req.user.role;
 
       await approval.save({ session });
 
@@ -518,6 +523,9 @@ export const bulkApproveRequests = async (req, res, next) => {
     });
     batchIds.forEach(bId => invalidateEntityCache('batch', bId));
     invalidateEntityCache('approval', req.user.userId, 'all');
+    // Bust HoD overview for all affected departments
+    const deptIds = new Set(batches.map(b => b.departmentId?.toString()).filter(Boolean));
+    deptIds.forEach(dId => invalidateKeys(`hod_overview:${dId}`));
 
     logger.audit('BULK_APPROVAL_ACTIONED', {
       actor: req.user.userId,
@@ -601,10 +609,8 @@ export const markDue = async (req, res, next) => {
     approval.remarks    = remarks ?? null;
     approval.actionedAt = new Date();
 
-    // Persist identity for departmental clearances
-    if (req.user.role === 'hod' || req.user.role === 'ao') {
-      approval.roleTag = req.user.role;
-    }
+    // Track who actioned this without mutating roleTag
+    approval.actionedByRole = req.user.role;
 
     await approval.save({ session });
 
@@ -632,6 +638,10 @@ export const markDue = async (req, res, next) => {
     invalidateStudentStatusCache(approval.studentId.toString());
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
+    // Bust HoD overview so the dashboard reflects this mark-due immediately
+    if (batch?.departmentId) {
+      invalidateKeys(`hod_overview:${batch.departmentId.toString()}`);
+    }
 
     logger.audit('DUE_MARKED', {
       actor: req.user.userId,
@@ -726,10 +736,8 @@ export const updateApproval = async (req, res, next) => {
     if (remarks !== undefined) approval.remarks = remarks;
     approval.actionedAt = new Date();
 
-    // Persist identity for departmental clearances
-    if (req.user.role === 'hod' || req.user.role === 'ao') {
-      approval.roleTag = req.user.role;
-    }
+    // Track actor role
+    approval.actionedByRole = req.user.role;
 
     await approval.save({ session });
 
@@ -740,6 +748,10 @@ export const updateApproval = async (req, res, next) => {
     invalidateStudentStatusCache(approval.studentId.toString());
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
+    // Bust HoD overview
+    if (batch?.departmentId) {
+      invalidateKeys(`hod_overview:${batch.departmentId.toString()}`);
+    }
 
     logger.audit('APPROVAL_UPDATED', {
       actor: req.user.userId,
@@ -769,8 +781,7 @@ export const updateApproval = async (req, res, next) => {
   }
 };
 
-// ── Internal helper ────────────────────────────────────────────────────────────
-async function recalcRequestStatus(requestId, session = null) {
+export async function recalcRequestStatus(requestId, session = null) {
   const query = NodueApproval.find({ requestId }, 'action isOptional');
   if (session) query.session(session);
   const approvals = await query.lean();

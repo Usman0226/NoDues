@@ -16,11 +16,14 @@ import {
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
 
+import { importLimiter } from '../middlewares/rateLimiter.js';
+
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(protect);
 router.use(RoleGuard(['admin', 'hod', 'ao']));
+router.use(importLimiter);
 
 // Templates
 router.get('/template/:type', getTemplate);
@@ -28,7 +31,7 @@ router.get('/template/:type', getTemplate);
 // Students
 router.post('/students/preview', upload.single('file'), previewStudents);
 router.post('/students/commit', commitStudents);
-
+ 
 // Faculty
 router.post('/faculty/preview', upload.single('file'), previewFaculty);
 router.post('/faculty/commit', commitFaculty);
