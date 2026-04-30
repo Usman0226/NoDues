@@ -187,31 +187,8 @@ export const updateDepartment = async (req, res, next) => {
 
               const batchIds = activeBatches.map(b => b._id);
 
-              // 1. Update NodueApproval records for HoD clearance
-              await NodueApproval.updateMany(
-                { batchId: { $in: batchIds }, approvalType: 'hodApproval' },
-                { $set: { facultyId: hodId } }
-              );
-
-              // 2. Update facultySnapshot in NodueRequest
-              await NodueRequest.updateMany(
-                { batchId: { $in: batchIds } },
-                { 
-                  $set: { 
-                    'facultySnapshot.hod.facultyId': hodId,
-                    'facultySnapshot.hod.facultyName': newHodName 
-                  } 
-                }
-              );
-
-              // 3. Clear relevant caches
-              batchIds.forEach(bId => cache.del(`batch_status:${bId}`));
-
-              logger.info('hod_propagation_complete', {
-                departmentId: id,
-                newHodId: hodId,
-                batchesUpdated: batchIds.length
-              });
+              // HoD propagation removed as HoD clearance is no longer a requirement (2026-04-29)
+              logger.info('hod_change_detected', { departmentId: id, newHodId: hodId });
             } catch (err) {
               logger.error('hod_propagation_failed', { error: err.message, departmentId: id });
             }

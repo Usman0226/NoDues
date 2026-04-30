@@ -1,5 +1,10 @@
 # No-Due Clearance System API Documentation
 
+> [!NOTE]
+> As of April 2026, the mandatory **Head of Department (HoD)** and **Administrative Officer (AO)** clearance step has been removed from the standard student clearance workflow.
+> *   New batches will no longer create `hodApproval` records.
+> *   HODs and Admins still retain the authority to perform **Bulk Overrides** to clear students who have existing dues.
+
 ## Rate Limiting
 
 The API implements rate limiting to ensure stability and security. Different tiers of rate limiting are applied based on the sensitivity and resource intensity of the endpoints.

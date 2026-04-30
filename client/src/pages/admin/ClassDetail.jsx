@@ -14,11 +14,10 @@ import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, 
 import { createStudent, updateStudent, deleteStudent, assignMentor, addElective, removeElective, bulkDeactivateStudents, bulkAssignMentor } from '../../api/students';
 import { getFaculty } from '../../api/faculty';
 import { getSubjects, createSubject } from '../../api/subjects';
-import { getPendingApprovals, approveRecord, bulkApproveRecords, markDueRecord, updateApproval } from '../../api/approvals';
 import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2, Search, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
-import { formatRole } from '../../utils/formatters';
+
 
 
 const BASE_TABS = [
@@ -28,7 +27,6 @@ const BASE_TABS = [
 ];
 
 const ClassDetail = () => {
-  // Debug log to verify imports during runtime
   console.log('DEBUG: API Imports check', { assignMentor, createStudent, createSubject });
 
   const { classId } = useParams();
@@ -67,12 +65,9 @@ const ClassDetail = () => {
   const [submitting, setSubmitting] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [selectedMappingIds, setSelectedMappingIds] = useState([]);
-  const [selectedApprovalIds, setSelectedApprovalIds] = useState([]);
   const [showBulkDeleteStudents, setShowBulkDeleteStudents] = useState(false);
   const [showBulkAssignMentor, setShowBulkAssignMentor] = useState(false);
   const [showBulkRemoveSubjects, setShowBulkRemoveSubjects] = useState(false);
-  const [hodDueModal, setHodDueModal] = useState(null);
-  const [hodDueForm, setHodDueForm] = useState({ dueType: 'other', remarks: '' });
   const [bulkMentorId, setBulkMentorId] = useState('');
   const [studentsList, setStudentsList] = useState([]);
   const [loadingStudentId, setLoadingStudentId] = useState(null);
@@ -101,31 +96,8 @@ const ClassDetail = () => {
   const subjects = useMemo(() => classData?.subjects || classData?.subjectAssignments || [], [classData?.subjects, classData?.subjectAssignments]);
   const pastBatches = useMemo(() => classData?.batchHistory || [], [classData?.batchHistory]);
   const activeBatch = classData?.activeBatch;
-  const tabs = useMemo(() => (
-    isHod
-      ? [...BASE_TABS, { key: 'approval', label: 'Approval', icon: CheckCircle }]
-      : BASE_TABS
-  ), [isHod]);
+  const tabs = useMemo(() => BASE_TABS, []);
   const facultyList = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
-  const { data: approvalResponse, loading: approvalsLoading, request: fetchApprovals } = useApi(getPendingApprovals, { 
-    immediate: false 
-  });
-  const hodApprovals = useMemo(() => {
-    const rows = approvalResponse?.data || [];
-    return rows
-      .filter((item) =>
-        item.roleTag === 'hod' ||
-        item.approvalType === 'hodApproval' ||
-        item.approvalType === 'office'
-      )
-      .sort((a, b) => String(a.studentRollNo || '').localeCompare(String(b.studentRollNo || ''), undefined, { numeric: true }));
-  }, [approvalResponse?.data]);
-  const hodApprovalStats = useMemo(() => ({
-    total: hodApprovals.length,
-    pending: hodApprovals.filter((item) => item.action === 'pending').length,
-    approved: hodApprovals.filter((item) => item.action === 'approved').length,
-    dueMarked: hodApprovals.filter((item) => item.action === 'due_marked').length,
-  }), [hodApprovals]);
   
   useEffect(() => {
     if (response?.data?.students) {
@@ -146,10 +118,7 @@ const ClassDetail = () => {
   const [facultySearchResults, setFacultySearchResults] = useState(null);
   const [isSearchingFaculty, setIsSearchingFaculty] = useState(false);
 
-  useEffect(() => {
-    if (!isHod || tab !== 'approval' || !activeBatch?._id) return;
-    fetchApprovals({ batchId: activeBatch._id, action: 'all', limit: 200 });
-  }, [isHod, tab, activeBatch?._id, fetchApprovals]);
+
 
   const handleFacultySearch = async (query) => {
     if (!query) {
@@ -600,64 +569,7 @@ const SUBJECT_COLS = [
    )}
     ];
 
-  const HOD_APPROVAL_COLS = [
-    {
-      key: 'studentRollNo',
-      label: 'Roll No',
-      width: '120px',
-      render: (v) => <span className="font-mono text-xs font-black text-navy">{v || '—'}</span>
-    },
-    {
-      key: 'studentName',
-      label: 'Student',
-      render: (v) => <span className="font-bold text-navy">{v || '—'}</span>
-    },
-    {
-      key: 'className',
-      label: 'Stage',
-      width: '180px',
-      render: (_, row) => (
-        <div className="leading-tight">
-          <p className="text-[10px] font-black uppercase tracking-widest text-navy/50">
-            {formatRole(user?.role)} Approval
-          </p>
-          <p className="text-xs text-muted-foreground">{row.className || classData?.name || '—'}</p>
-        </div>
-      )
-    },
-    {
-      key: 'action',
-      label: 'Status',
-      width: '120px',
-      align: 'center',
-      render: (v) => <Badge status={v || 'pending'} />
-    },
-    {
-      key: 'actions',
-      label: '',
-      width: '220px',
-      sortable: false,
-      align: 'right',
-      render: (_, row) => (
-        <div className="flex items-center justify-end gap-2">
-          {row.action === 'pending' ? (
-            <>
-              <Button size="sm" variant="ghost" onClick={() => openHodDueModal(row)} className="text-red-600 border border-red-100 hover:bg-red-50">
-                Mark Due
-              </Button>
-              <Button size="sm" variant="primary" onClick={() => handleHodApprove(row._id)}>
-                Approve
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" variant="ghost" onClick={() => handleHodReset(row._id)} className="text-navy border border-muted hover:bg-offwhite">
-              Reset
-            </Button>
-          )}
-        </div>
-      )
-    }
-  ];
+
 
   const handleBulkDeactivateStudents = async () => {
     setSubmitting(true);
@@ -710,80 +622,7 @@ const SUBJECT_COLS = [
     }
   };
 
-  const refreshHodApprovals = async () => {
-    if (!activeBatch?._id) return;
-    await fetchApprovals({ batchId: activeBatch._id, action: 'all', limit: 200 });
-  };
 
-  const handleHodApprove = async (approvalId) => {
-    setSubmitting(true);
-    try {
-      await approveRecord(approvalId);
-      toast.success(`${formatRole(user?.role)} approval recorded`);
-      await refreshHodApprovals();
-      fetchClass();
-    } catch (err) {
-      toast.error(err?.message || 'Failed to record HoD approval');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleHodBulkApprove = async () => {
-    if (!selectedApprovalIds.length) return;
-    setSubmitting(true);
-    try {
-      await bulkApproveRecords(selectedApprovalIds);
-      toast.success(`Approved ${selectedApprovalIds.length} students`);
-      setSelectedApprovalIds([]);
-      await refreshHodApprovals();
-      fetchClass();
-    } catch (err) {
-      toast.error(err?.message || 'Bulk approval failed');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleHodReset = async (approvalId) => {
-    setSubmitting(true);
-    try {
-      await updateApproval(approvalId, { action: 'pending', dueType: null, remarks: null });
-      toast.success('Approval reset to pending');
-      await refreshHodApprovals();
-      fetchClass();
-    } catch (err) {
-      toast.error(err?.message || 'Failed to reset approval');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const openHodDueModal = (row) => {
-    setHodDueModal(row);
-    setHodDueForm({ dueType: 'other', remarks: '' });
-  };
-
-  const handleHodMarkDue = async () => {
-    if (!hodDueModal?._id) return;
-    setSubmitting(true);
-    try {
-      await markDueRecord({
-        approvalId: hodDueModal._id,
-        dueType: hodDueForm.dueType,
-        remarks: hodDueForm.remarks?.trim() || null,
-      });
-      toast.success(`Due marked by ${formatRole(user?.role)}`);
-      setHodDueModal(null);
-      setHodDueForm({ dueType: 'other', remarks: '' });
-      await refreshHodApprovals();
-      fetchClass();
-    } catch (err) {
-      toast.error(err?.message || 'Failed to mark due');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (loading && !classData.name) {
     return (
@@ -897,13 +736,7 @@ const SUBJECT_COLS = [
           </div>
         )}
 
-        {tab === 'approval' && isHod && (
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => refreshHodApprovals()} className="text-navy border border-muted hover:bg-offwhite">
-              <RefreshCw size={14} /> Reload
-            </Button>
-          </div>
-        )}
+
       </div>
 
       <div className={tab === 'students' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
@@ -1015,64 +848,7 @@ const SUBJECT_COLS = [
           )}
       </div>
 
-      <div className={tab === 'approval' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
-        {!isHod ? null : !activeBatch ? (
-          <div className="bg-white rounded-3xl border border-muted border-dashed p-12 text-center transition-all duration-300 hover:border-navy/30 hover:bg-offwhite/50">
-            <CheckCircle size={48} className="text-muted-foreground/30 mx-auto mb-4" />
-            <h4 className="text-lg font-black text-navy mb-2">No Active Approval Queue</h4>
-            <p className="text-sm text-muted-foreground max-w-[360px] mx-auto">
-              Start a clearance cycle for this class to begin HoD approvals for every student.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl border border-muted/60 p-5 shadow-sm flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-navy/50">HoD Clearance Desk</p>
-                <p className="text-sm text-muted-foreground">
-                  Every student in the active batch must receive HoD approval here before full clearance can finish.
-                </p>
-              </div>
-              <Badge status={hodApprovalStats.pending > 0 ? 'pending' : 'approved'}>
-                {hodApprovalStats.pending > 0 ? `${hodApprovalStats.pending} Pending` : 'All Reviewed'}
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: 'Total', value: hodApprovalStats.total, tone: 'text-navy' },
-                { label: 'Pending', value: hodApprovalStats.pending, tone: 'text-amber-600' },
-                { label: 'Approved', value: hodApprovalStats.approved, tone: 'text-emerald-600' },
-                { label: 'Dues', value: hodApprovalStats.dueMarked, tone: 'text-red-600' },
-              ].map((card) => (
-                <div key={card.label} className="bg-white rounded-2xl border border-muted/60 p-5 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{card.label}</p>
-                  <p className={`text-2xl font-black mt-2 ${card.tone}`}>{card.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <Table
-              columns={HOD_APPROVAL_COLS}
-              data={hodApprovals}
-              loading={approvalsLoading}
-              selectable
-              selection={selectedApprovalIds}
-              onSelectionChange={setSelectedApprovalIds}
-              searchable
-              searchPlaceholder="Search by roll no or student name..."
-              showCount
-              bulkActions={[
-                {
-                  label: 'Approve Selected',
-                  icon: CheckCircle,
-                  onClick: handleHodBulkApprove,
-                }
-              ]}
-            />
-          </div>
-        )}
-      </div>
+      {/* HoD Approvals tab removed */}
 
       {showInitiate && (
         <Modal isOpen={showInitiate} title="Initiate Clearance Cycle" onClose={() => setShowInitiate(false)}>
@@ -1626,51 +1402,7 @@ const SUBJECT_COLS = [
         </div>
       </Modal>
 
-      {hodDueModal && (
-        <Modal isOpen={!!hodDueModal} title="Mark HoD Due" onClose={() => setHodDueModal(null)}>
-          <div className="space-y-6">
-            <div className="p-5 rounded-2xl bg-offwhite/50 border border-muted/40 shadow-sm">
-              <p className="text-xs font-black text-navy uppercase tracking-widest">{hodDueModal.studentName}</p>
-              <p className="text-[10px] text-muted-foreground font-bold mt-1">
-                {hodDueModal.studentRollNo} · {classData?.name}
-              </p>
-            </div>
 
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Due Type</label>
-              <select
-                value={hodDueForm.dueType}
-                onChange={(e) => setHodDueForm((prev) => ({ ...prev, dueType: e.target.value }))}
-                className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
-              >
-                <option value="library">Library</option>
-                <option value="lab">Lab</option>
-                <option value="fees">Fees</option>
-                <option value="attendance">Attendance</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Remarks</label>
-              <textarea
-                rows={4}
-                value={hodDueForm.remarks}
-                onChange={(e) => setHodDueForm((prev) => ({ ...prev, remarks: e.target.value }))}
-                placeholder="Explain why this student should remain blocked at HoD stage..."
-                className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-medium resize-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
-              <Button variant="ghost" onClick={() => setHodDueModal(null)}>Cancel</Button>
-              <Button variant="primary" onClick={handleHodMarkDue} loading={submitting}>
-                Mark Due
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       <ConfirmModal
         isOpen={showBulkRemoveSubjects}

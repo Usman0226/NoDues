@@ -48,13 +48,13 @@ export const initChangeStreams = async () => {
                 if (operationType === 'update' || operationType === 'insert') {
                     const { studentId, facultyId, batchId, action } = fullDocument;
                     if (studentId) {
-                        pushEvent([studentId.toString()], 'approval_update', { 
+                        pushEvent([studentId.toString()], 'APPROVAL_UPDATED', { 
                             batchId: batchId?.toString(),
                             action 
                         });
                     }
                     if (facultyId) {
-                        pushEvent([facultyId.toString()], 'pending_list_update', { 
+                        pushEvent([facultyId.toString()], 'PENDING_LIST_UPDATE', { 
                             batchId: batchId?.toString() 
                         });
                     }
@@ -90,7 +90,7 @@ export const initChangeStreams = async () => {
                 if (operationType === 'update' || operationType === 'insert') {
                     const { studentId, batchId, status } = fullDocument;
                     if (studentId) {
-                        pushEvent([studentId.toString()], 'request_status_change', { 
+                        pushEvent([studentId.toString()], 'REQUEST_STATUS_CHANGE', { 
                             batchId: batchId?.toString(),
                             status 
                         });

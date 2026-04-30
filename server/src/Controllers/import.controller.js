@@ -15,6 +15,7 @@ import crypto from 'crypto';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import Task from '../models/Task.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import {bulkSyncMentorUpdate} from "../utils/batchSync.js"
 
 const validateEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
 

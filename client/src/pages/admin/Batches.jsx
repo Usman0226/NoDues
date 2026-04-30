@@ -208,7 +208,7 @@ const Batches = () => {
             className="text-navy border border-navy/10 hover:bg-navy hover:text-white group h-8"
           >
             <Eye size={12} className="mr-2 group-hover:scale-110 transition-transform" />
-            <span className="text-[9px] font-black uppercase tracking-widest">View Details</span>
+            <span className="text-[9px] font-black uppercase tracking-widest">View </span>
           </Button>
           
           {row.status === 'active' && (

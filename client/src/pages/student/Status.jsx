@@ -130,13 +130,6 @@ const REGISTRY_GROUPS = [
     icon: UserCheck,
     gradient: 'from-emerald-500 to-teal-600'
   },
-  { 
-    id: 'hod', 
-    label: 'Department', 
-    filter: (a) => ['hod', 'ao'].includes(a.roleTag) && a.approvalType === 'hodApproval', 
-    icon: Shield,
-    gradient: 'from-purple-500 to-navy'
-  },
   {
     id: 'co-curricular',
     label: 'Co-Curricular',
@@ -388,8 +381,17 @@ const StudentStatus = () => {
     clearanceData.approvals || []
   , [clearanceData.approvals]);
 
+  const lastRefreshTimeRef = React.useRef(0);
+
   const handleRefresh = React.useCallback(async (mode = 'silent') => {
     const isManual = mode === 'manual';
+    const now = Date.now();
+    
+    if (!isManual && now - lastRefreshTimeRef.current < 1000) {
+      return;
+    }
+    
+    lastRefreshTimeRef.current = now;
     const hide = isManual ? showGlobalLoader('Syncing Your Records...') : () => {};
     try {
       await fetchStatus();
@@ -407,16 +409,16 @@ const StudentStatus = () => {
   // Track the last time an SSE event arrived — used by the polling fallback below
   const lastSseEventRef = React.useRef(Date.now());
 
-  useSSE(clearanceData?.batchId && !isHistoryMode ? getBatchSSEUrl(clearanceData.batchId) : null, (event) => {
-    const name = event?.event?.toUpperCase();
-    if (['APPROVAL_UPDATED', 'BATCH_UPDATED', 'BATCH_CLOSED', 'BATCH_INITIATED'].includes(name)) {
+  const sseEvents = React.useMemo(() => ['APPROVAL_UPDATED', 'REQUEST_STATUS_CHANGE'], []);
+  
+  useSSE(clearanceData?.batchId && !isHistoryMode ? getBatchSSEUrl(clearanceData.batchId) : null, (eventObj) => {
+    const name = eventObj?.event?.toUpperCase();
+    if (sseEvents.includes(name)) {
       lastSseEventRef.current = Date.now();
       handleRefresh('silent');
     }
-  });
+  }, sseEvents);
 
-  // Polling fallback: if SSE has been silent for >30s (Cloudflare/Render proxy drops stream)
-  // poll every 30s so the student always sees fresh data
   React.useEffect(() => {
     if (isHistoryMode || !clearanceData?.batchId) return;
     const interval = setInterval(() => {
@@ -440,7 +442,6 @@ const StudentStatus = () => {
     });
   }, [approvals, activeFilter]);
 
-  // ── DYNAMIC GROUPING ENGINE
   const groupedApprovals = React.useMemo(() => {
     const groups = {};
     const seenIds = new Set();

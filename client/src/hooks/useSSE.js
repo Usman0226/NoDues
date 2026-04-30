@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 
-const useSSE = (url, onMessage) => {
+const useSSE = (url, onMessage, eventNames = []) => {
   const sourceRef     = useRef(null);
   const retryTimerRef = useRef(null);
   const retryCountRef = useRef(0);
@@ -21,21 +21,39 @@ const useSSE = (url, onMessage) => {
     const source = new EventSource(url, { withCredentials: true });
     sourceRef.current = source;
 
+    const handleEvent = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.debug(`[SSE] ${event.type} received:`, data);
+        onMessageRef.current?.({ 
+          event: event.type, 
+          data: data,
+          ts: Date.now()
+        });
+      } catch {
+        console.debug(`[SSE] ${event.type} raw received:`, event.data);
+        onMessageRef.current?.({ 
+          event: event.type, 
+          data: event.data,
+          ts: Date.now()
+        });
+      }
+    };
+
     source.onopen = () => {
       console.log(`[SSE] Connected to ${url}`);
       retryCountRef.current = 0; 
     };
 
-    source.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.debug('[SSE] Message received:', data);
-        onMessageRef.current?.(data);
-      } catch {
-        console.debug('[SSE] Raw message received:', event.data);
-        onMessageRef.current?.(event.data);
-      }
-    };
+    // Default message listener
+    source.onmessage = handleEvent;
+
+    // Specific event listeners
+    if (eventNames && eventNames.length > 0) {
+      eventNames.forEach(name => {
+        source.addEventListener(name, handleEvent);
+      });
+    }
 
     source.onerror = (err) => {
       console.error('[SSE] Connection error:', err);
@@ -49,7 +67,7 @@ const useSSE = (url, onMessage) => {
       console.log(`[SSE] Retrying in ${delay}ms... (Attempt ${retryCountRef.current})`);
       retryTimerRef.current = setTimeout(() => connectRef.current?.(), delay);
     };
-  }, [url]);
+  }, [url, JSON.stringify(eventNames)]); // Re-connect if URL or event list changes
 
   useEffect(() => {
     connectRef.current = connect;

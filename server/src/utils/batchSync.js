@@ -708,17 +708,7 @@ export const generateStudentSnapshotData = (student, cls, {
   const snapshot = {};
 
   // 1. HOD/AO
-  if (hodAccount) {
-    const isAO = hodAccount.roleTags?.includes('ao') && !hodAccount.roleTags?.includes('hod');
-    snapshot['hod'] = {
-      facultyId: hodAccount._id,
-      facultyName: hodAccount.name,
-      roleTag: isAO ? 'ao' : 'hod',
-      approvalType: 'hodApproval',
-      subjectId: null,
-      subjectName: isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
-    };
-  }
+  // HoD/AO clearance removed per user request (2026-04-29)
 
   // 2. Class Subjects
   for (const s of cls.subjectAssignments ?? []) {

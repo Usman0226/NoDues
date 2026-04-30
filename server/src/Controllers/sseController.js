@@ -17,21 +17,40 @@ const removeClient = (userId, res) => {
   if (clients.get(userId)?.size === 0) clients.delete(userId);
 };
 
-/**
- * Push a typed event to all connected clients for the given userIds.
- * @param {string[]} userIds
- * @param {string}   eventName  - e.g. 'approval_update'
- * @param {object}   payload
- */
+// De-duplication cache: Map<userId_eventName_payloadHash, lastSentTimestamp>
+const recentEvents = new Map();
+
+// Cleanup interval for the de-duplication cache (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of recentEvents.entries()) {
+    if (now - timestamp > 5000) recentEvents.delete(key);
+  }
+}, 300_000);
+
+
 export const pushEvent = (userIds, eventName, payload) => {
   const data = JSON.stringify({ event: eventName, ...payload });
   const eventId = Date.now();
+  
+  // Create a fingerprint for de-duplication
+  const payloadStr = JSON.stringify(payload);
+
   for (const uid of userIds) {
+    const fingerPrint = `${uid}_${eventName}_${payloadStr}`;
+    const lastSent = recentEvents.get(fingerPrint);
+    
+    // Skip if identical event was sent to this user in the last 1000ms
+    if (lastSent && eventId - lastSent < 1000) {
+      continue;
+    }
+    
+    recentEvents.set(fingerPrint, eventId);
+
     const connections = clients.get(uid);
     if (!connections) continue;
     for (const res of connections) {
       try {
-        // Named events let browsers send Last-Event-ID on reconnect (critical for proxied SSE)
         res.write(`id: ${eventId}\nevent: ${eventName}\ndata: ${data}\n\n`);
       } catch (e) {
         logger.warn('SSE write failed', { userId: uid, error: e.message });
@@ -43,8 +62,10 @@ export const pushEvent = (userIds, eventName, payload) => {
 
 export const sseConnect = (req, res) => {
   const { userId } = req.user;
+  const { id: contextId } = req.params; // Supports /batch/:id or /department/:id
+  const path = req.path;
 
-  // SSE headers - Hardened for production proxies (Nginx, Cloudflare, Load Balancers)
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -60,7 +81,7 @@ export const sseConnect = (req, res) => {
   res.write('retry: 10000\n\n');
 
   // Send initial heartbeat so the browser knows the connection is live
-  res.write(`event: connected\ndata: ${JSON.stringify({ userId, ts: Date.now() })}\n\n`);
+  res.write(`event: connected\ndata: ${JSON.stringify({ userId, ts: Date.now(), context: contextId || 'global' })}\n\n`);
 
   addClient(userId, res);
 
@@ -68,7 +89,8 @@ export const sseConnect = (req, res) => {
     timestamp: new Date().toISOString(),
     actor: userId,
     action: 'SSE_CONNECT',
-    resource_id: null,
+    resource_id: contextId || null,
+    metadata: { path }
   });
 
   // Heartbeat every 15s (reduced from 25s) to prevent proxy/firewall timeouts

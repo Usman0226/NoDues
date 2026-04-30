@@ -61,8 +61,6 @@ const FILTERS = ['all', 'pending', 'approved', 'due_marked'];
 
 
 const getApprovalLabel = (item) => {
-  if (item.roleTag === 'ao') return 'AO Approval';
-  if (item.roleTag === 'hod' || item.approvalType === 'hodApproval' || item.approvalType === 'office') return 'HoD Approval';
   if (item.approvalType === 'classTeacher') return 'Class Teacher';
   if (item.approvalType === 'mentor') return 'Mentor Approval';
   if (item.approvalType === 'coCurricular') return item.itemTypeName || 'Co-Curricular';
@@ -303,46 +301,35 @@ const Pending = () => {
     });
   }, [fetchApprovals, page, limit, debouncedSearch, selectedBatch, filter, approvalType, itemTypeId, facultyId]);
 
+  const sseEvents = React.useMemo(() => ['APPROVAL_UPDATED', 'PENDING_LIST_UPDATE'], []);
+  
   useSSE(
     sseUrl,
-    useCallback(
-      (event) => {
-        if (event?.event !== 'APPROVAL_UPDATED') return;
+    (eventObj) => {
+      const { event: eventName, data: eventData } = eventObj;
+      if (eventName !== 'APPROVAL_UPDATED' && eventName !== 'PENDING_LIST_UPDATE') return;
 
-        // If the event carries a specific approvalId+action, apply it in-place.
-        // This avoids a full refetch when OUR OWN approve/mark-due action echoes back via SSE.
-        const { approvalId, action: incomingAction, bulk } = event;
+      const { approvalId, action: incomingAction, bulk } = eventData || {};
+      if (approvalId && incomingAction && !bulk) {
+        setResponse((prev) => {
+          const rows = Array.isArray(prev) ? prev : (prev?.data || []);
+          const target = rows.find((a) => a._id === approvalId);
+          if (!target || target.action === incomingAction) return prev;
 
-        if (approvalId && incomingAction && !bulk) {
-          setResponse((prev) => {
-            // Check if this row already matches — if so, no-op (we already set it optimistically)
-            const rows = Array.isArray(prev) ? prev : (prev?.data || []);
-            const target = rows.find((a) => a._id === approvalId);
-            if (!target || target.action === incomingAction) return prev; // already up to date
+          const update = (a) =>
+            a._id === approvalId
+              ? { ...a, action: incomingAction, dueType: eventData.dueType ?? null, remarks: eventData.remarks ?? null }
+              : a;
 
-            // Row exists but differs — apply the remote update in-place
-            const update = (a) =>
-              a._id === approvalId
-                ? { ...a, action: incomingAction, dueType: event.dueType ?? null, remarks: event.remarks ?? null }
-                : a;
-
-            if (Array.isArray(prev)) return prev.map(update);
-            if (prev?.data) return { ...prev, data: prev.data.map(update) };
-            return prev;
-          });
-        } else {
-          // Bulk event or cross-session event — do a full refetch
-          fetchApprovals({
-            page,
-            limit,
-            search: debouncedSearch,
-            batchId: selectedBatch !== 'all' ? selectedBatch : undefined,
-            action: filter
-          });
-        }
-      },
-      [fetchApprovals, setResponse, page, limit, debouncedSearch, selectedBatch, filter]
-    )
+          if (Array.isArray(prev)) return prev.map(update);
+          if (prev?.data) return { ...prev, data: prev.data.map(update) };
+          return prev;
+        });
+      } else {
+        fetchApprovals({ page, limit, search: debouncedSearch, batchId: selectedBatch !== 'all' ? selectedBatch : undefined, action: filter });
+      }
+    },
+    sseEvents
   );
 
   const handleUndo = async (id) => {
