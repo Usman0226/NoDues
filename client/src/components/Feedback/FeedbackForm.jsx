@@ -7,19 +7,11 @@ import { submitFeedback } from '../../api/feedback';
 import Button from '../ui/Button';
 import { toast } from 'react-hot-toast';
 
-const categories = [
-  { id: 'general', label: 'General', icon: MessageSquare, color: 'text-slate-500' },
-  { id: 'ui', label: 'UI/UX', icon: Zap, color: 'text-indigo-500' },
-  { id: 'bugs', label: 'Bugs', icon: Bug, color: 'text-rose-500' },
-  { id: 'speed', label: 'Speed', icon: Zap, color: 'text-amber-500' },
-  { id: 'feature_request', label: 'Feature', icon: Lightbulb, color: 'text-emerald-500' },
-];
 
 const FeedbackForm = ({ onSuccess, onCancel }) => {
   const { user } = useAuth();
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
-  const [category, setCategory] = useState('general');
   const [description, setDescription] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -40,7 +32,6 @@ const FeedbackForm = ({ onSuccess, onCancel }) => {
 
     request({
       rating,
-      category,
       description,
       page: window.location.pathname,
       userAgent: navigator.userAgent

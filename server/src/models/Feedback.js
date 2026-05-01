@@ -7,11 +7,6 @@ const feedbackSchema = new mongoose.Schema({
     min: 1,
     max: 5
   },
-  category: {
-    type: String,
-    enum: ['ui', 'speed', 'bugs', 'general', 'feature_request'],
-    default: 'general'
-  },
   description: {
     type: String,
     maxLength: [1000, 'Description cannot exceed 1000 characters']

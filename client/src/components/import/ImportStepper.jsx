@@ -57,6 +57,8 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
     const validCount = previewData?.valid?.length || 0;
     const taskLabel = `Importing ${validCount} ${type}`;
     
+    setLoading(true);
+
     // Create background task
     const taskId = addBackgroundTask({
       label: taskLabel,
@@ -64,7 +66,9 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       message: 'Initializing background sync...'
     });
 
-    // toast.success('Sync started in background'); // Removed to stay in modal
+    // Close modal immediately as it's a background operation
+    onComplete?.();
+    toast.success('Sync started in background');
 
     try {
       const payload = type === 'students' 
@@ -89,7 +93,6 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       }
       
       toast.success(`${type} sync finished`);
-      onComplete?.(); // Close only on success
     } catch (err) {
       const errorMsg = err?.message || 'Connection lost during sync';
       updateBackgroundTask(taskId, { 

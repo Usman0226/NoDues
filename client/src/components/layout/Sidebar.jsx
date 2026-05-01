@@ -6,7 +6,7 @@ import { ROLES } from '../../utils/constants';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardCheck,
   Shield, History, ChevronLeft, ChevronRight,
-  Building2, AlertTriangle, Layers, X, GraduationCap, Inbox, MessageSquarePlus
+  Building2, AlertTriangle, Layers, X, GraduationCap, Inbox, MessageSquarePlus, MessageSquare
 } from 'lucide-react';
 import { useFeedback } from '../../hooks/useFeedback';
 import FeedbackModal from '../Feedback/FeedbackModal';
@@ -17,6 +17,7 @@ const NAV_CONFIG = {
     { label: 'General', icon: LayoutDashboard, items: [
       { label: 'Dashboard', path: '/admin', icon: LayoutDashboard },
       { label: 'Email Monitor', path: '/admin/email-monitor', icon: Inbox },
+      { label: 'User Feedback', path: '/admin/feedback', icon: MessageSquare },
     ]},
     { label: 'Management', icon: Building2, items: [
       { label: 'Departments', path: '/admin/departments', icon: Building2 },

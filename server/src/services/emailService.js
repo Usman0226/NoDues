@@ -286,13 +286,13 @@ export const sendMail = async ({ to, subject, html, role = 'system', triggeredBy
 
 export const sendFeedbackEmail = async (feedbackData, user) => {
   const adminEmail = process.env.ADMIN_EMAIL || 'chandrakant@nodues.com';
-  const { rating, category, description, page, userAgent } = feedbackData;
+  const { rating, description, page, userAgent } = feedbackData;
   
   const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
   const ratingColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
   const ratingColor = ratingColors[rating - 1] || '#2563eb';
 
-  const subject = `[Feedback ${rating}/5] ${category.toUpperCase()} - From ${user.name}`;
+  const subject = `[Feedback ${rating}/5] New Rating Received - From ${user.name}`;
   const html = `
     <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; color: #1f2937;">
       <div style="background: #2563eb; padding: 24px; color: white;">
@@ -305,9 +305,6 @@ export const sendFeedbackEmail = async (feedbackData, user) => {
           <div style="font-size: 24px; color: ${ratingColor}; margin-right: 12px; letter-spacing: 2px;">
             ${stars}
           </div>
-          <span style="background: #f3f4f6; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #4b5563;">
-            ${category.replace('_', ' ')}
-          </span>
         </div>
 
         <div style="background: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 24px;">

@@ -10,7 +10,7 @@ import logger from '../utils/logger.js';
  * @access  Private
  */
 export const submitFeedback = asyncHandler(async (req, res, next) => {
-  const { rating, category, description, page, userAgent } = req.body;
+  const { rating, description, page, userAgent } = req.body;
 
   if (!rating || !description || !page) {
     return next(new ErrorResponse('Please provide rating, description and page', 400, 'FEEDBACK_MISSING_FIELDS'));
@@ -31,7 +31,6 @@ export const submitFeedback = asyncHandler(async (req, res, next) => {
 
   const feedback = await Feedback.create({
     rating,
-    category,
     description,
     submittedBy,
     page,
@@ -39,7 +38,7 @@ export const submitFeedback = asyncHandler(async (req, res, next) => {
   });
 
   // Non-blocking email notification to admin
-  emailService.sendFeedbackEmail({ rating, category, description, page, userAgent }, req.user)
+  emailService.sendFeedbackEmail({ rating, description, page, userAgent }, req.user)
     .catch(err => logger.error('Feedback email dispatch failed', { error: err.message }));
 
   // Audit event
@@ -60,12 +59,12 @@ export const submitFeedback = asyncHandler(async (req, res, next) => {
  * @access  Private/Admin
  */
 export const getFeedback = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, category, rating } = req.query;
+  const { page = 1, limit = 10, rating } = req.query;
 
   const query = {};
-  if (category) query.category = category;
-  if (rating) query.rating = rating;
+  if (rating) query.rating = Number(rating);
 
+  console.log('Feedback Query:', query);
   const skip = (Number(page) - 1) * Number(limit);
 
   const [feedback, total] = await Promise.all([
@@ -78,6 +77,8 @@ export const getFeedback = asyncHandler(async (req, res, next) => {
     Feedback.countDocuments(query)
   ]);
 
+  console.log('Feedback Found:', feedback.length, 'Total:', total);
+
   res.status(200).json({
     success: true,
     data: feedback,
@@ -86,5 +87,63 @@ export const getFeedback = asyncHandler(async (req, res, next) => {
       page: Number(page),
       pages: Math.ceil(total / Number(limit))
     }
+  });
+});
+
+/**
+ * @desc    Update feedback status
+ * @route   PATCH /api/feedback/:id
+ * @access  Private/Admin
+ */
+export const updateFeedback = asyncHandler(async (req, res, next) => {
+  const { status } = req.body;
+
+  let feedback = await Feedback.findById(req.params.id);
+
+  if (!feedback) {
+    return next(new ErrorResponse('Feedback not found', 404, 'FEEDBACK_NOT_FOUND'));
+  }
+
+  feedback = await Feedback.findByIdAndUpdate(req.params.id, { status }, {
+    new: true,
+    runValidators: true
+  });
+
+  // Audit event
+  logger.audit('FEEDBACK_UPDATED', { 
+    actor: req.user.userId, 
+    resource_id: feedback._id,
+    action: `Status set to ${status}`
+  });
+
+  res.status(200).json({
+    success: true,
+    data: feedback
+  });
+});
+
+/**
+ * @desc    Delete feedback
+ * @route   DELETE /api/feedback/:id
+ * @access  Private/Admin
+ */
+export const deleteFeedback = asyncHandler(async (req, res, next) => {
+  const feedback = await Feedback.findById(req.params.id);
+
+  if (!feedback) {
+    return next(new ErrorResponse('Feedback not found', 404, 'FEEDBACK_NOT_FOUND'));
+  }
+
+  await Feedback.findByIdAndDelete(req.params.id);
+
+  // Audit event
+  logger.audit('FEEDBACK_DELETED', { 
+    actor: req.user.userId, 
+    resource_id: req.params.id 
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {}
   });
 });

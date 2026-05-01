@@ -1,13 +1,24 @@
 {
-  "last_updated": "2026-04-29T04:04:00Z",
-  "completed": ["Implement Forgot Password feature"],
+  "last_updated": "2026-04-30T13:35:00Z",
+  "completed": [
+    "Implement Admin Feedback Dashboard",
+    "Secure feedback API for Admin-only access",
+    "Add status management (PATCH) and deletion (DELETE) for feedback",
+    "Create FeedbackReview frontend page with filtering and pagination",
+    "Strictly restrict feedback management to Admin role across UI and Backend"
+  ],
   "in_progress": [],
   "pending": [],
   "decisions": [
     { 
-      "context": "UI transition for Forgot Password", 
-      "decision": "Use a 'view' state with Framer Motion in Login.jsx", 
-      "trade_offs": "Slightly more complex state management in Login.jsx but significantly better UX and animations." 
+      "context": "Frontend date formatting", 
+      "decision": "Switched from date-fns to native Intl.DateTimeFormat to avoid adding new dependencies and fix Vite 500 errors.", 
+      "trade_offs": "Native Intl is slightly more verbose but avoids bundle bloat and installation issues." 
+    },
+    {
+      "context": "Access Control",
+      "decision": "Implemented triple-layer protection (Backend RoleGuard, AppRouter ProtectedRoute, and Component-level useAuth check).",
+      "trade_offs": "Redundant but ensures maximum security as requested by the user."
     }
   ],
   "blockers": []

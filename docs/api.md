@@ -479,7 +479,7 @@ curl -X POST http://localhost:5000/api/feedback \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <token>" \
   -d '{
-    "type": "bug",
+    "category": "bugs",
     "description": "The table alignment is slightly off on mobile devices.",
     "page": "/faculty/pending",
     "userAgent": "Mozilla/5.0..."
@@ -490,13 +490,68 @@ Sample Response (201):
   "success": true,
   "data": {
     "_id": "6627a3f2e4b0c9d8f9999000",
-    "type": "bug",
+    "category": "bugs",
     "description": "The table alignment is slightly off on mobile devices.",
     "status": "open"
   }
 }
 
 Error Codes: 400 (validation), 401 (auth)
+
+---
+
+### GET /api/feedback
+Description: Retrieve all user feedback (Admin only). Supports pagination and filtering.
+
+curl -X GET "http://localhost:5000/api/feedback?page=1&limit=10&category=bugs&rating=5" \
+  -H "Authorization: Bearer <token>"
+
+Sample Response (200):
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "6627a3f2e4b0c9d8f9999000",
+      "rating": 5,
+      "category": "bugs",
+      "description": "...",
+      "submittedBy": { "name": "Jane Doe", "role": "student", "identifier": "21CSE099" },
+      "status": "open",
+      "createdAt": "2026-04-30T10:00:00Z"
+    }
+  ],
+  "pagination": { "page": 1, "limit": 10, "total": 45, "pages": 5 }
+}
+
+Error Codes: 401 (auth), 403 (access denied)
+
+---
+
+### PATCH /api/feedback/:id
+Description: Update feedback status (Admin only).
+
+curl -X PATCH http://localhost:5000/api/feedback/6627a3f2e4b0c9d8f9999000 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{ "status": "in-review" }'
+
+Sample Response (200):
+{ "success": true, "data": { "_id": "6627a3f2e4b0c9d8f9999000", "status": "in-review" } }
+
+Error Codes: 401 (auth), 403 (access denied), 404 (not found)
+
+---
+
+### DELETE /api/feedback/:id
+Description: Delete a feedback record permanently (Admin only).
+
+curl -X DELETE http://localhost:5000/api/feedback/6627a3f2e4b0c9d8f9999000 \
+  -H "Authorization: Bearer <token>"
+
+Sample Response (200):
+{ "success": true, "data": {} }
+
+Error Codes: 401 (auth), 403 (access denied), 404 (not found)
 
 ---
 

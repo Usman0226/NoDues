@@ -44,6 +44,7 @@ import Subjects from './pages/admin/Subjects';
 import Batches from './pages/admin/Batches';
 import EmailMonitor from './pages/admin/EmailMonitor';
 import CoCurricular from './pages/admin/CoCurricular';
+import FeedbackReview from './pages/admin/FeedbackReview';
 
 import HodDashboard from './pages/hod/Dashboard';
 import Dues from './pages/hod/Dues';
@@ -260,6 +261,7 @@ const AppContent = () => {
             <Route path="/admin/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
             <Route path="/admin/co-curricular" element={<CoCurricular />} />
             <Route path="/admin/email-monitor" element={<EmailMonitor />} />
+            <Route element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><FeedbackReview /></ProtectedRoute>} path="/admin/feedback" />
             <Route path="/change-password" element={<ChangePassword />} />
 
             <Route path="/hod" element={<HodDashboard />} />
