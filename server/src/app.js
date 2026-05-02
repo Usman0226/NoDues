@@ -70,8 +70,6 @@ app.use(compression({
   level: 6, 
   threshold: 1024,
   filter: (req, res) => {
-    // Disable compression for SSE routes to prevent buffering
-    // Check both the URL and the Accept header for maximum reliability
     if (req.originalUrl?.includes('/sse') || req.headers.accept === 'text/event-stream') {
       return false;
     }
@@ -87,7 +85,6 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// Apply health check limiter specifically
 app.get('/api/health', healthLimiter, (_req, res) => {
   res.status(200).json({
     success: true,
@@ -99,8 +96,7 @@ app.get('/api/health', healthLimiter, (_req, res) => {
   });
 });
 
-// Apply global API rate limiter to all routes starting with /api
-// except for health check which has its own above
+
 app.use('/api', apiLimiter);
 
 app.use('/api/auth',        authRoutes);

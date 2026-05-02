@@ -1,10 +1,31 @@
 import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
 import logger from '../utils/logger.js';
 
+const isFacultyOrAdmin = (req) => {
+  if (process.env.NODE_ENV === 'test') return true;
+
+  const token = req.cookies?.nds_token || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null);
+
+  if (token) {
+    try {
+      const decoded = jwt.decode(token);
+      if (!decoded) return false;
+
+      const userRoles = decoded.roleTags || (decoded.role ? [decoded.role] : []);
+      const exemptedRoles = ['admin', 'faculty', 'hod', 'ao'];
+      
+      return exemptedRoles.some(role => userRoles.includes(role));
+    } catch (err) {
+      return false;
+    }
+  }
+  return false;
+};
 
 export const apiLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 500, 
+  windowMs: 2 * 60 * 1000, 
+  max: 1000, 
   standardHeaders: true, 
   legacyHeaders: false,
   message: {
@@ -24,7 +45,7 @@ export const apiLimiter = rateLimit({
     });
     res.status(options.statusCode).send(options.message);
   },
-  skip: (req) => process.env.NODE_ENV === 'test'
+  skip: isFacultyOrAdmin
 });
 
 
@@ -75,7 +96,8 @@ export const importLimiter = rateLimit({
       actor: req.user?.id || 'anonymous'
     });
     res.status(options.statusCode).send(options.message);
-  }
+  },
+  skip: isFacultyOrAdmin
 });
 
 

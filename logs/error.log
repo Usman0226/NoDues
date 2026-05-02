@@ -1,0 +1,1 @@
+{"level":"error","message":"Critical: MongoDB Connection failed after 5 attempts: The `uri` parameter to `openUri()` must be a string, got \"undefined\". Make sure the first parameter to `mongoose.connect()` or `mongoose.createConnection()` is a string.","timestamp":"2026-05-02T06:15:34.698Z"}
