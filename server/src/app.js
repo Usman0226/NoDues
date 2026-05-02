@@ -26,7 +26,7 @@ import coCurricularRoutes from './Routes/coCurricular.routes.js';
 import notificationRoutes from './Routes/notification.routes.js';
 import feedbackRoutes     from './Routes/feedback.routes.js';
 
-import { apiLimiter, healthLimiter } from './middlewares/rateLimiter.js';
+// import { apiLimiter, healthLimiter } from './middlewares/rateLimiter.js';
 
 const app = express();
 
@@ -85,7 +85,7 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-app.get('/api/health', healthLimiter, (_req, res) => {
+app.get('/api/health',  (_req, res) => {
   res.status(200).json({
     success: true,
     data: {
@@ -97,7 +97,7 @@ app.get('/api/health', healthLimiter, (_req, res) => {
 });
 
 
-app.use('/api', apiLimiter);
+// app.use('/api', apiLimiter);
 
 app.use('/api/auth',        authRoutes);
 app.use('/api/departments', departmentRoutes);
