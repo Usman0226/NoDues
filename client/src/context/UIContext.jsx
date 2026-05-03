@@ -11,6 +11,8 @@ export const UIProvider = ({ children }) => {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [backgroundTasks, setBackgroundTasks] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isFocusMode, setIsFocusMode] = useState(false);
   const timeoutRef = useRef(null);
   const pollIntervalRef = useRef(null);
   const notifPollIntervalRef = useRef(null);
@@ -175,7 +177,11 @@ export const UIProvider = ({ children }) => {
       refreshTasks: fetchTasks,
       refreshNotifications: fetchNotifications,
       showGlobalLoader, 
-      hideGlobalLoader 
+      hideGlobalLoader,
+      sidebarCollapsed,
+      setSidebarCollapsed,
+      isFocusMode,
+      setIsFocusMode
     }}>
       {children}
     </UIContext.Provider>

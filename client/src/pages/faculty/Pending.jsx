@@ -181,7 +181,7 @@ const Pending = () => {
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const { showGlobalLoader } = useUI();
+  const { showGlobalLoader, setIsFocusMode, setSidebarCollapsed } = useUI();
   const { user } = useAuth();
 
   const requestTypeOptions = useMemo(() => {
@@ -210,6 +210,37 @@ const Pending = () => {
       return () => clearTimeout(timer);
     }
   }, [loading, response]);
+
+  // Focus Mode Logic: Collapse sidebar and shrink header on scroll
+  useEffect(() => {
+    const handleScroll = (e) => {
+      const scrollY = e.target.scrollTop;
+      if (scrollY > 60) {
+        setIsFocusMode(true);
+        setSidebarCollapsed(true);
+      } else {
+        setIsFocusMode(false);
+      }
+    };
+
+    const mainContent = document.getElementById('main-content-viewport');
+    if (mainContent) {
+      mainContent.addEventListener('scroll', handleScroll);
+      // Immediate check in case of preserved scroll or fast navigation
+      if (mainContent.scrollTop > 60) {
+        setIsFocusMode(true);
+        setSidebarCollapsed(true);
+      }
+    }
+
+    return () => {
+      if (mainContent) {
+        mainContent.removeEventListener('scroll', handleScroll);
+      }
+      setIsFocusMode(false);
+      setSidebarCollapsed(false);
+    };
+  }, [setIsFocusMode, setSidebarCollapsed]);
 
   const tourSteps = [
     {
@@ -464,7 +495,7 @@ const Pending = () => {
       label: 'Roll No',
       sortable: true,
       render: (val) => (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-900/[0.04] text-zinc-900 border border-zinc-900/10 font-mono text-[10px] sm:text-xs font-black tracking-tight">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-900/[0.04] text-zinc-900 border border-zinc-900/10 font-mono text-xs sm:text-sm font-black tracking-widest">
           {val}
         </span>
       ),
@@ -604,7 +635,22 @@ const Pending = () => {
           />
         )}
       </AnimatePresence>
-      <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
+      <motion.div 
+        variants={container} 
+        initial="hidden" 
+        animate="show" 
+        className="space-y-6"
+        onMouseEnter={() => { 
+          setIsFocusMode(true); 
+          setSidebarCollapsed(true); 
+        }}
+        onMouseLeave={() => {
+          const mainContent = document.getElementById('main-content-viewport');
+          if (mainContent && mainContent.scrollTop <= 60) {
+            setIsFocusMode(false);
+          }
+        }}
+      >
         
 
         {/* Header Filters */}

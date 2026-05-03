@@ -71,7 +71,7 @@ const AppLayout = () => {
       <div className="flex-1 min-w-0 relative h-full flex flex-col overflow-x-hidden">
         <div className="absolute inset-0 pointer-events-none grid-overlay opacity-[0.32] -z-10" />
         <Navbar onMenuToggle={() => setMobileOpen(true)} />
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div id="main-content-viewport" className="flex-1 overflow-y-auto overflow-x-hidden">
           {!isLocked ? (
             <Outlet />
           ) : (

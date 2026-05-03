@@ -50,7 +50,7 @@ export const apiLimiter = rateLimit({
 
 
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
+  windowMs: 2 * 60 * 1000, 
   max: 10, 
   standardHeaders: true,
   legacyHeaders: false,
@@ -58,7 +58,7 @@ export const authLimiter = rateLimit({
     success: false,
     error: {
       code: 'AUTH_RATE_LIMIT_EXCEEDED',
-      message: 'Too many login attempts from this IP, please try again after 15 minutes',
+      message: 'Too many login attempts from this IP, please try again after 2 minutes',
       statusCode: 429
     }
   },

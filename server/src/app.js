@@ -8,7 +8,7 @@ import { errorHandler } from './middlewares/errorHandler.js';
 import { responseTimeLogger } from './middlewares/responseTime.js';
 import logger from './utils/logger.js';
 
-// ── Route imports ─────────────────────────────────────────────────────────────
+// Route imports 
 import authRoutes          from './Routes/auth.routes.js';
 import departmentRoutes    from './Routes/department.routes.js';
 import subjectRoutes       from './Routes/subject.routes.js';
@@ -30,7 +30,6 @@ import feedbackRoutes     from './Routes/feedback.routes.js';
 
 const app = express();
 
-// Trust proxy if behind Nginx/Cloudflare
 app.set('trust proxy', 1);
 
 app.use(responseTimeLogger);
@@ -85,7 +84,7 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-app.get('/api/health',  (_req, res) => {
+app.get('/api/health', (_req, res) => {
   res.status(200).json({
     success: true,
     data: {

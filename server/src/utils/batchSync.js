@@ -26,7 +26,7 @@ import {
   abortSafeTransaction,
   getSessionOptions,
 } from './safeTransaction.js';
-import { recalcRequestStatus } from '../Controllers/approvalController.js';
+ import { recalcRequestStatus, bulkRecalcRequestStatus } from '../Controllers/approvalController.js';
 
 // ── syncSubjectRemoval ────────────────────────────────────────────────────────
 export const syncSubjectRemoval = async (classId, subjectId) => {
@@ -38,26 +38,29 @@ export const syncSubjectRemoval = async (classId, subjectId) => {
     const activeBatch = await NodueBatch.findOne({ classId, status: 'active' }).session(session).lean();
     if (!activeBatch) {
       await commitSafeTransaction(session);
-      return; // no active batch — nothing to sync
+      return; 
     }
 
     logger.info('sync_subject_removal_started', { batchId: activeBatch._id, subjectId });
 
-    const requests = await NodueRequest.find({ batchId: activeBatch._id }).session(session);
+    // 1. Bulk Update Requests: Remove subject from snapshots
+    // Note: We use dot notation to unset a dynamic key in the Mixed object
+    await NodueRequest.updateMany(
+      { batchId: activeBatch._id },
+      { $unset: { [`facultySnapshot.${subjectId}`]: "" } },
+      getSessionOptions(session)
+    );
 
-    for (const req of requests) {
-      if (Array.isArray(req.facultySnapshot)) {
-        req.facultySnapshot = req.facultySnapshot.filter(
-          f => f.subjectId?.toString() !== subjectId.toString()
-        );
-      } else if (req.facultySnapshot && typeof req.facultySnapshot === 'object') {
-        delete req.facultySnapshot[subjectId.toString()];
-        req.markModified('facultySnapshot');
-      }
-      await req.save(getSessionOptions(session));
-    }
+    // 2. Bulk Delete Approvals
+    const deleteResult = await NodueApproval.deleteMany(
+      { batchId: activeBatch._id, subjectId, approvalType: 'subject' }, 
+      getSessionOptions(session)
+    );
 
-    const deleteResult = await NodueApproval.deleteMany({ batchId: activeBatch._id, subjectId, approvalType: 'subject' }, getSessionOptions(session));
+    // 3. Bulk Recalculate Status for all affected students
+    const affectedRequests = await NodueRequest.find({ batchId: activeBatch._id }).session(session).select('_id').lean();
+    const requestIds = affectedRequests.map(r => r._id);
+    await bulkRecalcRequestStatus(requestIds, session);
 
     await commitSafeTransaction(session);
     succeeded = true;
@@ -74,7 +77,6 @@ export const syncSubjectRemoval = async (classId, subjectId) => {
     session.endSession();
   }
 
-  // ── Cache invalidation: outside try — guaranteed to run only on success ──
   if (succeeded) {
     invalidateEntityCache('student', 'all');
     invalidateEntityCache('class', classId);
@@ -96,31 +98,29 @@ export const syncSubjectUpdate = async (classId, subjectId, facultyData) => {
 
     const { facultyId, facultyName, subjectCode } = facultyData;
 
-    const requests = await NodueRequest.find({ batchId: activeBatch._id }).session(session);
-    for (const req of requests) {
-      let updated = false;
-      if (Array.isArray(req.facultySnapshot)) {
-        const idx = req.facultySnapshot.findIndex(f => f.subjectId?.toString() === subjectId.toString());
-        if (idx !== -1) {
-          req.facultySnapshot[idx] = { ...req.facultySnapshot[idx], facultyId, facultyName, subjectCode };
-          updated = true;
-        }
-      } else if (req.facultySnapshot && req.facultySnapshot[subjectId.toString()]) {
-        req.facultySnapshot[subjectId.toString()] = {
-          ...req.facultySnapshot[subjectId.toString()],
-          facultyId, facultyName, subjectCode,
-        };
-        req.markModified('facultySnapshot');
-        updated = true;
-      }
-      if (updated) await req.save(getSessionOptions(session));
-    }
+    // 1. Bulk Update Requests: Update faculty details in snapshot
+    await NodueRequest.updateMany(
+      { batchId: activeBatch._id, [`facultySnapshot.${subjectId}`]: { $exists: true } },
+      { 
+        $set: { 
+          [`facultySnapshot.${subjectId}.facultyId`]: facultyId,
+          [`facultySnapshot.${subjectId}.facultyName`]: facultyName,
+          [`facultySnapshot.${subjectId}.subjectCode`]: subjectCode 
+        } 
+      },
+      getSessionOptions(session)
+    );
 
+    // 2. Bulk Update Approvals
     await NodueApproval.updateMany(
       { batchId: activeBatch._id, subjectId, approvalType: 'subject' },
       { facultyId, facultyName, action: 'pending', actionedAt: null, dueType: null, remarks: null },
       getSessionOptions(session)
     );
+
+    // 3. Bulk Recalculate Status (since resetting to pending might change request status)
+    const affectedRequests = await NodueRequest.find({ batchId: activeBatch._id }).session(session).select('_id').lean();
+    await bulkRecalcRequestStatus(affectedRequests.map(r => r._id), session);
 
     await commitSafeTransaction(session);
     succeeded = true;
@@ -153,46 +153,48 @@ export const syncStudentUpdate = async (studentId, { name, rollNo }) => {
   try {
     await startSafeTransaction(session);
 
-    // 1. Update the studentSnapshot in all active NodueRequests for this student
-    const activeRequests = await NodueRequest.find({ studentId }).session(session);
+    // 1. Identify active batches for this student
+    const activeRequests = await NodueRequest.find({ studentId }).session(session).select('batchId').lean();
     if (!activeRequests.length) {
       await commitSafeTransaction(session);
       return;
     }
 
-    const batchIds = [...new Set(activeRequests.map(r => r.batchId.toString()))];
+    const batchIds = activeRequests.map(r => r.batchId);
     const activeBatches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' })
       .session(session).select('_id').lean();
-    const activeBatchIds = new Set(activeBatches.map(b => b._id.toString()));
+    const activeBatchIds = activeBatches.map(b => b._id);
 
-    let requestsModified = 0;
-    for (const req of activeRequests) {
-      if (!activeBatchIds.has(req.batchId.toString())) continue;
-
-      if (name) req.studentSnapshot.name = name;
-      if (rollNo) req.studentSnapshot.rollNo = rollNo;
-      
-      req.markModified('studentSnapshot');
-      await req.save(getSessionOptions(session));
-      requestsModified++;
+    if (activeBatchIds.length === 0) {
+      await commitSafeTransaction(session);
+      return;
     }
 
-    // 2. Update the studentName/studentRollNo in all corresponding NodueApprovals
-    const updateFields = {};
-    if (name) updateFields.studentName = name;
-    if (rollNo) updateFields.studentRollNo = rollNo;
+    // 2. Bulk Update Requests: Update student snapshot
+    const requestUpdate = {};
+    if (name) requestUpdate["studentSnapshot.name"] = name;
+    if (rollNo) requestUpdate["studentSnapshot.rollNo"] = rollNo;
 
-    if (Object.keys(updateFields).length > 0 && activeBatchIds.size > 0) {
-      await NodueApproval.updateMany(
-        { studentId, batchId: { $in: Array.from(activeBatchIds) } },
-        { $set: updateFields },
-        getSessionOptions(session)
-      );
-    }
+    const requestResult = await NodueRequest.updateMany(
+      { studentId, batchId: { $in: activeBatchIds } },
+      { $set: requestUpdate },
+      getSessionOptions(session)
+    );
+
+    // 3. Bulk Update Approvals
+    const approvalUpdate = {};
+    if (name) approvalUpdate.studentName = name;
+    if (rollNo) approvalUpdate.studentRollNo = rollNo;
+
+    await NodueApproval.updateMany(
+      { studentId, batchId: { $in: activeBatchIds } },
+      { $set: approvalUpdate },
+      getSessionOptions(session)
+    );
 
     await commitSafeTransaction(session);
     succeeded = true;
-    logger.audit('SYNC_STUDENT_UPDATED', { studentId, requestsModified, name, rollNo });
+    logger.audit('SYNC_STUDENT_UPDATED', { studentId, requestsModified: requestResult.modifiedCount, name, rollNo });
   } catch (err) {
     await abortSafeTransaction(session);
     logger.error('sync_student_update_failed', { studentId, error: err.message });
@@ -362,6 +364,9 @@ export const syncElectiveAddition = async (studentId, electiveData) => {
       action: 'pending',
     }], getSessionOptions(session));
 
+    // Recalculate status
+    await recalcRequestStatus(request._id, session);
+
     await commitSafeTransaction(session);
     succeeded = true;
     logger.audit('SYNC_ELECTIVE_ADDED', { studentId, subjectId });
@@ -408,6 +413,9 @@ export const syncElectiveRemoval = async (studentId, subjectId) => {
       { requestId: request._id, subjectId, approvalType: 'subject' },
       getSessionOptions(session)
     );
+
+    // Recalculate status
+    await recalcRequestStatus(request._id, session);
 
     await commitSafeTransaction(session);
     succeeded = true;
@@ -553,6 +561,10 @@ export const syncStudentDeactivation = async (studentId) => {
 };
 
 // ── bulkSyncMentorUpdate ──────────────────────────────────────────────────────
+/**
+ * Synchronizes mentor changes for a list of students across all active batches.
+ * Replaces iterative loops with bulk updateMany operations.
+ */
 export const bulkSyncMentorUpdate = async (studentIds, mentorId, mentorName) => {
   let succeeded = false;
   const affectedClassIds = [];
@@ -560,86 +572,83 @@ export const bulkSyncMentorUpdate = async (studentIds, mentorId, mentorName) => 
   try {
     await startSafeTransaction(session);
 
-    const requests = await NodueRequest.find({ studentId: { $in: studentIds } }).session(session);
-    const batchIds = [...new Set(requests.map(r => r.batchId.toString()))];
-    const activeBatches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' })
-      .session(session).select('_id classId');
-    const activeBatchIds = activeBatches.map(b => b._id.toString());
+    // 1. Identify active requests for these students
+    const activeRequests = await NodueRequest.find({ studentId: { $in: studentIds } })
+      .session(session).select('_id batchId studentId studentSnapshot').lean();
+    if (!activeRequests.length) {
+      await commitSafeTransaction(session);
+      return;
+    }
 
+    const batchIds = activeRequests.map(r => r.batchId);
+    const activeBatches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' })
+      .session(session).select('_id classId').lean();
+    
+    const activeBatchIds = activeBatches.map(b => b._id);
     activeBatches.forEach(b => { if (b.classId) affectedClassIds.push(b.classId.toString()); });
 
-    const filteredRequests = requests.filter(r => activeBatchIds.includes(r.batchId.toString()));
-
-    for (const req of filteredRequests) {
-      // 1. Update facultySnapshot (both 'mentor' and 'coCurricular_mentor')
-      if (Array.isArray(req.facultySnapshot)) {
-        // Standard Mentor Role
-        const idx = req.facultySnapshot.findIndex(f => f.roleTag === 'mentor');
-        if (idx !== -1) {
-          req.facultySnapshot[idx] = { ...req.facultySnapshot[idx], facultyId: mentorId, facultyName: mentorName };
-        } else {
-          req.facultySnapshot.push({
-            facultyId: mentorId, facultyName: mentorName, roleTag: 'mentor',
-            approvalType: 'mentor', subjectName: 'Mentor',
-          });
-        }
-
-        // Co-Curricular entries assigned to mentor
-        req.facultySnapshot.forEach((f, idx) => {
-          if (f.roleTag === 'coCurricular_mentor') {
-            req.facultySnapshot[idx].facultyId = mentorId;
-            req.facultySnapshot[idx].facultyName = mentorName;
-          }
-        });
-      } else if (req.facultySnapshot) {
-        // Object-style snapshot
-        req.facultySnapshot['mentor'] = {
-          facultyId: mentorId, facultyName: mentorName, roleTag: 'mentor',
-          approvalType: 'mentor', subjectId: null, subjectName: 'Mentor',
-        };
-        
-        Object.keys(req.facultySnapshot).forEach(key => {
-          if (req.facultySnapshot[key].roleTag === 'coCurricular_mentor') {
-            req.facultySnapshot[key].facultyId = mentorId;
-            req.facultySnapshot[key].facultyName = mentorName;
-          }
-        });
-        req.markModified('facultySnapshot');
-      }
-
-      // 2. Database updates for approvals
-      await NodueApproval.findOneAndUpdate(
-        { requestId: req._id, roleTag: 'mentor' },
-        { 
-          studentId: req.studentId,
-          batchId: req.batchId,
-          studentRollNo: req.studentSnapshot?.rollNo,
-          studentName: req.studentSnapshot?.name,
-          facultyId: mentorId, 
-          facultyName: mentorName, 
-          subjectName: 'Mentor',
-          approvalType: 'mentor',
-          action: 'pending', 
-          actionedAt: null, 
-          dueType: null, 
-          remarks: null 
-        },
-        { upsert: true, session }
-      );
-
-      await NodueApproval.updateMany(
-        { requestId: req._id, roleTag: 'coCurricular_mentor' },
-        { facultyId: mentorId, facultyName: mentorName, action: 'pending', actionedAt: null },
-        { session }
-      );
-
-      // 3. Save request ONCE
-      await req.save(getSessionOptions(session));
+    if (activeBatchIds.length === 0) {
+      await commitSafeTransaction(session);
+      return;
     }
+
+    const filteredRequestIds = activeRequests
+      .filter(r => activeBatchIds.some(bid => bid.equals(r.batchId)))
+      .map(r => r._id);
+
+    // 2. Determine co-curricular types that are assigned to mentors
+    const mentorCCTypes = await CoCurricularType.find({ requiresMentorApproval: true }).session(session).lean();
+    const ccIds = mentorCCTypes.map(t => t._id.toString());
+
+    // 3. Bulk Update Requests: Update facultySnapshot
+    const snapshotUpdate = {
+      "facultySnapshot.mentor": {
+        facultyId: mentorId,
+        facultyName: mentorName,
+        roleTag: 'mentor',
+        approvalType: 'mentor',
+        subjectId: null,
+        subjectName: 'Mentor'
+      }
+    };
+    ccIds.forEach(id => {
+      snapshotUpdate[`facultySnapshot.${id}.facultyId`] = mentorId;
+      snapshotUpdate[`facultySnapshot.${id}.facultyName`] = mentorName;
+    });
+
+    await NodueRequest.updateMany(
+      { _id: { $in: filteredRequestIds } },
+      { $set: snapshotUpdate },
+      getSessionOptions(session)
+    );
+
+    // 4. Bulk Update Approvals: Mentor Role
+    await NodueApproval.updateMany(
+      { requestId: { $in: filteredRequestIds }, roleTag: 'mentor' },
+      { 
+        facultyId: mentorId, 
+        facultyName: mentorName,
+        action: 'pending', 
+        actionedAt: null, 
+        dueType: null, 
+        remarks: null 
+      },
+      getSessionOptions(session)
+    );
+
+    // 5. Bulk Update Approvals: Co-Curricular Role
+    await NodueApproval.updateMany(
+      { requestId: { $in: filteredRequestIds }, roleTag: 'coCurricular_mentor' },
+      { facultyId: mentorId, facultyName: mentorName, action: 'pending', actionedAt: null },
+      getSessionOptions(session)
+    );
+
+    // 6. Recalculate status for all affected requests
+    await bulkRecalcRequestStatus(filteredRequestIds, session);
 
     await commitSafeTransaction(session);
     succeeded = true;
-    logger.audit('BULK_SYNC_MENTOR_UPDATED', { count: filteredRequests.length });
+    logger.audit('BULK_SYNC_MENTOR_UPDATED', { count: filteredRequestIds.length });
   } catch (err) {
     await abortSafeTransaction(session);
     logger.error('bulk_sync_mentor_update_failed', { error: err.message });
@@ -647,7 +656,6 @@ export const bulkSyncMentorUpdate = async (studentIds, mentorId, mentorName) => 
     session.endSession();
   }
 
-  // Cache invalidation outside try — guaranteed on success only
   if (succeeded) {
     const uniqueClassIds = [...new Set(affectedClassIds)];
     uniqueClassIds.forEach(cid => invalidateEntityCache('class', cid));
@@ -957,26 +965,24 @@ export const syncSubjectAddition = async (classId, subjectData) => {
 
     const { subjectId, subjectName, subjectCode, facultyId, facultyName } = subjectData;
 
-    // Add to facultySnapshot of all requests in this batch
-    const requests = await NodueRequest.find({ batchId: activeBatch._id }).session(session);
-    for (const req of requests) {
-      if (Array.isArray(req.facultySnapshot)) {
-        req.facultySnapshot.push({
-          facultyId, facultyName, subjectId, subjectName, subjectCode,
-          roleTag: 'faculty', approvalType: 'subject',
-        });
-      } else if (req.facultySnapshot && typeof req.facultySnapshot === 'object') {
-        req.facultySnapshot[subjectId.toString()] = {
-          facultyId, facultyName, subjectId, subjectName, subjectCode,
-          roleTag: 'faculty', approvalType: 'subject',
-        };
-        req.markModified('facultySnapshot');
-      }
-      await req.save(getSessionOptions(session));
-    }
+    // 1. Bulk Update Requests: Add to facultySnapshot
+    const snapshotEntry = {
+      facultyId, facultyName, subjectId, subjectName, subjectCode,
+      roleTag: 'faculty', approvalType: 'subject',
+    };
 
-    // Create approval records for all students in the batch
-    const bulkApprovals = requests.map(req => ({
+    await NodueRequest.updateMany(
+      { batchId: activeBatch._id },
+      { $set: { [`facultySnapshot.${subjectId}`]: snapshotEntry } },
+      getSessionOptions(session)
+    );
+
+    // 2. Fetch all requests to prepare approvals and status recalculation
+    const affectedRequests = await NodueRequest.find({ batchId: activeBatch._id })
+      .session(session).select('_id studentId studentSnapshot').lean();
+
+    // 3. Bulk Create Approval Records
+    const bulkApprovals = affectedRequests.map(req => ({
       requestId: req._id,
       batchId: activeBatch._id,
       studentId: req.studentId,
@@ -991,6 +997,9 @@ export const syncSubjectAddition = async (classId, subjectData) => {
     if (bulkApprovals.length > 0) {
       await NodueApproval.insertMany(bulkApprovals, { session });
     }
+
+    // 4. Bulk Recalculate Status (new mandatory subject added)
+    await bulkRecalcRequestStatus(affectedRequests.map(r => r._id), session);
 
     await commitSafeTransaction(session);
     succeeded = true;
@@ -1060,7 +1069,8 @@ export const syncCoCurricularAddition = async (typeId) => {
     const facultyMap = new Map(faculties.map(f => [f._id.toString(), f.name]));
 
     const approvalOps = [];
-    const requestUpdates = [];
+    const requestBulkOps = [];
+    const requestIds = [];
 
     for (const req of requests) {
       const student = studentMap.get(req.studentId.toString());
@@ -1096,7 +1106,6 @@ export const syncCoCurricularAddition = async (typeId) => {
         roleTag = 'coCurricular_coordinator';
       }
       
-      // Fallback
       if ((isMentorMode || isCTMode) && !assignedFacultyId && type.coordinatorId) {
         assignedFacultyId = type.coordinatorId;
         roleTag = 'coCurricular_coordinator';
@@ -1125,43 +1134,34 @@ export const syncCoCurricularAddition = async (typeId) => {
         action: 'pending'
       });
 
-      // 2. Prepare Snapshot Update
-      if (Array.isArray(req.facultySnapshot)) {
-        req.facultySnapshot.push({
-          facultyId: assignedFacultyId,
-          facultyName,
-          subjectId: null,
-          subjectName: type.name,
-          subjectCode: type.code,
-          roleTag: roleTag,
-          approvalType: 'coCurricular',
-          itemTypeId: type._id,
-          itemTypeName: type.name,
-          itemCode: type.code,
-          isOptional: type.isOptional || false
-        });
-      } else if (req.facultySnapshot) {
-        req.facultySnapshot[type._id.toString()] = {
-          facultyId: assignedFacultyId,
-          facultyName,
-          subjectId: null,
-          subjectName: type.name,
-          subjectCode: type.code,
-          roleTag: roleTag,
-          approvalType: 'coCurricular',
-          itemTypeId: type._id,
-          itemTypeName: type.name,
-          itemCode: type.code,
-          isOptional: type.isOptional || false
-        };
-        req.markModified('facultySnapshot');
-      }
-      requestUpdates.push(req.save(getSessionOptions(session)));
+      // 2. Prepare Request Bulk Update
+      const snapshotEntry = {
+        facultyId: assignedFacultyId,
+        facultyName,
+        subjectId: null,
+        subjectName: type.name,
+        subjectCode: type.code,
+        roleTag: roleTag,
+        approvalType: 'coCurricular',
+        itemTypeId: type._id,
+        itemTypeName: type.name,
+        itemCode: type.code,
+        isOptional: type.isOptional || false
+      };
+
+      requestBulkOps.push({
+        updateOne: {
+          filter: { _id: req._id },
+          update: { $set: { [`facultySnapshot.${type._id}`]: snapshotEntry } }
+        }
+      });
+      requestIds.push(req._id);
     }
 
     if (approvalOps.length > 0) {
       await NodueApproval.insertMany(approvalOps, { session });
-      await Promise.all(requestUpdates);
+      await NodueRequest.bulkWrite(requestBulkOps, { session });
+      await bulkRecalcRequestStatus(requestIds, session);
     }
 
     await commitSafeTransaction(session);
@@ -1207,6 +1207,7 @@ export const syncCoCurricularUpdate = async (typeId) => {
 
     const batchIds = activeBatches.map(b => b._id);
     
+    // 1. Process Updates/Removals for existing records
     const existingApprovals = await NodueApproval.find({ 
       itemTypeId: typeId, 
       batchId: { $in: batchIds } 
@@ -1216,11 +1217,11 @@ export const syncCoCurricularUpdate = async (typeId) => {
     const existingRequests = await NodueRequest.find({
       batchId: { $in: batchIds },
       studentId: { $in: existingStudentIds }
-    }).session(session);
+    }).session(session).select('_id studentId facultySnapshot').lean();
+    
     const requestMap = new Map(existingRequests.map(r => [r.studentId.toString(), r]));
 
-    // Fetch all students in these batches to handle additions
-    const allRequests = await NodueRequest.find({ batchId: { $in: batchIds } }).session(session);
+    const allRequests = await NodueRequest.find({ batchId: { $in: batchIds } }).session(session).select('_id studentId').lean();
     const allStudentIds = [...new Set(allRequests.map(r => r.studentId.toString()))];
     const allStudents = await Student.find({ _id: { $in: allStudentIds } })
       .session(session).select('_id mentorId yearOfStudy name rollNo classId').lean();
@@ -1230,7 +1231,6 @@ export const syncCoCurricularUpdate = async (typeId) => {
       .session(session).select('_id classTeacherId').lean();
     const classMap = new Map(classes.map(c => [c._id.toString(), c]));
 
-    // Fetch faculty names
     const mentorIds = [...new Set(allStudents.map(s => s.mentorId?.toString()).filter(Boolean))];
     const ctIds = [...new Set(classes.map(c => c.classTeacherId?.toString()).filter(Boolean))];
     const faculties = await Faculty.find({ 
@@ -1238,9 +1238,10 @@ export const syncCoCurricularUpdate = async (typeId) => {
     }).session(session).select('name').lean();
     const facultyMap = new Map(faculties.map(f => [f._id.toString(), f.name]));
 
-    const ops = [];
+    const approvalBulkOps = [];
+    const requestBulkOps = [];
+    const affectedRequestIds = new Set();
 
-    // Process removals and updates
     const processedStudentIds = new Set();
     for (const app of existingApprovals) {
       const studentIdStr = app.studentId.toString();
@@ -1248,9 +1249,8 @@ export const syncCoCurricularUpdate = async (typeId) => {
       const req = requestMap.get(studentIdStr);
       if (!student || !req) continue;
 
-      // DEDUPLICATION: If we have multiple approvals for the same item/student, delete the extra ones
       if (processedStudentIds.has(studentIdStr)) {
-        ops.push(NodueApproval.deleteOne({ _id: app._id }).session(session));
+        approvalBulkOps.push({ deleteOne: { filter: { _id: app._id } } });
         continue;
       }
       processedStudentIds.add(studentIdStr);
@@ -1260,14 +1260,14 @@ export const syncCoCurricularUpdate = async (typeId) => {
 
       if (!isApplicable || isDeactivated) {
         // REMOVE
-        ops.push(NodueApproval.deleteOne({ _id: app._id }).session(session));
-        if (Array.isArray(req.facultySnapshot)) {
-          req.facultySnapshot = req.facultySnapshot.filter(f => f.itemTypeId?.toString() !== typeId.toString());
-        } else if (req.facultySnapshot) {
-          delete req.facultySnapshot[typeId.toString()];
-          req.markModified('facultySnapshot');
-        }
-        ops.push(req.save(getSessionOptions(session)));
+        approvalBulkOps.push({ deleteOne: { filter: { _id: app._id } } });
+        requestBulkOps.push({
+          updateOne: {
+            filter: { _id: req._id },
+            update: { $unset: { [`facultySnapshot.${typeId}`]: "" } }
+          }
+        });
+        affectedRequestIds.add(req._id.toString());
       } else {
         // UPDATE
         const isMentorMode = type.requiresMentorApproval;
@@ -1288,7 +1288,6 @@ export const syncCoCurricularUpdate = async (typeId) => {
           roleTag = 'coCurricular_coordinator';
         }
         
-        // Fallback
         if ((isMentorMode || isCTMode) && !assignedFacultyId && type.coordinatorId) {
           assignedFacultyId = type.coordinatorId;
           roleTag = 'coCurricular_coordinator';
@@ -1299,60 +1298,62 @@ export const syncCoCurricularUpdate = async (typeId) => {
         const facultyName = facultyMap.get(assignedFacultyId.toString()) || 
                             (isMentorMode ? "Student's Mentor" : (isCTMode ? "Class Teacher" : null));
 
-        app.facultyId = assignedFacultyId;
-        app.facultyName = facultyName;
-        app.subjectName = type.name;
-        app.itemTypeName = type.name;
-        app.itemCode = type.code;
-        app.isOptional = type.isOptional;
-        app.roleTag = roleTag;
-        app.approvalType = 'coCurricular';
-        ops.push(app.save(getSessionOptions(session)));
+        approvalBulkOps.push({
+          updateOne: {
+            filter: { _id: app._id },
+            update: { 
+              $set: { 
+                facultyId: assignedFacultyId,
+                facultyName,
+                subjectName: type.name,
+                itemTypeName: type.name,
+                itemCode: type.code,
+                roleTag,
+                isOptional: type.isOptional || false
+              } 
+            }
+          }
+        });
 
-        if (Array.isArray(req.facultySnapshot)) {
-          const idx = req.facultySnapshot.findIndex(f => f.itemTypeId?.toString() === typeId.toString());
-          const snapshotData = {
-            facultyId: assignedFacultyId,
-            facultyName,
-            subjectId: null,
-            subjectName: type.name,
-            subjectCode: type.code,
-            roleTag: roleTag,
-            approvalType: 'coCurricular',
-            itemTypeId: type._id,
-            itemTypeName: type.name,
-            itemCode: type.code,
-            isOptional: type.isOptional || false
-          };
-          if (idx !== -1) req.facultySnapshot[idx] = snapshotData;
-          else req.facultySnapshot.push(snapshotData);
-        } else if (req.facultySnapshot) {
-          req.facultySnapshot[typeId.toString()] = {
-            facultyId: assignedFacultyId,
-            facultyName,
-            subjectId: null,
-            subjectName: type.name,
-            subjectCode: type.code,
-            roleTag: roleTag,
-            approvalType: 'coCurricular',
-            itemTypeId: type._id,
-            itemTypeName: type.name,
-            itemCode: type.code,
-            isOptional: type.isOptional || false
-          };
-          req.markModified('facultySnapshot');
-        }
-        ops.push(req.save(getSessionOptions(session)));
+        requestBulkOps.push({
+          updateOne: {
+            filter: { _id: req._id },
+            update: { 
+              $set: { 
+                [`facultySnapshot.${typeId}`]: {
+                  facultyId: assignedFacultyId,
+                  facultyName,
+                  subjectId: null,
+                  subjectName: type.name,
+                  subjectCode: type.code,
+                  roleTag,
+                  approvalType: 'coCurricular',
+                  itemTypeId: type._id,
+                  itemTypeName: type.name,
+                  itemCode: type.code,
+                  isOptional: type.isOptional || false
+                }
+              } 
+            }
+          }
+        });
+        affectedRequestIds.add(req._id.toString());
       }
     }
 
-    // GROUP 2: ADDITIONS
+    if (approvalBulkOps.length > 0) await NodueApproval.bulkWrite(approvalBulkOps, { session });
+    if (requestBulkOps.length > 0) await NodueRequest.bulkWrite(requestBulkOps, { session });
+
+    // 2. Handle Additions (students who should have it but don't)
     if (type.isActive) {
       const existingStudentSet = new Set(existingStudentIds);
       const studentsToReceive = allStudents.filter(s => 
         !existingStudentSet.has(s._id.toString()) && 
         type.applicableYears.includes(s.yearOfStudy)
       );
+
+      const additionApprovalOps = [];
+      const additionRequestBulkOps = [];
 
       for (const student of studentsToReceive) {
         const req = allRequests.find(r => r.studentId.toString() === student._id.toString());
@@ -1376,7 +1377,6 @@ export const syncCoCurricularUpdate = async (typeId) => {
           roleTag = 'coCurricular_coordinator';
         }
         
-        // Fallback
         if ((isMentorMode || isCTMode) && !assignedFacultyId && type.coordinatorId) {
           assignedFacultyId = type.coordinatorId;
           roleTag = 'coCurricular_coordinator';
@@ -1387,8 +1387,7 @@ export const syncCoCurricularUpdate = async (typeId) => {
         const facultyName = facultyMap.get(assignedFacultyId.toString()) || 
                             (isMentorMode ? "Student's Mentor" : (isCTMode ? "Class Teacher" : null));
 
-        // Create Approval
-        ops.push(NodueApproval.create([{
+        additionApprovalOps.push({
           requestId: req._id,
           batchId: req.batchId,
           studentId: student._id,
@@ -1397,54 +1396,51 @@ export const syncCoCurricularUpdate = async (typeId) => {
           facultyId: assignedFacultyId,
           subjectName: type.name,
           approvalType: 'coCurricular',
-          roleTag: roleTag,
+          roleTag,
           itemTypeId: type._id,
           itemTypeName: type.name,
           itemCode: type.code,
           isOptional: type.isOptional || false,
           action: 'pending'
-        }], { session }));
+        });
 
-        // Update Snapshot
-        if (Array.isArray(req.facultySnapshot)) {
-          req.facultySnapshot.push({
-            facultyId: assignedFacultyId,
-            facultyName,
-            subjectId: null,
-            subjectName: type.name,
-            subjectCode: type.code,
-            roleTag: roleTag,
-            approvalType: 'coCurricular',
-            itemTypeId: type._id,
-            itemTypeName: type.name,
-            itemCode: type.code,
-            isOptional: type.isOptional || false
-          });
-        } else if (req.facultySnapshot) {
-          req.facultySnapshot[typeId.toString()] = {
-            facultyId: assignedFacultyId,
-            facultyName,
-            subjectId: null,
-            subjectName: type.name,
-            subjectCode: type.code,
-            roleTag: roleTag,
-            approvalType: 'coCurricular',
-            itemTypeId: type._id,
-            itemTypeName: type.name,
-            itemCode: type.code,
-            isOptional: type.isOptional || false
-          };
-          req.markModified('facultySnapshot');
-        }
-        ops.push(req.save(getSessionOptions(session)));
+        additionRequestBulkOps.push({
+          updateOne: {
+            filter: { _id: req._id },
+            update: { 
+              $set: { 
+                [`facultySnapshot.${typeId}`]: {
+                  facultyId: assignedFacultyId,
+                  facultyName,
+                  subjectId: null,
+                  subjectName: type.name,
+                  subjectCode: type.code,
+                  roleTag,
+                  approvalType: 'coCurricular',
+                  itemTypeId: type._id,
+                  itemTypeName: type.name,
+                  itemCode: type.code,
+                  isOptional: type.isOptional || false
+                }
+              } 
+            }
+          }
+        });
+        affectedRequestIds.add(req._id.toString());
       }
+
+      if (additionApprovalOps.length > 0) await NodueApproval.insertMany(additionApprovalOps, { session });
+      if (additionRequestBulkOps.length > 0) await NodueRequest.bulkWrite(additionRequestBulkOps, { session });
     }
 
-      await Promise.all(ops);
+    // 3. Recalculate status for all affected requests
+    if (affectedRequestIds.size > 0) {
+      await bulkRecalcRequestStatus(Array.from(affectedRequestIds), session);
+    }
 
     await commitSafeTransaction(session);
     succeeded = true;
-    logger.audit('SYNC_CO_CURRICULAR_UPDATED', { typeId, count: existingApprovals.length });
+    logger.audit('SYNC_CO_CURRICULAR_UPDATED', { typeId, affectedCount: affectedRequestIds.size });
   } catch (err) {
     await abortSafeTransaction(session);
     logger.error('sync_co_curricular_update_failed', { typeId, error: err.message });
@@ -1456,8 +1452,6 @@ export const syncCoCurricularUpdate = async (typeId) => {
     invalidateEntityCache('student', 'all');
   }
 };
-
-
 
 export const syncCoCurricularRemoval = async (departmentId, typeId) => {
   let succeeded = false;
@@ -1473,18 +1467,12 @@ export const syncCoCurricularRemoval = async (departmentId, typeId) => {
 
     const batchIds = activeBatches.map(b => b._id);
     
-    // 1. Remove from facultySnapshot
-    const requests = await NodueRequest.find({ batchId: { $in: batchIds } }).session(session);
-    const requestUpdates = [];
-    for (const req of requests) {
-      if (Array.isArray(req.facultySnapshot)) {
-        req.facultySnapshot = req.facultySnapshot.filter(f => f.itemTypeId?.toString() !== typeId.toString());
-      } else if (req.facultySnapshot) {
-        delete req.facultySnapshot[typeId.toString()];
-        req.markModified('facultySnapshot');
-      }
-      requestUpdates.push(req.save(getSessionOptions(session)));
-    }
+    // 1. Bulk Remove from facultySnapshot
+    await NodueRequest.updateMany(
+      { batchId: { $in: batchIds } },
+      { $unset: { [`facultySnapshot.${typeId}`]: "" } },
+      getSessionOptions(session)
+    );
 
     // 2. Delete approvals
     await NodueApproval.deleteMany({ 
@@ -1492,7 +1480,9 @@ export const syncCoCurricularRemoval = async (departmentId, typeId) => {
       itemTypeId: typeId 
     }, { session });
 
-    await Promise.all(requestUpdates);
+    // 3. Status Recalc
+    const affectedRequests = await NodueRequest.find({ batchId: { $in: batchIds } }).session(session).select('_id').lean();
+    await bulkRecalcRequestStatus(affectedRequests.map(r => r._id), session);
 
     await commitSafeTransaction(session);
     succeeded = true;
@@ -1524,68 +1514,46 @@ export const bulkSyncClassTeacherUpdate = async (classId, classTeacherId, classT
       return;
     }
 
-    const requests = await NodueRequest.find({ batchId: activeBatch._id }).session(session);
-    
-    for (const req of requests) {
-      let updated = false;
-      
-      if (Array.isArray(req.facultySnapshot)) {
-        // 1. Update core classTeacher approval if it exists
-        const idx = req.facultySnapshot.findIndex(f => f.roleTag === 'classTeacher');
-        if (idx !== -1) {
-          req.facultySnapshot[idx] = { ...req.facultySnapshot[idx], facultyId: classTeacherId, facultyName: classTeacherName };
-          updated = true;
-        }
-        
-        // 2. Update co-curricular items assigned to class teacher
-        req.facultySnapshot.forEach((f, i) => {
-          if (f.roleTag === 'coCurricular_classTeacher') {
-            req.facultySnapshot[i].facultyId = classTeacherId;
-            req.facultySnapshot[i].facultyName = classTeacherName;
-            updated = true;
-          }
-        });
-      } else if (req.facultySnapshot) {
-        // Handle object-based snapshot
-        if (req.facultySnapshot['classTeacher']) {
-          req.facultySnapshot['classTeacher'] = {
-            ...req.facultySnapshot['classTeacher'],
-            facultyId: classTeacherId,
-            facultyName: classTeacherName
-          };
-          updated = true;
-        }
-        
-        Object.keys(req.facultySnapshot).forEach(key => {
-          if (req.facultySnapshot[key].roleTag === 'coCurricular_classTeacher') {
-            req.facultySnapshot[key].facultyId = classTeacherId;
-            req.facultySnapshot[key].facultyName = classTeacherName;
-            updated = true;
-          }
-        });
-        if (updated) req.markModified('facultySnapshot');
-      }
-      
-      if (updated) await req.save(getSessionOptions(session));
-    }
+    // 1. Find all co-curricular types that require Class Teacher approval
+    const coCurricularCTItems = await CoCurricularType.find({ 
+      departmentId: activeBatch.departmentId, 
+      requiresClassTeacherApproval: true 
+    }).session(session).select('_id').lean();
 
-    // Update core classTeacher approval records
-    await NodueApproval.updateMany(
-      { batchId: activeBatch._id, roleTag: 'classTeacher' },
-      { facultyId: classTeacherId, facultyName: classTeacherName, action: 'pending', actionedAt: null },
-      { session }
+    // 2. Bulk Update NodueRequests (snapshots)
+    const updateSet = {
+      "facultySnapshot.classTeacher.facultyId": classTeacherId,
+      "facultySnapshot.classTeacher.facultyName": classTeacherName
+    };
+
+    coCurricularCTItems.forEach(item => {
+      updateSet[`facultySnapshot.${item._id}.facultyId`] = classTeacherId;
+      updateSet[`facultySnapshot.${item._id}.facultyName`] = classTeacherName;
+    });
+
+    await NodueRequest.updateMany(
+      { batchId: activeBatch._id },
+      { $set: updateSet },
+      getSessionOptions(session)
     );
 
-    // Update co-curricular approval records assigned to class teacher
+    // 3. Bulk Update NodueApprovals
     await NodueApproval.updateMany(
-      { batchId: activeBatch._id, roleTag: 'coCurricular_classTeacher' },
-      { facultyId: classTeacherId, facultyName: classTeacherName, action: 'pending', actionedAt: null },
-      { session }
+      { 
+        batchId: activeBatch._id, 
+        roleTag: { $in: ['classTeacher', 'coCurricular_classTeacher'] } 
+      },
+      { 
+        facultyId: classTeacherId, 
+        facultyName: classTeacherName, 
+        updatedAt: new Date() 
+      },
+      getSessionOptions(session)
     );
 
     await commitSafeTransaction(session);
     succeeded = true;
-    logger.audit('BULK_SYNC_CLASS_TEACHER_UPDATED', { classId, classTeacherId });
+    logger.audit('BULK_SYNC_CT_UPDATED', { classId, classTeacherId });
   } catch (err) {
     await abortSafeTransaction(session);
     logger.error('bulk_sync_class_teacher_update_failed', { classId, error: err.message });
@@ -1594,7 +1562,7 @@ export const bulkSyncClassTeacherUpdate = async (classId, classTeacherId, classT
   }
 
   if (succeeded) {
-    invalidateEntityCache('class', classId);
+    invalidateEntityCache('class', classId.toString());
   }
 };
 

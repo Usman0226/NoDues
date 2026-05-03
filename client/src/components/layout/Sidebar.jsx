@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
+import { useUI } from '../../hooks/useUI';
 import { ROLES } from '../../utils/constants';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardCheck,
@@ -160,7 +161,7 @@ const SidebarSection = ({ section, collapsed, location, onMobileClose, isExpande
 };
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const { sidebarCollapsed: collapsed, setSidebarCollapsed: setCollapsed } = useUI();
   const { user } = useAuth();
   const location = useLocation();
   const { isFeedbackOpen, openFeedback, closeFeedback } = useFeedback();
@@ -188,6 +189,9 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
     }
   }, [location.pathname, navItems]);
 
+  const [isHovered, setIsHovered] = useState(false);
+  const displayCollapsed = collapsed && !isHovered;
+
   const lastPath = React.useRef(location.pathname);
   
   useEffect(() => {
@@ -202,13 +206,13 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const sidebarContent = (
     <>
       <div className="h-20 flex items-center px-6 border-b border-white/10 shrink-0 bg-white/[0.02] relative">
-        <div className={`transition-all duration-300 ${collapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
+        <div className={`transition-all duration-300 ${displayCollapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
           <h2 className="text-white font-brand text-2xl tracking-tight leading-none">
             No<span className="text-gold">Dues</span>
           </h2>
           <p className="text-[8px] uppercase tracking-[0.3em] font-black text-indigo-200/50 mt-1">Admin Portal</p>
         </div>
-        <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 pointer-events-none ${collapsed ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 pointer-events-none ${displayCollapsed ? 'opacity-100' : 'opacity-0'}`}>
           <span className="text-gold font-brand text-2xl">N</span>
         </div>
         <button
@@ -228,7 +232,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
               <SidebarSection
                 key={item.label}
                 section={item}
-                collapsed={collapsed}
+                collapsed={displayCollapsed}
                 location={location}
                 onMobileClose={onMobileClose}
                 isExpanded={expandedSection === item.label}
@@ -241,7 +245,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
             <SidebarLink
               key={item.path}
               item={item}
-              collapsed={collapsed}
+              collapsed={displayCollapsed}
               location={location}
               onMobileClose={onMobileClose}
             />
@@ -254,13 +258,13 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group border border-transparent text-indigo-100/55 hover:bg-indigo-500/10 hover:text-white hover:border-indigo-500/20 mt-4`}
         >
           <MessageSquarePlus size={18} className="shrink-0 text-indigo-100/55 group-hover:text-white" />
-          <div className={`nav-text text-[10px] text-left truncate transition-all duration-300 overflow-hidden ${collapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
+          <div className={`nav-text text-[10px] text-left truncate transition-all duration-300 overflow-hidden ${displayCollapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
             Give Feedback
           </div>
         </button>
       </nav>
 
-      <div className={`p-6 border-t border-white/10 shrink-0 transition-all duration-300 ${collapsed ? 'opacity-0 invisible' : 'opacity-100 visible'}`}>
+      <div className={`p-6 border-t border-white/10 shrink-0 transition-all duration-300 ${displayCollapsed ? 'opacity-0 invisible' : 'opacity-100 visible'}`}>
         <div className="rounded-xl px-4 py-3 border border-indigo-200/20 bg-gradient-to-r from-white/10 to-white/5">
           <span className="block text-[8px] text-indigo-100/45 uppercase tracking-[0.3em] font-black mb-1">Account Role</span>
           <span className="text-[10px] text-gold uppercase tracking-[0.2em] font-black">
@@ -279,17 +283,24 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   );
 
   return (
-  
     <>
-      <div className={`hidden lg:flex flex-col relative shrink-0 transition-[width] duration-300 ease-in-out will-change-[width] min-h-screen ${collapsed ? 'w-20' : 'w-72'}`}>
-        <aside className="absolute inset-y-0 left-0 w-full bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex flex-col shadow-2xl shadow-indigo-900/30 overflow-hidden whitespace-nowrap">
+      <div 
+        className={`hidden lg:flex flex-col relative shrink-0 transition-[width] duration-300 ease-in-out will-change-[width] min-h-screen ${collapsed ? 'w-20' : 'w-72'}`}
+        onMouseEnter={() => collapsed && setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <aside 
+          className={`absolute inset-y-0 left-0 transition-all duration-300 ease-in-out bg-gradient-to-b from-indigo-950 via-indigo-900 to-slate-900 flex flex-col shadow-[15px_0_40px_rgba(0,0,0,0.4)] overflow-hidden whitespace-nowrap z-[110] ${displayCollapsed ? 'w-20' : 'w-72'}`}
+        >
           {sidebarContent}
         </aside>
         
         {/* Floating Toggle Button */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-4 top-24 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.15)] rounded-full p-2 text-navy hover:bg-gold hover:text-white hover:scale-110 transition-all duration-200 z-[100] flex items-center justify-center border border-indigo-100/10 group"
+          className={`absolute top-24 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.2)] rounded-full p-2 text-navy hover:bg-gold hover:text-white hover:scale-110 transition-all duration-300 ease-in-out z-[120] flex items-center justify-center border border-indigo-100/10 group ${
+            displayCollapsed ? '-right-4' : (collapsed ? '-right-[224px]' : '-right-4')
+          }`}
           title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           <div className="transition-transform duration-300">

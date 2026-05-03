@@ -511,8 +511,8 @@ export const bulkApproveRequests = async (req, res, next) => {
       results.push(approval._id);
     }
 
-    for (const id of requestIdsToRecalc) {
-      await recalcRequestStatus(id, session);
+    if (requestIdsToRecalc.size > 0) {
+      await bulkRecalcRequestStatus(Array.from(requestIdsToRecalc), session);
     }
     await commitSafeTransaction(session);
 
@@ -802,4 +802,47 @@ export async function recalcRequestStatus(requestId, session = null) {
   await updateQuery;
   
   return status;
+}
+
+/**
+ * Recalculates status for multiple NodueRequests in a single operation.
+ * Eliminates the N+1 query problem by using aggregation and bulkWrite.
+ */
+export async function bulkRecalcRequestStatus(requestIds, session = null) {
+  if (!requestIds || requestIds.length === 0) return;
+
+  const oids = requestIds.map(id => 
+    id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(id)
+  );
+
+  const results = await NodueApproval.aggregate([
+    { $match: { requestId: { $in: oids } } },
+    {
+      $group: {
+        _id: "$requestId",
+        dueCount: { $sum: { $cond: [{ $eq: ["$action", "due_marked"] }, 1, 0] } },
+        pendingMandatory: { $sum: { $cond: [
+          { $and: [
+            { $ne: ["$isOptional", true] },
+            { $not: [{ $in: ["$action", ["approved", "due_marked"]] }] }
+          ]},
+          1, 0
+        ] } }
+      }
+    }
+  ]).session(session);
+
+  const updates = results.map(res => {
+    const status = res.dueCount > 0 ? 'has_dues' : res.pendingMandatory === 0 ? 'cleared' : 'pending';
+    return {
+      updateOne: {
+        filter: { _id: res._id },
+        update: { $set: { status, updatedAt: new Date() } }
+      }
+    };
+  });
+
+  if (updates.length > 0) {
+    await NodueRequest.bulkWrite(updates, { session });
+  }
 }

@@ -1,9 +1,12 @@
 import React from 'react';
 import BackHeader from '../ui/BackHeader';
+import { useUI } from '../../hooks/useUI';
 
 const PageWrapper = ({ children, title, subtitle, backTitle, backFallback, isRefreshing, headerActions }) => {
+  const { isFocusMode } = useUI();
+
   return (
-    <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-10 fade-up max-w-full overflow-x-hidden relative">
+    <div className={`flex-1 min-w-0 transition-all duration-500 fade-up max-w-full overflow-x-hidden relative ${isFocusMode ? 'p-2 sm:p-4 lg:p-6' : 'p-4 sm:p-6 lg:p-10'}`}>
       {isRefreshing && (
         <div className="fixed top-0 inset-x-0 z-[100] h-0.5 pointer-events-none">
           <div className="h-full bg-gold/80 animate-progress origin-left" />
@@ -13,10 +16,10 @@ const PageWrapper = ({ children, title, subtitle, backTitle, backFallback, isRef
         {backFallback && (
           <BackHeader title={backTitle || 'Back'} fallback={backFallback} />
         )}
-        <header className="mb-8 lg:mb-10">
+        <header className={`transition-all duration-500 ${isFocusMode ? 'mb-4 lg:mb-6 opacity-40 hover:opacity-100' : 'mb-8 lg:mb-10'}`}>
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 md:gap-6">
             <div className="space-y-1">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-navy tracking-tighter leading-none">
+              <h1 className={`font-black text-navy tracking-tighter leading-none transition-all duration-500 ${isFocusMode ? 'text-xl sm:text-2xl lg:text-3xl' : 'text-3xl sm:text-4xl lg:text-5xl'}`}>
                 {title}
               </h1>
               {subtitle && (

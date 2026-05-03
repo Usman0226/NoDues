@@ -172,7 +172,7 @@ const itemVariants = {
 
 const MemoizedClearanceCard = React.memo(({ 
   item, 
-  index,      
+  // index,      
   handleOpenSubmission, 
   canSubmit, 
   isCoCurricular,
