@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://nodues-jbzp.onrender.com/api/:path*"
+      "destination": "http://40.81.243.62:5000/api/:path*"
     },
     {
       "source": "/(.*)",
