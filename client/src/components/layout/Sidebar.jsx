@@ -167,10 +167,8 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const { isFeedbackOpen, openFeedback, closeFeedback } = useFeedback();
   const navItems = React.useMemo(() => NAV_CONFIG[user?.role] || [], [user?.role]);
 
-  // Accordion state: only one section expanded at a time
   const [expandedSection, setExpandedSection] = useState(null);
 
-  // Auto-expand section containing active link on location change
   useEffect(() => {
     const activeSection = navItems.find(section => 
       section.items?.some(item => {

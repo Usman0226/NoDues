@@ -1572,7 +1572,7 @@ export const bulkSyncClassTeacherUpdate = async (classId, classTeacherId, classT
  */
 export const syncAllActiveBatches = async () => {
   try {
-    const activeBatches = await NodueBatch.find({ status: 'active' });
+    const activeBatches = await NodueBatch.find({ status: 'active' }).lean();
     logger.info('sync_all_active_batches_started', { count: activeBatches.length });
 
     for (const batch of activeBatches) {
@@ -1580,7 +1580,8 @@ export const syncAllActiveBatches = async () => {
       if (!cls) continue;
 
       const students = await Student.find({ classId: batch.classId, isActive: true }).lean();
-      
+      if (students.length === 0) continue;
+
       const [hodAccount, ctInfo, coCurricularItems, mentors] = await Promise.all([
         Faculty.findOne({ departmentId: cls.departmentId, roleTags: 'hod' }).lean(),
         cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').lean() : null,
@@ -1589,89 +1590,111 @@ export const syncAllActiveBatches = async () => {
       ]);
 
       const mentorMap = new Map(mentors.map(m => [m._id.toString(), m.name]));
+      
+      // Fetch existing requests and approvals for this batch
+      const existingRequests = await NodueRequest.find({ batchId: batch._id }).lean();
+      const requestMap = new Map(existingRequests.map(r => [r.studentId.toString(), r]));
+      
+      const existingApprovals = await NodueApproval.find({ batchId: batch._id }).select('requestId roleTag itemTypeId subjectId').lean();
+      const approvalLookup = new Set(existingApprovals.map(a => 
+        `${a.requestId}_${a.roleTag}_${a.itemTypeId ?? ''}_${a.subjectId ?? ''}`
+      ));
+
+      const requestBulkOps = [];
+      const newApprovals = [];
+      const affectedRequestIds = new Set();
 
       for (const student of students) {
-        try {
-          let request = await NodueRequest.findOne({ batchId: batch._id, studentId: student._id });
-          
-          const freshSnapshot = generateStudentSnapshotData(student, cls, {
-            hodAccount,
-            ctInfo,
-            mentorMap,
-            coCurricularItems
-          });
+        const studentIdStr = student._id.toString();
+        const existingReq = requestMap.get(studentIdStr);
+        
+        const freshSnapshot = generateStudentSnapshotData(student, cls, {
+          hodAccount,
+          ctInfo,
+          mentorMap,
+          coCurricularItems
+        });
 
-          if (!request) {
-            request = await NodueRequest.create({
-              batchId: batch._id,
-              studentId: student._id,
-              studentSnapshot: {
-                rollNo: student.rollNo,
-                name: student.name,
-                departmentName: cls.departmentId?.name ?? null,
-              },
-              facultySnapshot: freshSnapshot,
-              status: 'pending'
-            });
-          } else {
-            request.facultySnapshot = freshSnapshot;
-            request.markModified('facultySnapshot');
-            await request.save();
-          }
+        let requestId;
 
-          // Ensure all approval records from snapshot exist
-          for (const f of Object.values(freshSnapshot)) {
-            const query = {
-              requestId: request._id,
-              roleTag: f.roleTag,
-              itemTypeId: f.itemTypeId ?? null,
-              subjectId: f.subjectId ?? null
-            };
-
-            const existing = await NodueApproval.findOne(query);
-
-            if (!existing) {
-              await NodueApproval.create({
-                requestId: request._id,
+        if (!existingReq) {
+          requestId = new mongoose.Types.ObjectId();
+          requestBulkOps.push({
+            insertOne: {
+              document: {
+                _id: requestId,
                 batchId: batch._id,
                 studentId: student._id,
-                studentRollNo: student.rollNo,
-                studentName: student.name,
-                facultyId: f.facultyId,
-                subjectId: f.subjectId ?? null,
-                subjectName: f.subjectName ?? null,
-                itemTypeId: f.itemTypeId ?? null,
-                itemTypeName: f.itemTypeName ?? null,
-                itemCode: f.itemCode ?? null,
-                isOptional: f.isOptional ?? false,
-                approvalType: f.approvalType,
-                roleTag: f.roleTag,
-                action: f.approvalType === 'coCurricular' ? 'not_submitted' : 'pending'
-              });
+                studentSnapshot: {
+                  rollNo: student.rollNo,
+                  name: student.name,
+                  departmentName: cls.departmentId?.name ?? null,
+                },
+                facultySnapshot: freshSnapshot,
+                status: 'pending'
+              }
             }
-          }
-          
-          await recalcRequestStatus(request._id);
-          
-          // Invalidate student status cache to ensure immediate visibility
-          invalidateEntityCache('student', student._id);
-          
-          // Throttling to avoid overwhelming M0 cluster/connection pool
-          await new Promise(resolve => setTimeout(resolve, 50));
-        } catch (err) {
-          logger.error('sync_individual_student_failed', { 
-            studentId: student._id, 
-            rollNo: student.rollNo,
-            error: err.message 
+          });
+        } else {
+          requestId = existingReq._id;
+          requestBulkOps.push({
+            updateOne: {
+              filter: { _id: requestId },
+              update: { $set: { facultySnapshot: freshSnapshot } }
+            }
           });
         }
+        
+        affectedRequestIds.add(requestId.toString());
+
+        // Prepare missing approvals
+        for (const f of Object.values(freshSnapshot)) {
+          const key = `${requestId}_${f.roleTag}_${f.itemTypeId ?? ''}_${f.subjectId ?? ''}`;
+          if (!approvalLookup.has(key)) {
+            newApprovals.push({
+              requestId: requestId,
+              batchId: batch._id,
+              studentId: student._id,
+              studentRollNo: student.rollNo,
+              studentName: student.name,
+              facultyId: f.facultyId,
+              subjectId: f.subjectId ?? null,
+              subjectName: f.subjectName ?? null,
+              itemTypeId: f.itemTypeId ?? null,
+              itemTypeName: f.itemTypeName ?? null,
+              itemCode: f.itemCode ?? null,
+              isOptional: f.isOptional ?? false,
+              approvalType: f.approvalType,
+              roleTag: f.roleTag,
+              action: f.approvalType === 'coCurricular' ? 'not_submitted' : 'pending'
+            });
+            // Add to lookup to prevent duplicates if any
+            approvalLookup.add(key);
+          }
+        }
       }
+
+      // Execute batch operations
+      if (requestBulkOps.length > 0) {
+        await NodueRequest.bulkWrite(requestBulkOps);
+      }
+      if (newApprovals.length > 0) {
+        await NodueApproval.insertMany(newApprovals);
+      }
+
+      // Bulk recalculate statuses for all students in this batch
+      if (affectedRequestIds.size > 0) {
+        await bulkRecalcRequestStatus(Array.from(affectedRequestIds));
+      }
+      
+      logger.info('sync_batch_completed', { batchId: batch._id, students: students.length });
     }
 
     logger.audit('SYNC_ALL_ACTIVE_BATCHES_COMPLETE', { timestamp: new Date() });
     invalidateEntityCache('student', 'all');
     invalidateEntityCache('batch', 'all');
+    invalidateEntityCache('class', 'all');
   } catch (err) {
-    logger.error('sync_all_active_batches_failed', { error: err.message });
+    logger.error('sync_all_active_batches_failed', { error: err.message, stack: err.stack });
   }
 };

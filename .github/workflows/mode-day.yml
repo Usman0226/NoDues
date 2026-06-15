@@ -1,33 +1,33 @@
-name: Switch to Azure
+# name: Switch to Azure
 
-on:
-  schedule:
-    - cron: '45 3 * * *' # 9:15 AM IST
-  workflow_dispatch:
+# on:
+#   schedule:
+#     - cron: '45 3 * * *' # 9:15 AM IST
+#   workflow_dispatch:
 
-permissions:
-  contents: write
+# permissions:
+#   contents: write
 
-jobs:
-  switch-to-azure:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+# jobs:
+#   switch-to-azure:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - name: Update vercel.json to Azure
-        run: |
-          date
-          sed -i 's|.*destination.*api/:path.*|      "destination": "http://40.81.243.62:5000/api/:path*"|' client/vercel.json
-          cat client/vercel.json
+#       - name: Update vercel.json to Azure
+#         run: |
+#           date
+#           sed -i 's|.*destination.*api/:path.*|      "destination": "http://40.81.243.62:5000/api/:path*"|' client/vercel.json
+#           cat client/vercel.json
 
-      - name: Commit and Push
-        run: |
-          git config --global user.name "Deployment automation"
-          git config --global user.email "bot@nodues.com"
-          git add client/vercel.json
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Day Mode: Switched server to Azure VM"
-            git push origin main || (git pull --rebase origin main && git push origin main)
-          fi
+#       - name: Commit and Push
+#         run: |
+#           git config --global user.name "Deployment automation"
+#           git config --global user.email "bot@nodues.com"
+#           git add client/vercel.json
+#           if git diff --staged --quiet; then
+#             echo "No changes to commit"
+#           else
+#             git commit -m "Day Mode: Switched server to Azure VM"
+#             git push origin main || (git pull --rebase origin main && git push origin main)
+#           fi
