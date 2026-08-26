@@ -1,8 +1,3 @@
-#!/bin/bash
-
-# NoDues Azure VM Setup Script
-# Use: curl -sSL https://raw.githubusercontent.com/your-repo/setup.sh | bash
-
 set -e
 
 echo "🚀 Starting NoDues Azure VM Setup (B2s Optimized)"

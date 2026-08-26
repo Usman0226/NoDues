@@ -25,7 +25,7 @@ const isFacultyOrAdmin = (req) => {
 
 export const apiLimiter = rateLimit({
   windowMs: 2 * 60 * 1000, 
-  max: 1000, 
+  max: 500, 
   standardHeaders: true, 
   legacyHeaders: false,
   message: {
@@ -54,17 +54,21 @@ export const authLimiter = rateLimit({
   max: 10, 
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req, res) => {
+    return req.body?.rollNo || req.ip;
+  },
   message: {
     success: false,
     error: {
       code: 'AUTH_RATE_LIMIT_EXCEEDED',
-      message: 'Too many login attempts from this IP, please try again after 2 minutes',
+      message: 'Too many login attempts, please try again after 2 minutes',
       statusCode: 429
     }
   },
   handler: (req, res, next, options) => {
     logger.warn('Auth rate limit exceeded', {
       ip: req.ip,
+      rollNo: req.body?.rollNo || 'N/A',
       method: req.method,
       path: req.path
     });
@@ -72,12 +76,10 @@ export const authLimiter = rateLimit({
   }
 });
 
-/**
- * Rate limiter for heavy import operations
- */
+
 export const importLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 30, // Limit each IP to 30 import-related requests per hour
+  windowMs: 60 * 60 * 1000, 
+  max: 30, 
   standardHeaders: true,
   legacyHeaders: false,
   message: {

@@ -14,7 +14,6 @@ const connectDB = async (retryCount = 5) => {
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
     return true;
   } catch (err) {
-    // Specific diagnostic tips for common connection issues
     let tip = '';
     if (err.message.includes('ENOTFOUND')) {
       tip = 'DNS Error: Your server cannot resolve the MongoDB Atlas hostname. Check your VM DNS settings.';

@@ -9,7 +9,6 @@ export const RoleGuard = (roles) => (req, res, next) => {
     return next(new ErrorResponse('Authentication required', 401, 'AUTH_REQUIRED'));
   }
 
-  // Support both single role and roleTags array
   const userRoles = req.user.roleTags || [req.user.role];
   const hasAccess = roles.some(role => userRoles.includes(role));
 

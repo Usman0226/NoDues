@@ -12,3 +12,4 @@ phases
 scratch
 .npm
 .vscode
+.gsd/*
