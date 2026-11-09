@@ -47,6 +47,23 @@ const studentSchema = new mongoose.Schema(
       ref: 'Class',
       required: [true, 'Class is required'],
     },
+    batchId: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'Batch',
+      default: null,
+    },
+    currentSemester: {
+      type: Number,
+      min: 1,
+      max: 8,
+      default: null,
+    },
+    semesterOverride: {
+      type: Number,
+      min: 1,
+      max: 8,
+      default: null,
+    },
     departmentId: {
       type: mongoose.Schema.ObjectId,
       ref: 'Department',
@@ -120,6 +137,9 @@ studentSchema.index({ departmentId: 1, isActive: 1 });
 
 // Mentor's student list
 studentSchema.index({ mentorId: 1 });
+
+// Batch student list
+studentSchema.index({ batchId: 1, isActive: 1 });
 
 studentSchema.post('save', function(doc) {
   invalidateEntityCache('student', doc._id, doc.classId);
