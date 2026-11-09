@@ -13,3 +13,4 @@ scratch
 .npm
 .vscode
 .gsd/*
+node_modules/
