@@ -10,10 +10,10 @@
 
 | TRD ID | Item | Owner | Status | Evidence / Artifact |
 |---|---|---|---|---|
-| **0.1** | Manual Production Backup Snapshot | Admin (Manual) | ⏳ Awaiting Admin Action | `docs/runbooks/phase0-backup-restore.md` §Step 0.1 |
-| **0.2** | Restore snapshot into separate test cluster | Admin (Manual) | ⏳ Awaiting Admin Action | `docs/runbooks/phase0-backup-restore.md` §Step 0.2 |
+| **0.1** | Manual Production Backup (mongodump) | Admin (Manual) | ⏳ Awaiting Admin Action | `docs/runbooks/phase0-backup-restore.md` §3 |
+| **0.2** | Restore backup into separate test cluster (mongorestore) | Admin (Manual) | ⏳ Awaiting Admin Action | `docs/runbooks/phase0-backup-restore.md` §4 |
 | **0.2b** | Verify collection document counts | Automated / Admin | ✅ Tool Ready | `scripts/verify-counts.js` |
-| **0.3** | Clone production data into staging cluster | Admin (Manual) | ⏳ Awaiting Admin Action | `docs/runbooks/phase0-backup-restore.md` §Step 0.3 |
+| **0.3** | Clone production data into staging cluster | Admin (Manual) | ⏳ Awaiting Admin Action | `docs/runbooks/phase0-backup-restore.md` §6 |
 | **0.4** | Characterization regression suite | Agent (Automated) | ✅ Passed (21/21 tests) | `server/test/regression/phase0-characterization.test.js` |
 | **Baseline** | Staging index list, collection sizes & explain plans | Automated / Doc | ✅ Generated & Tool Ready | `scripts/capture-baseline.js` & `docs/phase0-baseline.md` |
 
@@ -75,10 +75,10 @@ The following behaviors were identified during code inspection and characterizat
 
 ## Manual Actions Remaining for Administrator
 
-- [ ] **Step 0.1**: Execute manual on-demand snapshot in MongoDB Atlas Console (see `docs/runbooks/phase0-backup-restore.md` §Step 0.1).
-- [ ] **Step 0.1b**: Record snapshot timestamp and ID.
-- [ ] **Step 0.2**: Restore snapshot into isolated test database (`test_nodues_restore`).
-- [ ] **Step 0.2b**: Run `node scripts/verify-counts.js <PROD_URI>` and `node scripts/verify-counts.js <TEST_URI>` and verify identical counts.
-- [ ] **Step 0.3**: Restore snapshot into persistent `staging` cluster.
+- [ ] **Step 0.1**: Execute client-side compressed backup via `mongodump` (see `docs/runbooks/phase0-backup-restore.md` §3).
+- [ ] **Step 0.1b**: Record backup archive timestamp and path outside git.
+- [ ] **Step 0.2**: Restore backup into isolated test database (`test_nodues_restore`) via `mongorestore` (see runbook §4).
+- [ ] **Step 0.2b**: Run `node scripts/verify-counts.js <PROD_URI> --json` and `node scripts/verify-counts.js <TEST_URI> --json` and verify 0 diff.
+- [ ] **Step 0.3**: Populate persistent staging database (`nodues_staging`) via `mongorestore` (see runbook §6).
 - [ ] **Step 0.3b**: Re-run `node scripts/capture-baseline.js <STAGING_URI>` to capture live staging cluster metrics into `docs/phase0-baseline.md`.
 - [ ] **Verification**: Confirm staging URI and safety isolation before Phase 1 begins.

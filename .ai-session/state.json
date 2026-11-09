@@ -1,14 +1,22 @@
 {
-  "last_updated": "2026-04-30T13:35:00Z",
+  "last_updated": "2026-11-10T03:00:00Z",
   "completed": [
     "Implement Admin Feedback Dashboard",
     "Secure feedback API for Admin-only access",
     "Add status management (PATCH) and deletion (DELETE) for feedback",
     "Create FeedbackReview frontend page with filtering and pagination",
-    "Strictly restrict feedback management to Admin role across UI and Backend"
+    "Strictly restrict feedback management to Admin role across UI and Backend",
+    "TRD Phase 0: Operational runbook for M0 Free-Tier backup/restore/cloning (docs/runbooks/phase0-backup-restore.md)",
+    "TRD Phase 0: Read-only per-collection document count verification script (scripts/verify-counts.js)",
+    "TRD Phase 0: Characterization regression test suite & safety harness with 21/21 passing tests (server/test/)",
+    "TRD Phase 0: Schema index catalog, explain plans, and latency baseline report (docs/phase0-baseline.md)"
   ],
-  "in_progress": [],
-  "pending": [],
+  "in_progress": [
+    "Phase 0 Admin Actions: Client-side mongodump production backup and staging clone verification"
+  ],
+  "pending": [
+    "Phase 1: Additive Schema Introduction (migrate-mongo, featureFlags, batches schema)"
+  ],
   "decisions": [
     { 
       "context": "Frontend date formatting", 
@@ -19,6 +27,16 @@
       "context": "Access Control",
       "decision": "Implemented triple-layer protection (Backend RoleGuard, AppRouter ProtectedRoute, and Component-level useAuth check).",
       "trade_offs": "Redundant but ensures maximum security as requested by the user."
+    },
+    {
+      "context": "M0 Free-Tier Backup & Restore Architecture (TRD Steps 0.1-0.3)",
+      "decision": "Atlas M0 Free Tier does not support Atlas Cloud Backup or web console snapshots. All backups, test restores, and staging clones are conducted client-side via mongodump and mongorestore with compressed BSON archives (.gz) outside git tracking.",
+      "trade_offs": "Requires local mongodump CLI and egress bandwidth, but guarantees exact BSON type fidelity and zero cloud cost without requiring paid M10+ tier."
+    },
+    {
+      "context": "Git Strategy & Deployment Safety",
+      "decision": "Pushing to GitHub is strictly reserved for the human administrator. Agent commits locally on phase branches (e.g., phase-0-safety-net) and never executes git push.",
+      "trade_offs": "Prevents accidental CI/CD trigger or auto-deploy to live production."
     }
   ],
   "blockers": []
