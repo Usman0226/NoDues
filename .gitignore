@@ -15,4 +15,6 @@ scratch
 .gsd/*
 node_modules/
 backups/
+merges/
+
 
