@@ -7,11 +7,12 @@ import { ROLES } from '../../utils/constants';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardCheck,
   Shield, History, ChevronLeft, ChevronRight,
-  Building2, AlertTriangle, Layers, X, GraduationCap, Inbox, MessageSquarePlus, MessageSquare
+  Building2, AlertTriangle, Layers, X, GraduationCap, Inbox, MessageSquarePlus, MessageSquare, Wand2
 } from 'lucide-react';
 import { useFeedback } from '../../hooks/useFeedback';
 import FeedbackModal from '../Feedback/FeedbackModal';
 import { formatRole } from '../../utils/formatters';
+import { useSetupWizardFlag } from '../../hooks/useFeatureFlag';
 
 const NAV_CONFIG = {
   [ROLES.ADMIN]: [
@@ -165,7 +166,27 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const { user } = useAuth();
   const location = useLocation();
   const { isFeedbackOpen, openFeedback, closeFeedback } = useFeedback();
-  const navItems = React.useMemo(() => NAV_CONFIG[user?.role] || [], [user?.role]);
+  const { isEnabled: wizardEnabled } = useSetupWizardFlag();
+  const navItems = React.useMemo(() => {
+    const baseConfig = NAV_CONFIG[user?.role] || [];
+    if (!wizardEnabled || ![ROLES.ADMIN, ROLES.HOD].includes(user?.role)) {
+      return baseConfig;
+    }
+    return baseConfig.map((section) => {
+      if (section.label === 'Academic' && section.items) {
+        if (!section.items.some((i) => i.path === '/admin/setup')) {
+          return {
+            ...section,
+            items: [
+              ...section.items,
+              { label: 'Setup Wizard', path: '/admin/setup', icon: Wand2 },
+            ],
+          };
+        }
+      }
+      return section;
+    });
+  }, [user?.role, wizardEnabled]);
 
   const [expandedSection, setExpandedSection] = useState(null);
 

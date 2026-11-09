@@ -1,5 +1,6 @@
 import TimetableUpload from '../models/TimetableUpload.js';
 import Class from '../models/Class.js';
+import Subject from '../models/Subject.js';
 import { parseTimetablePdf } from '../services/timetableParser.js';
 import logger from '../utils/logger.js';
 
@@ -56,7 +57,7 @@ export async function previewTimetable(req, res, next) {
     const uploadRecord = await TimetableUpload.create({
       classId: targetClass._id,
       targetSemester: targetSem,
-      uploadedBy: req.user._id,
+      uploadedBy: req.user._id || req.user.userId,
       uploaderModel: req.user.role === 'admin' ? 'Admin' : 'Faculty',
       originalFileName: req.file.originalname || 'timetable.pdf',
       parsedRowCount: parsedData.parsedRowCount,
@@ -130,18 +131,35 @@ export async function commitTimetable(req, res, next) {
       uploadDoc = await TimetableUpload.findById(uploadId);
     }
 
-    // Filter out excluded rows
-    const subjectsToCommit = confirmedRows
-      .filter(r => r.status !== 'excluded')
-      .map(r => ({
-        subjectId: r.subjectId,
-        subjectName: r.subjectName,
-        subjectCode: r.subjectCode,
-        facultyId: r.facultyId,
-        facultyName: r.facultyName,
-        coFacultyIds: r.coFacultyIds || [],
-        source: 'timetable_parse',
-      }));
+    // Filter out excluded rows and ensure valid Subject IDs
+    const subjectsToCommit = [];
+    for (const r of confirmedRows.filter((row) => row.status !== 'excluded')) {
+      let resolvedSubjectId = r.subjectId;
+      if (!resolvedSubjectId && r.subjectCode) {
+        let sub = await Subject.findOne({ code: r.subjectCode.toUpperCase() });
+        if (!sub) {
+          sub = await Subject.create({
+            code: r.subjectCode.toUpperCase(),
+            name: r.subjectName || r.subjectCode,
+            semester: targetSem,
+            isActive: true,
+          });
+        }
+        resolvedSubjectId = sub._id;
+      }
+
+      if (resolvedSubjectId) {
+        subjectsToCommit.push({
+          subjectId: resolvedSubjectId,
+          subjectName: r.subjectName,
+          subjectCode: r.subjectCode,
+          facultyId: r.facultyId || null,
+          facultyName: r.facultyName || null,
+          coFacultyIds: r.coFacultyIds || [],
+          source: 'timetable_parse',
+        });
+      }
+    }
 
     // Archive previous semester entries if present (FR-B3)
     if (!targetClass.semesterSubjects) {
@@ -186,7 +204,7 @@ export async function commitTimetable(req, res, next) {
       classId: targetClass._id,
       semester: targetSem,
       subjectCount: subjectsToCommit.length,
-      actor: req.user._id,
+      actor: req.user._id || req.user.userId,
     });
 
     return res.status(200).json({

@@ -1,6 +1,7 @@
 {
   "name": "nodues-root",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "dev:client": "cd client && npm run dev",
     "dev:server": "cd server && npm run dev",

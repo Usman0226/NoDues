@@ -12,13 +12,25 @@ import {
 } from '../Controllers/wizardController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
-import { requireFeature } from '../utils/featureFlags.js';
+import { isFeatureEnabled, requireFeature } from '../utils/featureFlags.js';
 
 const router = Router();
 
-// 1. Authentication & Role Authorization
+// 1. Authentication & Role Authorization (Admin and HoD per TRD / features guide)
 router.use(protect);
-router.use(RoleGuard(['admin']));
+router.use(RoleGuard(['admin', 'hod']));
+
+// Feature flag status check for client UI
+router.get('/status', async (_req, res) => {
+  const enabled = await isFeatureEnabled('setup_wizard_enabled');
+  res.status(200).json({
+    success: true,
+    data: {
+      enabled,
+      flagName: 'setup_wizard_enabled',
+    },
+  });
+});
 
 // 2. Feature Flag Gate (FR-F3 to FR-F5): Returns 404 FEAT_001 if flag disabled
 router.use(requireFeature('setup_wizard_enabled'));

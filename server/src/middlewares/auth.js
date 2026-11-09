@@ -21,6 +21,9 @@ export const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     req.user = decoded;
+    if (!req.user._id && req.user.userId) {
+      req.user._id = req.user.userId;
+    }
 
     if (
       decoded.mustChangePassword &&

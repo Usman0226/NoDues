@@ -46,6 +46,8 @@ import EmailMonitor from './pages/admin/EmailMonitor';
 import CoCurricular from './pages/admin/CoCurricular';
 import FeedbackReview from './pages/admin/FeedbackReview';
 
+const SetupWizard = React.lazy(() => import('./pages/admin/SetupWizard'));
+
 import HodDashboard from './pages/hod/Dashboard';
 import Dues from './pages/hod/Dues';
 import Overrides from './pages/hod/Overrides';
@@ -257,6 +259,16 @@ const AppContent = () => {
             <Route path="/admin/students" element={<StudentList />} />
             <Route path="/admin/subjects" element={<Subjects />} />
             <Route path="/admin/batches" element={<Batches />} />
+            <Route
+              path="/admin/setup"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.HOD]}>
+                  <React.Suspense fallback={<PageSpinner message="Loading Setup Wizard..." />}>
+                    <SetupWizard />
+                  </React.Suspense>
+                </ProtectedRoute>
+              }
+            />
             <Route path="/admin/batch/:batchId" element={<BatchView />} />
             <Route path="/admin/batch/:batchId/students/:studentId" element={<BatchStudentDetail />} />
             <Route path="/admin/co-curricular" element={<CoCurricular />} />

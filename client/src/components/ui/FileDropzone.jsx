@@ -59,8 +59,13 @@ const FileDropzone = ({ onFileSelect, accept = '.csv,.xlsx', label = 'Upload Fil
           <FileText size={20} className="text-navy" />
           <span className="text-sm font-medium text-navy">{file.name}</span>
           <span className="text-xs text-muted-foreground">({(file.size / 1024).toFixed(1)} KB)</span>
-          <button onClick={(e) => { e.stopPropagation(); clearFile(); }} className="p-1 rounded-full hover:bg-status-rejected/10 text-status-rejected">
-            <X size={14} />
+          <button
+            type="button"
+            aria-label="Remove uploaded file"
+            onClick={(e) => { e.stopPropagation(); clearFile(); }}
+            className="p-1 rounded-full hover:bg-status-rejected/10 text-status-rejected min-h-[36px] min-w-[36px] flex items-center justify-center"
+          >
+            <X size={16} />
           </button>
         </div>
       )}
