@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-11-10T03:00:00Z",
+  "last_updated": "2026-11-10T03:15:00Z",
   "completed": [
     "Implement Admin Feedback Dashboard",
     "Secure feedback API for Admin-only access",
@@ -8,14 +8,20 @@
     "Strictly restrict feedback management to Admin role across UI and Backend",
     "TRD Phase 0: Operational runbook for M0 Free-Tier backup/restore/cloning (docs/runbooks/phase0-backup-restore.md)",
     "TRD Phase 0: Read-only per-collection document count verification script (scripts/verify-counts.js)",
+    "TRD Phase 0: Automated local backup & restore tools without paid add-ons (scripts/backup.js & scripts/restore.js)",
     "TRD Phase 0: Characterization regression test suite & safety harness with 21/21 passing tests (server/test/)",
-    "TRD Phase 0: Schema index catalog, explain plans, and latency baseline report (docs/phase0-baseline.md)"
+    "TRD Phase 0: Schema index catalog, explain plans, and latency baseline report (docs/phase0-baseline.md)",
+    "TRD Phase 1: Configured migrate-mongo migration framework (server/migrate-mongo-config.js)",
+    "TRD Phase 1: Database-backed FeatureFlag model & 5s TTL cache guard (server/src/models/FeatureFlag.js)",
+    "TRD Phase 1: Batch collection model with semester advance & graduation logic (server/src/models/Batch.js)",
+    "TRD Phase 1: Additive persistent class semesterSubjects and student batch fields (Class.js & Student.js)",
+    "TRD Phase 1: Timetable PDF text-layer parser service, upload audit, and preview/commit endpoints (timetableParser.js)",
+    "TRD Phase 1: Centralized Action Registry with Zod schema validation & audit logging (actionRegistry.js)",
+    "TRD Phase 1: Comprehensive unit and integration test suite with 16/16 passing tests (phase1-features.test.js)"
   ],
-  "in_progress": [
-    "Phase 0 Admin Actions: Client-side mongodump production backup and staging clone verification"
-  ],
+  "in_progress": [],
   "pending": [
-    "Phase 1: Additive Schema Introduction (migrate-mongo, featureFlags, batches schema)"
+    "Phase 2: Batch Inference Migration (migrate-mongo script, human review, staging verification)"
   ],
   "decisions": [
     { 
@@ -30,13 +36,23 @@
     },
     {
       "context": "M0 Free-Tier Backup & Restore Architecture (TRD Steps 0.1-0.3)",
-      "decision": "Atlas M0 Free Tier does not support Atlas Cloud Backup or web console snapshots. All backups, test restores, and staging clones are conducted client-side via mongodump and mongorestore with compressed BSON archives (.gz) outside git tracking.",
-      "trade_offs": "Requires local mongodump CLI and egress bandwidth, but guarantees exact BSON type fidelity and zero cloud cost without requiring paid M10+ tier."
+      "decision": "Atlas M0 Free Tier does not support Atlas Cloud Backup or web console snapshots. All backups, test restores, and staging clones are conducted client-side via node scripts/backup.js with compressed BSON/JSON archives (.gz) outside git tracking.",
+      "trade_offs": "Requires local execution and egress bandwidth, but guarantees exact BSON type fidelity and zero cloud cost without requiring paid M10+ tier."
     },
     {
       "context": "Git Strategy & Deployment Safety",
-      "decision": "Pushing to GitHub is strictly reserved for the human administrator. Agent commits locally on phase branches (e.g., phase-0-safety-net) and never executes git push.",
+      "decision": "Pushing to GitHub is strictly reserved for the human administrator. Agent commits locally on phase branches (e.g., phase-0-safety-net, phase-1-additive-schema) and never executes git push.",
       "trade_offs": "Prevents accidental CI/CD trigger or auto-deploy to live production."
+    },
+    {
+      "context": "Feature Flag Performance (FR-F3 to FR-F5)",
+      "decision": "Implemented an in-memory 5-second TTL cache for feature flag lookups in server/src/utils/featureFlags.js with instant cache invalidation on mutations.",
+      "trade_offs": "Absorbs high-volume traffic spikes while strictly respecting FR-F5 requirement that flag changes take effect within <=10s."
+    },
+    {
+      "context": "Timetable Parsing Architecture (FR-C1 to FR-C8)",
+      "decision": "Used text-layer PDF parsing with honorific stripping, regex table extraction, 'without teacher' exclusions, and explicit Preview -> Commit staging.",
+      "trade_offs": "Guarantees zero OCR/ML hallucination, sub-second parsing time (<3s NFR-2), and prevents silent data overwrites."
     }
   ],
   "blockers": []
