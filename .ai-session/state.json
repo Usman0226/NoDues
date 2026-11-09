@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-11-10T03:15:00Z",
+  "last_updated": "2026-11-10T03:26:00Z",
   "completed": [
     "Implement Admin Feedback Dashboard",
     "Secure feedback API for Admin-only access",
@@ -17,11 +17,13 @@
     "TRD Phase 1: Additive persistent class semesterSubjects and student batch fields (Class.js & Student.js)",
     "TRD Phase 1: Timetable PDF text-layer parser service, upload audit, and preview/commit endpoints (timetableParser.js)",
     "TRD Phase 1: Centralized Action Registry with Zod schema validation & audit logging (actionRegistry.js)",
-    "TRD Phase 1: Comprehensive unit and integration test suite with 16/16 passing tests (phase1-features.test.js)"
+    "TRD Phase 1: Comprehensive unit and integration test suite with 16/16 passing tests (phase1-features.test.js)",
+    "TRD Phase 2: Idempotent Batch Inference migration script with full rollback support (server/migrations/20260415-infer-batches.js)",
+    "TRD Phase 2: Integration tests verifying formula accuracy, idempotency, rollback, and audit logging with 4/4 passing tests (phase2-migration.test.js)"
   ],
   "in_progress": [],
   "pending": [
-    "Phase 2: Batch Inference Migration (migrate-mongo script, human review, staging verification)"
+    "Phase 3: Class Identity Consolidation (proposeClassMerges.js, human review, commitClassMerge.js)"
   ],
   "decisions": [
     { 
@@ -41,7 +43,7 @@
     },
     {
       "context": "Git Strategy & Deployment Safety",
-      "decision": "Pushing to GitHub is strictly reserved for the human administrator. Agent commits locally on phase branches (e.g., phase-0-safety-net, phase-1-additive-schema) and never executes git push.",
+      "decision": "Pushing to GitHub is strictly reserved for the human administrator. Agent commits locally on phase branches (e.g., phase-0-safety-net, phase-1-additive-schema, phase-2-batch-inference) and never executes git push.",
       "trade_offs": "Prevents accidental CI/CD trigger or auto-deploy to live production."
     },
     {
@@ -53,6 +55,11 @@
       "context": "Timetable Parsing Architecture (FR-C1 to FR-C8)",
       "decision": "Used text-layer PDF parsing with honorific stripping, regex table extraction, 'without teacher' exclusions, and explicit Preview -> Commit staging.",
       "trade_offs": "Guarantees zero OCR/ML hallucination, sub-second parsing time (<3s NFR-2), and prevents silent data overwrites."
+    },
+    {
+      "context": "Batch Inference Migration Formula (TRD Step 2.1)",
+      "decision": "Computed batchStartYear = academicStartYear - Math.floor((semester - 1) / 2) with multi-level fallback (student.academicYear -> class.academicYear -> rollNo prefix). BulkWrite in chunks of 500.",
+      "trade_offs": "Handles all MITS 4-year cohorts with 100% determinism; chunking avoids memory pressure and connection timeouts on M0 free tier."
     }
   ],
   "blockers": []
