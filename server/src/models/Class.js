@@ -127,6 +127,34 @@ const classSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    wizardProgress: {
+      currentStep: {
+        type: String,
+        enum: [
+          'class_info',
+          'timetable_subjects',
+          'students',
+          'mentors',
+          'electives',
+          'preflight',
+          'initiation',
+          'completed',
+        ],
+        default: 'class_info',
+      },
+      completedSteps: {
+        type: [String],
+        default: [],
+      },
+      stepData: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
+      },
+      lastUpdated: {
+        type: Date,
+        default: Date.now,
+      },
+    },
   },
   {
     timestamps: true,

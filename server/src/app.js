@@ -26,6 +26,7 @@ import coCurricularRoutes from './Routes/coCurricular.routes.js';
 import notificationRoutes from './Routes/notification.routes.js';
 import feedbackRoutes     from './Routes/feedback.routes.js';
 import timetableRoutes    from './Routes/timetable.routes.js';
+import wizardRoutes       from './routes/wizard.routes.js';
 
 import { apiLimiter, healthLimiter } from './middlewares/rateLimiter.js';
 
@@ -116,6 +117,7 @@ app.use('/api/co-curricular', coCurricularRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/feedback',      feedbackRoutes);
 app.use('/api/timetable',     timetableRoutes);
+app.use('/api/wizard',        wizardRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({
