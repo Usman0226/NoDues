@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-11-10T03:26:00Z",
+  "last_updated": "2026-11-10T03:40:00Z",
   "completed": [
     "Implement Admin Feedback Dashboard",
     "Secure feedback API for Admin-only access",
@@ -19,11 +19,15 @@
     "TRD Phase 1: Centralized Action Registry with Zod schema validation & audit logging (actionRegistry.js)",
     "TRD Phase 1: Comprehensive unit and integration test suite with 16/16 passing tests (phase1-features.test.js)",
     "TRD Phase 2: Idempotent Batch Inference migration script with full rollback support (server/migrations/20260415-infer-batches.js)",
-    "TRD Phase 2: Integration tests verifying formula accuracy, idempotency, rollback, and audit logging with 4/4 passing tests (phase2-migration.test.js)"
+    "TRD Phase 2: Integration tests verifying formula accuracy, idempotency, rollback, and audit logging with 4/4 passing tests (phase2-migration.test.js)",
+    "TRD Phase 3: Class consolidation proposal generator with roster overlap arithmetic (scripts/proposeClassMerges.js)",
+    "TRD Phase 3: Human Review Gate enforcement (NC-4) and persistent class merge commit engine (scripts/commitClassMerge.js)",
+    "TRD Phase 3: Comprehensive unit and integration test suite with 5/5 passing tests (server/test/unit/phase3-consolidation.test.js)"
   ],
   "in_progress": [],
   "pending": [
-    "Phase 3: Class Identity Consolidation (proposeClassMerges.js, human review, commitClassMerge.js)"
+    "Phase 4: Shadow Verification (comparison middleware/logging between legacy and new batch fields)",
+    "Phase 5: Cutover & Setup Wizard frontend-backend dark launch verification"
   ],
   "decisions": [
     { 
@@ -43,7 +47,7 @@
     },
     {
       "context": "Git Strategy & Deployment Safety",
-      "decision": "Pushing to GitHub is strictly reserved for the human administrator. Agent commits locally on phase branches (e.g., phase-0-safety-net, phase-1-additive-schema, phase-2-batch-inference) and never executes git push.",
+      "decision": "Pushing to GitHub is strictly reserved for the human administrator. Agent commits locally on phase branches (e.g., phase-0-safety-net, phase-1-additive-schema, phase-2-batch-inference, phase-3-class-consolidation) and never executes git push.",
       "trade_offs": "Prevents accidental CI/CD trigger or auto-deploy to live production."
     },
     {
@@ -60,6 +64,11 @@
       "context": "Batch Inference Migration Formula (TRD Step 2.1)",
       "decision": "Computed batchStartYear = academicStartYear - Math.floor((semester - 1) / 2) with multi-level fallback (student.academicYear -> class.academicYear -> rollNo prefix). BulkWrite in chunks of 500.",
       "trade_offs": "Handles all MITS 4-year cohorts with 100% determinism; chunking avoids memory pressure and connection timeouts on M0 free tier."
+    },
+    {
+      "context": "Class Identity Consolidation & Referential Integrity (NC-4, NC-6, FR-B1 to FR-B4)",
+      "decision": "Primary class is updated in place as the persistent section document with full historical semesterSubjects (status: active/archived). Secondary contributing classes are retired via isActive: false and mergedIntoClassId pointing to primary class, preserving historical approvals and requests. Enforced NC-4 human review gate requiring explicit approved: true.",
+      "trade_offs": "Preserves referential integrity for 25k+ approvals while consolidating class model for single-section persistence."
     }
   ],
   "blockers": []
