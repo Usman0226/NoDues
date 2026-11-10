@@ -245,12 +245,12 @@ const SetupWizard = () => {
             />
           </StepContainer>
 
-          {/* STEP 3: STUDENT IMPORT */}
+          {/* STEP 3: STUDENTS */}
           <StepContainer
             stepNumber={3}
             stepId="students"
-            title="Student Roster Enrollment"
-            subtitle="Confirm existing class roster or upload new student records via CSV/Excel."
+            title="Students"
+            subtitle="Confirm existing students in this class or upload new student records via CSV/Excel."
             summary={stepSummaries.students}
             isActive={activeStepIndex === 2}
             isCompleted={completedSteps.includes('students')}
@@ -313,7 +313,7 @@ const SetupWizard = () => {
             stepNumber={6}
             stepId="preflight"
             title="Pre-Flight Verification Gate"
-            subtitle="Real-time verification that student roster, active subjects, and class teacher meet all launch criteria."
+            subtitle="Real-time verification that students, active subjects, and class teacher meet all launch criteria."
             summary={stepSummaries.preflight}
             isActive={activeStepIndex === 5}
             isCompleted={completedSteps.includes('preflight')}

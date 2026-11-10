@@ -54,7 +54,7 @@ const WizardProgressHeader = ({
             Class Setup & Onboarding Wizard
           </h1>
           <p className="text-sm text-zinc-600 mt-0.5">
-            Step-by-step guided setup to configure subjects, roster, mentors, and clearance pre-flight.
+            Step-by-step guided setup to configure subjects, students, mentors, and clearance pre-flight.
           </p>
         </div>
 

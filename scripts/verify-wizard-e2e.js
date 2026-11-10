@@ -339,8 +339,8 @@ async function runSuite() {
   await page.waitForSelector('button:has-text("Continue to Mentors")', { timeout: 15000 });
   await page.waitForTimeout(1000);
 
-  // 4. STEP 3: STUDENT IMPORT
-  console.log('\n--- Step 3: Student Roster Enrollment ---');
+  // 4. STEP 3: STUDENTS
+  console.log('\n--- Step 3: Students ---');
   await page.screenshot({ path: path.join(UI_REVIEW_DIR, 'step3_students_1280px.png'), fullPage: true });
   await runAxeAudit(page, 'Step 3 Students (1280px)');
 
@@ -349,12 +349,12 @@ async function runSuite() {
   await page.screenshot({ path: path.join(UI_REVIEW_DIR, 'step3_students_390px.png'), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 800 });
 
-  // If empty roster, upload students sample CSV
+  // If no students enrolled, upload students sample CSV
   const continueStudentsBtn = page.locator('button:has-text("Continue to Mentors")');
   await continueStudentsBtn.waitFor({ state: 'visible', timeout: 10000 });
   const studentsDisabled = await continueStudentsBtn.isDisabled();
   if (studentsDisabled) {
-    console.log('Roster empty: Uploading student CSV fixture...');
+    console.log('No students enrolled: Uploading student CSV fixture...');
     const studentFileInput = page.locator('input[type="file"]');
     await studentFileInput.setInputFiles(path.resolve(__dirname, '../test/fixtures/students_sample.csv'));
     await page.waitForTimeout(3000);

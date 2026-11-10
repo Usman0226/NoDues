@@ -76,7 +76,7 @@ const Step3Students = ({
       setShowUploader(false);
       refetch();
     } catch (err) {
-      toast.error(err?.message || 'Failed to import student roster.');
+      toast.error(err?.message || 'Failed to import students.');
     } finally {
       setIsUploading(false);
     }
@@ -102,7 +102,7 @@ const Step3Students = ({
     return (
       <div className="p-6 rounded-2xl border border-red-200 bg-red-50 text-center space-y-3" role="alert">
         <AlertCircle size={32} className="mx-auto text-red-600" aria-hidden="true" />
-        <h3 className="text-base font-bold text-red-900">Failed to load student roster</h3>
+        <h3 className="text-base font-bold text-red-900">Failed to load students</h3>
         <p className="text-xs text-red-700">Check connection and retry.</p>
         <Button type="button" variant="secondary" size="sm" onClick={() => refetch()}>
           <RefreshCw size={14} className="mr-1.5" /> Retry
@@ -113,7 +113,7 @@ const Step3Students = ({
 
   return (
     <div className="space-y-6">
-      {/* Roster Status Card */}
+      {/* Students Status Card */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-zinc-50 border border-zinc-200">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold shrink-0">
@@ -126,11 +126,11 @@ const Step3Students = ({
               </span>
               {enrolledCount > 0 ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  <CheckCircle2 size={12} /> Active Roster
+                  <CheckCircle2 size={12} /> Active Students
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">
-                  <AlertTriangle size={12} /> Empty Roster
+                  <AlertTriangle size={12} /> No Students Enrolled
                 </span>
               )}
             </div>
@@ -148,7 +148,7 @@ const Step3Students = ({
           className="text-xs font-bold min-h-[44px]"
         >
           <Upload size={14} className="mr-1.5" />
-          {showUploader ? 'Cancel Upload' : 'Import New Roster'}
+          {showUploader ? 'Cancel' : 'Upload / Add Students'}
         </Button>
       </div>
 
@@ -157,7 +157,7 @@ const Step3Students = ({
         <div className="p-5 rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50/20 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-extrabold text-navy">Upload Student Roster</h3>
+              <h3 className="text-sm font-extrabold text-navy">Upload Students</h3>
               <p className="text-xs text-zinc-600">Supported formats: CSV or Excel (.xlsx). Required columns: Roll No, Name, Email.</p>
             </div>
             <a
@@ -171,7 +171,7 @@ const Step3Students = ({
 
           <FileDropzone
             accept=".csv,.xlsx"
-            label="Drop Student Roster CSV or Click to Browse"
+            label="Drop Students CSV or Click to Browse"
             loading={isUploading}
             onFileSelect={handleFileSelect}
           />
@@ -200,7 +200,7 @@ const Step3Students = ({
             aria-label="Enrolled students table scrollable region"
             className="border border-zinc-200 rounded-xl overflow-hidden bg-white max-h-72 overflow-y-auto focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
-            <table className="w-full text-left text-xs" aria-label="Student Roster">
+            <table className="w-full text-left text-xs" aria-label="Students List">
               <thead className="bg-zinc-50 border-b border-zinc-200 font-black text-zinc-600 uppercase tracking-wider sticky top-0">
                 <tr>
                   <th className="py-2.5 px-4">Roll No</th>

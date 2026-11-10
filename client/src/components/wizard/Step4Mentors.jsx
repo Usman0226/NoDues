@@ -183,7 +183,7 @@ const Step4Mentors = ({
         aria-label="Student mentor mapping table scrollable region"
         className="border border-zinc-200 rounded-xl overflow-hidden bg-white max-h-72 overflow-y-auto focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
       >
-        <table className="w-full text-left text-xs" aria-label="Mentor Roster">
+        <table className="w-full text-left text-xs" aria-label="Student Mentor List">
           <thead className="bg-zinc-50 border-b border-zinc-200 font-black text-zinc-600 uppercase tracking-wider sticky top-0">
             <tr>
               <th className="py-2.5 px-4">Student</th>
