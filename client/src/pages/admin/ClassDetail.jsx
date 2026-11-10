@@ -527,7 +527,10 @@ const SUBJECT_COLS = [
     { 
       key: 'subjectName', 
       label: 'Component Name', 
-      render: (v) => <span className="font-bold text-navy truncate block" title={v}>{v}</span> 
+      render: (v) => {
+        const clean = typeof v === 'string' ? v.replace(/^[\s\-–—:]+/, '').trim() : v;
+        return <span className="font-bold text-navy truncate block" title={clean}>{clean}</span>;
+      }
     },
     { 
       key: 'faculty', 

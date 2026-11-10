@@ -185,7 +185,14 @@ const Subjects = () => {
 
   const columns = React.useMemo(() => [
     { key: 'code', label: 'Identity', render: (v) => <span className="font-mono text-[10px] font-black uppercase text-navy bg-offwhite px-2 py-0.5 rounded border border-muted/50">{v}</span> },
-    { key: 'name', label: 'Component Name', render: (v) => <span className="font-bold text-navy/80">{v}</span> },
+    { 
+      key: 'name', 
+      label: 'Component Name', 
+      render: (v) => {
+        const clean = typeof v === 'string' ? v.replace(/^[\s\-–—:]+/, '').trim() : v;
+        return <span className="font-bold text-navy/80">{clean}</span>;
+      }
+    },
     { key: 'semester', label: 'Standard Sem', render: (v) => <span className="font-bold text-muted-foreground/60">{v}</span> },
     {
       key: 'isElective', label: 'Category', render: (v) => (

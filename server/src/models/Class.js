@@ -8,7 +8,11 @@ const subjectAssignmentSchema = new mongoose.Schema(
       ref: 'Subject',
       required: true,
     },
-    subjectName: { type: String, trim: true },
+    subjectName: {
+      type: String,
+      trim: true,
+      set: (v) => (typeof v === 'string' ? v.replace(/^[\s\-–—:]+/, '').trim() : v),
+    },
     subjectCode: { type: String, trim: true }, // different department wise 
     isElective:  { type: Boolean, default: false },
     facultyId: {
@@ -29,7 +33,11 @@ const semesterSubjectItemSchema = new mongoose.Schema(
       ref: 'Subject',
       required: true,
     },
-    subjectName: { type: String, trim: true },
+    subjectName: {
+      type: String,
+      trim: true,
+      set: (v) => (typeof v === 'string' ? v.replace(/^[\s\-–—:]+/, '').trim() : v),
+    },
     subjectCode: { type: String, trim: true },
     facultyId: {
       type: mongoose.Schema.ObjectId,

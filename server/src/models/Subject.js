@@ -6,6 +6,7 @@ const subjectSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Subject name is required'],
       trim: true,
+      set: (v) => (typeof v === 'string' ? v.replace(/^[\s\-–—:]+/, '').trim() : v),
     },
     code: {
       type: String,

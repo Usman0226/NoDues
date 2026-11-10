@@ -204,13 +204,14 @@ export async function commitTimetable(req, res, next) {
     // Filter out excluded rows and ensure valid Subject IDs
     const subjectsToCommit = [];
     for (const r of confirmedRows.filter((row) => row.status !== 'excluded')) {
+      const cleanSubjectName = (r.subjectName || r.subjectCode || '').replace(/^[\s\-–—:]+/, '').trim();
       let resolvedSubjectId = r.subjectId;
       if (!resolvedSubjectId && r.subjectCode) {
         let sub = await Subject.findOne({ code: r.subjectCode.toUpperCase() });
         if (!sub) {
           sub = await Subject.create({
             code: r.subjectCode.toUpperCase(),
-            name: r.subjectName || r.subjectCode,
+            name: cleanSubjectName,
             semester: targetSem,
             isActive: true,
           });
@@ -221,7 +222,7 @@ export async function commitTimetable(req, res, next) {
       if (resolvedSubjectId) {
         subjectsToCommit.push({
           subjectId: resolvedSubjectId,
-          subjectName: r.subjectName,
+          subjectName: cleanSubjectName,
           subjectCode: r.subjectCode,
           facultyId: r.facultyId || null,
           facultyName: r.facultyName || null,
