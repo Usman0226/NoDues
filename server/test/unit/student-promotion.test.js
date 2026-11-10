@@ -301,4 +301,120 @@ describe('Student Promotion & Historical Record Preservation', () => {
       assert.equal(retainedApproval.action, 'approved');
     });
   });
+
+  describe('Bulk Cohort Promotion (Simultaneous Section Migration)', () => {
+    let sectionB;
+    let targetSectionB;
+    let studentB1;
+
+    beforeEach(async () => {
+      sectionB = await Class.create({
+        name: 'CSD-B',
+        departmentId: testDept._id,
+        semester: 4,
+        academicYear: '2024-2025',
+        isActive: true,
+      });
+
+      targetSectionB = await Class.create({
+        name: 'CSD-B',
+        departmentId: testDept._id,
+        semester: 5,
+        academicYear: '2025-2026',
+        isActive: true,
+      });
+
+      studentB1 = await Student.create({
+        rollNo: '23CSD099',
+        name: 'Rohan Sharma',
+        classId: sectionB._id,
+        departmentId: testDept._id,
+        semester: 4,
+        academicYear: '2024-2025',
+        yearOfStudy: 2,
+        isActive: true,
+      });
+      sectionB.studentIds = [studentB1._id];
+      await sectionB.save();
+    });
+
+    it('GET /api/classes/cohort-promotion-preview returns all sections with auto-matched targets', async () => {
+      const res = await request(app)
+        .get(`/api/classes/cohort-promotion-preview?departmentId=${testDept._id}&semester=4`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.success, true);
+      assert.equal(res.body.data.classes.length, 2); // CSD-E and CSD-B
+
+      const sectionEMapping = res.body.data.classes.find(c => c.sourceClass._id === sourceClass._id.toString());
+      assert.ok(sectionEMapping);
+      assert.equal(sectionEMapping.sourceClass.studentCount, 3);
+      assert.equal(sectionEMapping.recommendedTargetClassId, targetClass._id.toString());
+
+      const sectionBMapping = res.body.data.classes.find(c => c.sourceClass._id === sectionB._id.toString());
+      assert.ok(sectionBMapping);
+      assert.equal(sectionBMapping.sourceClass.studentCount, 1);
+      assert.equal(sectionBMapping.recommendedTargetClassId, targetSectionB._id.toString());
+    });
+
+    it('POST /api/classes/bulk-promote promotes multiple sections at once', async () => {
+      const res = await request(app)
+        .post('/api/classes/bulk-promote')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          departmentId: testDept._id,
+          promotions: [
+            { sourceClassId: sourceClass._id, targetClassId: targetClass._id, resetElectives: true },
+            { sourceClassId: sectionB._id, targetClassId: targetSectionB._id, resetElectives: true },
+          ],
+        });
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.success, true);
+      assert.equal(res.body.data.totalClasses, 2);
+      assert.equal(res.body.data.totalPromotedStudents, 4); // 3 from section E, 1 from section B
+
+      // Verify studentB1 is now in targetSectionB in Semester 5
+      const updatedB1 = await Student.findById(studentB1._id);
+      assert.equal(updatedB1.classId.toString(), targetSectionB._id.toString());
+      assert.equal(updatedB1.semester, 5);
+
+      // Verify target classes received studentIds
+      const refreshedTargetE = await Class.findById(targetClass._id);
+      assert.equal(refreshedTargetE.studentIds.length, 3);
+
+      const refreshedTargetB = await Class.findById(targetSectionB._id);
+      assert.equal(refreshedTargetB.studentIds.length, 1);
+    });
+
+    it('POST /api/classes/bulk-promote blocks entire promotion if any section has an active batch', async () => {
+      // Create an active batch on section B
+      await NodueBatch.create({
+        classId: sectionB._id,
+        departmentId: testDept._id,
+        semester: 4,
+        academicYear: '2024-2025',
+        status: 'active',
+      });
+
+      const res = await request(app)
+        .post('/api/classes/bulk-promote')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          departmentId: testDept._id,
+          promotions: [
+            { sourceClassId: sourceClass._id, targetClassId: targetClass._id },
+            { sourceClassId: sectionB._id, targetClassId: targetSectionB._id },
+          ],
+        });
+
+      assert.equal(res.status, 400);
+      assert.match(res.body.error?.message || res.body.message, /clearance batches are active/i);
+
+      // Verify no students were moved
+      const refreshedStudent1 = await Student.findById(student1._id);
+      assert.equal(refreshedStudent1.classId.toString(), sourceClass._id.toString());
+    });
+  });
 });

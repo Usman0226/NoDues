@@ -14,6 +14,8 @@ import { getFaculty } from '../../api/faculty';
 import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox, CheckCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import BackHeader from '../../components/ui/BackHeader';
+import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal';
+import BulkPromoteCohortModal from '../../components/classes/BulkPromoteCohortModal';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -47,6 +49,9 @@ const DepartmentClasses = () => {
   const [showActivate, setShowActivate] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [promoteClassId, setPromoteClassId] = useState(null);
+  const [showCohortPromote, setShowCohortPromote] = useState(false);
+  const [cohortPromoteSem, setCohortPromoteSem] = useState(1);
 
 
   // Pagination State
@@ -214,6 +219,17 @@ const DepartmentClasses = () => {
                 setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId, classTeacherId: '' });
                 setShowCreate(true);
             }}><Plus size={14} /> New Class</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCohortPromoteSem(1);
+                setShowCohortPromote(true);
+              }}
+              className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold gap-1.5"
+            >
+              <GraduationCap size={14} /> Bulk Promote Cohort
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => fetchClasses({ departmentId: deptId, page, limit, includeInactive })} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
         </div>
 
@@ -284,12 +300,25 @@ const DepartmentClasses = () => {
               .sort(([a], [b]) => Number(a) - Number(b))
               .map(([sem, semClasses]) => (
               <div key={sem} className="space-y-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-navy flex items-center justify-center text-xs font-black text-white shadow-lg shadow-navy/20">
-                    S{sem}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-navy flex items-center justify-center text-xs font-black text-white shadow-lg shadow-navy/20">
+                      S{sem}
+                    </div>
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-navy/40">Semester {sem} Groups</h3>
                   </div>
-                  <h3 className="text-xs font-black uppercase tracking-[0.2em] text-navy/40">Semester {sem} Groups</h3>
-                  <div className="h-px flex-1 bg-gradient-to-r from-muted/50 to-transparent"></div>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] tracking-wider uppercase gap-1.5"
+                    onClick={() => {
+                      setCohortPromoteSem(Number(sem));
+                      setShowCohortPromote(true);
+                    }}
+                  >
+                    <GraduationCap size={12} />
+                    Promote Semester {sem} ({semClasses.length} Sections)
+                  </Button>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -319,6 +348,17 @@ const DepartmentClasses = () => {
                         </div>
                         
                         <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.preventDefault()}>
+                             <button
+                               onClick={(e) => {
+                                 e.preventDefault();
+                                 e.stopPropagation();
+                                 setPromoteClassId(cls._id);
+                               }}
+                               title="Promote Class"
+                               className="p-2 hover:bg-indigo-50 rounded-lg text-muted-foreground hover:text-indigo-600 transition-all border border-transparent hover:border-muted"
+                             >
+                               <GraduationCap size={14} />
+                             </button>
                              <button onClick={(e) => handleEditClick(cls, e)} className="p-2 hover:bg-zinc-50 rounded-lg text-muted-foreground hover:text-navy transition-all border border-transparent hover:border-muted">
                                <Edit size={14} />
                              </button>
@@ -516,6 +556,31 @@ const DepartmentClasses = () => {
         isDestructive={true}
         loading={submitting}
       />
+
+      {promoteClassId && (
+        <PromoteStudentsModal
+          isOpen={Boolean(promoteClassId)}
+          onClose={() => setPromoteClassId(null)}
+          classId={promoteClassId}
+          onSuccess={() => {
+            fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+            setPromoteClassId(null);
+          }}
+        />
+      )}
+
+      {showCohortPromote && (
+        <BulkPromoteCohortModal
+          isOpen={showCohortPromote}
+          onClose={() => setShowCohortPromote(false)}
+          departmentId={deptId}
+          initialSemester={cohortPromoteSem}
+          onSuccess={() => {
+            fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+            setShowCohortPromote(false);
+          }}
+        />
+      )}
     </PageWrapper>
   );
 };

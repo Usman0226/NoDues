@@ -14,6 +14,8 @@ import {
   cloneSubjects,
   getPromotionCandidates,
   promoteStudents,
+  getCohortPromotionPreview,
+  bulkPromoteClasses,
 } from '../Controllers/classController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -28,6 +30,10 @@ router.use(RoleGuard(['admin', 'hod', 'ao']));
 router.route('/')
   .get(getClasses)
   .post(createClass);
+
+// Bulk cohort promotion routes (must precede /:id)
+router.get('/cohort-promotion-preview', getCohortPromotionPreview);
+router.post('/bulk-promote', bulkPromoteClasses);
 
 // Single class routes
 router.route('/:id')

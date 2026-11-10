@@ -15,4 +15,6 @@ export const initiateBatch = (id, sourceClassId) => api.post(`/classes/${id}/ini
 export const activateClass = (id) => api.post(`/classes/${id}/activate`);
 export const getPromotionCandidates = (id) => api.get(`/classes/${id}/promotion-candidates`);
 export const promoteStudents = (id, data) => api.post(`/classes/${id}/promote`, data);
+export const getCohortPromotionPreview = (params) => api.get('/classes/cohort-promotion-preview', { params });
+export const bulkPromoteClasses = (data) => api.post('/classes/bulk-promote', data);
 

@@ -47,8 +47,10 @@ export default function PromoteStudentsModal({
     getPromotionCandidates(classId)
       .then((res) => {
         if (!isMounted) return;
-        const data = res.data?.data;
-        if (data) {
+        // Handle axiosInstance response unwrap: res could be { success, data: { sourceClass, ... } } or already unwrapped
+        const payload = res?.data || res;
+        const data = payload?.sourceClass ? payload : (payload?.data || payload);
+        if (data && data.sourceClass) {
           setSourceClass(data.sourceClass || null);
           setTargetClasses(data.targetClasses || []);
           setStudents(data.students || []);
@@ -67,11 +69,13 @@ export default function PromoteStudentsModal({
             const allIds = (data.students || []).map((s) => s._id);
             setSelectedStudentIds(new Set(allIds));
           }
+        } else {
+          setError('Failed to load promotion candidate data');
         }
       })
       .catch((err) => {
         if (!isMounted) return;
-        const msg = err.response?.data?.message || err.message || 'Failed to load promotion data';
+        const msg = err?.message || err?.response?.data?.message || 'Failed to load promotion data';
         setError(msg);
       })
       .finally(() => {
@@ -148,13 +152,13 @@ export default function PromoteStudentsModal({
       };
 
       const res = await promoteStudents(classId, payload);
-      const msg = res.data?.message || `Successfully promoted ${selectedStudentIds.size} students.`;
+      const msg = res?.data?.message || res?.message || `Successfully promoted ${selectedStudentIds.size} students.`;
       toast.success(msg);
 
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Promotion failed';
+      const msg = err?.message || err?.response?.data?.message || 'Promotion failed';
       setError(msg);
       toast.error(msg);
     } finally {
@@ -400,3 +404,4 @@ export default function PromoteStudentsModal({
     </Modal>
   );
 }
+
