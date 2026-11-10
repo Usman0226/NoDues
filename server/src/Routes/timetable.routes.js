@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import {
+  inspectTimetablePdf,
   previewTimetable,
   commitTimetable,
   getClassSubjectHistory,
@@ -28,7 +29,8 @@ const upload = multer({
 router.use(protect);
 router.use(RoleGuard(['admin', 'hod', 'ao']));
 
-// Timetable parser preview and commit (FR-C1 to FR-C8)
+// Timetable parser inspect, preview, and commit (FR-C1 to FR-C8, Multi-Page Ingestion)
+router.post('/inspect', upload.single('file'), inspectTimetablePdf);
 router.post('/preview', upload.single('file'), previewTimetable);
 router.post('/commit', commitTimetable);
 

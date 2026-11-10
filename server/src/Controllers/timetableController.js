@@ -1,8 +1,59 @@
 import TimetableUpload from '../models/TimetableUpload.js';
 import Class from '../models/Class.js';
 import Subject from '../models/Subject.js';
-import { parseTimetablePdf } from '../services/timetableParser.js';
+import { parseTimetablePdf, inspectPdfPages } from '../services/timetableParser.js';
 import logger from '../utils/logger.js';
+
+/**
+ * Inspects an uploaded timetable PDF document structure.
+ * Returns page count, text layer status, detected headers, and class match recommendations.
+ * TRD Reference: FR-C1, FR-C2, Setup Wizard Multi-Page Ingestion
+ */
+export async function inspectTimetablePdf(req, res, next) {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VAL_001',
+          message: 'Please upload a PDF timetable file to inspect.',
+        },
+      });
+    }
+
+    const classId = req.body.classId || req.query.classId;
+    let targetClass = null;
+    if (classId) {
+      targetClass = await Class.findById(classId).lean();
+    }
+
+    const inspection = await inspectPdfPages(req.file.buffer, {
+      targetClassName: targetClass?.name,
+      semester: targetClass?.semester,
+      departmentId: targetClass?.departmentId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        fileName: req.file.originalname || 'timetable.pdf',
+        fileSize: req.file.size,
+        ...inspection.data,
+      },
+    });
+  } catch (err) {
+    if (err.code === 'VAL_001' || err.statusCode === 400) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: err.code || 'VAL_001',
+          message: err.message,
+        },
+      });
+    }
+    next(err);
+  }
+}
 
 /**
  * Generates a preview from an uploaded timetable PDF.
@@ -21,7 +72,7 @@ export async function previewTimetable(req, res, next) {
       });
     }
 
-    const { classId, targetSemester } = req.body;
+    const { classId, targetSemester, page } = req.body;
     if (!classId) {
       return res.status(400).json({
         success: false,
@@ -45,10 +96,19 @@ export async function previewTimetable(req, res, next) {
       });
     }
 
-    // Parse the PDF text layer
+    const selectedPage = page ? parseInt(page, 10) : null;
+    if (selectedPage && (isNaN(selectedPage) || selectedPage < 1)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VAL_001', message: 'Page must be a positive integer.' },
+      });
+    }
+
+    // Parse the PDF text layer (targeting specific page if provided)
     const result = await parseTimetablePdf(req.file.buffer, {
       departmentId: targetClass.departmentId,
       semester: targetSem,
+      page: selectedPage,
     });
 
     const parsedData = result.data;
@@ -64,7 +124,12 @@ export async function previewTimetable(req, res, next) {
       matchedRowCount: parsedData.matchedRowCount,
       flaggedRowCount: parsedData.flaggedRowCount,
       committed: false,
-      parsedData: parsedData.rows,
+      parsedData: {
+        selectedPage: parsedData.selectedPage,
+        pageCount: parsedData.pageCount,
+        isMultiPage: parsedData.isMultiPage,
+        rows: parsedData.rows,
+      },
     });
 
     return res.status(200).json({
@@ -74,17 +139,22 @@ export async function previewTimetable(req, res, next) {
         classId: targetClass._id,
         className: targetClass.name,
         targetSemester: targetSem,
+        selectedPage: parsedData.selectedPage,
+        pageCount: parsedData.pageCount,
+        isMultiPage: parsedData.isMultiPage,
         summary: {
           totalRows: parsedData.parsedRowCount,
           matchedRows: parsedData.matchedRowCount,
           flaggedRows: parsedData.flaggedRowCount,
+          selectedPage: parsedData.selectedPage,
+          pageCount: parsedData.pageCount,
           durationMs: parsedData.durationMs,
         },
         rows: parsedData.rows,
       },
     });
   } catch (err) {
-    if (err.code === 'INVALID_PDF_TEXT_LAYER' || err.code === 'NO_TABLE_ROWS_FOUND') {
+    if (err.code === 'INVALID_PDF_TEXT_LAYER' || err.code === 'NO_TABLE_ROWS_FOUND' || err.code === 'VAL_001') {
       return res.status(400).json({
         success: false,
         error: {

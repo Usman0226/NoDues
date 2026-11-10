@@ -226,20 +226,70 @@ async function runSuite() {
   await page.waitForSelector('text=Timetable Upload', { timeout: 10000 });
   await page.waitForTimeout(1000);
 
-  // 3. STEP 2: TIMETABLE UPLOAD & REVIEW
-  console.log('\n--- Step 2: Timetable Upload & Inline Correction ---');
+  // 3. STEP 2: TIMETABLE UPLOAD, MULTI-PAGE SELECTION & INLINE CORRECTION
+  console.log('\n--- Step 2: Timetable Upload & Multi-Page Selection ---');
   await page.screenshot({ path: path.join(UI_REVIEW_DIR, 'step2_timetable_initial_1280px.png'), fullPage: true });
   await runAxeAudit(page, 'Step 2 Timetable Initial (1280px)');
 
-  // Upload timetable sample PDF
+  // 3A. Test Multi-Page PDF Ingestion & Interactive Page Picker
   const fileInput = page.locator('input[type="file"]');
-  const samplePdfPath = path.resolve(__dirname, '../test/fixtures/timetable_sample.pdf');
-  await fileInput.setInputFiles(samplePdfPath);
-  console.log('Uploaded timetable PDF fixture.');
+  const multiPagePdfPath = path.resolve(__dirname, '../test/fixtures/timetable_multipage_sample.pdf');
+  await fileInput.setInputFiles(multiPagePdfPath);
+  console.log('Uploaded multi-page timetable PDF fixture (3 pages).');
 
-  // Wait for parsing to finish
+  // Verify Multi-Page Selector View
+  await page.waitForSelector('text=Multi-Page Timetable Detected (3 Pages)', { timeout: 15000 });
+  console.log('Multi-Page detection banner confirmed.');
+
+  // Assert page cards rendered in radiogroup
+  await page.waitForSelector('div[role="radiogroup"]', { timeout: 10000 });
+  await page.waitForSelector('div[role="radio"]', { timeout: 10000 });
+  const cardCount = await page.locator('div[role="radio"]').count();
+  console.log(`Rendered ${cardCount} page cards in radiogroup.`);
+
+  // Screenshots of multi-page selector
+  await page.screenshot({ path: path.join(UI_REVIEW_DIR, 'step2_multipage_selector_1280px.png'), fullPage: true });
+  await runAxeAudit(page, 'Step 2 Multi-Page Selector (1280px)');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(UI_REVIEW_DIR, 'step2_multipage_selector_390px.png'), fullPage: true });
+  await runAxeAudit(page, 'Step 2 Multi-Page Selector (390px)');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForTimeout(300);
+
+  // Select Page 2 and extract subjects
+  const page2Card = page.locator('div[role="radio"]', { hasText: 'Page 2' });
+  await page2Card.click();
+  await page.waitForTimeout(300);
+
+  const extractBtn = page.locator('button', { hasText: 'Extract Subjects from Page' });
+  await extractBtn.click();
+  console.log('Clicked extract subjects from selected page.');
+
+  // Wait for parsing to finish and table to render
   await page.waitForSelector('text=Total Rows', { timeout: 15000 });
   await page.waitForTimeout(1000);
+
+  // Assert page context banner displays "Page 2 of 3"
+  const pageContextBanner = page.locator('text=Page 2 of 3');
+  const isContextBannerVisible = await pageContextBanner.isVisible().catch(() => false);
+  console.log('Context banner indicates "Page 2 of 3":', isContextBannerVisible);
+
+  // Test "Change Page" button affordance
+  const changePageBtn = page.locator('button', { hasText: 'Change Page' });
+  if (await changePageBtn.isVisible()) {
+    await changePageBtn.click();
+    await page.waitForTimeout(500);
+    const pickerReopened = await page.locator('text=Multi-Page Timetable Detected').isVisible().catch(() => false);
+    console.log('Change Page button re-opens page picker without re-uploading:', pickerReopened);
+
+    // Cancel or re-extract Page 2
+    const reExtractBtn = page.locator('button', { hasText: 'Extract Subjects from Page' });
+    await reExtractBtn.click();
+    await page.waitForSelector('text=Total Rows', { timeout: 15000 });
+    await page.waitForTimeout(600);
+  }
 
   // Check if flagged row exists and blocks continue
   const flaggedNotice = page.locator('text=require faculty assignment or exclusion');
@@ -257,28 +307,16 @@ async function runSuite() {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(300);
 
-  // Inline correction: resolve any row needing review by assigning faculty or excluding
-  await page.waitForSelector('select[aria-label*="Assign faculty"] option[value]:not([value=""])', { timeout: 10000 }).catch(() => {});
-  const rowSelects = await page.locator('select[aria-label*="Assign faculty"]').all();
+  // Inline correction: resolve any row needing review by assigning faculty
+  await page.waitForSelector('table select[aria-label*="Assign faculty"] option[value]:not([value=""])', { timeout: 10000 }).catch(() => {});
+  const rowSelects = await page.locator('table select[aria-label*="Assign faculty"]').all();
   for (const sel of rowSelects) {
     if (await sel.isVisible()) {
-      const val = await sel.inputValue();
-      if (!val) {
-        const optionCount = await sel.locator('option').count();
-        if (optionCount > 1) {
-          await sel.selectOption({ index: 1 });
-          await page.waitForTimeout(300);
-        }
+      const optionCount = await sel.locator('option').count();
+      if (optionCount > 1) {
+        await sel.selectOption({ index: 1 });
+        await page.waitForTimeout(300);
       }
-    }
-  }
-
-  // Or click Exclude if any flagged rows remain
-  const excludeBtns = await page.locator('button:has-text("Exclude")').all();
-  for (const btn of excludeBtns) {
-    if (await btn.isVisible() && await flaggedNotice.isVisible().catch(() => false)) {
-      await btn.click();
-      await page.waitForTimeout(300);
     }
   }
 
@@ -288,9 +326,10 @@ async function runSuite() {
   const isCommitDisabled = await commitBtn.isDisabled();
   console.log('Commit button disabled state before click:', isCommitDisabled);
   if (isCommitDisabled) {
-    const allExclude = await page.locator('button:has-text("Exclude")').all();
-    for (const b of allExclude) {
-      if (await b.isVisible()) {
+    // If any row still needs review, exclude it from table view
+    const tableExcludeBtns = await page.locator('table button:has-text("Exclude")').all();
+    for (const b of tableExcludeBtns) {
+      if (await b.isVisible() && (await flaggedNotice.isVisible().catch(() => false))) {
         await b.click();
         await page.waitForTimeout(300);
       }

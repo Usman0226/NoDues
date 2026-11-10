@@ -41,6 +41,16 @@ export const getPreflightChecklist = (classId) => api.get(`/wizard/classes/${cla
 export const initiateWizardBatch = (classId) => api.post(`/wizard/classes/${classId}/initiate`);
 
 /**
+ * Inspect timetable PDF to discover page count, headers, and section matches
+ * @param {FormData} formData
+ * @returns {Promise<{ success: boolean, data: any }>}
+ */
+export const inspectTimetablePdf = (formData) =>
+  api.post('/timetable/inspect', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+
+/**
  * Upload timetable PDF to generate text-layer extracted preview
  * @param {FormData} formData
  * @returns {Promise<{ success: boolean, data: any }>}
