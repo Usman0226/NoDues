@@ -25,6 +25,9 @@ export default function BulkPromoteCohortModal({
   onSuccess,
 }) {
   const [selectedSemester, setSelectedSemester] = useState(initialSemester);
+  const [targetSemester, setTargetSemester] = useState(
+    initialSemester < 8 ? Number(initialSemester) + 1 : Number(initialSemester)
+  );
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [cohortData, setCohortData] = useState(null);
@@ -37,17 +40,19 @@ export default function BulkPromoteCohortModal({
   // Sync initialSemester when changed
   useEffect(() => {
     if (initialSemester) {
-      setSelectedSemester(Number(initialSemester));
+      const s = Number(initialSemester);
+      setSelectedSemester(s);
+      setTargetSemester(s < 8 ? s + 1 : s);
     }
   }, [initialSemester]);
 
   // Fetch cohort promotion preview
-  const fetchPreview = (sem) => {
-    if (!sem) return;
+  const fetchPreview = (srcSem, tgtSem) => {
+    if (!srcSem) return;
     setLoading(true);
     setError(null);
 
-    const params = { semester: sem };
+    const params = { semester: srcSem, targetSemester: tgtSem || srcSem + 1 };
     if (departmentId) params.departmentId = departmentId;
 
     getCohortPromotionPreview(params)
@@ -92,9 +97,9 @@ export default function BulkPromoteCohortModal({
 
   useEffect(() => {
     if (isOpen) {
-      fetchPreview(selectedSemester);
+      fetchPreview(selectedSemester, targetSemester);
     }
-  }, [isOpen, departmentId, selectedSemester]);
+  }, [isOpen, departmentId, selectedSemester, targetSemester]);
 
   // Compute eligible classes (those without active batches)
   const eligibleClasses = useMemo(() => {
@@ -248,22 +253,61 @@ export default function BulkPromoteCohortModal({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Source Semester:</span>
-            <select
-              className="text-xs font-bold bg-background border border-border rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
-              value={selectedSemester}
-              onChange={(e) => setSelectedSemester(Number(e.target.value))}
-              disabled={loading || submitting}
-            >
-              {[1, 2, 3, 4, 5, 6, 7].map((s) => (
-                <option key={s} value={s}>
-                  Semester {s}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Source:</span>
+              <select
+                className="text-xs font-bold bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                value={selectedSemester}
+                onChange={(e) => {
+                  const s = Number(e.target.value);
+                  setSelectedSemester(s);
+                  setTargetSemester(s < 8 ? s + 1 : s);
+                }}
+                disabled={loading || submitting}
+              >
+                {[1, 2, 3, 4, 5, 6, 7].map((s) => (
+                  <option key={s} value={s}>
+                    Sem {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <ArrowRight size={14} className="text-muted-foreground hidden sm:block" />
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Destination:</span>
+              <select
+                className="text-xs font-bold bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                value={targetSemester}
+                onChange={(e) => setTargetSemester(Number(e.target.value))}
+                disabled={loading || submitting}
+              >
+                {[2, 3, 4, 5, 6, 7, 8].map((s) => (
+                  <option key={s} value={s}>
+                    Sem {s}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
+
+        {/* Missing Target Sections Alert */}
+        {cohortData?.missingTargetSections?.length > 0 && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1 text-xs text-amber-800 dark:text-amber-300">
+            <div className="flex items-center gap-2 font-bold">
+              <AlertTriangle size={15} className="text-amber-500 shrink-0" />
+              <span>Missing Target Sections in Semester {targetSemester}</span>
+            </div>
+            <p className="text-[11px] leading-relaxed">
+              The following section{cohortData.missingTargetSections.length > 1 ? 's do' : ' does'} not exist yet in Semester {targetSemester}:{' '}
+              <strong className="font-semibold text-foreground">{cohortData.missingTargetSections.join(', ')}</strong>.
+              Ensure destination classes are created before assigning students to them.
+            </p>
+          </div>
+        )}
 
         {/* Error Alert */}
         {error && (

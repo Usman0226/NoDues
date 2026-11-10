@@ -802,7 +802,7 @@ export const cloneSubjects = async (req, res, next) => {
 // ── GET /api/classes/cohort-promotion-preview ────────────────────────────────
 export const getCohortPromotionPreview = async (req, res, next) => {
   try {
-    const { departmentId, semester } = req.query;
+    const { departmentId, semester, targetSemester } = req.query;
     const scopedDept = deptScope(req);
     let targetDeptId = scopedDept || departmentId;
 
@@ -811,6 +811,7 @@ export const getCohortPromotionPreview = async (req, res, next) => {
     }
 
     const numSemester = Number(semester);
+    const numTargetSemester = targetSemester ? Number(targetSemester) : numSemester + 1;
 
     // If targetDeptId is not explicitly provided and user is admin, auto-resolve from active classes in this semester
     if (!targetDeptId) {
@@ -844,23 +845,45 @@ export const getCohortPromotionPreview = async (req, res, next) => {
         data: {
           departmentId: targetDeptId,
           semester: numSemester,
+          targetSemester: numTargetSemester,
           classes: [],
           candidateTargetClasses: [],
+          missingTargetSections: [],
           message: `No active classes found in semester ${numSemester}`,
         },
       });
     }
 
-    // 2. Fetch candidate target classes (all other active classes in the department)
+    // 2. Fetch candidate target classes (scoped to targetSemester when specified, or strictly >= numSemester + 1)
     const sourceClassIds = sourceClasses.map(c => c._id);
-    const targetClasses = await Class.find({
+    const targetQuery = {
       departmentId: targetDeptId,
       _id: { $nin: sourceClassIds },
       isActive: { $ne: false },
-    })
+    };
+
+    if (targetSemester) {
+      targetQuery.semester = numTargetSemester;
+    } else {
+      // Default strictly to next semester or higher
+      targetQuery.semester = { $gte: numSemester + 1 };
+    }
+
+    const targetClasses = await Class.find(targetQuery)
       .select('_id name semester academicYear studentIds')
       .sort({ semester: 1, name: 1 })
       .lean();
+
+    // Compute sections missing in target semester
+    const missingTargetSections = sourceClasses
+      .filter((sc) => {
+        const cleanSourceName = (sc.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
+        return !targetClasses.some((tc) => {
+          const cleanTargetName = (tc.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
+          return cleanSourceName === cleanTargetName;
+        });
+      })
+      .map((sc) => sc.name);
 
     // 3. For each source class, check active batch and count active students
     const activeBatches = await NodueBatch.find({
@@ -929,6 +952,8 @@ export const getCohortPromotionPreview = async (req, res, next) => {
       data: {
         departmentId: targetDeptId,
         semester: numSemester,
+        targetSemester: numTargetSemester,
+        missingTargetSections,
         classes: classPreviews,
         candidateTargetClasses: targetClasses.map(tc => ({
           _id: tc._id,
