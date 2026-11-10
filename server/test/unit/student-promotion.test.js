@@ -480,5 +480,42 @@ describe('Student Promotion & Historical Record Preservation', () => {
       const refreshedStudent1 = await Student.findById(student1._id);
       assert.equal(refreshedStudent1.classId.toString(), sourceClass._id.toString());
     });
+
+    it('POST /api/classes/bulk-promote blocks duplicate destination assignment without explicit consolidation flag', async () => {
+      const res = await request(app)
+        .post('/api/classes/bulk-promote')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          departmentId: testDept._id,
+          promotions: [
+            { sourceClassId: sourceClass._id, targetClassId: targetClass._id },
+            { sourceClassId: sectionB._id, targetClassId: targetClass._id }, // Accidental duplicate!
+          ],
+        });
+
+      assert.equal(res.status, 400);
+      assert.match(res.body.error?.message || res.body.message, /Multiple source sections are mapped to the same destination/i);
+    });
+
+    it('POST /api/classes/auto-create-target-sections provisions missing sections in target semester', async () => {
+      const res = await request(app)
+        .post('/api/classes/auto-create-target-sections')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          departmentId: testDept._id,
+          sourceSemester: 4,
+          targetSemester: 5,
+          sectionNames: ['CSD-C', 'CSD-D'],
+        });
+
+      assert.equal(res.status, 201);
+      assert.equal(res.body.success, true);
+      assert.equal(res.body.data.length, 2);
+
+      const createdC = await Class.findOne({ departmentId: testDept._id, semester: 5, name: 'CSD-C' });
+      assert.ok(createdC);
+      assert.equal(createdC.semester, 5);
+      assert.equal(createdC.isActive, true);
+    });
   });
 });

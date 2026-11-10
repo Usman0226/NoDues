@@ -16,6 +16,7 @@ import {
   promoteStudents,
   getCohortPromotionPreview,
   bulkPromoteClasses,
+  autoCreateTargetSections,
 } from '../Controllers/classController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -34,6 +35,7 @@ router.route('/')
 // Bulk cohort promotion routes (must precede /:id)
 router.get('/cohort-promotion-preview', getCohortPromotionPreview);
 router.post('/bulk-promote', bulkPromoteClasses);
+router.post('/auto-create-target-sections', autoCreateTargetSections);
 
 // Single class routes
 router.route('/:id')

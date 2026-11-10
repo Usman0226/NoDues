@@ -3,7 +3,7 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import Spinner from '../ui/Spinner';
-import { getCohortPromotionPreview, bulkPromoteClasses } from '../../api/classes';
+import { getCohortPromotionPreview, bulkPromoteClasses, autoCreateTargetSections } from '../../api/classes';
 import { toast } from 'react-hot-toast';
 import {
   GraduationCap,
@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Layers,
   UserX,
+  Plus,
 } from 'lucide-react';
 
 export default function BulkPromoteCohortModal({
@@ -30,11 +31,13 @@ export default function BulkPromoteCohortModal({
   );
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [creatingSections, setCreatingSections] = useState(false);
   const [cohortData, setCohortData] = useState(null);
   const [mappings, setMappings] = useState({});
   const [selectedClassIds, setSelectedClassIds] = useState(new Set());
   const [resetFaculty, setResetFaculty] = useState(true);
   const [resetElectives, setResetElectives] = useState(true);
+  const [allowConsolidation, setAllowConsolidation] = useState(false);
   const [error, setError] = useState(null);
 
   // Sync initialSemester when changed
@@ -168,6 +171,43 @@ export default function BulkPromoteCohortModal({
     return selectedClasses.some((item) => !mappings[item.sourceClass?._id]);
   }, [selectedClasses, mappings]);
 
+  // Detect duplicate target destinations across selected classes
+  const duplicateTargetIds = useMemo(() => {
+    const counts = {};
+    selectedClasses.forEach((item) => {
+      const tgtId = mappings[item.sourceClass?._id];
+      if (tgtId) {
+        counts[tgtId] = (counts[tgtId] || 0) + 1;
+      }
+    });
+    return Object.keys(counts).filter((id) => counts[id] > 1);
+  }, [selectedClasses, mappings]);
+
+  const hasDuplicateTargets = duplicateTargetIds.length > 0;
+
+  const handleAutoCreateMissingSections = async () => {
+    if (!cohortData?.missingTargetSections?.length) return;
+    try {
+      setCreatingSections(true);
+      setError(null);
+      const res = await autoCreateTargetSections({
+        departmentId: cohortData.departmentId || departmentId,
+        sourceSemester: selectedSemester,
+        targetSemester,
+        sectionNames: cohortData.missingTargetSections,
+      });
+      const msg = res?.data?.message || res?.message || 'Missing sections created successfully';
+      toast.success(msg);
+      fetchPreview(selectedSemester, targetSemester);
+    } catch (err) {
+      const msg = err?.message || err?.response?.data?.message || 'Failed to auto-create sections';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setCreatingSections(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!cohortData?.classes || cohortData.classes.length === 0) {
       toast.error('No classes available to promote');
@@ -176,6 +216,11 @@ export default function BulkPromoteCohortModal({
 
     if (selectedClasses.length === 0) {
       toast.error('Please select at least one section to promote');
+      return;
+    }
+
+    if (hasDuplicateTargets && !allowConsolidation) {
+      toast.error('Multiple sections are mapped to the same destination. Confirm section consolidation to proceed.');
       return;
     }
 
@@ -213,6 +258,7 @@ export default function BulkPromoteCohortModal({
         promotions,
         resetElectives,
         resetFaculty,
+        allowConsolidation,
       });
 
       const msg =
@@ -296,7 +342,7 @@ export default function BulkPromoteCohortModal({
 
         {/* Missing Target Sections Alert */}
         {cohortData?.missingTargetSections?.length > 0 && (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1 text-xs text-amber-800 dark:text-amber-300">
+          <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2 text-xs text-amber-800 dark:text-amber-300">
             <div className="flex items-center gap-2 font-bold">
               <AlertTriangle size={15} className="text-amber-500 shrink-0" />
               <span>Missing Target Sections in Semester {targetSemester}</span>
@@ -306,6 +352,28 @@ export default function BulkPromoteCohortModal({
               <strong className="font-semibold text-foreground">{cohortData.missingTargetSections.join(', ')}</strong>.
               Ensure destination classes are created before assigning students to them.
             </p>
+            <div className="pt-0.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={handleAutoCreateMissingSections}
+                disabled={creatingSections || submitting}
+                className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 dark:text-amber-200 border-amber-500/40 text-xs font-semibold gap-1.5"
+              >
+                {creatingSections ? (
+                  <>
+                    <Spinner size="xs" />
+                    <span>Auto-Creating {cohortData.missingTargetSections.length} Section{cohortData.missingTargetSections.length !== 1 ? 's' : ''}...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus size={13} />
+                    <span>Auto-Create Missing Section{cohortData.missingTargetSections.length !== 1 ? 's' : ''} in Sem {targetSemester}</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -423,11 +491,15 @@ export default function BulkPromoteCohortModal({
                       ) : (
                         <select
                           className={`w-full text-xs font-semibold bg-background border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                            isSelected && !selectedTargetId ? 'border-amber-500/60 ring-1 ring-amber-500/20' : 'border-border'
+                            isSelected && !selectedTargetId
+                              ? 'border-amber-500/60 ring-1 ring-amber-500/20'
+                              : isSelected && duplicateTargetIds.includes(selectedTargetId)
+                              ? 'border-rose-500/60 ring-1 ring-rose-500/20 bg-rose-500/5'
+                              : 'border-border'
                           }`}
                           value={selectedTargetId}
                           onChange={(e) => handleTargetChange(src._id, e.target.value)}
-                          disabled={submitting || src.hasActiveBatch || !isSelected}
+                          disabled={submitting || creatingSections || src.hasActiveBatch || !isSelected}
                         >
                           <option value="">-- Choose Target Class --</option>
                           {allTargetCandidates.map((tc) => (
@@ -442,6 +514,28 @@ export default function BulkPromoteCohortModal({
                 );
               })}
             </div>
+
+            {/* Duplicate Destination Warning */}
+            {hasDuplicateTargets && (
+              <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-2 text-xs text-rose-800 dark:text-rose-300">
+                <div className="flex items-center gap-2 font-bold">
+                  <AlertTriangle size={15} className="text-rose-500 shrink-0" />
+                  <span>Duplicate Destination Section Detected</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  Multiple source sections are mapped to the same destination section. By default, this is blocked to prevent accidental section mixing.
+                </p>
+                <label className="flex items-center gap-2 pt-1 font-semibold text-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={allowConsolidation}
+                    onChange={(e) => setAllowConsolidation(e.target.checked)}
+                    className="rounded border-border text-rose-600 focus:ring-rose-500 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>Confirm Section Consolidation (Merge multiple classes into one)</span>
+                </label>
+              </div>
+            )}
 
             {/* Options Toggles */}
             <div className="space-y-2.5">
@@ -518,9 +612,11 @@ export default function BulkPromoteCohortModal({
               disabled={
                 loading ||
                 submitting ||
+                creatingSections ||
                 selectedClasses.length === 0 ||
                 allTargetCandidates.length === 0 ||
-                hasUnmappedSelected
+                hasUnmappedSelected ||
+                (hasDuplicateTargets && !allowConsolidation)
               }
               className="gap-1.5"
             >

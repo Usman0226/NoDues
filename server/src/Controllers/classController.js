@@ -927,11 +927,7 @@ export const getCohortPromotionPreview = async (req, res, next) => {
           }
         }
 
-        // Priority 3: First available higher semester class
-        if (!recommendedTargetId && targetClasses.length > 0) {
-          const higher = targetClasses.filter(c => c.semester > cls.semester);
-          if (higher.length > 0) recommendedTargetId = higher[0]._id;
-        }
+        // Never blindly fallback to arbitrary classes. If no matching section exists, leave recommendedTargetId as null.
 
         return {
           sourceClass: {
@@ -1007,6 +1003,14 @@ export const bulkPromoteClasses = async (req, res, next) => {
         return next(new ErrorResponse('One or more source or target classes were not found', 404, 'NOT_FOUND'));
       }
 
+      if (src._id.toString() === tgt._id.toString()) {
+        return next(new ErrorResponse(`Source and destination class cannot be the same (${src.name})`, 400, 'VAL_002'));
+      }
+
+      if (tgt.semester <= src.semester && !req.body.allowSameSemesterMove) {
+        return next(new ErrorResponse(`Destination class (${tgt.name} Sem ${tgt.semester}) must have a higher semester than source class (${src.name} Sem ${src.semester})`, 400, 'VAL_002'));
+      }
+
       if (req.user.role === 'hod' || req.user.role === 'ao') {
         const userDept = req.user.departmentId?.toString();
         const srcDept = (src.departmentId?._id || src.departmentId)?.toString();
@@ -1015,6 +1019,22 @@ export const bulkPromoteClasses = async (req, res, next) => {
           return next(new ErrorResponse('Access denied for this department scope', 403, 'AUTH_DEPARTMENT_SCOPE'));
         }
       }
+    }
+
+    // Check for accidental duplicate destination mappings (prevent unintended section mergers)
+    const targetUsage = new Map();
+    for (const p of promotions) {
+      const tid = p.targetClassId?.toString();
+      targetUsage.set(tid, (targetUsage.get(tid) || 0) + 1);
+    }
+    const duplicateTargets = [...targetUsage.entries()].filter(([_, count]) => count > 1);
+    if (duplicateTargets.length > 0 && !req.body.allowConsolidation) {
+      const dupNames = duplicateTargets.map(([id]) => classMap.get(id)?.name || id).join(', ');
+      return next(new ErrorResponse(
+        `Multiple source sections are mapped to the same destination section (${dupNames}). Section consolidation requires explicit confirmation.`,
+        400,
+        'VAL_002'
+      ));
     }
 
     // 3. Pre-fetch students to move for each promotion pair
@@ -1119,6 +1139,74 @@ export const bulkPromoteClasses = async (req, res, next) => {
         totalPromotedStudents,
         results: promotionResults,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /api/classes/auto-create-target-sections ─────────────────────────────
+export const autoCreateTargetSections = async (req, res, next) => {
+  try {
+    const { departmentId, sourceSemester, targetSemester, sectionNames } = req.body;
+
+    if (!departmentId || !targetSemester || !Array.isArray(sectionNames) || sectionNames.length === 0) {
+      return next(new ErrorResponse('departmentId, targetSemester, and sectionNames are required', 400, 'VAL_001'));
+    }
+
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId?.toString() !== departmentId.toString()) {
+      return next(new ErrorResponse('Access denied for this department scope', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
+    // Find source classes to inherit academicYear if applicable
+    const sourceClasses = await Class.find({
+      departmentId,
+      semester: Number(sourceSemester) || (Number(targetSemester) - 1),
+      isActive: true,
+    }).lean();
+
+    const academicYear = sourceClasses[0]?.academicYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 4}`;
+
+    const createdClasses = [];
+    for (const name of sectionNames) {
+      const cleanName = (name || '').trim();
+      if (!cleanName) continue;
+
+      const existing = await Class.findOne({
+        departmentId,
+        semester: Number(targetSemester),
+        name: { $regex: new RegExp(`^${cleanName}$`, 'i') },
+      });
+
+      if (!existing) {
+        const [newClass] = await Class.create([{
+          name: cleanName,
+          departmentId,
+          semester: Number(targetSemester),
+          academicYear,
+          studentIds: [],
+          subjectAssignments: [],
+          isActive: true,
+        }]);
+        createdClasses.push(newClass);
+      }
+    }
+
+    // Invalidate classes caches
+    invalidateEntityCache('class', 'bulk_create');
+
+    logger.info('cohort_target_sections_auto_created', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      departmentId,
+      targetSemester,
+      createdCount: createdClasses.length,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Successfully provisioned ${createdClasses.length} section(s) in Semester ${targetSemester}`,
+      data: createdClasses,
     });
   } catch (err) {
     next(err);
