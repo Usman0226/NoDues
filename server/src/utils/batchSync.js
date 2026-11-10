@@ -833,11 +833,15 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
   try {
     await startSafeTransaction(session);
 
-    // 1. Deactivate old request and its approvals
+    // 1. Deactivate old request and its approvals ONLY if it belongs to an ACTIVE in-flight batch.
+    // Immutable academic history: Completed/closed clearance requests from previous semesters are permanent records and must NEVER be deleted.
     const oldRequest = await NodueRequest.findOne({ studentId }).sort({ createdAt: -1 }).session(session);
     if (oldRequest) {
-      await NodueApproval.deleteMany({ requestId: oldRequest._id }, { session });
-      await NodueRequest.deleteOne({ _id: oldRequest._id }, { session });
+      const oldBatch = await NodueBatch.findById(oldRequest.batchId).session(session).lean();
+      if (oldBatch && oldBatch.status === 'active') {
+        await NodueApproval.deleteMany({ requestId: oldRequest._id }, { session });
+        await NodueRequest.deleteOne({ _id: oldRequest._id }, { session });
+      }
     }
 
     // 2. Check if new class has an active batch

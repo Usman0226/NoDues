@@ -37,7 +37,9 @@ export function isWithoutTeacher(facultyName) {
 
 /**
  * Parses raw text lines to detect subject summary table rows.
- * Extracts: subjectCode, subjectName, facultyName, hours.
+ * Supports both high-precision aSc tab-delimited tables and fallback line-by-line regex.
+ * Extracts: subjectCode, subjectName, facultyName, hours, isElective.
+ * Merges split theory/tutorial rows under the same subject code & faculty.
  * TRD Reference: FR-C1
  *
  * @param {string} text
@@ -51,9 +53,99 @@ export function extractTableRowsFromText(text) {
     .map(line => line.trim())
     .filter(Boolean);
 
-  const parsedRows = [];
+  // 1. High-precision bounded table extraction (aSc Timetables structure)
+  const headerIdx = lines.findIndex(l => /Subject Name.*Faculty Name/i.test(l));
+  const footerIdx = lines.findIndex(l => /Time Table Incharge|Principal|Head of the Department/i.test(l));
 
-  // Regex patterns to identify subject code (e.g., 20CS401, CS301, 23CSE-402, etc.)
+  if (headerIdx !== -1 && footerIdx !== -1 && footerIdx > headerIdx) {
+    const tableLines = lines.slice(headerIdx + 1, footerIdx);
+    const rawParsed = [];
+
+    for (const line of tableLines) {
+      const parts = line.split('\t').map(s => s.trim());
+      if (parts.length < 2) continue;
+
+      const subjectCol = parts[0];
+      const facultyCol = parts[1] || 'Without teacher';
+      const hoursCol = parts[2] || '0';
+      const hours = parseInt(hoursCol, 10) || 0;
+
+      let subjectCode = '';
+      let subjectName = '';
+      let isElective = false;
+
+      // Extract standard code pattern (e.g. 23PHY102, 23CSD107, 23CSD4M01, 23CSD604, etc.)
+      const codeMatch = subjectCol.match(/\b([0-9]{2}[A-Z]{2,4}[0-9]{2,4}[A-Z0-9]?)\b/i);
+      if (codeMatch) {
+        subjectCode = codeMatch[1].toUpperCase();
+        subjectName = subjectCol.replace(codeMatch[0], '').replace(/^[\s\-–—:]+/, '').trim();
+        if (/PE\s*[-I|IV|V0-9]|\bMOOC\b|\bElective\b/i.test(subjectCol)) {
+          isElective = true;
+        }
+      } else {
+        // Non-standard subject keywords
+        if (/^SS\b|^Soft Skill/i.test(subjectCol)) {
+          subjectCode = 'SS';
+          subjectName = 'Soft Skill';
+        } else if (/^APS\b|^Aptitude/i.test(subjectCol)) {
+          subjectCode = 'APS';
+          subjectName = 'Aptitude';
+        } else if (/^Code\s*Tantra/i.test(subjectCol)) {
+          subjectCode = 'Code Tantra';
+          subjectName = 'Code Tantra';
+        } else if (/^HA\b|^Holistic/i.test(subjectCol)) {
+          subjectCode = 'HA';
+          subjectName = 'Holistic Activities';
+        } else if (/^OE\s*[-I|IV|V0-9]/i.test(subjectCol)) {
+          const oeMatch = subjectCol.match(/^(OE\s*[-I|IV|V0-9]+)/i);
+          subjectCode = oeMatch ? oeMatch[1].toUpperCase().replace(/\s+/g, '') : 'OE';
+          subjectName = 'Open Elective';
+          isElective = true;
+        } else {
+          subjectCode = subjectCol.slice(0, 15).trim();
+          subjectName = subjectCol;
+        }
+      }
+
+      rawParsed.push({
+        rawLine: line,
+        subjectCode,
+        subjectName: subjectName || subjectCode,
+        facultyField: facultyCol,
+        hours,
+        isElective,
+      });
+    }
+
+    // Split-Row Merging: merge identical subjectCode + primary faculty
+    const mergedRows = [];
+    const mergeMap = new Map();
+
+    for (const item of rawParsed) {
+      const primaryFaculty = (item.facultyField.split(',')[0] || '').trim().toLowerCase();
+      const mergeKey = `${item.subjectCode}::${primaryFaculty}`;
+
+      if (mergeMap.has(mergeKey)) {
+        const existing = mergeMap.get(mergeKey);
+        existing.hours += item.hours;
+
+        // Combine co-faculty names without duplicates
+        const existingFaculties = existing.facultyField.split(',').map(f => f.trim()).filter(Boolean);
+        const newFaculties = item.facultyField.split(',').map(f => f.trim()).filter(Boolean);
+        const combined = Array.from(new Set([...existingFaculties, ...newFaculties]));
+        existing.facultyField = combined.join(', ');
+      } else {
+        const copy = { ...item };
+        mergeMap.set(mergeKey, copy);
+        mergedRows.push(copy);
+      }
+    }
+
+    return mergedRows;
+  }
+
+  // 2. Generic fallback for unstructured or synthetic fixture text
+  const parsedRows = [];
   const subjectCodePattern = /\b([0-9]{2}[A-Z]{2,4}[0-9]{3,4}[A-Z]?|[A-Z]{2,5}[- ]?[0-9]{3,4}[A-Z]?)\b/i;
 
   for (let i = 0; i < lines.length; i++) {
@@ -82,8 +174,6 @@ export function extractTableRowsFromText(text) {
       nameAndFaculty = lineWithoutCode.slice(0, hoursMatch.index).trim();
     }
 
-    // Attempt to split subject name and faculty name
-    // Common delimiters: ' - ', ' / ', ' by ', or tab/multiple spaces
     let subjectName = '';
     let facultyField = '';
 
@@ -93,13 +183,11 @@ export function extractTableRowsFromText(text) {
       subjectName = parts[0].trim();
       facultyField = parts.slice(1).join(' ').trim();
     } else {
-      // Fallback: search for honorific boundary
       const honorificMatch = nameAndFaculty.match(/\b(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.|Er\.)\b/i);
       if (honorificMatch && honorificMatch.index > 3) {
         subjectName = nameAndFaculty.slice(0, honorificMatch.index).trim();
         facultyField = nameAndFaculty.slice(honorificMatch.index).trim();
       } else {
-        // Half split heuristic
         subjectName = nameAndFaculty;
         facultyField = '';
       }
@@ -509,6 +597,27 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
     });
   }
 
+  // Extract page metadata (FR-C1/FR-C7): Class, Class Teacher, Academic Year, w.e.f
+  let metadata = null;
+  const textLines = extractedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (textLines.length > 0) {
+    const title = textLines[0];
+    const ctMatch = extractedText.match(/Class Teacher:\s*([^\t\r\n]+)/i);
+    const ayMatch = extractedText.match(/Academic Year:\s*([^\t\r\n]+)/i);
+    const wefMatch = extractedText.match(/w\.e\.f\s*([^\t\r\n]+)/i);
+    const deptMatch = extractedText.match(/Department of ([^\t\r\n\(\)]+)/i);
+    const totalScheduledHours = rawRows.reduce((acc, r) => acc + (r.hours || 0), 0);
+
+    metadata = {
+      classTitle: title || null,
+      classTeacher: ctMatch ? ctMatch[1].trim() : null,
+      academicYear: ayMatch ? ayMatch[1].trim() : null,
+      wef: wefMatch ? wefMatch[1].trim() : null,
+      departmentName: deptMatch ? deptMatch[1].trim() : null,
+      totalScheduledHours,
+    };
+  }
+
   const durationMs = Date.now() - startTime;
   logger.info('Timetable PDF parsed successfully', {
     totalRows: rawRows.length,
@@ -529,6 +638,7 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
       pageCount,
       isMultiPage: pageCount > 1,
       rows: processedRows,
+      metadata,
       durationMs,
     },
   };

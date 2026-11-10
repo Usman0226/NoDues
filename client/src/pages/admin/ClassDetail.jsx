@@ -14,9 +14,10 @@ import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, 
 import { createStudent, updateStudent, deleteStudent, assignMentor, addElective, removeElective, bulkDeactivateStudents, bulkAssignMentor } from '../../api/students';
 import { getFaculty } from '../../api/faculty';
 import { getSubjects, createSubject } from '../../api/subjects';
-import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2, Search, X, ChevronDown } from 'lucide-react';
+import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2, Search, X, ChevronDown, GraduationCap } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
+import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal';
 
 
 
@@ -27,13 +28,13 @@ const BASE_TABS = [
 ];
 
 const ClassDetail = () => {
-  console.log('DEBUG: API Imports check', { assignMentor, createStudent, createSubject });
 
   const { classId } = useParams();
   const navigate = useNavigate();
   const [tab, setTab] = useState('students');
   const [showImport, setShowImport] = useState(null);
   const [showAddStudent, setShowAddStudent] = useState(false);
+  const [showPromote, setShowPromote] = useState(false);
   const [showInitiate, setShowInitiate] = useState(false);
   const [initiateForm, setInitiateForm] = useState({ deadline: '' });
   
@@ -715,6 +716,14 @@ const SUBJECT_COLS = [
             }}>
               <UserPlus size={14} /> Add Student
             </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowPromote(true)}
+              className="bg-emerald-600/10 text-emerald-700 hover:bg-emerald-600/20 border border-emerald-600/30 flex items-center gap-1.5"
+            >
+              <GraduationCap size={14} /> Promote Section
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setShowImport('students')} className="text-navy border border-muted hover:bg-offwhite">
               <Upload size={14} /> Import students
             </Button>
@@ -756,6 +765,11 @@ const SUBJECT_COLS = [
             selection={selectedStudentIds}
             onSelectionChange={setSelectedStudentIds}
             bulkActions={[
+              { 
+                label: 'Promote Selected', 
+                icon: GraduationCap, 
+                onClick: () => setShowPromote(true) 
+              },
               { 
                 label: 'Assign Mentor', 
                 icon: Users, 
@@ -1414,6 +1428,19 @@ const SUBJECT_COLS = [
         isDestructive={true}
         loading={submitting}
       />
+
+      {showPromote && (
+        <PromoteStudentsModal
+          isOpen={showPromote}
+          onClose={() => setShowPromote(false)}
+          classId={classId}
+          onSuccess={() => {
+            fetchClass();
+            setSelectedStudentIds([]);
+          }}
+          preselectedStudentIds={selectedStudentIds}
+        />
+      )}
     </PageWrapper>
   );
 };

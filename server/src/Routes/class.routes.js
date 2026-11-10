@@ -12,6 +12,8 @@ import {
   updateSubjectAssignment,
   removeSubjectAssignment,
   cloneSubjects,
+  getPromotionCandidates,
+  promoteStudents,
 } from '../Controllers/classController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -34,6 +36,10 @@ router.route('/:id')
   .delete(deleteClass);
 
 router.post('/:id/activate', activateClass);
+
+// Student promotion routes
+router.get('/:id/promotion-candidates', getPromotionCandidates);
+router.post('/:id/promote', promoteStudents);
 
 
 // Class teacher assignment
