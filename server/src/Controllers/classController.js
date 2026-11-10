@@ -10,7 +10,7 @@ import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
 import { syncSubjectRemoval, syncSubjectUpdate, syncSubjectAddition, bulkSyncClassTeacherUpdate } from '../utils/batchSync.js';
-import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction, getSessionOptions } from '../utils/safeTransaction.js';
+import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction, getSessionOptions, executeSafeTransaction } from '../utils/safeTransaction.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 // Cache invalidation is now handled via Mongoose hooks in the model.
@@ -921,35 +921,30 @@ export const getCohortPromotionPreview = async (req, res, next) => {
 
 // ── POST /api/classes/bulk-promote ───────────────────────────────────────────
 export const bulkPromoteClasses = async (req, res, next) => {
-  const session = await mongoose.startSession();
   try {
-    await startSafeTransaction(session);
     const { promotions, resetElectives = true } = req.body;
 
     if (!Array.isArray(promotions) || promotions.length === 0) {
-      await abortSafeTransaction(session);
       return next(new ErrorResponse('Promotions list is required and cannot be empty', 400, 'VAL_001'));
     }
 
-    const opt = getSessionOptions(session);
     const sourceClassIds = promotions.map(p => p.sourceClassId);
     const targetClassIds = promotions.map(p => p.targetClassId);
 
-    // 1. Guard against any active batch across all source classes
+    // 1. Guard against any active batch across all source classes (outside transaction)
     const activeBatches = await NodueBatch.find({
       classId: { $in: sourceClassIds },
       status: 'active',
-    }, null, opt).select('classId').lean();
+    }).select('classId').lean();
 
     if (activeBatches.length > 0) {
-      await abortSafeTransaction(session);
       return next(new ErrorResponse('Cannot promote classes while clearance batches are active. Please complete or close active batches before proceeding.', 400, 'VAL_002'));
     }
 
-    // 2. Fetch all classes
+    // 2. Fetch all classes (outside transaction)
     const allClasses = await Class.find({
       _id: { $in: [...new Set([...sourceClassIds, ...targetClassIds])] },
-    }, null, opt);
+    }).lean();
 
     const classMap = new Map(allClasses.map(c => [c._id.toString(), c]));
 
@@ -959,27 +954,25 @@ export const bulkPromoteClasses = async (req, res, next) => {
       const tgt = classMap.get(p.targetClassId?.toString());
 
       if (!src || !tgt) {
-        await abortSafeTransaction(session);
         return next(new ErrorResponse('One or more source or target classes were not found', 404, 'NOT_FOUND'));
       }
 
-      if ((req.user.role === 'hod' || req.user.role === 'ao')) {
-        if (src.departmentId.toString() !== req.user.departmentId || tgt.departmentId.toString() !== req.user.departmentId) {
-          await abortSafeTransaction(session);
+      if (req.user.role === 'hod' || req.user.role === 'ao') {
+        const userDept = req.user.departmentId?.toString();
+        const srcDept = (src.departmentId?._id || src.departmentId)?.toString();
+        const tgtDept = (tgt.departmentId?._id || tgt.departmentId)?.toString();
+        if (srcDept !== userDept || tgtDept !== userDept) {
           return next(new ErrorResponse('Access denied for this department scope', 403, 'AUTH_DEPARTMENT_SCOPE'));
         }
       }
     }
 
-    // 3. Execute promotions per pair
-    let totalPromotedStudents = 0;
-    const promotionResults = [];
-
+    // 3. Pre-fetch students to move for each promotion pair
+    const plannedPromotions = [];
     for (const p of promotions) {
       const src = classMap.get(p.sourceClassId.toString());
       const tgt = classMap.get(p.targetClassId.toString());
 
-      // Find active students in source class
       const studentQuery = {
         $or: [
           { classId: src._id },
@@ -992,48 +985,61 @@ export const bulkPromoteClasses = async (req, res, next) => {
         studentQuery._id = { $in: p.studentIds };
       }
 
-      const students = await Student.find(studentQuery, null, opt);
+      const students = await Student.find(studentQuery).select('_id').lean();
       const studentIdsToMove = students.map(s => s._id);
 
-      if (studentIdsToMove.length > 0) {
-        // Atomic pull from source and push to target
-        await Class.findByIdAndUpdate(src._id, { $pullAll: { studentIds: studentIdsToMove } }, opt);
-        await Class.findByIdAndUpdate(tgt._id, { $addToSet: { studentIds: { $each: studentIdsToMove } } }, opt);
-
-        const updateData = {
-          classId: tgt._id,
-          departmentId: tgt.departmentId,
-          semester: tgt.semester,
-          currentSemester: tgt.semester,
-          academicYear: tgt.academicYear,
-          yearOfStudy: Math.ceil(tgt.semester / 2),
-        };
-
-        if (resetElectives) {
-          updateData.electiveSubjects = [];
-        }
-
-        await Student.updateMany(
-          { _id: { $in: studentIdsToMove } },
-          { $set: updateData },
-          opt
-        );
-
-        totalPromotedStudents += studentIdsToMove.length;
-      }
-
-      promotionResults.push({
-        sourceClassId: src._id,
-        sourceClassName: src.name,
-        targetClassId: tgt._id,
-        targetClassName: tgt.name,
-        promotedCount: studentIdsToMove.length,
+      plannedPromotions.push({
+        src,
+        tgt,
+        studentIdsToMove,
       });
     }
 
-    await commitSafeTransaction(session);
+    // 4. Execute atomic/safe writes
+    let totalPromotedStudents = 0;
+    const promotionResults = [];
 
-    // Invalidate caches
+    await executeSafeTransaction(async (session, opt) => {
+      for (const item of plannedPromotions) {
+        const { src, tgt, studentIdsToMove } = item;
+
+        if (studentIdsToMove.length > 0) {
+          await Class.findByIdAndUpdate(src._id, { $pullAll: { studentIds: studentIdsToMove } }, opt);
+          await Class.findByIdAndUpdate(tgt._id, { $addToSet: { studentIds: { $each: studentIdsToMove } } }, opt);
+
+          const updateData = {
+            classId: tgt._id,
+            departmentId: tgt.departmentId,
+            semester: tgt.semester,
+            currentSemester: tgt.semester,
+            academicYear: tgt.academicYear,
+            yearOfStudy: Math.ceil(tgt.semester / 2),
+          };
+
+          if (resetElectives) {
+            updateData.electiveSubjects = [];
+          }
+
+          await Student.updateMany(
+            { _id: { $in: studentIdsToMove } },
+            { $set: updateData },
+            opt
+          );
+
+          totalPromotedStudents += studentIdsToMove.length;
+        }
+
+        promotionResults.push({
+          sourceClassId: src._id,
+          sourceClassName: src.name,
+          targetClassId: tgt._id,
+          targetClassName: tgt.name,
+          promotedCount: studentIdsToMove.length,
+        });
+      }
+    });
+
+    // 5. Invalidate caches
     for (const p of promotions) {
       invalidateEntityCache('class', p.sourceClassId);
       invalidateEntityCache('class', p.targetClassId);
@@ -1058,10 +1064,7 @@ export const bulkPromoteClasses = async (req, res, next) => {
       },
     });
   } catch (err) {
-    await abortSafeTransaction(session);
     next(err);
-  } finally {
-    session.endSession();
   }
 };
 
@@ -1158,51 +1161,45 @@ export const getPromotionCandidates = async (req, res, next) => {
 
 // ── POST /api/classes/:id/promote ─────────────────────────────────────────────
 export const promoteStudents = async (req, res, next) => {
-  const session = await mongoose.startSession();
   try {
-    await startSafeTransaction(session);
     const { id } = req.params;
     const { targetClassId, studentIds, resetElectives = true } = req.body;
 
     if (!targetClassId) {
-      await abortSafeTransaction(session);
       return next(new ErrorResponse('Target class ID is required', 400, 'VAL_001'));
     }
 
     if (id.toString() === targetClassId.toString()) {
-      await abortSafeTransaction(session);
       return next(new ErrorResponse('Source and target classes cannot be the same', 400, 'VAL_001'));
     }
 
-    const opt = getSessionOptions(session);
-
+    // 1. Validation reads (outside transaction, zero racing)
     const [sourceClass, targetClass, activeSourceBatch] = await Promise.all([
-      Class.findById(id, null, opt),
-      Class.findById(targetClassId, null, opt),
-      NodueBatch.findOne({ classId: id, status: 'active' }, null, opt).lean(),
+      Class.findById(id).lean(),
+      Class.findById(targetClassId).lean(),
+      NodueBatch.findOne({ classId: id, status: 'active' }).select('_id status').lean(),
     ]);
 
     if (!sourceClass || !sourceClass.isActive) {
-      await abortSafeTransaction(session);
       return next(new ErrorResponse('Source class not found or inactive', 404, 'NOT_FOUND'));
     }
 
     if (!targetClass || !targetClass.isActive) {
-      await abortSafeTransaction(session);
       return next(new ErrorResponse('Target class not found or inactive', 404, 'NOT_FOUND'));
     }
 
     // Role department scope
-    if ((req.user.role === 'hod' || req.user.role === 'ao')) {
-      if (sourceClass.departmentId.toString() !== req.user.departmentId || targetClass.departmentId.toString() !== req.user.departmentId) {
-        await abortSafeTransaction(session);
+    if (req.user.role === 'hod' || req.user.role === 'ao') {
+      const userDept = req.user.departmentId?.toString();
+      const srcDept = (sourceClass.departmentId?._id || sourceClass.departmentId)?.toString();
+      const tgtDept = (targetClass.departmentId?._id || targetClass.departmentId)?.toString();
+      if (srcDept !== userDept || tgtDept !== userDept) {
         return next(new ErrorResponse('Access denied for this department scope', 403, 'AUTH_DEPARTMENT_SCOPE'));
       }
     }
 
     // Disturbance Prevention: Cannot promote while source class has an active in-flight batch
     if (activeSourceBatch) {
-      await abortSafeTransaction(session);
       return next(new ErrorResponse('Cannot promote students while a clearance batch is active for this class. Complete or close the active batch first.', 400, 'VAL_002'));
     }
 
@@ -1215,51 +1212,51 @@ export const promoteStudents = async (req, res, next) => {
       query._id = { $in: studentIds };
     }
 
-    const studentsToPromote = await Student.find(query, null, opt);
+    const studentsToPromote = await Student.find(query).select('_id').lean();
     if (!studentsToPromote.length) {
-      await abortSafeTransaction(session);
       return next(new ErrorResponse('No active students selected or eligible for promotion in this class', 400, 'VAL_002'));
     }
 
     const actualStudentIds = studentsToPromote.map(s => s._id);
 
-    // 1. Atomically remove from source class
-    await Class.findByIdAndUpdate(
-      id,
-      { $pullAll: { studentIds: actualStudentIds } },
-      opt
-    );
+    // 2. Execute atomic/safe writes
+    await executeSafeTransaction(async (session, opt) => {
+      // Step A: Remove from source class
+      await Class.findByIdAndUpdate(
+        id,
+        { $pullAll: { studentIds: actualStudentIds } },
+        opt
+      );
 
-    // 2. Atomically add to target class
-    await Class.findByIdAndUpdate(
-      targetClassId,
-      { $addToSet: { studentIds: { $each: actualStudentIds } } },
-      opt
-    );
+      // Step B: Add to target class
+      await Class.findByIdAndUpdate(
+        targetClassId,
+        { $addToSet: { studentIds: { $each: actualStudentIds } } },
+        opt
+      );
 
-    // 3. Bulk update student records
-    const studentUpdatePayload = {
-      classId: targetClass._id,
-      departmentId: targetClass.departmentId,
-      semester: targetClass.semester,
-      currentSemester: targetClass.semester,
-      academicYear: targetClass.academicYear,
-      yearOfStudy: Math.ceil(targetClass.semester / 2),
-    };
+      // Step C: Update student records
+      const studentUpdatePayload = {
+        classId: targetClass._id,
+        departmentId: targetClass.departmentId,
+        semester: targetClass.semester,
+        currentSemester: targetClass.semester,
+        academicYear: targetClass.academicYear,
+        yearOfStudy: Math.ceil(targetClass.semester / 2),
+      };
 
-    if (resetElectives) {
-      studentUpdatePayload.electiveSubjects = [];
-    }
+      if (resetElectives) {
+        studentUpdatePayload.electiveSubjects = [];
+      }
 
-    await Student.updateMany(
-      { _id: { $in: actualStudentIds } },
-      { $set: studentUpdatePayload },
-      opt
-    );
+      await Student.updateMany(
+        { _id: { $in: actualStudentIds } },
+        { $set: studentUpdatePayload },
+        opt
+      );
+    });
 
-    await commitSafeTransaction(session);
-
-    // 4. Invalidate caches
+    // 3. Invalidate caches
     invalidateEntityCache('class', id, sourceClass.departmentId);
     invalidateEntityCache('class', targetClassId, targetClass.departmentId);
     actualStudentIds.forEach(sid => invalidateEntityCache('student', sid));
@@ -1295,9 +1292,6 @@ export const promoteStudents = async (req, res, next) => {
       },
     });
   } catch (err) {
-    await abortSafeTransaction(session);
     next(err);
-  } finally {
-    session.endSession();
   }
 };

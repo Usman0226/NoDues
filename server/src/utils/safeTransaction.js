@@ -111,3 +111,47 @@ export const abortSafeTransaction = async (session) => {
     }
   }
 };
+
+/**
+ * Executes a unit of work inside an environment-aware transaction with automatic graceful degradation.
+ * If transactions are supported, it executes workFn(session, { session }).
+ * If the cluster throws a transaction mismatch error (e.g., MongoDB Atlas M0, Standalone, or NoSuchTransaction 251),
+ * it aborts the invalid transaction and transparently executes workFn(null, {}) to ensure operations always complete.
+ *
+ * @param {Function} workFn - async (session, opt) => Promise<any>
+ * @returns {Promise<any>}
+ */
+export const executeSafeTransaction = async (workFn) => {
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+    const opt = getSessionOptions(session);
+
+    try {
+      const result = await workFn(session, opt);
+      await commitSafeTransaction(session);
+      return result;
+    } catch (err) {
+      await abortSafeTransaction(session);
+
+      const isTxnError =
+        err.code === 251 ||
+        err.code === 20 ||
+        err.codeName === 'NoSuchTransaction' ||
+        err.codeName === 'IllegalOperation' ||
+        err.message?.includes('does not match any in-progress transactions') ||
+        err.message?.includes('Transaction numbers are only allowed');
+
+      if (isTxnError) {
+        logger.warn('executeSafeTransaction: Cluster does not support active transactions or transaction aborted. Retrying non-atomically.', {
+          error: err.message,
+        });
+        return await workFn(null, {});
+      }
+      throw err;
+    }
+  } finally {
+    session.endSession();
+  }
+};
+
