@@ -804,17 +804,29 @@ export const getCohortPromotionPreview = async (req, res, next) => {
   try {
     const { departmentId, semester } = req.query;
     const scopedDept = deptScope(req);
-    const targetDeptId = scopedDept || departmentId;
-
-    if (!targetDeptId) {
-      return next(new ErrorResponse('Department ID is required', 400, 'VAL_001'));
-    }
+    let targetDeptId = scopedDept || departmentId;
 
     if (!semester) {
       return next(new ErrorResponse('Semester is required', 400, 'VAL_001'));
     }
 
     const numSemester = Number(semester);
+
+    // If targetDeptId is not explicitly provided and user is admin, auto-resolve from active classes in this semester
+    if (!targetDeptId) {
+      const sampleClass = await Class.findOne({
+        semester: numSemester,
+        isActive: { $ne: false },
+      }).select('departmentId').lean();
+
+      if (sampleClass?.departmentId) {
+        targetDeptId = (sampleClass.departmentId?._id || sampleClass.departmentId).toString();
+      }
+    }
+
+    if (!targetDeptId) {
+      return next(new ErrorResponse('Department ID is required', 400, 'VAL_001'));
+    }
 
     // 1. Fetch source classes in the given semester
     const sourceClasses = await Class.find({
@@ -839,10 +851,11 @@ export const getCohortPromotionPreview = async (req, res, next) => {
       });
     }
 
-    // 2. Fetch candidate target classes (higher semester in same department)
+    // 2. Fetch candidate target classes (all other active classes in the department)
+    const sourceClassIds = sourceClasses.map(c => c._id);
     const targetClasses = await Class.find({
       departmentId: targetDeptId,
-      semester: { $gt: numSemester },
+      _id: { $nin: sourceClassIds },
       isActive: { $ne: false },
     })
       .select('_id name semester academicYear studentIds')
@@ -850,7 +863,6 @@ export const getCohortPromotionPreview = async (req, res, next) => {
       .lean();
 
     // 3. For each source class, check active batch and count active students
-    const sourceClassIds = sourceClasses.map(c => c._id);
     const activeBatches = await NodueBatch.find({
       classId: { $in: sourceClassIds },
       status: 'active',
@@ -868,7 +880,8 @@ export const getCohortPromotionPreview = async (req, res, next) => {
           isActive: { $ne: false },
         });
 
-        // Auto-recommend target class: match section letter/name with next semester
+        // Auto-recommend target class:
+        // Priority 1: Match section letter/name with higher semester (e.g. III CSD A -> IV CSD A)
         const cleanSourceName = (cls.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
         let recommendedTargetId = null;
 
@@ -880,6 +893,18 @@ export const getCohortPromotionPreview = async (req, res, next) => {
           }
         }
 
+        // Priority 2: Same section name/letter regardless of semester
+        if (!recommendedTargetId) {
+          for (const tc of targetClasses) {
+            const cleanTargetName = (tc.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
+            if (cleanSourceName === cleanTargetName) {
+              recommendedTargetId = tc._id;
+              break;
+            }
+          }
+        }
+
+        // Priority 3: First available higher semester class
         if (!recommendedTargetId && targetClasses.length > 0) {
           const higher = targetClasses.filter(c => c.semester > cls.semester);
           if (higher.length > 0) recommendedTargetId = higher[0]._id;
@@ -922,7 +947,7 @@ export const getCohortPromotionPreview = async (req, res, next) => {
 // ── POST /api/classes/bulk-promote ───────────────────────────────────────────
 export const bulkPromoteClasses = async (req, res, next) => {
   try {
-    const { promotions, resetElectives = true } = req.body;
+    const { promotions, resetElectives = true, resetFaculty = true } = req.body;
 
     if (!Array.isArray(promotions) || promotions.length === 0) {
       return next(new ErrorResponse('Promotions list is required and cannot be empty', 400, 'VAL_001'));
@@ -1007,6 +1032,9 @@ export const bulkPromoteClasses = async (req, res, next) => {
           await Class.findByIdAndUpdate(src._id, { $pullAll: { studentIds: studentIdsToMove } }, opt);
           await Class.findByIdAndUpdate(tgt._id, { $addToSet: { studentIds: { $each: studentIdsToMove } } }, opt);
 
+          const shouldResetElectives = typeof item.resetElectives === 'boolean' ? item.resetElectives : resetElectives;
+          const shouldResetFaculty = typeof item.resetFaculty === 'boolean' ? item.resetFaculty : resetFaculty;
+
           const updateData = {
             classId: tgt._id,
             departmentId: tgt.departmentId,
@@ -1016,7 +1044,11 @@ export const bulkPromoteClasses = async (req, res, next) => {
             yearOfStudy: Math.ceil(tgt.semester / 2),
           };
 
-          if (resetElectives) {
+          if (shouldResetFaculty) {
+            updateData.mentorId = null;
+          }
+
+          if (shouldResetElectives) {
             updateData.electiveSubjects = [];
           }
 
@@ -1163,7 +1195,7 @@ export const getPromotionCandidates = async (req, res, next) => {
 export const promoteStudents = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { targetClassId, studentIds, resetElectives = true } = req.body;
+    const { targetClassId, studentIds, resetElectives = true, resetFaculty = true } = req.body;
 
     if (!targetClassId) {
       return next(new ErrorResponse('Target class ID is required', 400, 'VAL_001'));
@@ -1245,7 +1277,11 @@ export const promoteStudents = async (req, res, next) => {
         yearOfStudy: Math.ceil(targetClass.semester / 2),
       };
 
-      if (resetElectives) {
+      if (resetFaculty !== false) {
+        studentUpdatePayload.mentorId = null;
+      }
+
+      if (resetElectives !== false) {
         studentUpdatePayload.electiveSubjects = [];
       }
 
@@ -1275,6 +1311,7 @@ export const promoteStudents = async (req, res, next) => {
         targetSemester: targetClass.semester,
         promotedCount: actualStudentIds.length,
         resetElectives: Boolean(resetElectives),
+        resetFaculty: Boolean(resetFaculty),
       },
     });
 

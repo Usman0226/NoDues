@@ -68,6 +68,11 @@ const DepartmentClasses = () => {
   const classes = useMemo(() => response?.data || [], [response?.data]);
   const total = response?.total || 0;
 
+  // Resolve active department ID (fallback from loaded classes if super admin accesses directly)
+  const activeDeptId = useMemo(() => {
+    return deptId || classes[0]?.departmentId?._id || (typeof classes[0]?.departmentId === 'string' ? classes[0]?.departmentId : null);
+  }, [deptId, classes]);
+
   const facultyOptions = useMemo(() => ({
     queryKey: ['faculty', { departmentId: deptId }],
     immediate: false
@@ -573,7 +578,7 @@ const DepartmentClasses = () => {
         <BulkPromoteCohortModal
           isOpen={showCohortPromote}
           onClose={() => setShowCohortPromote(false)}
-          departmentId={deptId}
+          departmentId={activeDeptId}
           initialSemester={cohortPromoteSem}
           onSuccess={() => {
             fetchClasses({ departmentId: deptId, page, limit, includeInactive });

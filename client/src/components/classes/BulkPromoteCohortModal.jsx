@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Layers,
+  UserX,
 } from 'lucide-react';
 
 export default function BulkPromoteCohortModal({
@@ -28,6 +29,8 @@ export default function BulkPromoteCohortModal({
   const [submitting, setSubmitting] = useState(false);
   const [cohortData, setCohortData] = useState(null);
   const [mappings, setMappings] = useState({});
+  const [selectedClassIds, setSelectedClassIds] = useState(new Set());
+  const [resetFaculty, setResetFaculty] = useState(true);
   const [resetElectives, setResetElectives] = useState(true);
   const [error, setError] = useState(null);
 
@@ -40,34 +43,47 @@ export default function BulkPromoteCohortModal({
 
   // Fetch cohort promotion preview
   const fetchPreview = (sem) => {
-    if (!departmentId || !sem) return;
+    if (!sem) return;
     setLoading(true);
     setError(null);
 
-    getCohortPromotionPreview({ departmentId, semester: sem })
+    const params = { semester: sem };
+    if (departmentId) params.departmentId = departmentId;
+
+    getCohortPromotionPreview(params)
       .then((res) => {
         const payload = res?.data || res;
         const data = payload?.classes ? payload : (payload?.data || payload);
 
         if (data && Array.isArray(data.classes)) {
           setCohortData(data);
-          // Initialize mappings with recommended targets
+          // Initialize mappings with recommended targets and select eligible classes
           const initialMap = {};
+          const eligibleIds = [];
+
           data.classes.forEach((item) => {
-            if (item.sourceClass?._id) {
-              initialMap[item.sourceClass._id] = item.recommendedTargetClassId || '';
+            const sId = item.sourceClass?._id;
+            if (sId) {
+              initialMap[sId] = item.recommendedTargetClassId || '';
+              if (!item.sourceClass?.hasActiveBatch) {
+                eligibleIds.push(sId);
+              }
             }
           });
+
           setMappings(initialMap);
+          setSelectedClassIds(new Set(eligibleIds));
         } else {
           setCohortData(null);
           setMappings({});
+          setSelectedClassIds(new Set());
         }
       })
       .catch((err) => {
         const msg = err?.message || err?.response?.data?.message || 'Failed to load cohort preview';
         setError(msg);
         setCohortData(null);
+        setSelectedClassIds(new Set());
       })
       .finally(() => {
         setLoading(false);
@@ -75,13 +91,55 @@ export default function BulkPromoteCohortModal({
   };
 
   useEffect(() => {
-    if (isOpen && departmentId) {
+    if (isOpen) {
       fetchPreview(selectedSemester);
     }
   }, [isOpen, departmentId, selectedSemester]);
 
-  // Compute aggregate totals
-  const totalStudents = useMemo(() => {
+  // Compute eligible classes (those without active batches)
+  const eligibleClasses = useMemo(() => {
+    return (cohortData?.classes || []).filter((item) => !item.sourceClass?.hasActiveBatch);
+  }, [cohortData]);
+
+  // Selection state helpers
+  const isAllEligibleSelected =
+    eligibleClasses.length > 0 &&
+    eligibleClasses.every((item) => selectedClassIds.has(item.sourceClass?._id));
+
+  const isPartiallySelected =
+    selectedClassIds.size > 0 && !isAllEligibleSelected;
+
+  const handleToggleAll = () => {
+    if (isAllEligibleSelected) {
+      setSelectedClassIds(new Set());
+    } else {
+      setSelectedClassIds(new Set(eligibleClasses.map((item) => item.sourceClass?._id)));
+    }
+  };
+
+  const handleToggleClass = (classId) => {
+    setSelectedClassIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(classId)) {
+        next.delete(classId);
+      } else {
+        next.add(classId);
+      }
+      return next;
+    });
+  };
+
+  // Selected classes calculation
+  const selectedClasses = useMemo(() => {
+    if (!cohortData?.classes) return [];
+    return cohortData.classes.filter((item) => selectedClassIds.has(item.sourceClass?._id));
+  }, [cohortData, selectedClassIds]);
+
+  const selectedStudentsCount = useMemo(() => {
+    return selectedClasses.reduce((sum, item) => sum + (item.sourceClass?.studentCount || 0), 0);
+  }, [selectedClasses]);
+
+  const totalCohortStudents = useMemo(() => {
     if (!cohortData?.classes) return 0;
     return cohortData.classes.reduce((sum, item) => sum + (item.sourceClass?.studentCount || 0), 0);
   }, [cohortData]);
@@ -100,30 +158,44 @@ export default function BulkPromoteCohortModal({
     }));
   };
 
+  const hasUnmappedSelected = useMemo(() => {
+    if (selectedClasses.length === 0) return false;
+    return selectedClasses.some((item) => !mappings[item.sourceClass?._id]);
+  }, [selectedClasses, mappings]);
+
   const handleSubmit = async () => {
     if (!cohortData?.classes || cohortData.classes.length === 0) {
       toast.error('No classes available to promote');
       return;
     }
 
-    if (hasAnyActiveBatch) {
-      toast.error('Cannot promote cohort while clearance batches are active');
+    if (selectedClasses.length === 0) {
+      toast.error('Please select at least one section to promote');
       return;
     }
 
-    // Verify all source classes have a target mapped
+    // Verify all selected source classes have a target mapped
     const promotions = [];
-    for (const item of cohortData.classes) {
-      const srcId = item.sourceClass?._id;
+    for (const item of selectedClasses) {
+      const src = item.sourceClass;
+      const srcId = src?._id;
       const tgtId = mappings[srcId];
+
       if (!tgtId) {
-        toast.error(`Please assign a destination class for ${item.sourceClass?.name}`);
+        toast.error(`Please assign a destination class for ${src?.name || 'selected section'}`);
         return;
       }
+
+      if (src?.hasActiveBatch) {
+        toast.error(`Cannot promote ${src?.name} while clearance batch is active`);
+        return;
+      }
+
       promotions.push({
         sourceClassId: srcId,
         targetClassId: tgtId,
         resetElectives,
+        resetFaculty,
       });
     }
 
@@ -132,12 +204,16 @@ export default function BulkPromoteCohortModal({
       setError(null);
 
       const res = await bulkPromoteClasses({
-        departmentId,
+        departmentId: cohortData.departmentId || departmentId,
         promotions,
         resetElectives,
+        resetFaculty,
       });
 
-      const msg = res?.data?.message || res?.message || `Successfully promoted ${totalStudents} students across ${promotions.length} classes.`;
+      const msg =
+        res?.data?.message ||
+        res?.message ||
+        `Successfully promoted ${selectedStudentsCount} students across ${promotions.length} classes.`;
       toast.success(msg);
 
       if (onSuccess) onSuccess();
@@ -157,6 +233,7 @@ export default function BulkPromoteCohortModal({
       onClose={onClose}
       title="Bulk Promote Semester Cohort"
       size="xl"
+      preventClose={submitting}
     >
       <div className="space-y-6">
         {/* Semester Selection & Description */}
@@ -164,10 +241,10 @@ export default function BulkPromoteCohortModal({
           <div>
             <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
               <Layers size={16} className="text-primary" />
-              Promote All Sections Simultaneously
+              Promote Semester Sections Simultaneously
             </h4>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Advance an entire semester cohort to the next academic level without navigating into individual sections.
+              Advance selected sections to the next academic level without navigating into individual classes.
             </p>
           </div>
 
@@ -196,7 +273,7 @@ export default function BulkPromoteCohortModal({
           </div>
         )}
 
-        {/* Active Clearance Batch Warning */}
+        {/* Active Clearance Batch Notice */}
         {hasAnyActiveBatch && (
           <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-1.5 text-xs text-amber-700 dark:text-amber-300">
             <div className="flex items-center gap-2 font-bold">
@@ -204,7 +281,7 @@ export default function BulkPromoteCohortModal({
               <span>In-Flight Clearance Session Detected</span>
             </div>
             <p className="leading-relaxed">
-              One or more sections in Semester {selectedSemester} currently have an active NoDues batch. Cohort promotion is locked until the active clearance session is closed to ensure zero academic disruption.
+              Sections with an active clearance batch are locked to prevent academic disruption. You can uncheck them and promote the remaining ready sections.
             </p>
           </div>
         )}
@@ -213,7 +290,7 @@ export default function BulkPromoteCohortModal({
         {loading ? (
           <div className="py-12 flex flex-col items-center justify-center space-y-3">
             <Spinner size="lg" />
-            <p className="text-xs text-muted-foreground font-medium">Loading semester classes and candidate mappings...</p>
+            <p className="text-xs text-muted-foreground font-medium">Loading semester classes and candidate destinations...</p>
           </div>
         ) : !cohortData?.classes || cohortData.classes.length === 0 ? (
           <div className="py-12 text-center space-y-2 border border-dashed border-border rounded-2xl p-6">
@@ -225,31 +302,62 @@ export default function BulkPromoteCohortModal({
           <div className="space-y-4">
             {/* Class Mapping Grid */}
             <div className="border border-border/60 rounded-2xl overflow-hidden divide-y divide-border/40 bg-card">
-              <div className="grid grid-cols-12 bg-muted/40 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+              <div className="grid grid-cols-12 bg-muted/40 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground items-center">
+                <div className="col-span-1 flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllEligibleSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = isPartiallySelected;
+                    }}
+                    onChange={handleToggleAll}
+                    disabled={submitting || eligibleClasses.length === 0}
+                    className="rounded border-border text-primary focus:ring-primary/30 w-3.5 h-3.5 cursor-pointer disabled:opacity-40"
+                    title="Toggle all eligible sections"
+                  />
+                </div>
                 <div className="col-span-5">Source Section (Semester {selectedSemester})</div>
                 <div className="col-span-1 text-center"></div>
-                <div className="col-span-6">Destination Target Section</div>
+                <div className="col-span-5">Destination Target Section</div>
               </div>
 
               {cohortData.classes.map((item) => {
                 const src = item.sourceClass;
                 const selectedTargetId = mappings[src._id] || '';
+                const isSelected = selectedClassIds.has(src._id);
 
                 return (
                   <div
                     key={src._id}
                     className={`grid grid-cols-12 items-center px-4 py-3.5 gap-2 transition-colors ${
-                      src.hasActiveBatch ? 'bg-amber-500/5' : 'hover:bg-muted/10'
+                      src.hasActiveBatch
+                        ? 'bg-amber-500/5 opacity-75'
+                        : isSelected
+                        ? 'hover:bg-muted/10'
+                        : 'opacity-50 bg-muted/5'
                     }`}
                   >
+                    {/* Checkbox */}
+                    <div className="col-span-1 flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleClass(src._id)}
+                        disabled={submitting || src.hasActiveBatch}
+                        className="rounded border-border text-primary focus:ring-primary/30 w-3.5 h-3.5 cursor-pointer disabled:opacity-40"
+                      />
+                    </div>
+
                     {/* Source Section Info */}
                     <div className="col-span-5 space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-sm text-foreground">{src.name}</span>
                         {src.hasActiveBatch ? (
                           <Badge variant="warning" className="text-[9px] py-0">Batch Active</Badge>
+                        ) : isSelected ? (
+                          <Badge variant="outline" className="text-[9px] py-0 text-emerald-600 border-emerald-500/30">Selected</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[9px] py-0">Ready</Badge>
+                          <Badge variant="secondary" className="text-[9px] py-0">Excluded</Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -265,15 +373,17 @@ export default function BulkPromoteCohortModal({
                     </div>
 
                     {/* Destination Class Dropdown */}
-                    <div className="col-span-6">
+                    <div className="col-span-5">
                       {allTargetCandidates.length === 0 ? (
                         <p className="text-xs text-destructive font-medium">No target classes found</p>
                       ) : (
                         <select
-                          className="w-full text-xs font-semibold bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          className={`w-full text-xs font-semibold bg-background border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                            isSelected && !selectedTargetId ? 'border-amber-500/60 ring-1 ring-amber-500/20' : 'border-border'
+                          }`}
                           value={selectedTargetId}
                           onChange={(e) => handleTargetChange(src._id, e.target.value)}
-                          disabled={submitting || src.hasActiveBatch}
+                          disabled={submitting || src.hasActiveBatch || !isSelected}
                         >
                           <option value="">-- Choose Target Class --</option>
                           {allTargetCandidates.map((tc) => (
@@ -289,28 +399,48 @@ export default function BulkPromoteCohortModal({
               })}
             </div>
 
-            {/* Reset Electives Toggle */}
-            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-muted/20 border border-muted/30 cursor-pointer select-none text-xs">
-              <input
-                type="checkbox"
-                className="mt-0.5 rounded border-muted-foreground/30 text-primary focus:ring-primary"
-                checked={resetElectives}
-                onChange={(e) => setResetElectives(e.target.checked)}
-                disabled={submitting}
-              />
-              <div className="space-y-0.5">
-                <span className="font-bold text-foreground">Reset previous semester electives</span>
-                <p className="text-[11px] text-muted-foreground">
-                  Clears past elective selections so students can be mapped to new semester electives.
-                </p>
-              </div>
-            </label>
+            {/* Options Toggles */}
+            <div className="space-y-2.5">
+              {/* Reset Faculty Mentors Toggle */}
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-muted/20 border border-muted/30 cursor-pointer select-none text-xs">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-muted-foreground/30 text-primary focus:ring-primary"
+                  checked={resetFaculty}
+                  onChange={(e) => setResetFaculty(e.target.checked)}
+                  disabled={submitting}
+                />
+                <div className="space-y-0.5">
+                  <span className="font-bold text-foreground">Reset assigned faculty mentors</span>
+                  <p className="text-[11px] text-muted-foreground">
+                    Recommended. Clears previous semester faculty mentor allocations so students can be mapped to new mentors in the new class/academic year.
+                  </p>
+                </div>
+              </label>
+
+              {/* Reset Electives Toggle */}
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-muted/20 border border-muted/30 cursor-pointer select-none text-xs">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-muted-foreground/30 text-primary focus:ring-primary"
+                  checked={resetElectives}
+                  onChange={(e) => setResetElectives(e.target.checked)}
+                  disabled={submitting}
+                />
+                <div className="space-y-0.5">
+                  <span className="font-bold text-foreground">Reset previous semester electives</span>
+                  <p className="text-[11px] text-muted-foreground">
+                    Recommended. Clears past elective selections and elective faculty assignments so students can be mapped to new semester electives.
+                  </p>
+                </div>
+              </label>
+            </div>
 
             {/* Disturbance-Free Guarantee */}
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2.5 text-xs text-emerald-800 dark:text-emerald-300">
               <ShieldCheck size={18} className="text-emerald-600 shrink-0" />
               <span>
-                <strong>Disturbance-Free Guarantee:</strong> All past closed clearance records and faculty approvals remain permanently archived.
+                <strong>Disturbance-Free Guarantee:</strong> All past closed clearance records and faculty approvals remain permanently archived in student histories.
               </span>
             </div>
           </div>
@@ -321,7 +451,7 @@ export default function BulkPromoteCohortModal({
           <div className="text-xs text-muted-foreground">
             {cohortData?.classes?.length ? (
               <span>
-                <strong>{cohortData.classes.length}</strong> sections • <strong>{totalStudents}</strong> students ready
+                <strong>{selectedClasses.length}</strong> of {cohortData.classes.length} sections selected • <strong>{selectedStudentsCount}</strong> of {totalCohortStudents} students ready
               </span>
             ) : null}
           </div>
@@ -344,9 +474,9 @@ export default function BulkPromoteCohortModal({
               disabled={
                 loading ||
                 submitting ||
-                hasAnyActiveBatch ||
-                !cohortData?.classes?.length ||
-                allTargetCandidates.length === 0
+                selectedClasses.length === 0 ||
+                allTargetCandidates.length === 0 ||
+                hasUnmappedSelected
               }
               className="gap-1.5"
             >
@@ -358,7 +488,9 @@ export default function BulkPromoteCohortModal({
               ) : (
                 <>
                   <GraduationCap size={15} />
-                  <span>Promote {cohortData?.classes?.length || 0} Sections ({totalStudents} Students)</span>
+                  <span>
+                    Promote {selectedClasses.length} Section{selectedClasses.length !== 1 ? 's' : ''} ({selectedStudentsCount} Students)
+                  </span>
                 </>
               )}
             </Button>
@@ -368,4 +500,3 @@ export default function BulkPromoteCohortModal({
     </Modal>
   );
 }
-

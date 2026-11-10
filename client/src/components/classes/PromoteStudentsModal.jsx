@@ -33,6 +33,7 @@ export default function PromoteStudentsModal({
   const [selectedTargetClassId, setSelectedTargetClassId] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState(new Set());
   const [resetElectives, setResetElectives] = useState(true);
+  const [resetFaculty, setResetFaculty] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState(null);
 
@@ -149,6 +150,7 @@ export default function PromoteStudentsModal({
         targetClassId: selectedTargetClassId,
         studentIds: Array.from(selectedStudentIds),
         resetElectives,
+        resetFaculty,
       };
 
       const res = await promoteStudents(classId, payload);
@@ -340,6 +342,23 @@ export default function PromoteStudentsModal({
 
             {/* Options & Guarantees */}
             <div className="space-y-3 pt-2">
+              {/* Reset Faculty Mentors Toggle */}
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={resetFaculty}
+                  onChange={(e) => setResetFaculty(e.target.checked)}
+                  disabled={submitting}
+                  className="rounded border-border text-primary focus:ring-primary/30 w-4 h-4 mt-0.5"
+                />
+                <div className="text-xs">
+                  <span className="font-semibold text-foreground">Reset assigned faculty mentor</span>
+                  <p className="text-[11px] text-muted-foreground">
+                    Recommended. Clears previous semester faculty mentor allocation so students can be mapped to new mentors in the new class/academic year.
+                  </p>
+                </div>
+              </label>
+
               {/* Reset Electives Toggle */}
               <label className="flex items-start gap-2.5 cursor-pointer">
                 <input

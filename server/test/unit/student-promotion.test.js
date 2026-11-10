@@ -255,6 +255,51 @@ describe('Student Promotion & Historical Record Preservation', () => {
       assert.equal(promotedStudent.semester, 5);
     });
 
+    it('resets assigned faculty mentor (mentorId: null) by default upon promotion', async () => {
+      // Assign faculty mentor to student1 and student2
+      await Student.findByIdAndUpdate(student1._id, { mentorId: hodUser._id });
+      await Student.findByIdAndUpdate(student2._id, { mentorId: hodUser._id });
+
+      const beforeS1 = await Student.findById(student1._id);
+      assert.equal(beforeS1.mentorId?.toString(), hodUser._id.toString());
+
+      // Promote with default resetFaculty
+      const res = await request(app)
+        .post(`/api/classes/${sourceClass._id}/promote`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          targetClassId: targetClass._id,
+          resetElectives: true,
+          // resetFaculty defaults to true
+        });
+
+      assert.equal(res.status, 200);
+
+      // Verify mentorId is now null for promoted students
+      const afterS1 = await Student.findById(student1._id);
+      assert.equal(afterS1.mentorId, null, 'Assigned faculty mentor must be reset to null upon promotion');
+      const afterS2 = await Student.findById(student2._id);
+      assert.equal(afterS2.mentorId, null, 'Assigned faculty mentor must be reset to null upon promotion');
+    });
+
+    it('preserves assigned faculty mentor when resetFaculty: false is passed', async () => {
+      await Student.findByIdAndUpdate(student1._id, { mentorId: hodUser._id });
+
+      const res = await request(app)
+        .post(`/api/classes/${sourceClass._id}/promote`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          targetClassId: targetClass._id,
+          studentIds: [student1._id],
+          resetFaculty: false,
+        });
+
+      assert.equal(res.status, 200);
+
+      const afterS1 = await Student.findById(student1._id);
+      assert.equal(afterS1.mentorId?.toString(), hodUser._id.toString(), 'Mentor must be preserved when resetFaculty is false');
+    });
+
     it('guarantees historical clearance records are NEVER deleted upon promotion', async () => {
       // 1. Create a closed historical batch representing past Semester 3 clearance
       const closedPastBatch = await NodueBatch.create({
@@ -358,12 +403,27 @@ describe('Student Promotion & Historical Record Preservation', () => {
       assert.equal(sectionBMapping.recommendedTargetClassId, targetSectionB._id.toString());
     });
 
-    it('POST /api/classes/bulk-promote promotes multiple sections at once', async () => {
+    it('GET /api/classes/cohort-promotion-preview auto-resolves department for admin when departmentId omitted', async () => {
+      const res = await request(app)
+        .get(`/api/classes/cohort-promotion-preview?semester=4`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.success, true);
+      assert.equal(res.body.data.classes.length, 2);
+    });
+
+    it('POST /api/classes/bulk-promote promotes multiple sections at once and resets assigned faculty', async () => {
+      // Assign faculty mentor to studentB1 and student1
+      await Student.findByIdAndUpdate(studentB1._id, { mentorId: hodUser._id });
+      await Student.findByIdAndUpdate(student1._id, { mentorId: hodUser._id });
+
       const res = await request(app)
         .post('/api/classes/bulk-promote')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           departmentId: testDept._id,
+          resetFaculty: true,
           promotions: [
             { sourceClassId: sourceClass._id, targetClassId: targetClass._id, resetElectives: true },
             { sourceClassId: sectionB._id, targetClassId: targetSectionB._id, resetElectives: true },
@@ -375,10 +435,14 @@ describe('Student Promotion & Historical Record Preservation', () => {
       assert.equal(res.body.data.totalClasses, 2);
       assert.equal(res.body.data.totalPromotedStudents, 4); // 3 from section E, 1 from section B
 
-      // Verify studentB1 is now in targetSectionB in Semester 5
+      // Verify studentB1 is now in targetSectionB in Semester 5 and mentorId is reset to null
       const updatedB1 = await Student.findById(studentB1._id);
       assert.equal(updatedB1.classId.toString(), targetSectionB._id.toString());
       assert.equal(updatedB1.semester, 5);
+      assert.equal(updatedB1.mentorId, null, 'Faculty mentor must be reset to null upon bulk promotion');
+
+      const updatedS1 = await Student.findById(student1._id);
+      assert.equal(updatedS1.mentorId, null, 'Faculty mentor must be reset to null upon bulk promotion');
 
       // Verify target classes received studentIds
       const refreshedTargetE = await Class.findById(targetClass._id);
