@@ -586,7 +586,7 @@ const DepartmentClasses = () => {
                           setShowCreate(true);
                         }}
                       >
-                        <Plus size={14} /> + New Class
+                        <Plus size={14} /> New Class
                       </Button>
                     </div>
                   </div>

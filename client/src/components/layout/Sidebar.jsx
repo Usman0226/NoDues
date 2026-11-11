@@ -6,7 +6,7 @@ import { useUI } from '../../hooks/useUI';
 import { ROLES } from '../../utils/constants';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardCheck,
-  Shield, History, ChevronLeft, ChevronRight,
+  Shield, History, ChevronRight,
   Building2, AlertTriangle, Layers, X, GraduationCap, Inbox, MessageSquarePlus, MessageSquare, Wand2
 } from 'lucide-react';
 import { useFeedback } from '../../hooks/useFeedback';
@@ -315,19 +315,6 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
         >
           {sidebarContent}
         </aside>
-        
-        {/* Floating Toggle Button */}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className={`absolute top-24 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.2)] rounded-full p-2 text-navy hover:bg-gold hover:text-white hover:scale-110 transition-all duration-300 ease-in-out z-[120] flex items-center justify-center border border-indigo-100/10 group ${
-            displayCollapsed ? '-right-4' : (collapsed ? '-right-[224px]' : '-right-4')
-          }`}
-          title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        >
-          <div className="transition-transform duration-300">
-            {collapsed ? <ChevronRight size={10} /> : <ChevronLeft size={10} />}
-          </div>
-        </button>
       </div>
       <AnimatePresence>
         {mobileOpen && (
