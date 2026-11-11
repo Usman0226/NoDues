@@ -45,6 +45,11 @@
       "context": "Setup Wizard missing from sidebar and department classes zero-state",
       "decision": "Declared Setup Wizard in NAV_CONFIG for Admin and HoD by default, gated by feature flag only when explicitly disabled; added dual entry points on DepartmentClasses (top action bar + zero-state onboarding card) with automatic department context passing via URL query",
       "trade_offs": "Guarantees zero-latency rendering of wizard navigation, eliminates user confusion when onboarding classes for an empty department."
+    },
+    {
+      "context": "Write conflict (code 112) when bulk removing subjects mapping",
+      "decision": "Replaced frontend Promise.all parallel individual DELETE requests with an atomic POST /api/classes/:id/subjects/bulk-remove endpoint and bulkSyncSubjectRemoval, backed by exponential backoff write conflict retry logic",
+      "trade_offs": "Consolidates N concurrent database transactions into 1 atomic mutation, eliminating race conditions and WiredTiger lock contention."
     }
   ],
   "blockers": []
