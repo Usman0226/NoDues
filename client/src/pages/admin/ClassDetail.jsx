@@ -19,7 +19,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNavigationStack } from '../../hooks/useNavigationStack';
 import { toast } from 'react-hot-toast';
 import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal';
-import { formatSectionDisplayName } from './DepartmentClasses';
+import { formatSectionDisplayName } from '../../utils/formatters';
 
 
 

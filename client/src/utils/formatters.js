@@ -29,8 +29,12 @@ export const getAcademicYearRoman = (semester) => {
 };
 
 export const formatSectionDisplayName = (name, semester) => {
-  if (!name) return '';
-  const roman = getAcademicYearRoman(semester);
-  const cleanName = name.replace(/^(I|II|III|IV)[\s\-_]+/i, '').trim();
-  return `${roman} ${cleanName}`;
+  if (!name || typeof name !== 'string') return '';
+  if (/curriculum\s*master/i.test(name)) return name;
+  const semNum = Number(semester);
+  const roman = semNum ? getAcademicYearRoman(semNum) : '';
+  const cleanName = name
+    .replace(/^([1-4]|I|II|III|IV)[\s\-_]+/i, '')
+    .trim();
+  return roman ? `${roman} ${cleanName}` : cleanName;
 };
