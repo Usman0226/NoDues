@@ -348,6 +348,7 @@ export const getClassById = async (req, res, next) => {
       studentCount:    students.length,
       hasActiveBatch:  !!activeBatch,
       activeBatchId:   activeBatch?._id ?? null,
+      isMaster:        cls.isMaster || false,
       isActive:        cls.isActive,
       createdAt:       cls.createdAt,
     };
@@ -1327,9 +1328,10 @@ export const propagateCohortSubjects = async (req, res, next) => {
       semester: sourceClass.semester,
       _id: { $ne: sourceClass._id },
       isActive: true,
+      isMaster: { $ne: true },
     };
 
-    if (!overwrite) {
+    if (!overwrite && !sourceClass.isMaster) {
       filter.$or = [
         { subjectAssignments: { $exists: false } },
         { subjectAssignments: { $size: 0 } },

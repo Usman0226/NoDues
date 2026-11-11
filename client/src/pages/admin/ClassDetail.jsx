@@ -19,6 +19,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNavigationStack } from '../../hooks/useNavigationStack';
 import { toast } from 'react-hot-toast';
 import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal';
+import { formatSectionDisplayName } from './DepartmentClasses';
 
 
 
@@ -99,7 +100,19 @@ const ClassDetail = () => {
   const subjects = useMemo(() => classData?.subjects || classData?.subjectAssignments || [], [classData?.subjects, classData?.subjectAssignments]);
   const pastBatches = useMemo(() => classData?.batchHistory || [], [classData?.batchHistory]);
   const activeBatch = classData?.activeBatch;
-  const tabs = useMemo(() => BASE_TABS, []);
+  const tabs = useMemo(() => {
+    if (classData?.isMaster) {
+      return [{ key: 'subjects', label: 'Curriculum Subjects', icon: BookOpen }];
+    }
+    return BASE_TABS;
+  }, [classData?.isMaster]);
+
+  useEffect(() => {
+    if (classData?.isMaster && tab !== 'subjects') {
+      setTab('subjects');
+    }
+  }, [classData?.isMaster, tab]);
+
   const facultyList = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
   
   useEffect(() => {
@@ -116,7 +129,8 @@ const ClassDetail = () => {
     if (!classData?.name) return;
     const deptName = classData.departmentName || 'Department';
     const deptId = typeof departmentId === 'object' ? departmentId?._id : departmentId;
-    const tabLabel = tab === 'students' ? 'Students' : tab === 'subjects' ? 'Subjects' : 'History';
+    const displayName = classData?.isMaster ? classData.name : formatSectionDisplayName(classData.name, classData.semester);
+    const tabLabel = classData?.isMaster ? 'Curriculum' : tab === 'students' ? 'Students' : tab === 'subjects' ? 'Subjects' : 'History';
 
     const crumbs = [
       { label: 'NoDues', path: isHod ? '/hod' : '/admin' },
@@ -126,7 +140,7 @@ const ClassDetail = () => {
             { label: 'Departments', path: '/admin/departments' },
             ...(deptId ? [{ label: deptName, path: `/admin/departments/${deptId}/classes` }] : [])
           ]),
-      { label: classData.name, path: isHod ? `/hod/class/${classId}` : `/admin/class/${classId}` },
+      { label: displayName, path: isHod ? `/hod/class/${classId}` : `/admin/class/${classId}` },
       { label: tabLabel, isCurrent: true }
     ];
     setBreadcrumbs(crumbs);
@@ -601,7 +615,7 @@ const SUBJECT_COLS = [
         <ActionMenu
           actions={[
             { label: 'Edit Mapping', icon: Edit, onClick: () => handleEditSubjectClick(row) },
-            ...(row.isElective ? [{ label: 'Map Students', icon: Users, onClick: () => handleMapElectiveClick(row) }] : []),
+            ...((row.isElective && !classData?.isMaster) ? [{ label: 'Map Students', icon: Users, onClick: () => handleMapElectiveClick(row) }] : []),
             { label: 'Remove Component', icon: Trash2, onClick: () => handleDeleteSubjectClick(row), variant: 'danger' },
           ]}
         />
@@ -725,28 +739,39 @@ const SUBJECT_COLS = [
 
   return (
     <PageWrapper 
-      title={classData?.name} 
-      subtitle={`${classData?.departmentName ? `${classData.departmentName} · ` : ''}Semester ${classData?.semester || ''} · ${classData?.academicYear || ''}`}
+      title={classData?.isMaster ? classData?.name : formatSectionDisplayName(classData?.name, classData?.semester)} 
+      subtitle={
+        classData?.isMaster 
+          ? `${classData?.departmentName ? `${classData.departmentName} · ` : ''}Semester ${classData?.semester || ''} · Curriculum Blueprint (Single Source of Truth)`
+          : `${classData?.departmentName ? `${classData.departmentName} · ` : ''}Semester ${classData?.semester || ''} · ${classData?.academicYear || ''}`
+      }
       isRefreshing={refreshing}
       badge={classData?.isMaster ? 'CURRICULUM MASTER' : (classData?.isActive === false ? 'INACTIVE' : (classData?.activeBatch ? 'CLEARANCE IN PROGRESS' : 'ACTIVE'))}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="overflow-x-auto no-scrollbar pb-1 -mb-1">
-          <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-full p-1.5 w-fit min-w-full sm:min-w-0">
-            {tabs.map((t) => {
-              const Icon = t.icon;
-              return (
-                <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap
-                    ${tab === t.key ? 'bg-navy text-white shadow-md scale-100' : 'text-muted-foreground hover:bg-offwhite hover:text-navy hover:scale-[0.98]'}`}>
-                  <Icon size={14} /> {t.label}
-                </button>
-              );
-            })}
-          </div>
+          {classData?.isMaster ? (
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-xs font-bold shadow-xs">
+              <BookOpen size={14} className="text-indigo-600" />
+              <span>Curriculum Master Blueprint (SSOT)</span>
+            </div>
+          ) : (
+            <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-full p-1.5 w-fit min-w-full sm:min-w-0">
+              {tabs.map((t) => {
+                const Icon = t.icon;
+                return (
+                  <button key={t.key} onClick={() => setTab(t.key)}
+                    className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap
+                      ${tab === t.key ? 'bg-navy text-white shadow-md scale-100' : 'text-muted-foreground hover:bg-offwhite hover:text-navy hover:scale-[0.98]'}`}>
+                    <Icon size={14} /> {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {tab === 'students' && (
+        {!classData?.isMaster && tab === 'students' && (
           <div className="flex items-center gap-2">
             <Button variant="primary" size="sm" onClick={() => {
               setAddStudentFormData({ name: '', rollNo: '', email: '' });
@@ -777,20 +802,24 @@ const SUBJECT_COLS = [
             <Button variant="ghost" size="sm" type="button" onClick={() => setShowClone(true)} className="text-navy border border-muted hover:bg-offwhite">
               <Copy size={14} /> Import Subjects
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowImport('electives')} className="text-navy border border-muted hover:bg-offwhite">
-              <Upload size={14} /> Bulk Map Electives
-            </Button>
-            {classData.subjectAssignments?.length > 0 && (
+            {!classData?.isMaster && (
+              <Button variant="ghost" size="sm" onClick={() => setShowImport('electives')} className="text-navy border border-muted hover:bg-offwhite">
+                <Upload size={14} /> Bulk Map Electives
+              </Button>
+            )}
+            {((classData?.subjectAssignments?.length > 0) || classData?.isMaster) && (
               <Button
-                variant="ghost"
+                variant={classData?.isMaster ? 'secondary' : 'ghost'}
                 size="sm"
                 type="button"
                 onClick={handleSyncCohortSubjects}
-                disabled={syncingCohort}
-                className="text-navy border border-muted hover:bg-offwhite flex items-center gap-1.5"
-                title={`Sync these ${classData.subjectAssignments.length} subjects across all sections in Semester ${classData.semester}`}
+                disabled={syncingCohort || (classData?.subjectAssignments?.length || 0) === 0}
+                className={classData?.isMaster 
+                  ? "bg-indigo-600 text-white hover:bg-indigo-700 border-none shadow-sm flex items-center gap-1.5 font-bold" 
+                  : "text-navy border border-muted hover:bg-offwhite flex items-center gap-1.5"}
+                title={`Sync these ${classData?.subjectAssignments?.length || 0} subjects across all sections in Semester ${classData?.semester}`}
               >
-                <Share2 size={14} /> {syncingCohort ? 'Syncing...' : 'Sync to Cohort'}
+                <Share2 size={14} /> {syncingCohort ? 'Syncing...' : classData?.isMaster ? 'Sync Blueprint to All Sections' : 'Sync to Cohort'}
               </Button>
             )}
           </div>
@@ -799,44 +828,73 @@ const SUBJECT_COLS = [
 
       </div>
 
-      <div className={tab === 'students' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
-          <Table 
-            columns={STUDENT_COLS} 
-            data={studentsList} 
-            loading={loading}
-            rowClassName={(row) => `
-              transition-colors duration-200
-              ${!row.mentorId ? 'border-l-4 border-amber-400 bg-amber-50/20' : ''}
-              ${row._isUpdating ? 'bg-emerald-50/30' : ''}
-            `}
-            searchable 
-            searchPlaceholder="Search by roll no or name..." 
-            showCount={true} 
-            selectable
-            selection={selectedStudentIds}
-            onSelectionChange={setSelectedStudentIds}
-            bulkActions={[
-              { 
-                label: 'Promote Selected', 
-                icon: GraduationCap, 
-                onClick: () => setShowPromote(true) 
-              },
-              { 
-                label: 'Assign Mentor', 
-                icon: Users, 
-                onClick: () => setShowBulkAssignMentor(true) 
-              },
-              { 
-                label: 'Unenroll Bulk', 
-                icon: Trash2, 
-                onClick: () => setShowBulkDeleteStudents(true),
-                variant: 'danger'
-              }
-            ]}
-          />
-      </div>
+      {!classData?.isMaster && (
+        <div className={tab === 'students' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
+            <Table 
+              columns={STUDENT_COLS} 
+              data={studentsList} 
+              loading={loading}
+              rowClassName={(row) => `
+                transition-colors duration-200
+                ${!row.mentorId ? 'border-l-4 border-amber-400 bg-amber-50/20' : ''}
+                ${row._isUpdating ? 'bg-emerald-50/30' : ''}
+              `}
+              searchable 
+              searchPlaceholder="Search by roll no or name..." 
+              showCount={true} 
+              selectable
+              selection={selectedStudentIds}
+              onSelectionChange={setSelectedStudentIds}
+              bulkActions={[
+                { 
+                  label: 'Promote Selected', 
+                  icon: GraduationCap, 
+                  onClick: () => setShowPromote(true) 
+                },
+                { 
+                  label: 'Assign Mentor', 
+                  icon: Users, 
+                  onClick: () => setShowBulkAssignMentor(true) 
+                },
+                { 
+                  label: 'Unenroll Bulk', 
+                  icon: Trash2, 
+                  onClick: () => setShowBulkDeleteStudents(true),
+                  variant: 'danger'
+                }
+              ]}
+            />
+        </div>
+      )}
 
       <div className={tab === 'subjects' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
+          {classData?.isMaster && (
+            <div className="mb-4 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-indigo-950">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <BookOpen size={18} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-indigo-900">
+                    Semester {classData.semester} Curriculum Blueprint (Single Source of Truth)
+                  </h4>
+                  <p className="text-xs text-indigo-700/90 mt-0.5">
+                    All operational sections in Semester {classData.semester} inherit their core and elective syllabus from this master blueprint.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleSyncCohortSubjects}
+                disabled={syncingCohort || (classData?.subjectAssignments?.length || 0) === 0}
+                className="shrink-0 bg-indigo-600 text-white hover:bg-indigo-700 border-none shadow-sm flex items-center gap-1.5 font-bold text-xs"
+              >
+                <Share2 size={13} /> {syncingCohort ? 'Syncing...' : 'Sync to All Sections'}
+              </Button>
+            </div>
+          )}
+
           <Table 
             columns={SUBJECT_COLS} 
             data={subjects} 
@@ -858,7 +916,8 @@ const SUBJECT_COLS = [
           />
       </div>
 
-      <div className={tab === 'batch' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
+      {!classData?.isMaster && (
+        <div className={tab === 'batch' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
           {activeBatch ? (
             <div className="bg-white rounded-3xl border border-navy/10 p-8 mb-10 shadow-md shadow-navy/5 relative overflow-hidden transition-all duration-300 hover:shadow-lg">
               <div className="absolute top-0 right-0 p-1 bg-navy text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl">LIVE SESSION</div>
@@ -912,6 +971,7 @@ const SUBJECT_COLS = [
             </div>
           )}
       </div>
+      )}
 
       {/* HoD Approvals tab removed */}
 

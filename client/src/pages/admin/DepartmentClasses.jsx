@@ -20,6 +20,21 @@ import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal'
 import BulkPromoteCohortModal from '../../components/classes/BulkPromoteCohortModal';
 import DepartmentRolloverModal from '../../components/classes/DepartmentRolloverModal';
 
+export const getAcademicYearRoman = (semester) => {
+  const sem = Number(semester);
+  if (sem <= 2) return 'I';
+  if (sem <= 4) return 'II';
+  if (sem <= 6) return 'III';
+  return 'IV';
+};
+
+export const formatSectionDisplayName = (name, semester) => {
+  if (!name) return '';
+  const roman = getAcademicYearRoman(semester);
+  const cleanName = name.replace(/^(I|II|III|IV)[\s\-_]+/i, '').trim();
+  return `${roman} ${cleanName}`;
+};
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -531,7 +546,7 @@ const DepartmentClasses = () => {
                           <div className="flex justify-between items-start mb-4">
                             <div>
                               <h4 className="text-xl sm:text-2xl font-black text-navy uppercase tracking-tight group-hover:text-gold transition-colors">
-                                {cls.name}
+                                {formatSectionDisplayName(cls.name, cls.semester)}
                               </h4>
                               <p className="text-[10px] font-black tracking-wider uppercase text-muted-foreground mt-1">
                                 CT: {cls.classTeacher?.name || 'Not Assigned'}
@@ -740,7 +755,7 @@ const DepartmentClasses = () => {
         onClose={() => setShowActivate(false)}
         onConfirm={handleActivateConfirm}
         title="Reactivate Academic Group"
-        description={`Are you sure you want to reactivate ${selectedClass?.name}? This will restore its visibility and accessibility for students and faculty.`}
+        description={`Are you sure you want to reactivate ${selectedClass?.name ? formatSectionDisplayName(selectedClass.name, selectedClass.semester) : 'this group'}? This will restore its visibility and accessibility for students and faculty.`}
         confirmText="Reactivate Group"
         isDestructive={false}
         loading={submitting}
@@ -752,7 +767,7 @@ const DepartmentClasses = () => {
         onClose={() => setShowDelete(false)}
         onConfirm={handleDeleteConfirm}
         title="Deactivate Academic Group"
-        description={`Are you sure you want to deactivate ${selectedClass?.name}? This action might prevent structural integrity if students are actively mapped to this group.`}
+        description={`Are you sure you want to deactivate ${selectedClass?.name ? formatSectionDisplayName(selectedClass.name, selectedClass.semester) : 'this group'}? This action might prevent structural integrity if students are actively mapped to this group.`}
         confirmText="Deactivate Group"
         isDestructive={true}
         loading={submitting}
