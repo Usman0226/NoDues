@@ -319,33 +319,10 @@ const DepartmentClasses = () => {
 
   return (
     <PageWrapper 
-      title={departmentName || "Academic Groups"} 
-      subtitle={`Academic structure, cohort progression and section management · ${activeOperationalSections.length} Sections · ${activeTotalStudents} Students`}
-      tag={departmentName ? (departmentName.match(/\b([A-Z])/g)?.join('').slice(0, 4) || 'DEPT') : 'DEPT'}
-      meta={activeOperationalSections[0]?.academicYear ? `A.Y. ${activeOperationalSections[0]?.academicYear}` : 'A.Y. 2024-2028'}
+      title="Academic Groups" 
+      subtitle={departmentName ? `${departmentName} Department · Academic Structure & Cohort Progression` : 'Academic structure and cohort progression'}
       headerActions={
-        <div className="flex flex-wrap items-center gap-2">
-          <div 
-            className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition-colors cursor-pointer select-none"
-            onClick={() => setIncludeInactive(!includeInactive)}
-          >
-            <div className={`w-7 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-slate-200'}`}>
-              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-3.5' : 'left-0.5'}`} />
-            </div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Show Inactive
-            </span>
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDepartmentRollover(true)}
-            className="border-purple-200 text-purple-700 hover:bg-purple-50 font-semibold gap-1.5"
-          >
-            <Layers size={14} /> Department Rollover
-          </Button>
-
+        <div className="flex flex-wrap items-center gap-2.5">
           <Button
             variant="primary"
             size="sm"
@@ -353,20 +330,50 @@ const DepartmentClasses = () => {
               setFormData({ name: '', semester: activeSemester || 1, academicYear: activeOperationalSections[0]?.academicYear || '2025-26', departmentId: deptId, classTeacherId: '' });
               setShowCreate(true);
             }}
-            className="gap-1.5"
           >
-            <Plus size={14} /> New Section
+            <Plus size={14} /> New Class
           </Button>
 
           <Button
-            variant="ghost"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setCohortPromoteSem(Number(activeSemester) || 1);
+              setShowCohortPromote(true);
+            }}
+          >
+            <GraduationCap size={14} /> Bulk Promote Cohort
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowDepartmentRollover(true)}
+          >
+            <Layers size={14} /> Academic Rollover
+          </Button>
+
+          <Button
+            variant="secondary"
             size="sm"
             onClick={() => fetchClasses({ departmentId: deptId, page, limit, includeInactive })}
-            className="text-slate-400 hover:text-navy p-2"
-            title="Reload sections"
+            title="Reload records"
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={14} /> Reload
           </Button>
+
+          {/* Show Inactivated Toggle */}
+          <div 
+            className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-zinc-200 shadow-xs hover:border-zinc-300 transition-colors cursor-pointer select-none"
+            onClick={() => setIncludeInactive(!includeInactive)}
+          >
+            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+              Show Inactivated
+            </span>
+            <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
+            </div>
+          </div>
         </div>
       }
     >
@@ -423,257 +430,209 @@ const DepartmentClasses = () => {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="space-y-8"
+            className="space-y-4"
           >
-            {/* Semester Tabs Navigation Bar */}
-            <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/60 flex items-center gap-1.5 overflow-x-auto no-scrollbar mb-6">
-              {sortedSemesters.map((sem) => {
-                const semClasses = grouped[sem] || [];
-                const opSecs = semClasses.filter((c) => !c.isMaster);
-                const hasBatchActive = semClasses.some((c) => c.hasActiveBatch);
-                const isSelected = Number(activeSemester) === sem;
+            {/* Semester Tabs Navigation Bar & Cohort Action (Single Unified Line) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-muted/50">
+              {/* Semester Pill Tabs */}
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+                {sortedSemesters.map((sem) => {
+                  const semClasses = grouped[sem] || [];
+                  const opSecs = semClasses.filter((c) => !c.isMaster);
+                  const isSelected = Number(activeSemester) === sem;
+                  const hasBatchActive = semClasses.some((c) => c.hasActiveBatch);
 
-                return (
-                  <button
-                    key={sem}
-                    onClick={() => setActiveSemester(sem)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 select-none cursor-pointer ${
-                      isSelected
-                        ? 'bg-white text-navy shadow-xs border border-slate-200/60'
-                        : 'text-slate-600 hover:text-navy hover:bg-white/50'
-                    }`}
-                  >
-                    <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black ${
-                      isSelected ? 'bg-navy text-white' : 'bg-slate-200 text-slate-600'
-                    }`}>
-                      S{sem}
-                    </span>
-                    <span>Semester {sem}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${
-                      isSelected ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-200/70 text-slate-500'
-                    }`}>
-                      {opSecs.length}
-                    </span>
-                    {hasBatchActive && (
-                      <span
-                        className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-white"
-                        title="Active Clearance Batch in Progress"
-                      />
-                    )}
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={sem}
+                      onClick={() => setActiveSemester(sem)}
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer select-none ${
+                        isSelected
+                          ? 'bg-navy text-white shadow-md shadow-navy/20'
+                          : 'bg-white hover:bg-zinc-50 text-muted-foreground hover:text-navy border border-zinc-200 shadow-xs'
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'
+                      }`}>
+                        S{sem}
+                      </span>
+                      <span>Semester {sem}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                        isSelected ? 'bg-white/25 text-white' : 'bg-zinc-100 text-zinc-500'
+                      }`}>
+                        {opSecs.length}
+                      </span>
+                      {hasBatchActive && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-amber-400 ring-2 ring-white"
+                          title="Active Clearance Batch in Progress"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Promote Semester Action */}
+              {activeSemester && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-black text-[10px] uppercase tracking-wider gap-1.5 shadow-xs"
+                  onClick={() => {
+                    setCohortPromoteSem(Number(activeSemester));
+                    setShowCohortPromote(true);
+                  }}
+                  disabled={activeOperationalSections.length === 0}
+                >
+                  <GraduationCap size={14} />
+                  Promote Semester {activeSemester} ({activeOperationalSections.length} {activeOperationalSections.length === 1 ? 'Section' : 'Sections'})
+                </Button>
+              )}
             </div>
 
-            {/* Active Semester Content */}
+            {/* Curriculum Master Banner (Clean, slim single row) */}
             {activeSemester && (
-              <div className="space-y-6">
-                {/* Active Semester Hub */}
-                <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-11 h-11 rounded-xl bg-navy text-white flex items-center justify-center text-sm font-black shadow-xs shrink-0">
-                        S{activeSemester}
-                      </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-base sm:text-lg font-black text-navy uppercase tracking-tight">
-                            Semester {activeSemester} Cohort
-                          </h2>
-                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                            AY {activeOperationalSections[0]?.academicYear || '2024-28'}
-                          </span>
-                          {activeOperationalSections.some((c) => c.hasActiveBatch) && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                              Clearance In Progress
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {activeOperationalSections.length} {activeOperationalSections.length === 1 ? 'Section' : 'Sections'} &bull; {activeTotalStudents} Total Enrolled Students
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold text-xs gap-1.5 shadow-xs"
-                        onClick={() => {
-                          setCohortPromoteSem(Number(activeSemester));
-                          setShowCohortPromote(true);
-                        }}
-                        disabled={activeOperationalSections.length === 0}
-                      >
-                        <GraduationCap size={15} />
-                        Promote Semester {activeSemester} ({activeOperationalSections.length} Sections)
-                      </Button>
-                    </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:px-4 sm:py-2.5 bg-gradient-to-r from-indigo-50/90 via-white to-purple-50/40 rounded-2xl border border-indigo-100/90 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold shrink-0">
+                    <BookOpen size={16} />
                   </div>
-
-                  {/* Curriculum Blueprint Strip */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-50/80 rounded-xl border border-slate-200/70">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
-                        <BookOpen size={16} />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-navy">
-                            Curriculum Blueprint:
-                          </span>
-                          <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
-                            {activeCohortSubjectCount} Subjects Defined
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Master syllabus automatically inherited by all {activeOperationalSections.length} operational sections.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        className="text-xs font-semibold gap-1.5 border-slate-300 text-slate-700 hover:bg-white bg-white shadow-xs"
-                        onClick={() => handleOpenMasterCurriculum(Number(activeSemester))}
-                      >
-                        <BookOpen size={13} /> Manage Master Syllabus
-                      </Button>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        className="text-xs font-semibold gap-1.5 text-slate-600 hover:text-indigo-600 hover:bg-white"
-                        onClick={() => handleSyncMaster(Number(activeSemester))}
-                        disabled={syncingSem === Number(activeSemester)}
-                      >
-                        <RefreshCw size={13} className={syncingSem === Number(activeSemester) ? 'animate-spin' : ''} /> Sync Sections
-                      </Button>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-black text-navy uppercase tracking-wider">
+                      Semester {activeSemester} Curriculum Master
+                    </span>
+                    <span className="text-[9px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                      Single Source of Truth
+                    </span>
+                    <span className="text-[11px] font-bold text-muted-foreground">
+                      • {activeCohortSubjectCount} Subjects
+                    </span>
+                    <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                      (Inherited by all {activeOperationalSections.length} sections)
+                    </span>
                   </div>
                 </div>
 
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="text-[10px] font-black uppercase tracking-wider gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 py-1.5 px-3"
+                    onClick={() => handleOpenMasterCurriculum(Number(activeSemester))}
+                  >
+                    <BookOpen size={12} /> Manage Master Syllabus
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-[10px] font-black uppercase tracking-wider gap-1.5 text-muted-foreground hover:text-indigo-600 py-1.5 px-2.5"
+                    onClick={() => handleSyncMaster(Number(activeSemester))}
+                    disabled={syncingSem === Number(activeSemester)}
+                  >
+                    <RefreshCw size={12} className={syncingSem === Number(activeSemester) ? 'animate-spin' : ''} /> Sync All Sections
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Active Semester Section Cards */}
+            {activeSemester && (
+              <div>
                 {activeOperationalSections.length === 0 ? (
-                  <div className="text-center py-16 bg-white rounded-xl border border-dashed border-slate-300 p-8 space-y-3">
-                    <div className="w-12 h-12 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center mx-auto">
-                      <Users size={24} />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-bold text-navy">No sections in Semester {activeSemester} yet</h3>
-                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                        Create operational sections (e.g. CSD-A, CSD-B) to enroll students and map faculty.
-                      </p>
-                    </div>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => {
-                        setFormData({ name: '', semester: activeSemester, academicYear: '2025-26', departmentId: deptId, classTeacherId: '' });
-                        setShowCreate(true);
-                      }}
-                    >
-                      <Plus size={14} /> Establish Section in S{activeSemester}
-                    </Button>
+                  <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-border p-6 space-y-2">
+                    <Users size={36} className="mx-auto text-muted-foreground/30" />
+                    <p className="text-sm font-semibold text-foreground">No sections created in Semester {activeSemester} yet</p>
+                    <p className="text-xs text-muted-foreground">Click &quot;+ New Class&quot; above to establish a section.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {activeOperationalSections.map((cls) => (
                       <motion.div key={cls._id} variants={itemVariants} layout>
-                        <div className="group bg-white rounded-xl border border-slate-200/90 p-5 hover:border-indigo-300 hover:shadow-md transition-all duration-200 relative flex flex-col justify-between h-full">
+                        <Link 
+                          to={isHod ? `/hod/class/${cls._id}` : `/admin/class/${cls._id}`}
+                          className="group block bg-white rounded-3xl border border-muted/50 p-6 shadow-sm hover:shadow-xl hover:border-navy/20 transition-all duration-300 relative"
+                        >
                           {!cls.isActive && (
-                            <div className="absolute top-0 right-0 px-2.5 py-0.5 bg-slate-100 text-[9px] font-bold uppercase tracking-wider text-slate-400 rounded-bl-lg border-b border-l border-slate-200">
+                            <div className="absolute top-0 right-0 px-3 py-1 bg-muted/20 text-[9px] font-black uppercase tracking-widest text-muted-foreground rounded-bl-xl border-b border-l border-muted/50">
                               Inactive
                             </div>
                           )}
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h4 className="text-xl sm:text-2xl font-black text-navy uppercase tracking-tight group-hover:text-gold transition-colors">
+                                {cls.name}
+                              </h4>
+                              <p className="text-[10px] font-black tracking-wider uppercase text-muted-foreground mt-1">
+                                CT: {cls.classTeacher?.name || 'Not Assigned'}
+                              </p>
+                              <p className="text-[10px] font-black tracking-wider uppercase text-muted-foreground">
+                                Batch: {cls.academicYear}
+                              </p>
+                            </div>
 
-                          <div>
-                            <div className="flex items-start justify-between gap-3 mb-3">
-                              <div className="min-w-0 pr-16">
-                                <Link
-                                  to={isHod ? `/hod/class/${cls._id}` : `/admin/class/${cls._id}`}
-                                  className="text-lg font-black text-navy group-hover:text-indigo-600 transition-colors uppercase tracking-tight block truncate"
-                                >
-                                  {cls.name}
-                                </Link>
-                                <p className="text-xs font-medium text-slate-600 flex items-center gap-1.5 mt-1 truncate">
-                                  <span className="text-slate-400 font-normal">CT:</span>
-                                  <span className="font-semibold text-slate-700">{cls.classTeacher?.name || 'Not Assigned'}</span>
-                                </p>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">
-                                  Batch: {cls.academicYear}
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-0.5 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+                            <div className="flex items-center gap-1 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setPromoteClassId(cls._id);
+                                }}
+                                title="Promote Class"
+                                className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-600 transition-colors"
+                              >
+                                <GraduationCap size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleEditClick(cls, e)}
+                                title="Edit Group"
+                                className="p-1.5 hover:bg-offwhite rounded-lg text-navy transition-colors"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              {cls.isActive === false ? (
                                 <button
                                   type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setPromoteClassId(cls._id);
-                                  }}
-                                  title="Promote Class"
-                                  className="p-1.5 hover:bg-indigo-50 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors"
+                                  onClick={(e) => handleActivateClick(cls, e)}
+                                  title="Reactivate Group"
+                                  className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors"
                                 >
-                                  <GraduationCap size={15} />
+                                  <RefreshCw size={16} />
                                 </button>
+                              ) : (
                                 <button
                                   type="button"
-                                  onClick={(e) => handleEditClick(cls, e)}
-                                  title="Edit Section"
-                                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-navy transition-colors"
+                                  onClick={(e) => handleDeleteClick(cls, e)}
+                                  title="Deactivate Group"
+                                  className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-600 transition-colors"
                                 >
-                                  <Edit size={14} />
+                                  <Trash2 size={16} />
                                 </button>
-                                {cls.isActive === false ? (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleActivateClick(cls, e)}
-                                    title="Reactivate Section"
-                                    className="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-400 hover:text-emerald-600 transition-colors"
-                                  >
-                                    <RefreshCw size={14} />
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleDeleteClick(cls, e)}
-                                    title="Deactivate Section"
-                                    className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                )}
-                              </div>
+                              )}
                             </div>
                           </div>
 
-                          <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Subjects</span>
-                                <span className="text-sm font-black text-navy">{cls.subjectCount || 0}</span>
-                              </div>
-                              <div className="h-6 w-px bg-slate-100" />
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Students</span>
-                                <span className="text-sm font-black text-navy">{cls.studentCount || 0}</span>
-                              </div>
+                          <div className="grid grid-cols-2 gap-3 mt-4">
+                            <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100/50">
+                              <p className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-tighter mb-1">Subjects</p>
+                              <p className="text-sm font-black text-navy">{cls.subjectCount || 0}</p>
                             </div>
-
-                            <Link
-                              to={isHod ? `/hod/class/${cls._id}` : `/admin/class/${cls._id}`}
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
-                            >
-                              <span>View Details</span>
-                              <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
-                            </Link>
+                            <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100/50">
+                              <p className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-tighter mb-1">Students</p>
+                              <p className="text-sm font-black text-navy">{cls.studentCount || 0}</p>
+                            </div>
                           </div>
-                        </div>
+
+                          <div className="mt-4 pt-4 border-t border-muted/30 flex items-center justify-between">
+                            <span className="text-[9px] font-black text-navy/40 uppercase tracking-widest group-hover:text-navy transition-colors">Academic Oversight</span>
+                            <div className="flex items-center gap-1.5 text-navy font-black text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
+                              View Details <ArrowRight size={14} />
+                            </div>
+                          </div>
+                        </Link>
                       </motion.div>
                     ))}
                   </div>

@@ -43,3 +43,4 @@ NoDues digitizes and automates the semester and graduation clearance process for
 - High-contrast badges for statuses (cleared: emerald, pending: amber, due: red, override: indigo).
 - Accessible touch targets (≥ 44×44px hit areas) and screen-reader labels with native tooltip titles on truncated headers.
 - Motion matches user preference via `prefers-reduced-motion`.
+

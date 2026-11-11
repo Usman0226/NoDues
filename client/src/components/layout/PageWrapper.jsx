@@ -17,7 +17,7 @@ const PageWrapper = ({
   const { isFocusMode } = useUI();
 
   return (
-    <div className={`flex-1 min-w-0 transition-all duration-500 fade-up max-w-full overflow-x-hidden relative ${isFocusMode ? 'p-2 sm:p-4 lg:p-6' : 'p-4 sm:p-6 lg:p-10'}`}>
+    <div className={`flex-1 min-w-0 transition-all duration-500 fade-up max-w-full overflow-x-hidden relative ${isFocusMode ? 'p-2 sm:p-4 lg:p-6' : 'p-4 sm:p-6 lg:p-8'}`}>
       {isRefreshing && (
         <div className="fixed top-0 inset-x-0 z-[100] h-0.5 pointer-events-none">
           <div className="h-full bg-gold/80 animate-progress origin-left" />
@@ -27,12 +27,12 @@ const PageWrapper = ({
         {backFallback && (
           <BackHeader title={backTitle || 'Back'} fallback={backFallback} />
         )}
-        <header className={`transition-all duration-500 ${isFocusMode ? 'mb-4 lg:mb-6 opacity-40 hover:opacity-100' : 'mb-8 lg:mb-10'}`}>
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 md:gap-6">
-            <div className="space-y-1.5 min-w-0">
+        <header className={`transition-all duration-500 ${isFocusMode ? 'mb-3 lg:mb-4 opacity-40 hover:opacity-100' : 'mb-5 lg:mb-6'}`}>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4">
+            <div className="space-y-1 min-w-0">
               {/* Optional Meta / Tag Bar (like CAI | A.Y. 2025-2026 | Date) */}
               {(tag || meta) && (
-                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-muted-foreground mb-1">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-muted-foreground mb-0.5">
                   {tag && (
                     <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-black uppercase tracking-wider">
                       {tag}
@@ -47,7 +47,7 @@ const PageWrapper = ({
               )}
 
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className={`font-black text-navy tracking-tighter leading-none transition-all duration-500 ${isFocusMode ? 'text-xl sm:text-2xl lg:text-3xl' : 'text-3xl sm:text-4xl lg:text-5xl'}`}>
+                <h1 className={`font-black text-navy tracking-tight leading-none transition-all duration-500 ${isFocusMode ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl lg:text-4xl'}`}>
                   {title}
                 </h1>
                 {badge && (
@@ -65,7 +65,7 @@ const PageWrapper = ({
 
               {subtitle && (
                 <div className="flex items-center gap-2 pt-0.5">
-                  <div className="h-0.5 w-5 bg-gold/50 rounded-full shrink-0" />
+                  <div className="h-0.5 w-4 bg-gold rounded-full shrink-0" />
                   <div className="text-xs font-semibold text-muted-foreground tracking-wide">
                     {subtitle}
                   </div>
@@ -74,7 +74,7 @@ const PageWrapper = ({
             </div>
 
             {headerActions && (
-              <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
                 {headerActions}
               </div>
             )}
