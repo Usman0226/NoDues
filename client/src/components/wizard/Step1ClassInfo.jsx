@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getDepartments } from '../../api/departments';
 import { getClasses, createClass, updateClass } from '../../api/classes';
 import { getFaculty } from '../../api/faculty';
 import { getBatches } from '../../api/batch';
 import { ROLES } from '../../utils/constants';
+import { getAcademicYearRoman, formatSectionDisplayName } from '../../utils/formatters';
 import Button from '../ui/Button';
 import { StepTableSkeleton } from './WizardSkeleton';
 import { Building2, Layers, BookOpen, UserCheck, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
@@ -46,9 +47,14 @@ const Step1ClassInfo = ({
 
   const { data: classRes, isLoading: loadingClasses, isError: classesError, refetch: refetchClasses } = useQuery({
     queryKey: ['wizard', 'classes', isHod ? defaultDeptId : 'all'],
-    queryFn: () => getClasses({ limit: 100 }),
+    queryFn: () => getClasses({ limit: 150 }),
   });
-  const classesList = classRes?.data || classRes?.classes || [];
+  const rawClassesList = classRes?.data || classRes?.classes || [];
+
+  // Filter out Master syllabus classes (only operational sections can be set up for students)
+  const operationalClasses = useMemo(() => {
+    return rawClassesList.filter((c) => !c.isMaster);
+  }, [rawClassesList]);
 
   const { data: facultyRes, isLoading: loadingFaculty } = useQuery({
     queryKey: ['wizard', 'faculty', formData.departmentId],
@@ -66,7 +72,7 @@ const Step1ClassInfo = ({
   // When selected class changes in 'existing' mode, load its values
   useEffect(() => {
     if (mode === 'existing' && selectedClassId) {
-      const cls = classesList.find((c) => c._id === selectedClassId);
+      const cls = operationalClasses.find((c) => c._id === selectedClassId);
       if (cls) {
         setFormData({
           name: cls.name,
@@ -77,13 +83,13 @@ const Step1ClassInfo = ({
         });
       }
     }
-  }, [selectedClassId, classesList, mode]);
+  }, [selectedClassId, operationalClasses, mode]);
 
   // Validation function
   const validateField = (field, value) => {
     let err = '';
     if (field === 'name') {
-      if (!value || !value.trim()) err = 'Class name is required (e.g. CSD-A)';
+      if (!value || !value.trim()) err = 'Class name is required (e.g. CSD-E)';
       else if (value.trim().length < 2) err = 'Class name must be at least 2 characters';
     }
     if (field === 'departmentId' && !value) {
@@ -115,7 +121,6 @@ const Step1ClassInfo = ({
     }
   };
 
-  // Determine if continue is valid
   const isFormValid = () => {
     if (mode === 'existing') {
       return Boolean(selectedClassId && formData.semester >= 1 && formData.semester <= 8);
@@ -148,10 +153,9 @@ const Step1ClassInfo = ({
         };
         const res = await createClass(payload);
         savedClass = res?.data || res;
-        toast.success(`Class ${savedClass.name} created successfully.`);
+        toast.success(`Class ${formatSectionDisplayName(savedClass.name, savedClass.semester)} created.`);
       } else {
-        // Existing class selected: update semester or teacher if modified
-        const existingClassObj = classesList.find((c) => c._id === selectedClassId) || {};
+        const existingClassObj = operationalClasses.find((c) => c._id === selectedClassId) || {};
         const payload = {
           semester: Number(formData.semester),
           ...(formData.classTeacherId ? { classTeacherId: formData.classTeacherId } : {}),
@@ -164,16 +168,14 @@ const Step1ClassInfo = ({
           semester: Number(formData.semester),
           departmentId: existingClassObj.departmentId || updatedData.departmentId,
         };
-        toast.success(`Class ${savedClass.name} configuration confirmed.`);
+        toast.success(`Class ${formatSectionDisplayName(savedClass.name, savedClass.semester)} selected.`);
       }
 
       onDirtyChange?.(false);
       onSave({
         classId: savedClass._id,
         classData: savedClass,
-        summary: `${savedClass.name} · Semester ${savedClass.semester} · Dept: ${
-          departments.find((d) => d._id === (savedClass.departmentId?._id || savedClass.departmentId))?.name || 'Department'
-        }`,
+        summary: `${formatSectionDisplayName(savedClass.name, savedClass.semester)} · Semester ${savedClass.semester} · Batch ${savedClass.academicYear || 'Current'}`,
       });
     } catch (err) {
       toast.error(err?.message || 'Failed to save class configuration.');
@@ -188,11 +190,11 @@ const Step1ClassInfo = ({
 
   if (deptsError || classesError) {
     return (
-      <div className="p-6 rounded-2xl border border-red-200 bg-red-50/50 text-center space-y-4" role="alert">
-        <AlertCircle size={32} className="mx-auto text-red-600" aria-hidden="true" />
+      <div className="p-5 rounded-2xl border border-red-200 bg-red-50/50 text-center space-y-3" role="alert">
+        <AlertCircle size={28} className="mx-auto text-red-600" aria-hidden="true" />
         <div>
-          <h3 className="text-base font-bold text-red-900">Failed to load academic entities</h3>
-          <p className="text-xs text-red-700 mt-1">Check your network connection and retry.</p>
+          <h3 className="text-sm font-bold text-red-900">Failed to load academic records</h3>
+          <p className="text-xs text-red-700 mt-0.5">Please check your network connection and retry.</p>
         </div>
         <Button
           type="button"
@@ -200,41 +202,44 @@ const Step1ClassInfo = ({
           size="sm"
           onClick={() => { refetchDepts(); refetchClasses(); }}
         >
-          <RefreshCw size={14} className="mr-1.5" /> Retry Loading
+          <RefreshCw size={13} className="mr-1.5" /> Retry
         </Button>
       </div>
     );
   }
 
+  const selectedClassObj = operationalClasses.find((c) => c._id === selectedClassId);
+  const romanYear = getAcademicYearRoman(formData.semester);
+
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-6">
+    <form onSubmit={handleSubmit} noValidate className="space-y-5">
       {/* Mode Selector Tabs */}
-      <div className="flex items-center gap-2 p-1.5 bg-zinc-100/80 rounded-xl max-w-md border border-zinc-200/60" role="tablist">
+      <div className="flex items-center gap-1.5 p-1 bg-zinc-100 rounded-xl max-w-sm border border-zinc-200/80" role="tablist">
         <button
           type="button"
           role="tab"
           aria-selected={mode === 'existing'}
           onClick={() => setMode('existing')}
-          className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all min-h-[44px]
+          className={`flex-1 py-1.5 px-3 text-xs font-bold rounded-lg transition-all min-h-[38px]
             ${mode === 'existing'
-              ? 'bg-white text-navy shadow-sm border border-zinc-200/60 font-black'
-              : 'text-zinc-700 hover:text-navy hover:bg-white/50'
+              ? 'bg-white text-navy shadow-xs border border-zinc-200/80 font-black'
+              : 'text-zinc-600 hover:text-navy hover:bg-white/50'
             }`}
         >
-          Select Existing Class
+          Select Existing Section
         </button>
         <button
           type="button"
           role="tab"
           aria-selected={mode === 'new'}
           onClick={() => setMode('new')}
-          className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all min-h-[44px]
+          className={`flex-1 py-1.5 px-3 text-xs font-bold rounded-lg transition-all min-h-[38px]
             ${mode === 'new'
-              ? 'bg-white text-navy shadow-sm border border-zinc-200/60 font-black'
-              : 'text-zinc-700 hover:text-navy hover:bg-white/50'
+              ? 'bg-white text-navy shadow-xs border border-zinc-200/80 font-black'
+              : 'text-zinc-600 hover:text-navy hover:bg-white/50'
             }`}
         >
-          Create New Class
+          Create New Section
         </button>
       </div>
 
@@ -242,15 +247,15 @@ const Step1ClassInfo = ({
       {mode === 'existing' && (
         <div className="space-y-4">
           <div>
-            <label htmlFor="wizard-select-class" className="block text-xs font-black uppercase tracking-wider text-navy mb-1.5">
-              Choose Section / Class <span className="text-red-600">*</span>
+            <label htmlFor="wizard-select-class" className="block text-xs font-black uppercase tracking-wider text-navy mb-1">
+              Choose Section <span className="text-red-500">*</span>
             </label>
-            <p className="text-xs text-zinc-600 mb-2 font-medium">
-              Select an existing persistent section to stand up for the new semester cycle.
+            <p className="text-xs text-zinc-500 mb-2">
+              Select an operational section to configure for the upcoming semester clearance.
             </p>
-            {classesList.length === 0 ? (
-              <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-xs">
-                No active classes found for this department. Please switch to "Create New Class" above.
+            {operationalClasses.length === 0 ? (
+              <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-xs font-medium">
+                No active sections found. Please switch to "Create New Section" above.
               </div>
             ) : (
               <select
@@ -260,58 +265,58 @@ const Step1ClassInfo = ({
                   setSelectedClassId(e.target.value);
                   onDirtyChange?.(true);
                 }}
-                className="w-full px-4 py-2.5 bg-white border border-zinc-300 rounded-xl text-sm font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 min-h-[44px]"
+                className="w-full px-3.5 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs sm:text-sm font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/20 min-h-[42px]"
               >
-                <option value="">-- Choose a Class --</option>
-                {classesList.map((c) => (
+                <option value="">-- Select Section --</option>
+                {operationalClasses.map((c) => (
                   <option key={c._id} value={c._id}>
-                    {c.name} · Current Sem: {c.semester || 1} {c.academicYear ? `(${c.academicYear})` : ''}
+                    {formatSectionDisplayName(c.name, c.semester)} · Semester {c.semester || 1} {c.academicYear ? `(${c.academicYear})` : ''} — {c.studentCount || 0} Students
                   </option>
                 ))}
               </select>
             )}
           </div>
 
-          {selectedClassId && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-zinc-50 border border-zinc-200/80">
+          {selectedClassId && selectedClassObj && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-4 rounded-xl bg-zinc-50 border border-zinc-200/80">
               <div>
-                <label htmlFor="wizard-sem-update" className="block text-xs font-bold text-zinc-700 mb-1">
-                  Target Semester (1 to 8) <span className="text-red-500">*</span>
-                </label>
-                <input
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor="wizard-sem-update" className="block text-xs font-bold text-zinc-700">
+                    Semester <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                    Year {romanYear}
+                  </span>
+                </div>
+                <select
                   id="wizard-sem-update"
-                  type="number"
-                  min="1"
-                  max="8"
                   value={formData.semester}
-                  onChange={(e) => handleChange('semester', e.target.value)}
+                  onChange={(e) => handleChange('semester', Number(e.target.value))}
                   onBlur={() => handleBlur('semester')}
-                  aria-invalid={Boolean(errors.semester)}
-                  aria-describedby={errors.semester ? 'sem-error' : undefined}
-                  className={`w-full px-3 py-2 bg-white border rounded-lg text-sm font-bold text-navy focus:outline-none focus:ring-2 min-h-[44px]
-                    ${errors.semester ? 'border-red-400 focus:ring-red-400/30' : 'border-zinc-300 focus:ring-indigo-500/40'}`}
-                />
-                {errors.semester && (
-                  <p id="sem-error" className="text-xs text-red-600 mt-1 font-semibold" role="alert">
-                    {errors.semester}
-                  </p>
-                )}
+                  className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-xs sm:text-sm font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/20 min-h-[40px]"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                    <option key={s} value={s}>
+                      Semester {s} (Year {getAcademicYearRoman(s)})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label htmlFor="wizard-teacher-select" className="block text-xs font-bold text-zinc-700 mb-1">
-                  Class Teacher (Optional update)
+                  Class Teacher <span className="text-zinc-500 text-[10px] font-normal">(Required for Clearance)</span>
                 </label>
                 <select
                   id="wizard-teacher-select"
                   value={formData.classTeacherId}
                   onChange={(e) => handleChange('classTeacherId', e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-sm text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px]"
+                  className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-xs sm:text-sm text-navy focus:outline-none focus:ring-2 focus:ring-navy/20 min-h-[40px]"
                 >
-                  <option value="">-- Leave Unchanged or Select Teacher --</option>
+                  <option value="">-- Select Class Teacher --</option>
                   {facultyList.map((f) => (
                     <option key={f._id} value={f._id}>
-                      {f.name} ({f.employeeId || 'Faculty'})
+                      {f.name} {f.employeeId ? `(${f.employeeId})` : ''}
                     </option>
                   ))}
                 </select>
@@ -327,7 +332,7 @@ const Step1ClassInfo = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Department */}
             <div>
-              <label htmlFor="wizard-dept-select" className="block text-xs font-black uppercase tracking-wider text-navy mb-1.5">
+              <label htmlFor="wizard-dept-select" className="block text-xs font-black uppercase tracking-wider text-navy mb-1">
                 Department <span className="text-red-500">*</span>
               </label>
               <select
@@ -336,8 +341,8 @@ const Step1ClassInfo = ({
                 value={formData.departmentId}
                 onChange={(e) => handleChange('departmentId', e.target.value)}
                 onBlur={() => handleBlur('departmentId')}
-                className={`w-full px-4 py-2.5 bg-white border rounded-xl text-sm font-semibold text-navy focus:outline-none focus:ring-2 min-h-[44px]
-                  ${errors.departmentId ? 'border-red-400 focus:ring-red-400/30' : 'border-zinc-300 focus:ring-indigo-500/40'}`}
+                className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs sm:text-sm font-semibold text-navy focus:outline-none focus:ring-2 min-h-[42px]
+                  ${errors.departmentId ? 'border-red-400 focus:ring-red-400/20' : 'border-zinc-300 focus:ring-navy/20'}`}
               >
                 <option value="">-- Choose Department --</option>
                 {departments.map((d) => (
@@ -351,74 +356,90 @@ const Step1ClassInfo = ({
 
             {/* Class Name */}
             <div>
-              <label htmlFor="wizard-class-name" className="block text-xs font-black uppercase tracking-wider text-navy mb-1.5">
-                Class / Section Name <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="wizard-class-name" className="block text-xs font-black uppercase tracking-wider text-navy">
+                  Section Name <span className="text-red-500">*</span>
+                </label>
+                {formData.name.trim() && (
+                  <span className="text-[10px] font-bold text-zinc-500">
+                    Preview: <strong className="text-navy">{formatSectionDisplayName(formData.name, formData.semester)}</strong>
+                  </span>
+                )}
+              </div>
               <input
                 id="wizard-class-name"
                 type="text"
-                placeholder="e.g. CSD-A or CSE-B"
+                placeholder="e.g. CSD-E or CSE-A"
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
                 onBlur={() => handleBlur('name')}
                 aria-invalid={Boolean(errors.name)}
-                aria-describedby={errors.name ? 'name-error' : undefined}
-                className={`w-full px-4 py-2.5 bg-white border rounded-xl text-sm font-semibold text-navy focus:outline-none focus:ring-2 min-h-[44px]
-                  ${errors.name ? 'border-red-400 focus:ring-red-400/30' : 'border-zinc-300 focus:ring-indigo-500/40'}`}
+                className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs sm:text-sm font-semibold text-navy focus:outline-none focus:ring-2 min-h-[42px]
+                  ${errors.name ? 'border-red-400 focus:ring-red-400/20' : 'border-zinc-300 focus:ring-navy/20'}`}
               />
               {errors.name && (
-                <p id="name-error" className="text-xs text-red-600 mt-1 font-semibold" role="alert">{errors.name}</p>
+                <p className="text-xs text-red-600 mt-1 font-semibold" role="alert">{errors.name}</p>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
             {/* Semester */}
             <div>
-              <label htmlFor="wizard-new-sem" className="block text-xs font-black uppercase tracking-wider text-navy mb-1.5">
-                Semester (1-8) <span className="text-red-500">*</span>
-              </label>
-              <input
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="wizard-new-sem" className="block text-xs font-black uppercase tracking-wider text-navy">
+                  Semester <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 px-2 py-0.2 rounded-full">
+                  Year {romanYear}
+                </span>
+              </div>
+              <select
                 id="wizard-new-sem"
-                type="number"
-                min="1"
-                max="8"
                 value={formData.semester}
-                onChange={(e) => handleChange('semester', e.target.value)}
+                onChange={(e) => handleChange('semester', Number(e.target.value))}
                 onBlur={() => handleBlur('semester')}
-                className="w-full px-4 py-2.5 bg-white border border-zinc-300 rounded-xl text-sm font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px]"
-              />
+                className="w-full px-3.5 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs sm:text-sm font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/20 min-h-[42px]"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                  <option key={s} value={s}>
+                    Semester {s} (Year {getAcademicYearRoman(s)})
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Batch Label */}
             <div>
-              <label htmlFor="wizard-batch-label" className="block text-xs font-black uppercase tracking-wider text-navy mb-1.5">
+              <label htmlFor="wizard-batch-label" className="block text-xs font-black uppercase tracking-wider text-navy mb-1">
                 Academic Batch
               </label>
               <input
                 id="wizard-batch-label"
                 type="text"
-                placeholder="e.g. 2024-2028"
+                placeholder="e.g. 2024-28"
                 value={formData.batchLabel}
                 onChange={(e) => handleChange('batchLabel', e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-zinc-300 rounded-xl text-sm font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px]"
+                className="w-full px-3.5 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs sm:text-sm font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-navy/20 min-h-[42px]"
               />
             </div>
 
             {/* Class Teacher */}
             <div>
-              <label htmlFor="wizard-new-teacher" className="block text-xs font-black uppercase tracking-wider text-navy mb-1.5">
+              <label htmlFor="wizard-new-teacher" className="block text-xs font-black uppercase tracking-wider text-navy mb-1">
                 Class Teacher
               </label>
               <select
                 id="wizard-new-teacher"
                 value={formData.classTeacherId}
                 onChange={(e) => handleChange('classTeacherId', e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-zinc-300 rounded-xl text-sm font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px]"
+                className="w-full px-3.5 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs sm:text-sm font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-navy/20 min-h-[42px]"
               >
-                <option value="">-- Select Teacher --</option>
+                <option value="">-- Select Class Teacher --</option>
                 {facultyList.map((f) => (
-                  <option key={f._id} value={f._id}>{f.name}</option>
+                  <option key={f._id} value={f._id}>
+                    {f.name} {f.employeeId ? `(${f.employeeId})` : ''}
+                  </option>
                 ))}
               </select>
             </div>
@@ -427,18 +448,18 @@ const Step1ClassInfo = ({
       )}
 
       {/* Action Footer */}
-      <div className="pt-6 border-t border-zinc-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="text-xs text-zinc-700">
+      <div className="pt-4 border-t border-zinc-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="text-xs text-zinc-600">
           {!isFormValid() ? (
             <span className="text-amber-700 font-semibold flex items-center gap-1.5">
               <AlertCircle size={14} className="shrink-0" />
               {mode === 'existing'
-                ? 'Please select a class to continue.'
-                : 'Please fill all required fields before continuing.'}
+                ? 'Please select a section to continue.'
+                : 'Please complete all required fields.'}
             </span>
           ) : (
             <span className="text-emerald-700 font-semibold flex items-center gap-1.5">
-              <CheckCircle2 size={14} className="shrink-0" /> Ready to proceed to Timetable step.
+              <CheckCircle2 size={14} className="shrink-0" /> Ready to proceed to Subjects & Timetable.
             </span>
           )}
         </div>
@@ -448,7 +469,7 @@ const Step1ClassInfo = ({
           variant="primary"
           disabled={!isFormValid() || isSubmitting}
           loading={isSubmitting}
-          className="w-full sm:w-60 min-h-[44px]"
+          className="w-full sm:w-56 min-h-[42px]"
         >
           {isSubmitting ? 'Saving...' : 'Save & Continue →'}
         </Button>

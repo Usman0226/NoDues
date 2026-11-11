@@ -19,3 +19,18 @@ export const formatRole = (role) => {
   };
   return roles[role.toLowerCase()] || role.toUpperCase();
 };
+
+export const getAcademicYearRoman = (semester) => {
+  const sem = Number(semester);
+  if (sem <= 2) return 'I';
+  if (sem <= 4) return 'II';
+  if (sem <= 6) return 'III';
+  return 'IV';
+};
+
+export const formatSectionDisplayName = (name, semester) => {
+  if (!name) return '';
+  const roman = getAcademicYearRoman(semester);
+  const cleanName = name.replace(/^(I|II|III|IV)[\s\-_]+/i, '').trim();
+  return `${roman} ${cleanName}`;
+};

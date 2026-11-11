@@ -5,6 +5,8 @@ import { useSetupWizardFlag } from '../../hooks/useFeatureFlag';
 import { ROLES } from '../../utils/constants';
 import { getWizardProgress, updateWizardProgress } from '../../api/wizard';
 import { getClass } from '../../api/classes';
+import { formatSectionDisplayName } from '../../utils/formatters';
+import { useNavigationStack } from '../../hooks/useNavigationStack';
 import WizardProgressHeader, { STEPS_CONFIG } from '../../components/wizard/WizardProgressHeader';
 import StepContainer from '../../components/wizard/StepContainer';
 import { WizardPageSkeleton } from '../../components/wizard/WizardSkeleton';
@@ -22,6 +24,7 @@ const STEP_IDS = STEPS_CONFIG.map((s) => s.id);
 const SetupWizard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { setBreadcrumbs } = useNavigationStack();
   const { isEnabled: flagEnabled, isLoading: flagLoading } = useSetupWizardFlag();
 
   // Wizard State
@@ -33,22 +36,20 @@ const SetupWizard = () => {
   const [isDirty, setIsDirty] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
-  // 1. Feature Flag Guard (FR-F4, FR-F5)
-  // If flag is off: redirect to existing dashboard
-  if (flagLoading) {
-    return <WizardPageSkeleton />;
-  }
-
-  if (!flagEnabled) {
-    const fallbackRoute = user?.role === ROLES.HOD ? '/hod' : '/admin';
-    return <Navigate to={fallbackRoute} replace />;
-  }
-
-  // 2. Role Authorization (Admin and HoD only)
+  const isHod = user?.role === ROLES.HOD || user?.role === 'hod';
   const isAuthorized = user?.role === ROLES.ADMIN || user?.role === ROLES.HOD || user?.role === 'admin' || user?.role === 'hod';
-  if (!isAuthorized) {
-    return <Navigate to="/unauthorized" replace />;
-  }
+
+  // Set Top Navigation Stack Breadcrumbs
+  useEffect(() => {
+    const crumbs = [
+      { label: 'NoDues', path: isHod ? '/hod' : '/admin' },
+      ...(isHod
+        ? [{ label: 'Academic Groups', path: '/hod/classes' }]
+        : [{ label: 'Departments', path: '/admin/departments' }]),
+      { label: 'Class Setup Wizard', isCurrent: true },
+    ];
+    setBreadcrumbs(crumbs);
+  }, [setBreadcrumbs, isHod]);
 
   // Unsaved changes browser warning
   useEffect(() => {
@@ -65,19 +66,16 @@ const SetupWizard = () => {
   // Load progress when class is selected
   const loadClassProgress = useCallback(async (targetClassId) => {
     try {
-      // 1. Fetch class details
       const clsRes = await getClass(targetClassId);
       const classData = clsRes?.data || clsRes;
       setSelectedClass(classData);
 
-      // 2. Fetch wizard progress
       const progressRes = await getWizardProgress(targetClassId);
       const progress = progressRes?.data || progressRes;
 
       if (progress?.completedSteps && Array.isArray(progress.completedSteps)) {
         setCompletedSteps(progress.completedSteps);
 
-        // Find next step to resume from
         const nextStepId = progress.nextStep || STEP_IDS[0];
         const nextIdx = STEP_IDS.indexOf(nextStepId);
         if (nextIdx !== -1) {
@@ -87,14 +85,13 @@ const SetupWizard = () => {
 
       setStepSummaries((prev) => ({
         ...prev,
-        class_info: `${classData.name} · Semester ${classData.semester || 1} · Batch ${classData.academicYear || 'Current'}`,
+        class_info: `${formatSectionDisplayName(classData.name, classData.semester)} · Semester ${classData.semester || 1} · Batch ${classData.academicYear || 'Current'}`,
       }));
     } catch (err) {
       console.warn('Could not restore saved wizard progress:', err?.message);
     }
   }, []);
 
-  // Announce step transitions to screen readers
   const announce = (message) => {
     setLiveAnnouncement(message);
   };
@@ -108,7 +105,6 @@ const SetupWizard = () => {
     setStepSummaries((prev) => ({ ...prev, class_info: summary }));
     markStepComplete('class_info', 1);
 
-    // Persist progress to backend
     try {
       await updateWizardProgress(newClassId, {
         step: 'class_info',
@@ -119,7 +115,7 @@ const SetupWizard = () => {
       console.warn('Backend progress save failed:', err?.message);
     }
 
-    announce(`Step 1 completed. Moving to Step 2: Timetable.`);
+    announce(`Step 1 completed. Moving to Step 2: Subjects & Timetable.`);
   };
 
   // Generic Step Save Handler
@@ -134,7 +130,6 @@ const SetupWizard = () => {
 
     markStepComplete(step, nextIdx);
 
-    // Persist progress to backend
     if (classId) {
       try {
         await updateWizardProgress(classId, {
@@ -153,7 +148,6 @@ const SetupWizard = () => {
     }
   };
 
-  // Helper to mark step complete and advance
   const markStepComplete = (stepId, targetActiveIndex) => {
     setCompletedSteps((prev) => {
       const set = new Set(prev);
@@ -166,14 +160,12 @@ const SetupWizard = () => {
     }
   };
 
-  // Edit completed step without restarting flow (DESIGN.md Part 2 §6)
   const handleEditStep = (stepIdx) => {
     setActiveStepIndex(stepIdx);
     const stepConfig = STEPS_CONFIG[stepIdx];
     announce(`Editing Step ${stepIdx + 1}: ${stepConfig?.label}.`);
   };
 
-  // Reset wizard to setup a new class
   const handleResetWizard = () => {
     setClassId(null);
     setSelectedClass(null);
@@ -181,18 +173,31 @@ const SetupWizard = () => {
     setStepSummaries({});
     setActiveStepIndex(0);
     setIsDirty(false);
-    announce('Wizard reset. Ready to setup a new class.');
+    announce('Wizard reset. Ready to configure a new class.');
   };
 
+  if (flagLoading) {
+    return <WizardPageSkeleton />;
+  }
+
+  if (!flagEnabled) {
+    const fallbackRoute = isHod ? '/hod' : '/admin';
+    return <Navigate to={fallbackRoute} replace />;
+  }
+
+  if (!isAuthorized) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
   return (
-    <div className="min-h-full bg-offwhite py-8 px-4 sm:px-6 lg:px-8">
-      {/* Screen Reader Live Region for A11y (DESIGN.md §15) */}
+    <div className="min-h-full bg-offwhite py-5 px-3 sm:px-6 lg:px-8">
+      {/* Screen Reader Live Region */}
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {liveAnnouncement}
       </div>
 
-      <div className="max-w-5xl mx-auto space-y-8">
-        {/* Progress Header & Department Scoping */}
+      <div className="max-w-5xl mx-auto space-y-5">
+        {/* Progress Header */}
         <WizardProgressHeader
           activeStepIndex={activeStepIndex}
           completedStepIds={completedSteps}
@@ -202,13 +207,13 @@ const SetupWizard = () => {
         />
 
         {/* Step Container Flow with Progressive Disclosure */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* STEP 1: CLASS INFO */}
           <StepContainer
             stepNumber={1}
             stepId="class_info"
-            title="Class Information & Section Setup"
-            subtitle="Select an existing section to stand up for the new semester, or configure a new persistent class document."
+            title="Class & Section Details"
+            subtitle="Choose an existing operational section or create a new section for this semester."
             summary={stepSummaries.class_info}
             isActive={activeStepIndex === 0}
             isCompleted={completedSteps.includes('class_info')}
@@ -224,12 +229,12 @@ const SetupWizard = () => {
             />
           </StepContainer>
 
-          {/* STEP 2: TIMETABLE UPLOAD & REVIEW */}
+          {/* STEP 2: TIMETABLE & SUBJECTS */}
           <StepContainer
             stepNumber={2}
             stepId="timetable_subjects"
-            title="Timetable Upload & Subject Parsing"
-            subtitle="Upload an official timetable PDF to extract subjects and faculty via text layer, or clone assignments from another section."
+            title="Subjects & Timetable"
+            subtitle="Set up semester subjects by inheriting the master syllabus, uploading a timetable PDF, or copying from another section."
             summary={stepSummaries.timetable_subjects}
             isActive={activeStepIndex === 1}
             isCompleted={completedSteps.includes('timetable_subjects')}
@@ -249,8 +254,8 @@ const SetupWizard = () => {
           <StepContainer
             stepNumber={3}
             stepId="students"
-            title="Students"
-            subtitle="Confirm existing students in this class or upload new student records via CSV/Excel."
+            title="Enrolled Students"
+            subtitle="Verify students currently enrolled in this section or import new student records."
             summary={stepSummaries.students}
             isActive={activeStepIndex === 2}
             isCompleted={completedSteps.includes('students')}
@@ -270,8 +275,8 @@ const SetupWizard = () => {
           <StepContainer
             stepNumber={4}
             stepId="mentors"
-            title="Mentor Faculty Assignment"
-            subtitle="Assign academic mentors to enrolled students via bulk mapping or individual faculty allocation."
+            title="Mentor Faculty Allocation"
+            subtitle="Assign academic mentors to enrolled students individually, in bulk, or using auto-distribution."
             summary={stepSummaries.mentors}
             isActive={activeStepIndex === 3}
             isCompleted={completedSteps.includes('mentors')}
@@ -287,12 +292,12 @@ const SetupWizard = () => {
             />
           </StepContainer>
 
-          {/* STEP 5: ELECTIVE ASSIGNMENT (CONDITIONAL) */}
+          {/* STEP 5: ELECTIVE ASSIGNMENT */}
           <StepContainer
             stepNumber={5}
             stepId="electives"
-            title="Elective Subject Mapping (Conditional)"
-            subtitle="Map open or professional electives for applicable students (typically Semesters 5 through 8)."
+            title="Elective Subject Mapping"
+            subtitle="Map open or professional electives if applicable for this semester."
             summary={stepSummaries.electives}
             isActive={activeStepIndex === 4}
             isCompleted={completedSteps.includes('electives')}
@@ -308,12 +313,12 @@ const SetupWizard = () => {
             />
           </StepContainer>
 
-          {/* STEP 6: PRE-FLIGHT CHECKLIST */}
+          {/* STEP 6: PRE-FLIGHT CHECK */}
           <StepContainer
             stepNumber={6}
             stepId="preflight"
-            title="Pre-Flight Verification Gate"
-            subtitle="Real-time verification that students, active subjects, and class teacher meet all launch criteria."
+            title="Review & Pre-Flight Check"
+            subtitle="Verify enrolled students, active subjects, and class teacher before launching clearance."
             summary={stepSummaries.preflight}
             isActive={activeStepIndex === 5}
             isCompleted={completedSteps.includes('preflight')}
@@ -333,8 +338,8 @@ const SetupWizard = () => {
           <StepContainer
             stepNumber={7}
             stepId="initiation"
-            title="Launch No-Due Clearance Cycle"
-            subtitle="Final confirmation to generate official student clearance requests across subjects and departments."
+            title="Launch Clearance Cycle"
+            subtitle="Final confirmation to activate the official No-Due clearance cycle for this section."
             summary={stepSummaries.initiation}
             isActive={activeStepIndex === 6}
             isCompleted={completedSteps.includes('initiation')}
@@ -355,4 +360,3 @@ const SetupWizard = () => {
 };
 
 export default SetupWizard;
-
