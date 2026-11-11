@@ -40,6 +40,11 @@
       "context": "HoD overview cache not busting after class-teacher/mentor/faculty approvals",
       "decision": "All approval mutations now call invalidateKeys('hod_overview:<deptId>') immediately after transaction commit",
       "trade_offs": "Requires batch.departmentId in every approval function — already fetched for auth checks, so zero extra DB round-trips."
+    },
+    {
+      "context": "Setup Wizard missing from sidebar and department classes zero-state",
+      "decision": "Declared Setup Wizard in NAV_CONFIG for Admin and HoD by default, gated by feature flag only when explicitly disabled; added dual entry points on DepartmentClasses (top action bar + zero-state onboarding card) with automatic department context passing via URL query",
+      "trade_offs": "Guarantees zero-latency rendering of wizard navigation, eliminates user confusion when onboarding classes for an empty department."
     }
   ],
   "blockers": []
