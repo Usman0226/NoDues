@@ -55,6 +55,11 @@
       "context": "Inconsistent border radii across forms, SearchableSelect (0px inherited bug), cards, and modals",
       "decision": "Established formal CSS custom properties (--radius-micro 6px, --radius-chip 8px, --radius-control 12px/rounded-xl, --radius-surface 16px/rounded-2xl, --radius-pill 9999px/rounded-full) in index.css and normalized all UI primitives, form controls, and cards across client/src",
       "trade_offs": "Eliminates arbitrary border-radius overrides and achieves concentric geometry throughout the application."
+    },
+    {
+      "context": "Inconsistent button sizes, SearchableSelect multi-line trigger height, and filter/toolbar vertical misalignment across modals and admin/faculty pages",
+      "decision": "Enforced deterministic fixed height tiers on Button (xs h-8, sm h-9, md h-10, lg h-11), SearchableSelect triggers (sm h-9, default h-11 with single-line label and subLabel strictly inside dropdown menu + title tooltip), modal inputs (h-11), wizard form controls (h-9), and page filter capsules/action bars (matching h-9 or h-10/h-11 baselines with inline-flex alignment)",
+      "trade_offs": "Fixed heights prevent vertical wobble across heterogeneous controls in multi-column grids and horizontal toolbars, at the cost of truncating long subLabels on closed SearchableSelect triggers."
     }
   ],
   "blockers": []

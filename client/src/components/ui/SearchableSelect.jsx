@@ -95,13 +95,13 @@ const SearchableSelect = ({
     const hasCustomRadius = /\brounded-/.test(className);
     const radiusClass = hasCustomRadius ? 'rounded-[inherit]' : 'rounded-xl';
     const base = `w-full flex items-center justify-between transition-all duration-300 ${radiusClass} group`;
-    const padding = size === 'sm' ? 'py-1.5 px-2.5' : 'py-3 px-4';
+    const sizing = size === 'sm' ? 'h-9 px-3 text-xs' : 'h-11 px-4 text-sm';
     
     if (variant === 'ghost') {
-      return `${base} ${padding} border-transparent bg-transparent hover:bg-zinc-100/50 ${isOpen ? 'bg-zinc-100' : ''}`;
+      return `${base} ${sizing} border border-transparent bg-transparent hover:bg-zinc-100/50 ${isOpen ? 'bg-zinc-100' : ''}`;
     }
     
-    return `${base} ${padding} border ${disabled ? 'bg-zinc-50 border-zinc-200 opacity-60' : 'bg-white border-zinc-200 hover:border-indigo-300 focus:ring-4 focus:ring-indigo-100'} ${isOpen ? 'border-indigo-500 ring-4 ring-indigo-100' : ''}`;
+    return `${base} ${sizing} border ${disabled ? 'bg-zinc-50 border-zinc-200 opacity-60' : 'bg-white border-zinc-200 hover:border-indigo-300 focus:ring-4 focus:ring-indigo-100'} ${isOpen ? 'border-indigo-500 ring-4 ring-indigo-100' : ''}`;
   }, [size, variant, disabled, isOpen, className]);
 
   return (
@@ -124,24 +124,22 @@ const SearchableSelect = ({
         }}
         className={`${triggerClasses} cursor-pointer select-none`}
       >
-        <div className="flex flex-col items-start overflow-hidden">
+        <div className="flex items-center overflow-hidden min-w-0 flex-1">
           {selectedOption ? (
-            <>
-              <span className={`text-sm font-bold truncate w-full ${variant === 'ghost' ? 'text-navy' : 'text-zinc-900 group-hover:text-indigo-600'}`}>
-                {selectedOption[labelKey]}
-              </span>
-              {selectedOption[subLabelKey] && (
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mt-0.5 truncate w-full">
-                  {selectedOption[subLabelKey]}
-                </span>
-              )}
-            </>
+            <span
+              className={`${size === 'sm' ? 'text-xs' : 'text-sm'} font-bold truncate w-full ${variant === 'ghost' ? 'text-navy' : 'text-zinc-900 group-hover:text-indigo-600'}`}
+              title={selectedOption[subLabelKey] ? `${selectedOption[labelKey]} · ${selectedOption[subLabelKey]}` : selectedOption[labelKey]}
+            >
+              {selectedOption[labelKey]}
+            </span>
           ) : (
-            <span className="text-sm text-zinc-400 font-medium">{placeholder}</span>
+            <span className={`${size === 'sm' ? 'text-xs' : 'text-sm'} text-zinc-400 font-medium truncate`}>
+              {placeholder}
+            </span>
           )}
         </div>
         
-        <div className={`flex items-center ml-2 ${size === 'sm' ? 'gap-1' : 'gap-2'}`}>
+        <div className={`flex items-center ml-2 shrink-0 ${size === 'sm' ? 'gap-1' : 'gap-1.5'}`}>
           {loading && <Loader2 size={size === 'sm' ? 12 : 16} className="animate-spin text-indigo-500" />}
           {selectedOption && !disabled && clearable && (
             <button
@@ -151,13 +149,13 @@ const SearchableSelect = ({
                 onChange?.(null);
                 setSearchValue('');
               }}
-              className="p-1 hover:bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-600 transition-colors"
+              className="p-0.5 hover:bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-600 transition-colors"
             >
-              <X size={14} />
+              <X size={size === 'sm' ? 12 : 14} />
             </button>
           )}
           <ChevronDown 
-            size={size === 'sm' ? 14 : 18} 
+            size={size === 'sm' ? 14 : 16} 
             className={`text-zinc-400 transition-transform duration-300 ${isOpen ? 'rotate-180 text-indigo-500' : 'group-hover:text-zinc-600'}`} 
           />
         </div>

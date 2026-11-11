@@ -251,16 +251,18 @@ const Subjects = () => {
                   setPage(1);
                 }}
                 placeholder="Filter by Session"
+                size="sm"
+                className="rounded-full"
              />
           </div>
         </div>
 
-        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+        <div className="h-9 inline-flex items-center gap-3 px-4 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
              onClick={() => setIncludeInactive(!includeInactive)}>
            <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
               <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
            </div>
-           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors">Show Inactivated</span>
+           <span className="text-[10px] font-black uppercase tracking-widest text-navy/60 group-hover:text-navy transition-colors leading-none">Show Inactivated</span>
            <div className="w-px h-4 bg-muted/50 mx-1" />
            <Button 
               variant="ghost" 
@@ -271,9 +273,9 @@ const Subjects = () => {
                 await fetchSubjects({ includeInactive });
                 hide();
               }} 
-              className="text-muted-foreground hover:text-navy p-0 h-auto"
+              className="text-muted-foreground hover:text-navy p-0 h-auto leading-none"
             >
-              <RefreshCw size={14} className="mr-2" /> Reload
+              <RefreshCw size={14} className="mr-1.5" /> Reload
             </Button>
         </div>
       </div>
@@ -334,7 +336,7 @@ const Subjects = () => {
                   type="text" 
                   value={formData.code}
                   onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
                   placeholder="CODE-XYZ" 
                 />
               </div>
@@ -358,7 +360,7 @@ const Subjects = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="Full Component Name" 
               />
             </div>
@@ -405,7 +407,7 @@ const Subjects = () => {
                   type="text" 
                   value={formData.code}
                   onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
                   placeholder="CODE-XYZ" 
                 />
               </div>
@@ -429,7 +431,7 @@ const Subjects = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="Full Component Name" 
               />
             </div>

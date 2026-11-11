@@ -326,7 +326,7 @@ const FacultyList = () => {
           <Button variant="ghost" size="sm" onClick={() => setShowImport(true)} className="text-navy border border-muted hover:bg-offwhite"><Upload size={14} /> Import list</Button>
         </div>
 
-        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+        <div className="h-9 inline-flex items-center gap-3 px-4 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none leading-none"
              onClick={() => setIncludeInactive(!includeInactive)}>
            <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
               <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
@@ -342,7 +342,7 @@ const FacultyList = () => {
                 await fetchFaculty({ page, limit, includeInactive, search: debouncedSearch });
                 hide();
               }} 
-              className="text-muted-foreground hover:text-navy p-0 h-auto"
+              className="text-muted-foreground hover:text-navy p-0 h-auto border-0"
             >
               <RefreshCw size={14} className="mr-2" /> Reload
             </Button>
@@ -414,7 +414,7 @@ const FacultyList = () => {
                   type="text" 
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all text-navy font-bold" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all text-navy font-bold" 
                   placeholder="e.g. Dr. Jane Doe" 
                 />
               </div>
@@ -424,7 +424,7 @@ const FacultyList = () => {
                   type="text" 
                   value={formData.employeeId}
                   onChange={e => setFormData({...formData, employeeId: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
                   placeholder="EMP-000" 
                 />
               </div>
@@ -437,7 +437,7 @@ const FacultyList = () => {
                   type="email" 
                   value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
                   placeholder="name@mits.ac.in" 
                 />
               </div>
@@ -497,7 +497,7 @@ const FacultyList = () => {
                   type="text" 
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all text-navy font-bold" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all text-navy font-bold" 
                 />
               </div>
               <div>
@@ -506,7 +506,7 @@ const FacultyList = () => {
                   type="text" 
                   value={formData.employeeId}
                   onChange={e => setFormData({...formData, employeeId: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
                 />
               </div>
             </div>
@@ -518,7 +518,7 @@ const FacultyList = () => {
                   type="email" 
                   value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
                 />
               </div>
               <div>

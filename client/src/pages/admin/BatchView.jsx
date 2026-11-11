@@ -133,21 +133,21 @@ const BatchView = () => {
 
       {/* Control Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-10 mb-6 bg-white p-4 rounded-xl border border-muted shadow-sm">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {['all', 'has_dues', 'pending', 'cleared'].map((f) => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all
+              className={`h-9 px-4 inline-flex items-center justify-center rounded-full text-[10px] font-black uppercase tracking-widest transition-all
                 ${filter === f ? 'bg-navy text-white shadow-md' : 'text-muted-foreground hover:bg-offwhite'}`}>
               {f.replace('_', ' ')}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-3">
-          <Badge status={batch.batch?.status === 'active' ? 'pending' : 'cleared'} className="bg-navy/5 text-navy/70 border-none px-4">
+          <Badge status={batch.batch?.status === 'active' ? 'pending' : 'cleared'} className="h-9 inline-flex items-center bg-navy/5 text-navy/70 border-none px-4">
             Batch Status: {batch.batch?.status?.toUpperCase()}
           </Badge>
           {batch.batch?.status === 'active' && (
-            <Button variant="danger" size="sm" className="h-9" onClick={handleCloseBatch}><X size={14} /> Close Cycle</Button>
+            <Button variant="danger" size="sm" onClick={handleCloseBatch}><X size={14} /> Close Cycle</Button>
           )}
         </div>
       </div>

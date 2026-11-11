@@ -325,11 +325,14 @@ const DepartmentClasses = () => {
       subtitle={departmentName ? `${departmentName} Department · Academic Structure & Cohort Progression` : 'Academic structure and cohort progression'}
       headerActions={
         <div className="flex flex-wrap items-center gap-2.5">
-          <Link to={isHod ? (deptId ? `/hod/setup?dept=${deptId}` : '/hod/setup') : (deptId ? `/admin/setup?dept=${deptId}` : '/admin/setup')}>
+          <Link
+            to={isHod ? (deptId ? `/hod/setup?dept=${deptId}` : '/hod/setup') : (deptId ? `/admin/setup?dept=${deptId}` : '/admin/setup')}
+            className="inline-flex"
+          >
             <Button
               variant="secondary"
               size="sm"
-              className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 font-bold shadow-xs hover:border-indigo-300 transition-all"
+              className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300"
               title="Launch Class Setup Wizard with Timetable PDF auto-detection"
             >
               <Wand2 size={14} className="text-indigo-600" />
@@ -367,10 +370,10 @@ const DepartmentClasses = () => {
 
           {/* Show Inactivated Toggle */}
           <div 
-            className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-zinc-200 shadow-xs hover:border-zinc-300 transition-colors cursor-pointer select-none"
+            className="h-9 inline-flex items-center gap-2.5 px-3.5 bg-white rounded-full border border-zinc-200 shadow-xs hover:border-zinc-300 transition-colors cursor-pointer select-none"
             onClick={() => setIncludeInactive(!includeInactive)}
           >
-            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground leading-none">
               Show Inactivated
             </span>
             <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
@@ -540,17 +543,17 @@ const DepartmentClasses = () => {
 
                 <div className="flex items-center gap-2">
                   <Button
-                    size="sm"
+                    size="xs"
                     variant="secondary"
-                    className="text-[10px] font-black uppercase tracking-wider gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 py-1.5 px-3"
+                    className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
                     onClick={() => handleOpenMasterCurriculum(Number(activeSemester))}
                   >
                     <BookOpen size={12} /> Manage Subjects
                   </Button>
                   <Button
-                    size="sm"
+                    size="xs"
                     variant="ghost"
-                    className="text-[10px] font-black uppercase tracking-wider gap-1.5 text-muted-foreground hover:text-indigo-600 py-1.5 px-2.5"
+                    className="text-muted-foreground hover:text-indigo-600"
                     onClick={() => handleSyncMaster(Number(activeSemester))}
                     disabled={syncingSem === Number(activeSemester)}
                   >
@@ -573,8 +576,8 @@ const DepartmentClasses = () => {
                       <p className="text-xs text-muted-foreground mt-1">Establish sections using the Setup Wizard or create a single section manually.</p>
                     </div>
                     <div className="flex items-center justify-center gap-3 pt-1">
-                      <Link to={isHod ? (deptId ? `/hod/setup?dept=${deptId}` : '/hod/setup') : (deptId ? `/admin/setup?dept=${deptId}` : '/admin/setup')}>
-                        <Button variant="secondary" size="sm" className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 font-bold">
+                      <Link to={isHod ? (deptId ? `/hod/setup?dept=${deptId}` : '/hod/setup') : (deptId ? `/admin/setup?dept=${deptId}` : '/admin/setup')} className="inline-flex">
+                        <Button variant="secondary" size="sm" className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100">
                           <Wand2 size={14} /> Setup Wizard
                         </Button>
                       </Link>
@@ -701,7 +704,7 @@ const DepartmentClasses = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="e.g. CSE-A Sem 5" 
               />
             </div>
@@ -725,7 +728,7 @@ const DepartmentClasses = () => {
                   type="text" 
                   value={formData.academicYear}
                   onChange={e => setFormData({...formData, academicYear: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
                   placeholder="2025-26" 
                 />
               </div>
@@ -760,7 +763,7 @@ const DepartmentClasses = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="e.g. CSE-A Sem 5" 
               />
             </div>
@@ -784,7 +787,7 @@ const DepartmentClasses = () => {
                   type="text" 
                   value={formData.academicYear}
                   onChange={e => setFormData({...formData, academicYear: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
                   placeholder="2025-26" 
                 />
               </div>

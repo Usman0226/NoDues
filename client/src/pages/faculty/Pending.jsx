@@ -657,7 +657,7 @@ const Pending = () => {
         <motion.div variants={item} className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           {/* Status Filters Capsule */}
           <div className="overflow-x-auto no-scrollbar pb-1 -mx-2 px-2 lg:mx-0 lg:px-0">
-            <div id="tour-filters" className="flex items-center gap-1 bg-white border border-zinc-100 p-1 rounded-full w-fit shadow-sm shadow-zinc-200/50">
+            <div id="tour-filters" className="h-11 flex items-center gap-1 bg-white border border-zinc-100 p-1 rounded-full w-fit shadow-sm shadow-zinc-200/50">
               {FILTERS.map((f) => {
                 const count = approvals.filter((a) => f === 'all' || (f === 'pending' ? (a.action === 'pending' || a.action === 'not_submitted') : a.action === f)).length;
                 const active = filter === f;
@@ -671,7 +671,7 @@ const Pending = () => {
                   <button
                     key={f}
                     onClick={() => { setFilter(f); setSelection([]); setPage(1); }}
-                    className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 relative whitespace-nowrap flex items-center gap-2.5
+                    className={`h-9 px-4 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 relative whitespace-nowrap inline-flex items-center gap-2.5
                       ${active ? 'text-white' : 'text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50/50'}`}
                   >
                     {active && (
@@ -699,8 +699,8 @@ const Pending = () => {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-            <div id="tour-request-type-select" className="flex-1 sm:flex-initial flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-zinc-200/50 rounded-full shadow-sm hover:shadow-md transition-all group">
-               <div className="pl-3 text-zinc-400 group-hover:text-indigo-500 transition-colors">
+            <div id="tour-request-type-select" className="flex-1 sm:flex-initial h-11 flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-zinc-200/50 rounded-full shadow-sm hover:shadow-md transition-all group">
+               <div className="pl-3.5 text-zinc-400 group-hover:text-indigo-500 transition-colors shrink-0">
                 <Filter size={14} />
                </div>
                <SearchableSelect 
@@ -711,12 +711,13 @@ const Pending = () => {
                 labelKey="name"
                 idKey="id"
                 variant="ghost"
+                size="sm"
                 className="min-w-[150px] w-full sm:w-[150px]"
                 clearable={!!approvalType}
               />
             </div>
-            <div id="tour-class-select" className="flex-1 sm:flex-initial flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-zinc-200/50 rounded-full shadow-sm hover:shadow-md transition-all group">
-               <div className="pl-3 text-zinc-400 group-hover:text-indigo-500 transition-colors">
+            <div id="tour-class-select" className="flex-1 sm:flex-initial h-11 flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-zinc-200/50 rounded-full shadow-sm hover:shadow-md transition-all group">
+               <div className="pl-3.5 text-zinc-400 group-hover:text-indigo-500 transition-colors shrink-0">
                 <Settings2 size={14} />
                </div>
                <SearchableSelect 
@@ -727,6 +728,7 @@ const Pending = () => {
                 labelKey="name"
                 idKey="id"
                 variant="ghost"
+                size="sm"
                 className="min-w-[200px] w-full sm:w-[200px]"
                 clearable={selectedBatch !== 'all'}
               />
@@ -738,7 +740,7 @@ const Pending = () => {
                 await fetchApprovals();
                 hide();
               }}
-              className={`p-3.5 rounded-full bg-white border border-zinc-200 text-zinc-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-500/5 transition-all ${loading ? 'opacity-50' : ''}`}
+              className={`h-11 w-11 p-0 inline-flex items-center justify-center shrink-0 rounded-full bg-white border border-zinc-200 text-zinc-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-500/5 transition-all ${loading ? 'opacity-50' : ''}`}
             >
               <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
             </button>

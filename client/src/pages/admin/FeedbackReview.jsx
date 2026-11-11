@@ -204,8 +204,8 @@ const FeedbackReview = () => {
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
 
-           <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-muted shadow-sm">
-              <Star size={14} className="text-slate-400" />
+           <div className="h-9 inline-flex items-center gap-2 px-3.5 bg-white rounded-full border border-muted shadow-sm">
+              <Star size={14} className="text-slate-400 shrink-0" />
               <select 
                 value={rating} 
                 onChange={(e) => setRating(e.target.value)}

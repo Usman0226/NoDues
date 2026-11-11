@@ -1212,7 +1212,7 @@ const Step1ClassSubjects = ({
                   placeholder="e.g. CSD-A"
                   value={sectionForm.name}
                   onChange={(e) => setSectionForm((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
                 />
               </div>
 
@@ -1223,7 +1223,7 @@ const Step1ClassSubjects = ({
                 <select
                   value={sectionForm.semester}
                   onChange={(e) => setSectionForm((p) => ({ ...p, semester: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
                 >
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                     <option key={s} value={s}>
@@ -1242,7 +1242,7 @@ const Step1ClassSubjects = ({
                   placeholder="2026-27"
                   value={sectionForm.academicYear}
                   onChange={(e) => setSectionForm((p) => ({ ...p, academicYear: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
                 />
               </div>
             </div>
@@ -1256,7 +1256,7 @@ const Step1ClassSubjects = ({
             <select
               value={sectionForm.classTeacherId}
               onChange={(e) => setSectionForm((p) => ({ ...p, classTeacherId: e.target.value }))}
-              className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+              className="w-full h-9 px-3 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
             >
               <option value="">-- Choose Class Teacher --</option>
               {facultyList.map((f) => (
@@ -1339,7 +1339,7 @@ const Step1ClassSubjects = ({
                 <select
                   value={cloneSourceClassId}
                   onChange={(e) => setCloneSourceClassId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
                 >
                   <option value="">-- Choose source section --</option>
                   {operationalClasses

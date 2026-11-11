@@ -252,10 +252,10 @@ const Batches = () => {
       </div>
 
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 px-1">
-        <div className="flex items-center gap-3 bg-white p-1 rounded-full border border-muted shadow-sm overflow-x-auto max-w-full no-scrollbar">
+        <div className="h-10 inline-flex items-center gap-1.5 bg-white p-1 rounded-full border border-muted shadow-sm overflow-x-auto max-w-full no-scrollbar">
           {['all', 'active', 'closed'].map((f) => (
             <button key={f} onClick={() => { setStatusFilter(f); setPage(1); }}
-              className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all whitespace-nowrap
+              className={`h-full px-5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all whitespace-nowrap inline-flex items-center justify-center
                 ${statusFilter === f ? 'bg-navy text-white shadow-md' : 'text-muted-foreground hover:bg-offwhite'}`}>
               {f}
             </button>
@@ -265,13 +265,13 @@ const Batches = () => {
         <div className="flex items-center gap-2">
           <Button 
             variant="ghost" 
-            size="sm" 
+            size="md" 
             onClick={async () => {
               const hide = showGlobalLoader('Refreshing batches...');
               await fetchBatches();
               hide();
             }} 
-            className="text-muted-foreground h-10 px-4 hover:bg-white border-transparent hover:border-muted rounded-full"
+            className="text-muted-foreground px-4 hover:bg-white border-transparent hover:border-muted rounded-full"
           >
             <RefreshCw size={14} className={`${loading ? 'animate-spin' : ''}`} />
             <span className="ml-2 text-[10px] font-black uppercase tracking-widest">Reload</span>

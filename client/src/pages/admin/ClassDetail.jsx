@@ -750,17 +750,17 @@ const SUBJECT_COLS = [
         <div className="overflow-x-auto no-scrollbar pb-1 -mb-1">
           {classData?.isMaster ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-navy uppercase tracking-wider bg-slate-100 px-3.5 py-1.5 rounded-full border border-slate-200">
+              <span className="h-9 inline-flex items-center text-xs font-bold text-navy uppercase tracking-wider bg-slate-100 px-3.5 rounded-full border border-slate-200">
                 Semester {classData?.semester} Subjects ({subjects.length})
               </span>
             </div>
           ) : (
-            <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-full p-1.5 w-fit min-w-full sm:min-w-0">
+            <div className="h-9 inline-flex items-center gap-1 bg-white border border-muted/40 shadow-sm rounded-full p-0.5 w-fit min-w-full sm:min-w-0">
               {tabs.map((t) => {
                 const Icon = t.icon;
                 return (
                   <button key={t.key} onClick={() => setTab(t.key)}
-                    className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap
+                    className={`h-full inline-flex items-center gap-2 px-4 sm:px-5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap
                       ${tab === t.key ? 'bg-navy text-white shadow-md scale-100' : 'text-muted-foreground hover:bg-offwhite hover:text-navy hover:scale-[0.98]'}`}>
                     <Icon size={14} /> {t.label}
                   </button>
@@ -771,7 +771,7 @@ const SUBJECT_COLS = [
         </div>
 
         {!classData?.isMaster && tab === 'students' && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="primary" size="sm" onClick={() => {
               setAddStudentFormData({ name: '', rollNo: '', email: '' });
               setShowAddStudent(true);
@@ -796,7 +796,7 @@ const SUBJECT_COLS = [
         )}
 
         {tab === 'subjects' && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}>
               <Plus size={14} /> Add Subject
             </Button>
@@ -965,7 +965,7 @@ const SUBJECT_COLS = [
               <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Target Completion Deadline (Optional)</label>
               <input 
                 type="date"
-                className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                 value={initiateForm.deadline}
                 min={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setInitiateForm({ ...initiateForm, deadline: e.target.value })}
@@ -1053,7 +1053,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Roll Number</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono font-bold"
+                    className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono font-bold"
                     placeholder="e.g. 21691A0501"
                     value={addStudentFormData.rollNo}
                     onChange={(e) => setAddStudentFormData({...addStudentFormData, rollNo: e.target.value.toUpperCase()})}
@@ -1062,7 +1062,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Candidate Name</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     placeholder="Full Name"
                     value={addStudentFormData.name}
                     onChange={(e) => setAddStudentFormData({...addStudentFormData, name: e.target.value})}
@@ -1073,7 +1073,7 @@ const SUBJECT_COLS = [
                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Email Identity (Institutional)</label>
                  <input 
                     type="email"
-                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     placeholder="name@mits.ac.in"
                     value={addStudentFormData.email}
                     onChange={(e) => setAddStudentFormData({...addStudentFormData, email: e.target.value})}
@@ -1128,7 +1128,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Roll Number</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 font-mono border-dashed opacity-70 cursor-not-allowed"
+                    className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 font-mono border-dashed opacity-70 cursor-not-allowed"
                     value={studentFormData.rollNo}
                     disabled
                   />
@@ -1137,7 +1137,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Candidate Name</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     value={studentFormData.name}
                     onChange={(e) => setStudentFormData({...studentFormData, name: e.target.value})}
                   />
@@ -1147,7 +1147,7 @@ const SUBJECT_COLS = [
                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Email Identity</label>
                  <input 
                     type="email"
-                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     value={studentFormData.email}
                     onChange={(e) => setStudentFormData({...studentFormData, email: e.target.value})}
                   />
@@ -1294,7 +1294,7 @@ const SUBJECT_COLS = [
              <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Code (Optional override)</label>
                 <input 
-                  className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
+                  className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
                   placeholder="Leave empty for subject default"
                   value={subjectFormData.subjectCode}
                   onChange={(e) => setSubjectFormData({...subjectFormData, subjectCode: e.target.value})}
@@ -1321,7 +1321,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Code</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 font-mono font-bold focus:ring-2 focus:ring-navy/5"
+                    className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 font-mono font-bold focus:ring-2 focus:ring-navy/5"
                     placeholder="e.g. 20CSE101"
                     value={quickSubjectForm.code}
                     onChange={(e) => setQuickSubjectForm({...quickSubjectForm, code: e.target.value.toUpperCase()})}
@@ -1330,7 +1330,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Name</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     placeholder="e.g. Data Structures"
                     value={quickSubjectForm.name}
                     onChange={(e) => setQuickSubjectForm({...quickSubjectForm, name: e.target.value})}
@@ -1385,7 +1385,7 @@ const SUBJECT_COLS = [
              <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Alias Subject Code</label>
                 <input 
-                  className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
+                  className="w-full h-11 px-4 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
                   placeholder="Set context-specific code"
                   value={subjectFormData.subjectCode}
                   onChange={(e) => setSubjectFormData({...subjectFormData, subjectCode: e.target.value})}

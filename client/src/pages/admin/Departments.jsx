@@ -144,7 +144,7 @@ const Departments = () => {
           </Button>
         </div>
 
-        <Button variant="ghost" size="sm" onClick={() => fetchDepts()} className="text-muted-foreground border border-muted hover:bg-offwhite rounded-full px-5">
+        <Button variant="ghost" size="sm" onClick={() => fetchDepts()} className="text-muted-foreground border border-muted hover:bg-offwhite rounded-full">
           <RefreshCw size={14} className="mr-2"/> Reload
         </Button>
       </div>
@@ -212,7 +212,7 @@ const Departments = () => {
               type="text" 
               value={formData.name}
               onChange={e => setFormData({...formData, name: e.target.value})}
-              className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold uppercase" 
+              className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold uppercase" 
               placeholder="e.g. CSE" 
             />
           </div>

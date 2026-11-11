@@ -194,8 +194,8 @@ const FacultyHistory = () => {
     <PageWrapper title="Action History" subtitle="Your archive of all past clearance approvals and dues">
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center gap-4 mb-6">
-        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-muted shadow-sm">
-          <Filter size={14} className="text-muted-foreground" />
+        <div className="h-9 flex items-center gap-2 bg-white pl-3 pr-1 rounded-xl border border-muted shadow-sm">
+          <Filter size={14} className="text-muted-foreground shrink-0" />
           <span className="text-xs font-medium text-muted-foreground shrink-0">Semester</span>
           <SearchableSelect 
             options={[
@@ -209,12 +209,14 @@ const FacultyHistory = () => {
             value={semesterFilter}
             onChange={(val) => handleSemesterChange(val)}
             placeholder="Select Sem"
-            className="w-[180px]"
+            variant="ghost"
+            size="sm"
+            className="w-[155px] !h-8"
           />
         </div>
 
-        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-muted shadow-sm">
-          <Layers size={14} className="text-muted-foreground" />
+        <div className="h-9 flex items-center gap-2 bg-white px-3.5 rounded-xl border border-muted shadow-sm">
+          <Layers size={14} className="text-muted-foreground shrink-0" />
           <span className="text-xs font-medium text-muted-foreground shrink-0">
             {total != null ? `${total} total records` : 'Loading…'}
           </span>

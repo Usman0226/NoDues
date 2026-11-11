@@ -368,7 +368,7 @@ const CoCurricular = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none"
+        <div className="h-9 inline-flex items-center gap-3 px-4 bg-white rounded-full border border-muted shadow-sm group hover:border-indigo-200 transition-all cursor-pointer select-none leading-none"
              onClick={() => setIncludeInactive(!includeInactive)}>
            <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
               <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
@@ -384,7 +384,7 @@ const CoCurricular = () => {
               await fetchItems({ includeInactive });
               hide();
             }} 
-            className="text-muted-foreground hover:text-navy p-0 h-auto"
+            className="text-muted-foreground hover:text-navy p-0 h-auto border-0"
           >
             <RefreshCw size={14} className="mr-2" /> Reload
           </Button>
@@ -432,7 +432,7 @@ const CoCurricular = () => {
                   type="text" 
                   value={formData.code}
                   onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
+                  className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
                   placeholder="EX: INTERN-2024" 
                 />
               </div>
@@ -452,7 +452,7 @@ const CoCurricular = () => {
               {isHod && (
                   <div>
                     <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Department</label>
-                    <div className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm font-bold text-navy opacity-70">
+                    <div className="w-full h-11 flex items-center px-4 rounded-xl border border-muted bg-offwhite text-sm font-bold text-navy opacity-70">
                       {user?.departmentName || 'Your Department'}
                     </div>
                   </div>
@@ -462,7 +462,7 @@ const CoCurricular = () => {
             <div className="grid grid-cols-1 gap-5">
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Visibility Type</label>
-                <div className="h-[46px] flex items-center px-4 rounded-xl border border-muted bg-offwhite/50">
+                <div className="h-11 flex items-center px-4 rounded-xl border border-muted bg-offwhite/50">
                    <label className="flex items-center gap-3 cursor-pointer">
                       <input 
                         type="checkbox" 
@@ -482,7 +482,7 @@ const CoCurricular = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full h-11 px-4 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="Ex: Summer Internship Clearance" 
               />
             </div>
