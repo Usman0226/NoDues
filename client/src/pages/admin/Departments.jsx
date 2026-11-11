@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import { Building2, Users, GraduationCap, BookOpen, Layers, ArrowRight, RefreshCw, AlertCircle, Plus, Edit2 } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
+import { useNavigationStack } from '../../hooks/useNavigationStack';
 import { getDepartments, createDepartment, updateDepartment } from '../../api/departments';
 import { getFaculty } from '../../api/faculty';
 import Button from '../../components/ui/Button';
@@ -16,6 +17,15 @@ const Departments = () => {
     queryKey: ['departments'] 
   });
   const depts = useMemo(() => response?.data || [], [response?.data]);
+  
+  const { setBreadcrumbs } = useNavigationStack();
+
+  React.useEffect(() => {
+    setBreadcrumbs([
+      { label: 'NoDues', path: '/admin' },
+      { label: 'Departments', path: '/admin/departments', isCurrent: true }
+    ]);
+  }, [setBreadcrumbs]);
   
   const [showModal, setShowModal] = useState(false);
   const [editingDept, setEditingDept] = useState(null);

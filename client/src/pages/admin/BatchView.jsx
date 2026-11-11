@@ -14,6 +14,7 @@ import { ArrowLeft, X, ChevronRight, Info, AlertTriangle, RefreshCw, Check, Cloc
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
+import { useNavigationStack } from '../../hooks/useNavigationStack';
 
 
 const ICON_MAP = {
@@ -55,6 +56,19 @@ const BatchView = () => {
       // toast handled
     }
   };
+
+  const { setBreadcrumbs } = useNavigationStack();
+
+  useEffect(() => {
+    if (!batch?.batch) return;
+    const b = batch.batch;
+    const crumbs = [
+      { label: 'NoDues', path: basePath },
+      { label: 'Clearance Batches', path: `${basePath}/batches` },
+      { label: b.name || `${b.className || 'Batch'} Clearance`, isCurrent: true }
+    ];
+    setBreadcrumbs(crumbs);
+  }, [setBreadcrumbs, batch, basePath]);
 
   const filtered = useMemo(() => {
     if (!batch?.students) return [];
@@ -110,9 +124,12 @@ const BatchView = () => {
 
   return (
     <PageWrapper 
-      title="Clearance Overview" 
-      subtitle={`${batch.batch?.className} · Cycle ${batch.batch?.academicYear}`}
-      backTitle="Return to History"
+      title={batch.batch?.name || `${batch.batch?.className || 'Batch'} Clearance`} 
+      subtitle={`Academic cycle ${batch.batch?.academicYear || ''} · ${batch.batch?.className || ''}`}
+      tag={batch.batch?.className || 'BATCH'}
+      meta={`Cycle ${batch.batch?.academicYear || ''}`}
+      badge={batch.batch?.status === 'active' ? 'IN PROGRESS' : 'CLOSED'}
+      backTitle="Return to Batches"
       backFallback={`${basePath}/batches`}
     >
 

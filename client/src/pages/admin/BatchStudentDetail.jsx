@@ -4,6 +4,7 @@ import PageWrapper from '../../components/layout/PageWrapper';
 import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigationStack } from '../../hooks/useNavigationStack';
 import { getBatchStudentDetail } from '../../api/batch';
 
 import { 
@@ -54,6 +55,19 @@ const BatchStudentDetail = () => {
   }
 
   const student = detail || {};
+
+  const { setBreadcrumbs } = useNavigationStack();
+
+  React.useEffect(() => {
+    const studentLabel = student.name ? `${student.name} (${student.rollNo || ''})` : 'Student Clearance';
+    const crumbs = [
+      { label: 'NoDues', path: basePath },
+      { label: 'Clearance Batches', path: `${basePath}/batches` },
+      { label: 'Batch Workspace', path: `${basePath}/batch/${batchId}` },
+      { label: studentLabel, isCurrent: true }
+    ];
+    setBreadcrumbs(crumbs);
+  }, [setBreadcrumbs, student, basePath, batchId]);
 
   return (
     <PageWrapper 

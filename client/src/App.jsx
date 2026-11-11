@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, Link } from 'react-rout
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { UIProvider, UIContext } from './context/UIContext';
+import { NavigationStackProvider } from './context/NavigationStackContext';
 import { useUI } from './hooks/useUI';
 import { PageSpinner } from './components/ui/Spinner';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -331,7 +332,9 @@ const App = () => {
         <BrowserRouter>
           <AuthProvider>
             <UIProvider>
-              <AppContent />
+              <NavigationStackProvider>
+                <AppContent />
+              </NavigationStackProvider>
             </UIProvider>
           </AuthProvider>
         </BrowserRouter>

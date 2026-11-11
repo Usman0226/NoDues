@@ -11,6 +11,8 @@ import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { getClasses, createClass, updateClass, deleteClass, activateClass, getMasterCurriculum, syncMasterCurriculum } from '../../api/classes';
 import { getFaculty } from '../../api/faculty';
+import { getDepartment } from '../../api/departments';
+import { useNavigationStack } from '../../hooks/useNavigationStack';
 import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox, CheckCircle, Sparkles } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import BackHeader from '../../components/ui/BackHeader';
@@ -183,6 +185,43 @@ const DepartmentClasses = () => {
     return activeOperationalSections.reduce((sum, cls) => sum + (cls.studentCount || 0), 0);
   }, [activeOperationalSections]);
 
+  const { setBreadcrumbs } = useNavigationStack();
+  const [departmentName, setDepartmentName] = useState('');
+
+  useEffect(() => {
+    if (classes[0]?.departmentName) {
+      setDepartmentName(classes[0].departmentName);
+    } else if (activeDeptId) {
+      getDepartment(activeDeptId)
+        .then((res) => {
+          const name = res.data?.data?.name || res.data?.name;
+          if (name) setDepartmentName(name);
+        })
+        .catch(() => {});
+    }
+  }, [classes, activeDeptId]);
+
+  useEffect(() => {
+    const deptLabel = departmentName || 'Academic Groups';
+    const deptPath = isHod
+      ? '/hod/classes'
+      : deptId
+      ? `/admin/departments/${deptId}/classes`
+      : '/admin/departments';
+
+    const crumbs = [
+      { label: 'NoDues', path: isHod ? '/hod' : '/admin' },
+      ...(isHod
+        ? [{ label: 'Academic Groups', path: '/hod/classes', isCurrent: !activeSemester }]
+        : [
+            { label: 'Departments', path: '/admin/departments' },
+            { label: deptLabel, path: deptPath, isCurrent: !activeSemester }
+          ]),
+      ...(activeSemester ? [{ label: `Semester ${activeSemester}`, isCurrent: true }] : [])
+    ];
+    setBreadcrumbs(crumbs);
+  }, [setBreadcrumbs, isHod, deptId, departmentName, activeSemester]);
+
   const handleCreate = async () => {
     if (!formData.name || !formData.academicYear) return toast.error('Fields missing');
     setSubmitting(true);
@@ -280,8 +319,10 @@ const DepartmentClasses = () => {
 
   return (
     <PageWrapper 
-      title="Academic Groups" 
-      subtitle="Manage classes, semesters and department structure"
+      title={departmentName || "Academic Groups"} 
+      subtitle={`Academic structure, cohort progression and section management · ${activeOperationalSections.length} Sections · ${activeTotalStudents} Students`}
+      tag={departmentName ? (departmentName.match(/\b([A-Z])/g)?.join('').slice(0, 4) || 'DEPT') : 'DEPT'}
+      meta={activeOperationalSections[0]?.academicYear ? `A.Y. ${activeOperationalSections[0]?.academicYear}` : 'A.Y. 2024-2028'}
     >
        {!isHod && (
           <BackHeader 

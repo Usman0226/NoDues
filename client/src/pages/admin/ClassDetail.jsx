@@ -16,6 +16,7 @@ import { getFaculty } from '../../api/faculty';
 import { getSubjects, createSubject } from '../../api/subjects';
 import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2, Search, X, ChevronDown, GraduationCap, Share2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigationStack } from '../../hooks/useNavigationStack';
 import { toast } from 'react-hot-toast';
 import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal';
 
@@ -108,6 +109,28 @@ const ClassDetail = () => {
   }, [response]);
 
   const departmentId = classData?.departmentId || classData?.department;
+
+  const { setBreadcrumbs } = useNavigationStack();
+
+  useEffect(() => {
+    if (!classData?.name) return;
+    const deptName = classData.departmentName || 'Department';
+    const deptId = typeof departmentId === 'object' ? departmentId?._id : departmentId;
+    const tabLabel = tab === 'students' ? 'Students' : tab === 'subjects' ? 'Subjects' : 'History';
+
+    const crumbs = [
+      { label: 'NoDues', path: isHod ? '/hod' : '/admin' },
+      ...(isHod
+        ? [{ label: 'Academic Groups', path: '/hod/classes' }]
+        : [
+            { label: 'Departments', path: '/admin/departments' },
+            ...(deptId ? [{ label: deptName, path: `/admin/departments/${deptId}/classes` }] : [])
+          ]),
+      { label: classData.name, path: isHod ? `/hod/class/${classId}` : `/admin/class/${classId}` },
+      { label: tabLabel, isCurrent: true }
+    ];
+    setBreadcrumbs(crumbs);
+  }, [setBreadcrumbs, classData, isHod, classId, tab, departmentId]);
 
   const [otherClasses, setOtherClasses] = useState([]);
   useEffect(() => {
@@ -703,10 +726,13 @@ const SUBJECT_COLS = [
   return (
     <PageWrapper 
       title={classData?.name} 
-      subtitle={`${classData?.departmentName} · Semester ${classData?.semester} · ${classData?.academicYear}`}
+      subtitle={`${classData?.departmentName || ''} · Semester ${classData?.semester || ''} · ${classData?.academicYear || ''}`}
       isRefreshing={refreshing}
       backTitle="Return to Directory"
       backFallback={isHod ? '/hod/classes' : (departmentId ? `/admin/departments/${departmentId}/classes` : '/admin/departments')}
+      tag={classData?.isMaster ? 'CURRICULUM MASTER' : (classData?.departmentName ? (classData.departmentName.match(/\b([A-Z])/g)?.join('').slice(0, 4) || 'SEC') : 'SEC')}
+      meta={`Semester ${classData?.semester || ''} · A.Y. ${classData?.academicYear || ''}`}
+      badge={classData?.isActive === false ? 'INACTIVE' : (classData?.activeBatch ? 'CLEARANCE IN PROGRESS' : 'ACTIVE')}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="overflow-x-auto no-scrollbar pb-1 -mb-1">
