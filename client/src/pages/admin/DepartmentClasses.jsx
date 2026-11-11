@@ -20,8 +20,7 @@ import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal'
 import BulkPromoteCohortModal from '../../components/classes/BulkPromoteCohortModal';
 import DepartmentRolloverModal from '../../components/classes/DepartmentRolloverModal';
 
-import { getAcademicYearRoman, formatSectionDisplayName } from '../../utils/formatters';
-export { getAcademicYearRoman, formatSectionDisplayName };
+export { getAcademicYearRoman, formatSectionDisplayName } from '../../utils/formatters';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -320,27 +319,12 @@ const DepartmentClasses = () => {
   };
 
 
-  const deptCode = useMemo(() => {
-    return classes[0]?.departmentCode || 
-           classes[0]?.departmentId?.code || 
-           (departmentName ? departmentName.split(' ')[0] : 'CSD');
-  }, [classes, departmentName]);
-
   return (
     <PageWrapper 
-      cardHeader
-      tag={deptCode}
-      meta={`A.Y. ${activeOperationalSections[0]?.academicYear || '2024-2028'} | ${activeOperationalSections.length} Sections · ${activeTotalStudents} Students`}
-      title={departmentName || 'Computer Science & Design (CSD)'} 
-      badge="Active Department"
-      subtitle="Academic structure, cohort progression and section management"
-      subtitleIcon={Layers}
-      stats={[
-        { label: 'Enrolled Students', value: activeTotalStudents, icon: Users, color: 'rose' },
-        { label: 'Active Cohort', value: activeSemester ? `Semester ${activeSemester}` : '-', icon: Layers, color: 'indigo' }
-      ]}
+      title="Academic Groups" 
+      subtitle={departmentName ? `${departmentName} Department · Academic Structure & Cohort Progression` : 'Academic structure and cohort progression'}
       headerActions={
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
           <Button
             variant="primary"
             size="sm"
@@ -349,7 +333,7 @@ const DepartmentClasses = () => {
               setShowCreate(true);
             }}
           >
-            <Plus size={14} /> New Section
+            <Plus size={14} /> New Class
           </Button>
 
           <Button
@@ -366,19 +350,19 @@ const DepartmentClasses = () => {
             onClick={() => fetchClasses({ departmentId: deptId, page, limit, includeInactive })}
             title="Reload records"
           >
-            <RefreshCw size={13} /> Reload
+            <RefreshCw size={14} /> Reload
           </Button>
 
           {/* Show Inactivated Toggle */}
           <div 
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-slate-300 transition-colors cursor-pointer select-none"
+            className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-zinc-200 shadow-xs hover:border-zinc-300 transition-colors cursor-pointer select-none"
             onClick={() => setIncludeInactive(!includeInactive)}
           >
-            <span className="text-[11px] font-semibold text-slate-500">
-              Show Inactive
+            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+              Show Inactivated
             </span>
-            <div className={`w-7 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-slate-300'}`}>
-              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-3.5' : 'left-0.5'}`} />
+            <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
             </div>
           </div>
         </div>
@@ -534,27 +518,27 @@ const DepartmentClasses = () => {
                     <p className="text-xs text-muted-foreground">Click &quot;+ New Class&quot; above to establish a section.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {activeOperationalSections.map((cls) => (
                       <motion.div key={cls._id} variants={itemVariants} layout>
                         <Link 
                           to={isHod ? `/hod/class/${cls._id}` : `/admin/class/${cls._id}`}
-                          className="group block bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all duration-200 relative"
+                          className="group block bg-white rounded-3xl border border-muted/50 p-6 shadow-sm hover:shadow-xl hover:border-navy/20 transition-all duration-300 relative"
                         >
                           {!cls.isActive && (
-                            <div className="absolute top-0 right-0 px-2.5 py-1 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500 rounded-bl-xl border-b border-l border-slate-200">
+                            <div className="absolute top-0 right-0 px-3 py-1 bg-muted/20 text-[9px] font-black uppercase tracking-widest text-muted-foreground rounded-bl-xl border-b border-l border-muted/50">
                               Inactive
                             </div>
                           )}
-                          <div className="flex justify-between items-start mb-3">
+                          <div className="flex justify-between items-start mb-4">
                             <div>
-                              <h4 className="text-lg font-bold text-slate-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">
+                              <h4 className="text-xl sm:text-2xl font-black text-navy uppercase tracking-tight group-hover:text-gold transition-colors">
                                 {formatSectionDisplayName(cls.name, cls.semester)}
                               </h4>
-                              <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
+                              <p className="text-[10px] font-black tracking-wider uppercase text-muted-foreground mt-1">
                                 CT: {cls.classTeacher?.name || 'Not Assigned'}
                               </p>
-                              <p className="text-[11px] font-medium text-slate-400">
+                              <p className="text-[10px] font-black tracking-wider uppercase text-muted-foreground">
                                 Batch: {cls.academicYear}
                               </p>
                             </div>
@@ -564,9 +548,9 @@ const DepartmentClasses = () => {
                                 type="button"
                                 onClick={(e) => handleEditClick(cls, e)}
                                 title="Edit Group"
-                                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition-colors"
+                                className="p-1.5 hover:bg-offwhite rounded-lg text-navy transition-colors"
                               >
-                                <Edit size={15} />
+                                <Edit size={16} />
                               </button>
                               {cls.isActive === false ? (
                                 <button
@@ -575,7 +559,7 @@ const DepartmentClasses = () => {
                                   title="Reactivate Group"
                                   className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors"
                                 >
-                                  <RefreshCw size={15} />
+                                  <RefreshCw size={16} />
                                 </button>
                               ) : (
                                 <button
@@ -584,27 +568,27 @@ const DepartmentClasses = () => {
                                   title="Deactivate Group"
                                   className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-600 transition-colors"
                                 >
-                                  <Trash2 size={15} />
+                                  <Trash2 size={16} />
                                 </button>
                               )}
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2.5 mt-3">
-                            <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-200/70">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Subjects</p>
-                              <p className="text-base font-black text-slate-800">{cls.subjectCount || 0}</p>
+                          <div className="grid grid-cols-2 gap-3 mt-4">
+                            <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100/50">
+                              <p className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-tighter mb-1">Subjects</p>
+                              <p className="text-sm font-black text-navy">{cls.subjectCount || 0}</p>
                             </div>
-                            <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-200/70">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Students</p>
-                              <p className="text-base font-black text-slate-800">{cls.studentCount || 0}</p>
+                            <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100/50">
+                              <p className="text-[9px] font-black text-muted-foreground/60 uppercase tracking-tighter mb-1">Students</p>
+                              <p className="text-sm font-black text-navy">{cls.studentCount || 0}</p>
                             </div>
                           </div>
 
-                          <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-slate-600 transition-colors">Academic Oversight</span>
-                            <div className="flex items-center gap-1 text-indigo-600 font-semibold group-hover:translate-x-1 transition-transform">
-                              View Details <ArrowRight size={13} />
+                          <div className="mt-4 pt-4 border-t border-muted/30 flex items-center justify-between">
+                            <span className="text-[9px] font-black text-navy/40 uppercase tracking-widest group-hover:text-navy transition-colors">Academic Oversight</span>
+                            <div className="flex items-center gap-1.5 text-navy font-black text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
+                              View Details <ArrowRight size={14} />
                             </div>
                           </div>
                         </Link>
