@@ -726,13 +726,9 @@ const SUBJECT_COLS = [
   return (
     <PageWrapper 
       title={classData?.name} 
-      subtitle={`${classData?.departmentName || ''} · Semester ${classData?.semester || ''} · ${classData?.academicYear || ''}`}
+      subtitle={`${classData?.departmentName ? `${classData.departmentName} · ` : ''}Semester ${classData?.semester || ''} · ${classData?.academicYear || ''}`}
       isRefreshing={refreshing}
-      backTitle="Return to Directory"
-      backFallback={isHod ? '/hod/classes' : (departmentId ? `/admin/departments/${departmentId}/classes` : '/admin/departments')}
-      tag={classData?.isMaster ? 'CURRICULUM MASTER' : (classData?.departmentName ? (classData.departmentName.match(/\b([A-Z])/g)?.join('').slice(0, 4) || 'SEC') : 'SEC')}
-      meta={`Semester ${classData?.semester || ''} · A.Y. ${classData?.academicYear || ''}`}
-      badge={classData?.isActive === false ? 'INACTIVE' : (classData?.activeBatch ? 'CLEARANCE IN PROGRESS' : 'ACTIVE')}
+      badge={classData?.isMaster ? 'CURRICULUM MASTER' : (classData?.isActive === false ? 'INACTIVE' : (classData?.activeBatch ? 'CLEARANCE IN PROGRESS' : 'ACTIVE'))}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="overflow-x-auto no-scrollbar pb-1 -mb-1">

@@ -337,17 +337,6 @@ const DepartmentClasses = () => {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => {
-              setCohortPromoteSem(Number(activeSemester) || 1);
-              setShowCohortPromote(true);
-            }}
-          >
-            <GraduationCap size={14} /> Bulk Promote Cohort
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
             onClick={() => setShowDepartmentRollover(true)}
           >
             <Layers size={14} /> Academic Rollover
@@ -432,64 +421,44 @@ const DepartmentClasses = () => {
             animate="visible"
             className="space-y-4"
           >
-            {/* Semester Tabs Navigation Bar & Cohort Action (Single Unified Line) */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-muted/50">
-              {/* Semester Pill Tabs */}
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-                {sortedSemesters.map((sem) => {
-                  const semClasses = grouped[sem] || [];
-                  const opSecs = semClasses.filter((c) => !c.isMaster);
-                  const isSelected = Number(activeSemester) === sem;
-                  const hasBatchActive = semClasses.some((c) => c.hasActiveBatch);
+            {/* Semester Tabs Navigation Bar */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 pb-2 border-b border-muted/50">
+              {sortedSemesters.map((sem) => {
+                const semClasses = grouped[sem] || [];
+                const opSecs = semClasses.filter((c) => !c.isMaster);
+                const isSelected = Number(activeSemester) === sem;
+                const hasBatchActive = semClasses.some((c) => c.hasActiveBatch);
 
-                  return (
-                    <button
-                      key={sem}
-                      onClick={() => setActiveSemester(sem)}
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer select-none ${
-                        isSelected
-                          ? 'bg-navy text-white shadow-md shadow-navy/20'
-                          : 'bg-white hover:bg-zinc-50 text-muted-foreground hover:text-navy border border-zinc-200 shadow-xs'
-                      }`}
-                    >
-                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black ${
-                        isSelected ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'
-                      }`}>
-                        S{sem}
-                      </span>
-                      <span>Semester {sem}</span>
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                        isSelected ? 'bg-white/25 text-white' : 'bg-zinc-100 text-zinc-500'
-                      }`}>
-                        {opSecs.length}
-                      </span>
-                      {hasBatchActive && (
-                        <span
-                          className="w-1.5 h-1.5 rounded-full bg-amber-400 ring-2 ring-white"
-                          title="Active Clearance Batch in Progress"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Promote Semester Action */}
-              {activeSemester && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-black text-[10px] uppercase tracking-wider gap-1.5 shadow-xs"
-                  onClick={() => {
-                    setCohortPromoteSem(Number(activeSemester));
-                    setShowCohortPromote(true);
-                  }}
-                  disabled={activeOperationalSections.length === 0}
-                >
-                  <GraduationCap size={14} />
-                  Promote Semester {activeSemester} ({activeOperationalSections.length} {activeOperationalSections.length === 1 ? 'Section' : 'Sections'})
-                </Button>
-              )}
+                return (
+                  <button
+                    key={sem}
+                    onClick={() => setActiveSemester(sem)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer select-none ${
+                      isSelected
+                        ? 'bg-navy text-white shadow-md shadow-navy/20'
+                        : 'bg-white hover:bg-zinc-50 text-muted-foreground hover:text-navy border border-zinc-200 shadow-xs'
+                    }`}
+                  >
+                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'
+                    }`}>
+                      S{sem}
+                    </span>
+                    <span>Semester {sem}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      isSelected ? 'bg-white/25 text-white' : 'bg-zinc-100 text-zinc-500'
+                    }`}>
+                      {opSecs.length}
+                    </span>
+                    {hasBatchActive && (
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-amber-400 ring-2 ring-white"
+                        title="Active Clearance Batch in Progress"
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Curriculum Master Banner (Clean, slim single row) */}
@@ -573,18 +542,6 @@ const DepartmentClasses = () => {
                             </div>
 
                             <div className="flex items-center gap-1 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setPromoteClassId(cls._id);
-                                }}
-                                title="Promote Class"
-                                className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-600 transition-colors"
-                              >
-                                <GraduationCap size={16} />
-                              </button>
                               <button
                                 type="button"
                                 onClick={(e) => handleEditClick(cls, e)}

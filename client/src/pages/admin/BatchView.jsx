@@ -126,11 +126,7 @@ const BatchView = () => {
     <PageWrapper 
       title={batch.batch?.name || `${batch.batch?.className || 'Batch'} Clearance`} 
       subtitle={`Academic cycle ${batch.batch?.academicYear || ''} · ${batch.batch?.className || ''}`}
-      tag={batch.batch?.className || 'BATCH'}
-      meta={`Cycle ${batch.batch?.academicYear || ''}`}
       badge={batch.batch?.status === 'active' ? 'IN PROGRESS' : 'CLOSED'}
-      backTitle="Return to Batches"
-      backFallback={`${basePath}/batches`}
     >
 
       <BatchSummaryChips counts={summary} />

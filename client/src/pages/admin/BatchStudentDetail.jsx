@@ -73,8 +73,6 @@ const BatchStudentDetail = () => {
     <PageWrapper 
       title="Candidate Progress Audit" 
       subtitle={`Clearance trajectory for ${student.name}`}
-      backTitle="Return to Progress Matrix"
-      backFallback={`${basePath}/batch/${batchId}`}
     >
    
 
