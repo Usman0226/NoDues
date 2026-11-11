@@ -234,3 +234,4 @@ export const NavigationStackProvider = ({ children }) => {
     </NavigationStackContext.Provider>
   );
 };
+

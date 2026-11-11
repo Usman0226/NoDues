@@ -22,10 +22,10 @@ const BackHeader = ({ title, fallback }) => {
   return (
     <button 
       onClick={handleBack}
-      className="inline-flex items-center gap-2.5 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:text-navy mb-8 -mt-6 transition-all duration-300 group focus:outline-none"
+      className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-navy mb-4 transition-colors group focus:outline-none focus:ring-2 focus:ring-indigo-500/20 rounded-lg"
     >
-      <div className="p-1.5 sm:p-2 rounded-full bg-white border border-muted group-hover:bg-navy group-hover:text-white group-hover:border-navy transition-all duration-300 shadow-sm">
-        <ArrowLeft size={12} sm:size={14} strokeWidth={3} />
+      <div className="p-1.5 rounded-lg bg-white border border-slate-200 group-hover:bg-slate-50 group-hover:border-slate-300 text-slate-500 group-hover:text-navy transition-colors shadow-xs">
+        <ArrowLeft size={13} strokeWidth={2.5} />
       </div>
       <span className="translate-y-[0.5px]">{title}</span>
     </button>
