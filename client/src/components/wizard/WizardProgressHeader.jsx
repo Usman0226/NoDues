@@ -1,27 +1,24 @@
 import React from 'react';
-import { Check, Lock, Building2, Sparkles } from 'lucide-react';
+import { Check, Lock, Building2, RotateCcw, Clock } from 'lucide-react';
 import { ROLES } from '../../utils/constants';
 import { formatSectionDisplayName } from '../../utils/formatters';
-
-export const STEPS_CONFIG = [
-  { id: 'class_info', number: 1, label: 'Class & Subjects', short: 'Setup' },
-  { id: 'students', number: 2, label: 'Enrolled Students', short: 'Students' },
-  { id: 'mentors', number: 3, label: 'Mentors Allocation', short: 'Mentors' },
-  { id: 'electives', number: 4, label: 'Electives Mapping', short: 'Electives' },
-  { id: 'preflight', number: 5, label: 'Review & Pre-Flight', short: 'Review' },
-  { id: 'initiation', number: 6, label: 'Launch Clearance', short: 'Launch' },
-];
+import Button from '../ui/Button';
+import { STEPS_CONFIG } from './wizardSteps';
 
 const WizardProgressHeader = ({
   activeStepIndex,
   completedStepIds = [],
+  skippedStepIds = [],
+  furthestUnlockedIndex = 0,
   onSelectStep,
   selectedClass,
   user,
+  onReset,
 }) => {
   const currentStep = STEPS_CONFIG[activeStepIndex] || STEPS_CONFIG[0];
   const totalSteps = STEPS_CONFIG.length;
-  const progressPercent = Math.round(((completedStepIds.length) / totalSteps) * 100);
+  const completedCount = STEPS_CONFIG.filter((s) => completedStepIds.includes(s.id)).length;
+  const progressPercent = Math.round((completedCount / totalSteps) * 100);
 
   const isHod = user?.role === ROLES.HOD || user?.role === 'hod';
   const deptName = user?.departmentName || user?.department?.name || user?.department || 'Department';
@@ -31,120 +28,138 @@ const WizardProgressHeader = ({
     : '';
 
   return (
-    <header className="space-y-3 pb-3 border-b border-zinc-200">
-      {/* HoD Department Scope Indicator */}
-      {isHod && (
-        <div 
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50/80 border border-indigo-200/60 text-indigo-900 text-xs font-medium"
-          role="status"
-          aria-label="Department Scope Indicator"
-        >
-          <Building2 size={14} className="text-indigo-600 shrink-0" aria-hidden="true" />
-          <span className="font-bold">Head of Department:</span>
-          <span className="font-extrabold text-indigo-950 uppercase">{deptName}</span>
-          <span className="text-indigo-700 hidden sm:inline">· Department Records</span>
-        </div>
-      )}
-
-      {/* Main Header Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-navy tracking-tight">
-            Class Setup Wizard
-          </h1>
-          <p className="text-xs text-zinc-600 mt-0.5">
-            Step-by-step setup to configure subjects, enrolled students, faculty mentors, and launch clearance.
-          </p>
-        </div>
-
-        {/* Current Class Context Card */}
-        {selectedClass && (
-          <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white border border-zinc-200/90 shadow-xs self-start sm:self-auto">
-            <div className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true" />
-            <div className="text-left">
-              <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider block">Selected Class</span>
-              <p className="text-xs font-black text-navy leading-tight">
-                {classDisplayName}
-                <span className="text-zinc-600 font-semibold ml-1.5">
-                  (Sem {selectedClass.semester || 1})
-                </span>
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Progress Metric & Stepper Navigation */}
-      <div className="space-y-2 pt-1">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-black text-navy uppercase tracking-wider text-[11px]">
-              Step {currentStep.number} of {totalSteps}:
-            </span>
-            <span className="font-bold text-indigo-600">
-              {currentStep.label}
-            </span>
-          </div>
-          <div className="font-bold text-zinc-600 tabular-nums text-[11px]">
-            {progressPercent}% completed ({completedStepIds.length}/{totalSteps})
-          </div>
-        </div>
-
-        {/* Accessible Progress Bar */}
-        <div
-          role="progressbar"
-          aria-valuenow={currentStep.number}
-          aria-valuemin={1}
-          aria-valuemax={totalSteps}
-          aria-label={`Wizard progress: step ${currentStep.number} of ${totalSteps}`}
-          className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/60"
-        >
-          <div
-            className="h-full bg-navy transition-all duration-300 ease-out rounded-full"
-            style={{ width: `${Math.max(8, progressPercent)}%` }}
-          />
-        </div>
-
-        {/* Step Badges */}
-        <nav aria-label="Wizard Steps" className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-1.5 pt-1">
-          {STEPS_CONFIG.map((step, idx) => {
-            const isCompleted = completedStepIds.includes(step.id);
-            const isActive = idx === activeStepIndex;
-            const isFuture = !isCompleted && !isActive;
-
-            return (
-              <button
-                key={step.id}
-                type="button"
-                onClick={() => isCompleted && onSelectStep(idx)}
-                disabled={isFuture}
-                aria-current={isActive ? 'step' : undefined}
-                aria-label={`Step ${step.number}: ${step.label} (${isCompleted ? 'Completed' : isActive ? 'Active' : 'Locked'})`}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-bold transition-all min-h-[38px]
-                  ${isActive
-                    ? 'bg-navy text-white shadow-xs font-black'
-                    : isCompleted
-                      ? 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100 cursor-pointer'
-                      : 'bg-zinc-100 text-zinc-600 border border-zinc-200 cursor-not-allowed opacity-80'
-                  }`}
+    <header className="shrink-0 space-y-2.5">
+      {/* Top Row: Title + Context Pills */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-black text-navy tracking-tight leading-none">
+              Class Setup Wizard
+            </h1>
+            {isHod && (
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200/70 text-indigo-900 text-[10px] font-black uppercase tracking-wider"
+                role="status"
+                aria-label="Department Scope Indicator"
               >
-                <span className="shrink-0">
-                  {isCompleted ? (
-                    <Check size={12} className="text-emerald-800 stroke-[3]" aria-hidden="true" />
-                  ) : isFuture ? (
-                    <Lock size={11} className="text-zinc-500" aria-hidden="true" />
-                  ) : (
-                    <span className="w-3.5 h-3.5 flex items-center justify-center rounded-full bg-white/20 text-[9px] font-black">
-                      {step.number}
-                    </span>
-                  )}
+                <Building2 size={11} className="text-indigo-600 shrink-0" aria-hidden="true" />
+                <span>{deptName}</span>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <div className="h-0.5 w-3.5 bg-gold rounded-full shrink-0" />
+            <p className="text-xs font-semibold text-muted-foreground tracking-wide">
+              Step {currentStep.number} of {totalSteps}:{' '}
+              <span className="text-navy font-bold">{currentStep.label}</span>
+              {currentStep.optional && (
+                <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+                  (Optional)
                 </span>
-                <span className="truncate">{step.short}</span>
-              </button>
-            );
-          })}
-        </nav>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Right Context: Selected Class + Progress + Reset */}
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
+          {selectedClass && (
+            <div className="h-9 inline-flex items-center gap-2 px-3 rounded-full bg-white border border-zinc-200 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden="true" />
+              <span className="text-xs font-black text-navy leading-none">
+                {classDisplayName}
+              </span>
+              <span className="text-[11px] font-semibold text-zinc-500 leading-none">
+                Sem {selectedClass.semester || 1}
+              </span>
+            </div>
+          )}
+
+          <span className="h-9 inline-flex items-center px-3 rounded-full bg-white border border-zinc-200/80 text-[11px] font-bold text-zinc-600 tabular-nums shadow-xs">
+            {progressPercent}% ({completedCount}/{totalSteps})
+          </span>
+
+          {selectedClass && onReset && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onReset}
+              className="border border-zinc-200 bg-white text-zinc-600 hover:text-navy"
+              title="Start configuring a new class"
+            >
+              <RotateCcw size={12} />
+              <span className="hidden sm:inline">New Setup</span>
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Slim Accessible Progress Bar */}
+      <div
+        role="progressbar"
+        aria-valuenow={currentStep.number}
+        aria-valuemin={1}
+        aria-valuemax={totalSteps}
+        aria-label={`Wizard progress: step ${currentStep.number} of ${totalSteps}`}
+        className="h-1 w-full bg-zinc-200/70 rounded-full overflow-hidden"
+      >
+        <div
+          className="h-full bg-navy transition-all duration-300 ease-out rounded-full"
+          style={{ width: `${Math.max(8, progressPercent)}%` }}
+        />
+      </div>
+
+      {/* 6-Column Section Navigation Tabs (exact 6 cols for 6 steps) */}
+      <nav aria-label="Wizard Steps" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        {STEPS_CONFIG.map((step, idx) => {
+          const isCompleted = completedStepIds.includes(step.id);
+          const isSkipped = skippedStepIds.includes(step.id);
+          const isActive = idx === activeStepIndex;
+          const isUnlocked = isCompleted || isActive || idx <= furthestUnlockedIndex;
+
+          return (
+            <button
+              key={step.id}
+              type="button"
+              onClick={() => isUnlocked && onSelectStep(idx)}
+              disabled={!isUnlocked}
+              aria-current={isActive ? 'step' : undefined}
+              aria-label={`Step ${step.number}: ${step.label} (${isSkipped ? 'Deferred' : isCompleted ? 'Completed' : isActive ? 'Active' : 'Locked'})`}
+              className={`h-9 flex items-center gap-2 px-3 rounded-xl text-left text-[11px] font-bold transition-all border leading-none
+                ${isActive
+                  ? 'bg-navy text-white border-navy shadow-sm font-black'
+                  : isSkipped
+                    ? 'bg-amber-50/90 text-amber-900 border-amber-200 hover:bg-amber-100/70 cursor-pointer'
+                    : isCompleted
+                      ? 'bg-emerald-50/90 text-emerald-900 border-emerald-200 hover:bg-emerald-100/70 cursor-pointer'
+                      : isUnlocked
+                        ? 'bg-white text-navy border-zinc-200 hover:border-indigo-300 cursor-pointer'
+                        : 'bg-zinc-100/80 text-zinc-400 border-zinc-200/70 cursor-not-allowed'
+                }`}
+            >
+              <span className="shrink-0">
+                {isSkipped && !isActive ? (
+                  <Clock size={12} className="text-amber-700" aria-hidden="true" />
+                ) : isCompleted && !isActive ? (
+                  <Check size={12} className="text-emerald-700 stroke-[3]" aria-hidden="true" />
+                ) : !isUnlocked ? (
+                  <Lock size={11} className="text-zinc-400" aria-hidden="true" />
+                ) : (
+                  <span
+                    className={`w-4 h-4 inline-flex items-center justify-center rounded-full text-[9px] font-black ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-zinc-100 text-navy'
+                    }`}
+                  >
+                    {step.number}
+                  </span>
+                )}
+              </span>
+              <span className="truncate">{step.short}</span>
+            </button>
+          );
+        })}
+      </nav>
     </header>
   );
 };

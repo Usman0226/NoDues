@@ -60,6 +60,11 @@
       "context": "Inconsistent button sizes, SearchableSelect multi-line trigger height, and filter/toolbar vertical misalignment across modals and admin/faculty pages",
       "decision": "Enforced deterministic fixed height tiers on Button (xs h-8, sm h-9, md h-10, lg h-11), SearchableSelect triggers (sm h-9, default h-11 with single-line label and subLabel strictly inside dropdown menu + title tooltip), modal inputs (h-11), wizard form controls (h-9), and page filter capsules/action bars (matching h-9 or h-10/h-11 baselines with inline-flex alignment)",
       "trade_offs": "Fixed heights prevent vertical wobble across heterogeneous controls in multi-column grids and horizontal toolbars, at the cost of truncating long subLabels on closed SearchableSelect triggers."
+    },
+    {
+      "context": "Setup Wizard vertical overflow, redundant accordion cards, student/mentor/elective import blockers, silent PDF failures, and missing batch launch / HoD route bugs",
+      "decision": "Converted SetupWizard into a non-scrolling section-tabbed viewport shell using balanced 2-column layouts with internal table scrolling and sticky footers; built shared WizardImportPanel with authenticated .xlsx template downloads and row-level pre-commit validation; made Step 2 (Students), Step 3 (Mentors), and Step 4 (Electives) optional/skippable with exact Class/Directory destination guidance and deferred-setup exit to the role-aware Class Details page; fixed import.controller.js previewStudents ReferenceError, fuzzy header normalization in importUtils.js, email-optional student rows, Step 1 PDF error recovery & pageCache edit sync, URL ?classId progress restoration, and Step 6 actual NodueBatch initiation + HoD navigation paths.",
+      "trade_offs": "FR-E2 preflight still gates actual batch launch on >=1 student, so admins skipping student import are routed cleanly to Save Draft & Open Class Page where students can be enrolled, manually added, or promoted before triggering clearance."
     }
   ],
   "blockers": []

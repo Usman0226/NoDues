@@ -32,7 +32,11 @@ export const commitImport = (type, data) => {
 };
 
 // Student Import
-export const previewStudents = (formData) => api.post('/import/students/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const previewStudents = (formData, params = {}) =>
+  api.post('/import/students/preview', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    params,
+  });
 export const commitStudents = (data) => api.post('/import/students/commit', data);
 
 // Faculty Import

@@ -19,6 +19,48 @@ import {bulkSyncMentorUpdate} from "../utils/batchSync.js"
 
 const validateEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
 
+const ROLL_KEYS = [
+  'Roll No',
+  'Roll Number',
+  'rollNo',
+  'roll_no',
+  'HT No',
+  'Hall Ticket',
+  'Hall Ticket No',
+  'Reg No',
+  'Registration No',
+  'USN',
+];
+const NAME_KEYS = ['Name', 'Student Name', 'Full Name', 'Candidate Name', 'name'];
+const EMAIL_KEYS = ['Email', 'Email ID', 'Institutional Email', 'E-mail', 'Mail ID', 'email'];
+const SUBJECT_CODE_KEYS = ['Subject Code', 'Course Code', 'subjectCode', 'code'];
+const FACULTY_IDENTIFIER_KEYS = [
+  'Faculty Employee ID',
+  'Employee ID',
+  'Faculty ID',
+  'Mentor ID',
+  'Faculty Email',
+  'Mentor Email',
+  'employeeId',
+  'facultyEmail',
+  'email',
+];
+
+const buildFacultyLookup = (facultyList) => {
+  const map = new Map();
+  for (const fac of facultyList) {
+    if (fac.employeeId) map.set(fac.employeeId.toUpperCase(), fac);
+    if (fac.email) map.set(fac.email.toLowerCase(), fac);
+  }
+  return map;
+};
+
+const lookupFaculty = (facultyMap, identifier) => {
+  if (!identifier) return null;
+  const trimmed = identifier.toString().trim();
+  return facultyMap.get(trimmed.toUpperCase()) || facultyMap.get(trimmed.toLowerCase()) || null;
+};
+
 const checkDeptScope = (user, deptId) => {
   if (['hod', 'ao'].includes(user.role) && deptId.toString() !== user.departmentId) {
     throw new ErrorResponse('Access denied: Department outside your scope', 403, 'AUTH_DEPARTMENT_SCOPE');
@@ -35,22 +77,41 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
   if (!targetClass) return next(new ErrorResponse('Target class not found', 404));
   checkDeptScope(req.user, targetClass.departmentId);
 
+  const rows = parseBuffer(req.file.buffer);
+  if (!rows.length) {
+    return next(
+      new ErrorResponse(
+        'Uploaded spreadsheet has no data rows. Download the template to check expected columns (Roll No, Name, Email).',
+        400,
+        'VAL_001'
+      )
+    );
+  }
+
+  const results = {
+    valid: [],
+    errors: [],
+    summary: { total: rows.length, valid: 0, errors: 0 },
+  };
+
   // 1. Extract all roll numbers for bulk duplicate check
-  const rollNos = rows.map(r => getRowValue(r, ['Roll No', 'rollNo'])?.toString().toUpperCase()).filter(Boolean);
+  const rollNos = rows
+    .map((r) => getRowValue(r, ROLL_KEYS)?.toString().toUpperCase())
+    .filter(Boolean);
   const existingStudents = await Student.find({ rollNo: { $in: rollNos } }).select('rollNo').lean();
-  const existingRollSet = new Set(existingStudents.map(s => s.rollNo));
+  const existingRollSet = new Set(existingStudents.map((s) => s.rollNo));
+  const seenRolls = new Set();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    let rollNo = getRowValue(row, ['Roll No', 'rollNo']);
-    const name = getRowValue(row, ['Name', 'name']);
-    const email = getRowValue(row, ['Email', 'email']);
+    let rollNo = getRowValue(row, ROLL_KEYS);
+    const name = getRowValue(row, NAME_KEYS);
+    const email = getRowValue(row, EMAIL_KEYS);
 
     const errors = [];
-    if (!rollNo) errors.push('Roll number is required');
-    if (!name) errors.push('Name is required');
-    if (!email) errors.push('Email is required');
-    else if (!validateEmail(email)) errors.push('Invalid email format');
+    if (!rollNo) errors.push('Roll number missing (column: Roll No)');
+    if (!name) errors.push('Name missing (column: Name)');
+    if (email && !validateEmail(email)) errors.push(`Invalid email format "${email}"`);
 
     if (errors.length > 0) {
       results.errors.push({ row: i + 1, data: row, reason: errors.join(', ') });
@@ -59,13 +120,24 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
     }
 
     rollNo = rollNo.toString().toUpperCase();
+    if (seenRolls.has(rollNo)) {
+      results.errors.push({ row: i + 1, data: row, reason: `Duplicate roll number ${rollNo} in file` });
+      results.summary.errors++;
+      continue;
+    }
+    seenRolls.add(rollNo);
+
     if (existingRollSet.has(rollNo)) {
       results.errors.push({ row: i + 1, data: row, reason: `Roll number ${rollNo} already exists` });
       results.summary.errors++;
       continue;
     }
 
-    results.valid.push({ rollNo, name, email: email.toLowerCase() });
+    results.valid.push({
+      rollNo,
+      name,
+      ...(email ? { email: email.toLowerCase() } : {}),
+    });
     results.summary.valid++;
   }
 
@@ -345,46 +417,65 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
 export const previewElectives = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
   const rows = parseBuffer(req.file.buffer);
+  if (!rows.length) {
+    return next(
+      new ErrorResponse(
+        'Uploaded spreadsheet has no data rows. Expected columns: Roll No, Subject Code, Faculty Employee ID (or Email).',
+        400,
+        'VAL_001'
+      )
+    );
+  }
   const results = { valid: [], errors: [], summary: { total: 0, valid: 0, errors: 0 } };
 
   // 1. Pre-process all rows to collect IDs for bulk lookup
   const allRollNos = new Set();
   const allSubjectCodes = new Set();
   const allEmpIds = new Set();
+  const allEmails = new Set();
 
   for (const row of rows) {
-    const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
-    const subjectCode = getRowValue(row, ['Subject Code', 'subjectCode']);
-    const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
+    const rawRoll = getRowValue(row, ROLL_KEYS);
+    const subjectCode = getRowValue(row, SUBJECT_CODE_KEYS);
+    const empOrEmail = getRowValue(row, FACULTY_IDENTIFIER_KEYS);
 
     if (rawRoll) {
       const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
-      if (rolls) rolls.forEach(r => allRollNos.add(r.toUpperCase()));
+      if (rolls) rolls.forEach((r) => allRollNos.add(r.toUpperCase()));
     }
     if (subjectCode) allSubjectCodes.add(subjectCode.toUpperCase());
-    if (empId) allEmpIds.add(empId.toUpperCase());
+    if (empOrEmail) {
+      if (empOrEmail.includes('@')) allEmails.add(empOrEmail.toLowerCase());
+      else allEmpIds.add(empOrEmail.toUpperCase());
+    }
   }
 
   // 2. Bulk Database Queries
+  const facultyConditions = [];
+  if (allEmpIds.size > 0) facultyConditions.push({ employeeId: { $in: Array.from(allEmpIds) } });
+  if (allEmails.size > 0) facultyConditions.push({ email: { $in: Array.from(allEmails) } });
+
   const [students, subjects, faculty] = await Promise.all([
     Student.find({ rollNo: { $in: Array.from(allRollNos) }, isActive: true }).select('_id rollNo name departmentId').lean(),
     Subject.find({ code: { $in: Array.from(allSubjectCodes) }, isElective: true, isActive: true }).select('_id code name').lean(),
-    Faculty.find({ employeeId: { $in: Array.from(allEmpIds) }, isActive: true }).select('_id employeeId name').lean()
+    facultyConditions.length > 0
+      ? Faculty.find({ $or: facultyConditions, isActive: true }).select('_id employeeId email name').lean()
+      : Promise.resolve([]),
   ]);
 
-  const studentMap = new Map(students.map(s => [s.rollNo, s]));
-  const subjectMap = new Map(subjects.map(s => [s.code, s]));
-  const facultyMap = new Map(faculty.map(f => [f.employeeId, f]));
+  const studentMap = new Map(students.map((s) => [s.rollNo, s]));
+  const subjectMap = new Map(subjects.map((s) => [s.code, s]));
+  const facultyMap = buildFacultyLookup(faculty);
 
   // 3. Process validation in-memory
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
-    const subjectCode = getRowValue(row, ['Subject Code', 'subjectCode']);
-    const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
+    const rawRoll = getRowValue(row, ROLL_KEYS);
+    const subjectCode = getRowValue(row, SUBJECT_CODE_KEYS);
+    const empOrEmail = getRowValue(row, FACULTY_IDENTIFIER_KEYS);
 
-    if (!rawRoll || !subjectCode || !empId) {
-      results.errors.push({ row: i + 1, data: row, reason: 'Missing required columns (Roll No, Subject Code, Faculty Employee ID)' });
+    if (!rawRoll || !subjectCode || !empOrEmail) {
+      results.errors.push({ row: i + 1, data: row, reason: 'Missing required columns (Roll No, Subject Code, Faculty Employee ID / Email)' });
       results.summary.errors++;
       results.summary.total++;
       continue;
@@ -403,15 +494,15 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
       const upperRoll = rollNo.toUpperCase();
       const student = studentMap.get(upperRoll);
       const subject = subjectMap.get(subjectCode.toUpperCase());
-      const mentor = facultyMap.get(empId.toUpperCase());
+      const mentor = lookupFaculty(facultyMap, empOrEmail);
 
       let reason = null;
       if (!student) {
         reason = `Student ${rollNo} not found or inactive`;
       } else if (!subject) {
-        reason = `Subject ${subjectCode} not found or inactive`;
+        reason = `Elective subject ${subjectCode} not found or inactive`;
       } else if (!mentor) {
-        reason = `Faculty ${empId} not found or inactive`;
+        reason = `Faculty ${empOrEmail} not found or inactive`;
       } else {
         try {
           checkDeptScope(req.user, student.departmentId);
@@ -545,40 +636,59 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
 export const previewMentors = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
   const rows = parseBuffer(req.file.buffer);
+  if (!rows.length) {
+    return next(
+      new ErrorResponse(
+        'Uploaded spreadsheet has no data rows. Expected columns: Roll No, Faculty Employee ID (or Email).',
+        400,
+        'VAL_001'
+      )
+    );
+  }
   const results = { valid: [], errors: [], summary: { total: 0, valid: 0, errors: 0 } };
 
   // 1. Pre-process to collect IDs
   const allRollNos = new Set();
   const allEmpIds = new Set();
+  const allEmails = new Set();
   const seenRolls = new Set();
 
   for (const row of rows) {
-    const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
-    const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
+    const rawRoll = getRowValue(row, ROLL_KEYS);
+    const empOrEmail = getRowValue(row, FACULTY_IDENTIFIER_KEYS);
     if (rawRoll) {
       const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
-      if (rolls) rolls.forEach(r => allRollNos.add(r.toUpperCase()));
+      if (rolls) rolls.forEach((r) => allRollNos.add(r.toUpperCase()));
     }
-    if (empId) allEmpIds.add(empId.toUpperCase());
+    if (empOrEmail) {
+      if (empOrEmail.includes('@')) allEmails.add(empOrEmail.toLowerCase());
+      else allEmpIds.add(empOrEmail.toUpperCase());
+    }
   }
 
   // 2. Bulk Database Queries
+  const facultyConditions = [];
+  if (allEmpIds.size > 0) facultyConditions.push({ employeeId: { $in: Array.from(allEmpIds) } });
+  if (allEmails.size > 0) facultyConditions.push({ email: { $in: Array.from(allEmails) } });
+
   const [students, faculty] = await Promise.all([
     Student.find({ rollNo: { $in: Array.from(allRollNos) }, isActive: true }).select('_id rollNo name departmentId').lean(),
-    Faculty.find({ employeeId: { $in: Array.from(allEmpIds) }, isActive: true }).select('_id employeeId name departmentId roleTags').lean()
+    facultyConditions.length > 0
+      ? Faculty.find({ $or: facultyConditions, isActive: true }).select('_id employeeId email name departmentId roleTags').lean()
+      : Promise.resolve([]),
   ]);
 
-  const studentMap = new Map(students.map(s => [s.rollNo, s]));
-  const facultyMap = new Map(faculty.map(f => [f.employeeId, f]));
+  const studentMap = new Map(students.map((s) => [s.rollNo, s]));
+  const facultyMap = buildFacultyLookup(faculty);
 
   // 3. Process Validation
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rawRoll = getRowValue(row, ['Roll No', 'rollNo']);
-    const empId = getRowValue(row, ['Faculty Employee ID', 'employeeId']);
-    
-    if (!rawRoll || !empId) {
-      results.errors.push({ row: i+1, data: row, reason: 'Missing required columns (Roll No, Faculty Employee ID)' });
+    const rawRoll = getRowValue(row, ROLL_KEYS);
+    const empOrEmail = getRowValue(row, FACULTY_IDENTIFIER_KEYS);
+
+    if (!rawRoll || !empOrEmail) {
+      results.errors.push({ row: i + 1, data: row, reason: 'Missing required columns (Roll No, Faculty Employee ID / Email)' });
       results.summary.errors++;
       results.summary.total++;
       continue;
@@ -595,14 +705,14 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
     for (const rollNo of rolls) {
       results.summary.total++;
       const upperRoll = rollNo.toUpperCase();
-      
+
       if (seenRolls.has(upperRoll)) {
-        results.errors.push({ 
-          row: i + 1, 
-          data: { ...row, rollNo }, 
+        results.errors.push({
+          row: i + 1,
+          data: { ...row, rollNo },
           reason: `Duplicate Roll No ${rollNo} in expansion or file`,
           isExpanded: rolls.length > 1,
-          originalRange: rolls.length > 1 ? rawRoll : null
+          originalRange: rolls.length > 1 ? rawRoll : null,
         });
         results.summary.errors++;
         continue;
@@ -610,13 +720,13 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
       seenRolls.add(upperRoll);
 
       const student = studentMap.get(upperRoll);
-      const mentor = facultyMap.get(empId.toUpperCase());
+      const mentor = lookupFaculty(facultyMap, empOrEmail);
 
       let reason = null;
       if (!student) {
         reason = `Student ${rollNo} not found or inactive`;
       } else if (!mentor) {
-        reason = `Faculty ${empId} not found or inactive`;
+        reason = `Faculty ${empOrEmail} not found or inactive`;
       } else {
         try {
           checkDeptScope(req.user, student.departmentId);
