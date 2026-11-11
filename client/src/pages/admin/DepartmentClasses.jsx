@@ -146,6 +146,43 @@ const DepartmentClasses = () => {
     }, {});
   }, [classes]);
 
+  const sortedSemesters = useMemo(() => {
+    return Object.keys(grouped)
+      .map(Number)
+      .sort((a, b) => a - b);
+  }, [grouped]);
+
+  const [activeSemester, setActiveSemester] = useState(null);
+
+  useEffect(() => {
+    if (sortedSemesters.length > 0) {
+      if (!activeSemester || !sortedSemesters.includes(Number(activeSemester))) {
+        setActiveSemester(sortedSemesters[0]);
+      }
+    }
+  }, [sortedSemesters, activeSemester]);
+
+  const activeSemesterClasses = useMemo(() => {
+    if (!activeSemester || !grouped[activeSemester]) return [];
+    return grouped[activeSemester];
+  }, [grouped, activeSemester]);
+
+  const activeMasterClass = useMemo(() => {
+    return activeSemesterClasses.find((c) => c.isMaster);
+  }, [activeSemesterClasses]);
+
+  const activeOperationalSections = useMemo(() => {
+    return activeSemesterClasses.filter((c) => !c.isMaster);
+  }, [activeSemesterClasses]);
+
+  const activeCohortSubjectCount = useMemo(() => {
+    return activeMasterClass?.subjectCount ?? activeOperationalSections[0]?.subjectCount ?? 0;
+  }, [activeMasterClass, activeOperationalSections]);
+
+  const activeTotalStudents = useMemo(() => {
+    return activeOperationalSections.reduce((sum, cls) => sum + (cls.studentCount || 0), 0);
+  }, [activeOperationalSections]);
+
   const handleCreate = async () => {
     if (!formData.name || !formData.academicYear) return toast.error('Fields missing');
     setSubmitting(true);
@@ -341,83 +378,146 @@ const DepartmentClasses = () => {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="space-y-12"
+            className="space-y-8"
           >
-            {Object.entries(grouped)
-              .sort(([a], [b]) => Number(a) - Number(b))
-              .map(([sem, semClasses]) => {
-                const masterClass = semClasses.find((c) => c.isMaster);
-                const operationalSections = semClasses.filter((c) => !c.isMaster);
-                const cohortSubjectCount = masterClass?.subjectCount ?? operationalSections[0]?.subjectCount ?? 0;
+            {/* Semester Tabs Navigation Bar */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-muted/50 no-scrollbar">
+              {sortedSemesters.map((sem) => {
+                const semClasses = grouped[sem] || [];
+                const opSecs = semClasses.filter((c) => !c.isMaster);
+                const hasBatchActive = semClasses.some((c) => c.hasActiveBatch);
+                const isSelected = Number(activeSemester) === sem;
 
                 return (
-                  <div key={sem} className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-navy flex items-center justify-center text-xs font-black text-white shadow-lg shadow-navy/20">
-                          S{sem}
-                        </div>
-                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-navy/40">Semester {sem} Groups</h3>
-                      </div>
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] tracking-wider uppercase gap-1.5"
-                        onClick={() => {
-                          setCohortPromoteSem(Number(sem));
-                          setShowCohortPromote(true);
-                        }}
-                      >
-                        <GraduationCap size={12} />
-                        Promote Semester {sem} ({operationalSections.length} Sections)
-                      </Button>
+                  <button
+                    key={sem}
+                    onClick={() => setActiveSemester(sem)}
+                    className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2.5 shrink-0 select-none cursor-pointer ${
+                      isSelected
+                        ? 'bg-navy text-white shadow-md shadow-navy/20 scale-[1.02]'
+                        : 'bg-white hover:bg-zinc-50 text-muted-foreground hover:text-navy border border-muted/60 shadow-xs'
+                    }`}
+                  >
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'
+                      }`}
+                    >
+                      S{sem}
                     </div>
+                    <span>Semester {sem}</span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-500'
+                      }`}
+                    >
+                      {opSecs.length} {opSecs.length === 1 ? 'Section' : 'Sections'}
+                    </span>
+                    {hasBatchActive && (
+                      <span
+                        className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-white"
+                        title="Active Clearance Batch in Progress"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-                    {/* Semester Master Curriculum Blueprint Banner */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-indigo-50/90 via-white to-purple-50/40 rounded-2xl border border-indigo-100/90 shadow-xs">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold">
-                          <BookOpen size={16} />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-navy">Semester {sem} Curriculum Master</span>
-                            <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                              Single Source of Truth
-                            </span>
-                            <span className="text-[10px] font-bold text-muted-foreground">
-                              • {cohortSubjectCount} Subjects
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground">
-                            All {operationalSections.length} operational sections inherit this syllabus. Faculty are mapped per section.
-                          </p>
-                        </div>
+            {/* Active Semester Content */}
+            {activeSemester && (
+              <div className="space-y-5">
+                {/* Semester Header & Action Ribbon */}
+                <div className="flex flex-wrap items-center justify-between gap-4 p-1">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-navy text-white flex items-center justify-center text-sm font-black shadow-lg shadow-navy/20">
+                      S{activeSemester}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <h3 className="text-base font-black text-navy uppercase tracking-tight">
+                          Semester {activeSemester} Academic Groups
+                        </h3>
+                        <span className="text-[10px] font-bold text-muted-foreground bg-zinc-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          AY {activeOperationalSections[0]?.academicYear || '2024-28'}
+                        </span>
                       </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {activeOperationalSections.length} Sections • {activeTotalStudents} Enrolled Students
+                      </p>
+                    </div>
+                  </div>
 
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold text-[10px] tracking-wider uppercase gap-1.5 shadow-xs"
+                      onClick={() => {
+                        setCohortPromoteSem(Number(activeSemester));
+                        setShowCohortPromote(true);
+                      }}
+                    >
+                      <GraduationCap size={13} />
+                      Promote Semester {activeSemester} ({activeOperationalSections.length} Sections)
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Semester Master Curriculum Blueprint Banner */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-gradient-to-r from-indigo-50/90 via-white to-purple-50/40 rounded-2xl border border-indigo-100/90 shadow-xs">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold">
+                      <BookOpen size={18} />
+                    </div>
+                    <div>
                       <div className="flex items-center gap-2">
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          className="text-xs font-semibold gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                          onClick={() => handleOpenMasterCurriculum(Number(sem))}
-                        >
-                          <BookOpen size={13} /> Manage Master Syllabus
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          className="text-xs font-semibold gap-1.5 text-muted-foreground hover:text-indigo-600"
-                          onClick={() => handleSyncMaster(Number(sem))}
-                          disabled={syncingSem === Number(sem)}
-                        >
-                          <RefreshCw size={13} className={syncingSem === Number(sem) ? 'animate-spin' : ''} /> Sync All Sections
-                        </Button>
+                        <span className="text-xs font-black text-navy uppercase tracking-wider">
+                          Semester {activeSemester} Curriculum Master
+                        </span>
+                        <span className="text-[9px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                          Single Source of Truth
+                        </span>
+                        <span className="text-[10px] font-bold text-muted-foreground">
+                          • {activeCohortSubjectCount} Subjects
+                        </span>
                       </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        All {activeOperationalSections.length} operational sections inherit this syllabus. Faculty are mapped per section.
+                      </p>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                      {operationalSections.map((cls) => (
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      className="text-xs font-semibold gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                      onClick={() => handleOpenMasterCurriculum(Number(activeSemester))}
+                    >
+                      <BookOpen size={13} /> Manage Master Syllabus
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="text-xs font-semibold gap-1.5 text-muted-foreground hover:text-indigo-600"
+                      onClick={() => handleSyncMaster(Number(activeSemester))}
+                      disabled={syncingSem === Number(activeSemester)}
+                    >
+                      <RefreshCw size={13} className={syncingSem === Number(activeSemester) ? 'animate-spin' : ''} /> Sync All Sections
+                    </Button>
+                  </div>
+                </div>
+
+                {activeOperationalSections.length === 0 ? (
+                  <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-border p-6 space-y-2">
+                    <Users size={36} className="mx-auto text-muted-foreground/30" />
+                    <p className="text-sm font-semibold text-foreground">No sections created in Semester {activeSemester} yet</p>
+                    <p className="text-xs text-muted-foreground">Click &quot;+ New Class&quot; above to establish a section.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {activeOperationalSections.map((cls) => (
                         <motion.div key={cls._id} variants={itemVariants} layout>
                        <Link 
                         to={isHod ? `/hod/class/${cls._id}` : `/admin/class/${cls._id}`}
@@ -488,9 +588,9 @@ const DepartmentClasses = () => {
                     </motion.div>
                   ))}
                 </div>
-              </div>
-            );
-          })}
+              )}
+            </div>
+          )}
           </motion.div>
         )}
       </AnimatePresence>
