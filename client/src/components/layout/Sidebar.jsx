@@ -27,6 +27,7 @@ const NAV_CONFIG = {
       { label: 'Students', path: '/admin/students', icon: Users },
     ]},
     { label: 'Academic', icon: BookOpen, items: [
+      { label: 'Setup Wizard', path: '/admin/setup', icon: Wand2 },
       { label: 'Subjects', path: '/admin/subjects', icon: BookOpen },
       { label: 'Batches', path: '/admin/batches', icon: Layers },
       { label: 'Co-Curricular', path: '/admin/co-curricular', icon: ClipboardCheck },
@@ -38,6 +39,7 @@ const NAV_CONFIG = {
     { label: 'Approvals (Dept.)', path: '/faculty/pending', icon: ClipboardCheck },
     { label: 'Academic', icon: BookOpen, items: [
       { label: 'Classes', path: '/hod/classes', icon: GraduationCap },
+      { label: 'Setup Wizard', path: '/hod/setup', icon: Wand2 },
       { label: 'Subjects', path: '/hod/subjects', icon: BookOpen },
       { label: 'Co-Curricular', path: '/hod/co-curricular', icon: ClipboardCheck },
     ]},
@@ -71,6 +73,9 @@ const SidebarLink = ({ item, collapsed, location, onMobileClose, isSubItem = fal
     if (item.path === '/hod/my-classes') {
       return location.pathname.startsWith('/hod/my-classes');
     }
+    if (item.path === '/admin/setup' || item.path === '/hod/setup') {
+      return location.pathname.startsWith('/admin/setup') || location.pathname.startsWith('/hod/setup');
+    }
     return location.pathname === item.path ||
       (item.path.endsWith('/batches') && location.pathname.includes('/batch/')) ||
       (item.path !== '/' && !['/admin', '/hod', '/faculty'].includes(item.path) && location.pathname.startsWith(item.path + '/'));
@@ -102,6 +107,9 @@ const SidebarSection = ({ section, collapsed, location, onMobileClose, isExpande
     return section.items.some(item => {
       if (item.path === '/hod/classes') {
         return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
+      }
+      if (item.path === '/admin/setup' || item.path === '/hod/setup') {
+        return location.pathname.startsWith('/admin/setup') || location.pathname.startsWith('/hod/setup');
       }
       // Strict matching for base routes to avoid multi-section highlights
       if (['/admin', '/hod', '/faculty'].includes(item.path)) {
@@ -169,23 +177,14 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const { isEnabled: wizardEnabled } = useSetupWizardFlag();
   const navItems = React.useMemo(() => {
     const baseConfig = NAV_CONFIG[user?.role] || [];
-    if (!wizardEnabled || ![ROLES.ADMIN, ROLES.HOD].includes(user?.role)) {
-      return baseConfig;
+    // If setup wizard is explicitly disabled by feature flag, filter it out
+    if (wizardEnabled === false) {
+      return baseConfig.map((section) => ({
+        ...section,
+        items: section.items?.filter((item) => item.path !== '/admin/setup' && item.path !== '/hod/setup'),
+      }));
     }
-    return baseConfig.map((section) => {
-      if (section.label === 'Academic' && section.items) {
-        if (!section.items.some((i) => i.path === '/admin/setup')) {
-          return {
-            ...section,
-            items: [
-              ...section.items,
-              { label: 'Setup Wizard', path: '/admin/setup', icon: Wand2 },
-            ],
-          };
-        }
-      }
-      return section;
-    });
+    return baseConfig;
   }, [user?.role, wizardEnabled]);
 
   const [expandedSection, setExpandedSection] = useState(null);
@@ -195,6 +194,9 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
       section.items?.some(item => {
         if (item.path === '/hod/classes') {
           return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
+        }
+        if (item.path === '/admin/setup' || item.path === '/hod/setup') {
+          return location.pathname.startsWith('/admin/setup') || location.pathname.startsWith('/hod/setup');
         }
         // Strict matching for base routes to avoid incorrect expansion
         if (['/admin', '/hod', '/faculty'].includes(item.path)) {

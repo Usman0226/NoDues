@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useSetupWizardFlag } from '../../hooks/useFeatureFlag';
 import { ROLES } from '../../utils/constants';
@@ -23,13 +23,19 @@ const STEP_IDS = STEPS_CONFIG.map((s) => s.id);
 const SetupWizard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { setBreadcrumbs } = useNavigationStack();
   const { isEnabled: flagEnabled, isLoading: flagLoading } = useSetupWizardFlag();
+
+  // URL query params (e.g. ?dept=... or ?classId=...)
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const queryDeptId = searchParams.get('dept');
+  const queryClassId = searchParams.get('classId');
 
   // Wizard State
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [completedSteps, setCompletedSteps] = useState([]);
-  const [classId, setClassId] = useState(null);
+  const [classId, setClassId] = useState(queryClassId || null);
   const [selectedClass, setSelectedClass] = useState(null);
   const [stepSummaries, setStepSummaries] = useState({});
   const [isDirty, setIsDirty] = useState(false);
@@ -230,6 +236,7 @@ const SetupWizard = () => {
               user={user}
               initialClassId={classId}
               initialData={selectedClass}
+              initialDepartmentId={queryDeptId}
               onSave={handleStep1Save}
               onDirtyChange={setIsDirty}
             />

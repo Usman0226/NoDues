@@ -13,7 +13,7 @@ import { getClasses, createClass, updateClass, deleteClass, activateClass, getMa
 import { getFaculty } from '../../api/faculty';
 import { getDepartment } from '../../api/departments';
 import { useNavigationStack } from '../../hooks/useNavigationStack';
-import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox, CheckCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox, CheckCircle, Sparkles, Wand2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import BackHeader from '../../components/ui/BackHeader';
 import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal';
@@ -325,6 +325,18 @@ const DepartmentClasses = () => {
       subtitle={departmentName ? `${departmentName} Department · Academic Structure & Cohort Progression` : 'Academic structure and cohort progression'}
       headerActions={
         <div className="flex flex-wrap items-center gap-2.5">
+          <Link to={isHod ? (deptId ? `/hod/setup?dept=${deptId}` : '/hod/setup') : (deptId ? `/admin/setup?dept=${deptId}` : '/admin/setup')}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 font-bold shadow-xs hover:border-indigo-300 transition-all"
+              title="Launch Class Setup Wizard with Timetable PDF auto-detection"
+            >
+              <Wand2 size={14} className="text-indigo-600" />
+              <span>Setup Wizard</span>
+            </Button>
+          </Link>
+
           <Button
             variant="primary"
             size="sm"
@@ -409,11 +421,51 @@ const DepartmentClasses = () => {
             key="empty"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm border-dashed"
+            className="text-center py-16 px-6 bg-white rounded-3xl border border-muted/60 shadow-sm border-dashed max-w-2xl mx-auto space-y-5 my-6"
           >
-             <Inbox size={48} className="mx-auto text-muted mb-4 opacity-20" />
-             <p className="text-muted-foreground font-semibold italic">No academic groups found matching criteria</p>
-             <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mt-1">Try adjusting filters or checking inactive records</p>
+             <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto text-indigo-600 shadow-xs">
+               <Wand2 size={32} />
+             </div>
+             <div>
+               <h3 className="text-xl font-black text-navy tracking-tight">No Academic Groups Configured Yet</h3>
+               <p className="text-xs text-muted-foreground mt-1.5 max-w-md mx-auto leading-relaxed">
+                 Get started by establishing this department's academic structure. Auto-detect sections, class teachers, and subjects from your institutional timetable PDF or configure manually.
+               </p>
+             </div>
+             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+               <Link to={isHod ? (deptId ? `/hod/setup?dept=${deptId}` : '/hod/setup') : (deptId ? `/admin/setup?dept=${deptId}` : '/admin/setup')}>
+                 <Button
+                   variant="primary"
+                   size="md"
+                   className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 font-bold shadow-md shadow-indigo-600/20"
+                 >
+                   <Wand2 size={16} />
+                   <span>Launch Class Setup Wizard</span>
+                 </Button>
+               </Link>
+               <Button
+                 variant="secondary"
+                 size="md"
+                 onClick={() => {
+                   setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId, classTeacherId: '' });
+                   setShowCreate(true);
+                 }}
+                 className="flex items-center gap-2 font-bold border-zinc-200"
+               >
+                 <Plus size={16} />
+                 <span>Create Section Manually</span>
+               </Button>
+               <Button
+                 variant="outline"
+                 size="md"
+                 onClick={() => fetchClasses({ departmentId: deptId, page, limit, includeInactive })}
+                 className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                 title="Reload records"
+               >
+                 <RefreshCw size={14} />
+                 <span>Reload</span>
+               </Button>
+             </div>
           </motion.div>
         ) : (
           <motion.div
@@ -512,10 +564,31 @@ const DepartmentClasses = () => {
             {activeSemester && (
               <div>
                 {activeOperationalSections.length === 0 ? (
-                  <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-border p-6 space-y-2">
-                    <Users size={36} className="mx-auto text-muted-foreground/30" />
-                    <p className="text-sm font-semibold text-foreground">No sections created in Semester {activeSemester} yet</p>
-                    <p className="text-xs text-muted-foreground">Click &quot;+ New Class&quot; above to establish a section.</p>
+                  <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-border p-6 space-y-4 max-w-xl mx-auto">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto text-indigo-600">
+                      <Users size={24} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-foreground">No sections created in Semester {activeSemester} yet</p>
+                      <p className="text-xs text-muted-foreground mt-1">Establish sections using the Setup Wizard or create a single section manually.</p>
+                    </div>
+                    <div className="flex items-center justify-center gap-3 pt-1">
+                      <Link to={isHod ? (deptId ? `/hod/setup?dept=${deptId}` : '/hod/setup') : (deptId ? `/admin/setup?dept=${deptId}` : '/admin/setup')}>
+                        <Button variant="secondary" size="sm" className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 font-bold">
+                          <Wand2 size={14} /> Setup Wizard
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          setFormData({ name: '', semester: activeSemester, academicYear: '2025-26', departmentId: deptId, classTeacherId: '' });
+                          setShowCreate(true);
+                        }}
+                      >
+                        <Plus size={14} /> + New Class
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

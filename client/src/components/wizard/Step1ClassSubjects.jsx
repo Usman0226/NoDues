@@ -42,11 +42,12 @@ const Step1ClassSubjects = ({
   user,
   initialClassId,
   initialData,
+  initialDepartmentId,
   onSave,
   onDirtyChange,
 }) => {
   const isHod = user?.role === ROLES.HOD || user?.role === 'hod';
-  const defaultDeptId = user?.departmentId || user?.department?._id || (typeof user?.department === 'string' ? user?.department : '');
+  const defaultDeptId = initialDepartmentId || user?.departmentId || user?.department?._id || (typeof user?.department === 'string' ? user?.department : '');
 
   // Main Mode: 'pdf' (default) | 'manual'
   const [activeTab, setActiveTab] = useState('pdf');
@@ -147,6 +148,13 @@ const Step1ClassSubjects = ({
     }
     return groups;
   }, [inspection]);
+
+  // Sync department if initialDepartmentId passed from route
+  useEffect(() => {
+    if (initialDepartmentId && (!sectionForm.departmentId || sectionForm.departmentId !== initialDepartmentId)) {
+      setSectionForm((prev) => ({ ...prev, departmentId: initialDepartmentId }));
+    }
+  }, [initialDepartmentId, sectionForm.departmentId]);
 
   // Preload initial class data if passed
   useEffect(() => {

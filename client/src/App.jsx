@@ -281,6 +281,16 @@ const AppContent = () => {
             <Route path="/hod/classes" element={<DepartmentClasses />} />
             <Route path="/hod/my-classes" element={<HodMyClasses />} />
             <Route path="/hod/class/:classId" element={<ClassDetail />} />
+            <Route
+              path="/hod/setup"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.HOD]}>
+                  <React.Suspense fallback={<PageSpinner message="Loading Setup Wizard..." />}>
+                    <SetupWizard />
+                  </React.Suspense>
+                </ProtectedRoute>
+              }
+            />
             <Route path="/hod/students" element={<StudentList />} />
             <Route path="/hod/faculty" element={<FacultyList />} />
             <Route path="/hod/subjects" element={<Subjects />} />

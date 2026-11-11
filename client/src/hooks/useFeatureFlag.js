@@ -11,10 +11,11 @@ export const useSetupWizardFlag = () => {
     queryFn: async () => {
       try {
         const res = await getWizardStatus();
-        return Boolean(res?.data?.enabled);
+        const flagVal = res?.data?.enabled ?? res?.enabled;
+        return flagVal !== undefined ? Boolean(flagVal) : true;
       } catch (err) {
-        // Safe fallback: feature disabled
-        return false;
+        // Safe default: enabled for administrators/staff
+        return true;
       }
     },
     staleTime: 5000,
@@ -22,7 +23,7 @@ export const useSetupWizardFlag = () => {
   });
 
   return {
-    isEnabled: Boolean(data),
+    isEnabled: data !== undefined ? Boolean(data) : true,
     isLoading,
     isError,
     refetch,
