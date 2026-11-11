@@ -18,4 +18,5 @@ export const promoteStudents = (id, data) => api.post(`/classes/${id}/promote`, 
 export const getCohortPromotionPreview = (params) => api.get('/classes/cohort-promotion-preview', { params });
 export const bulkPromoteClasses = (data) => api.post('/classes/bulk-promote', data);
 export const autoCreateTargetSections = (data) => api.post('/classes/auto-create-target-sections', data);
+export const propagateCohortSubjects = (id, data) => api.post(`/classes/${id}/propagate-cohort-subjects`, data);
 

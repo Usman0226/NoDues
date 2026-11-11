@@ -10,11 +10,11 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import ImportStepper from '../../components/import/ImportStepper';
 import { useApi } from '../../hooks/useApi';
-import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, updateClassSubject, removeClassSubject } from '../../api/classes';
+import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, updateClassSubject, removeClassSubject, propagateCohortSubjects } from '../../api/classes';
 import { createStudent, updateStudent, deleteStudent, assignMentor, addElective, removeElective, bulkDeactivateStudents, bulkAssignMentor } from '../../api/students';
 import { getFaculty } from '../../api/faculty';
 import { getSubjects, createSubject } from '../../api/subjects';
-import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2, Search, X, ChevronDown, GraduationCap } from 'lucide-react';
+import { Plus, Upload, Users, BookOpen, Layers, CheckCircle, AlertTriangle, Copy, UserPlus, ArrowLeft, Play, RefreshCw, AlertCircle, Edit, Trash2, Search, X, ChevronDown, GraduationCap, Share2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal';
@@ -62,6 +62,7 @@ const ClassDetail = () => {
   const [electiveSelections, setElectiveSelections] = useState({});
   
   const [cloneSourceId, setCloneSourceId] = useState('');
+  const [syncingCohort, setSyncingCohort] = useState(false);
   
   const [submitting, setSubmitting] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
@@ -271,6 +272,18 @@ const ClassDetail = () => {
       toast.error(err?.message || 'Failed to Import Subjects');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSyncCohortSubjects = async () => {
+    setSyncingCohort(true);
+    try {
+      const res = await propagateCohortSubjects(classId, { overwrite: false });
+      toast.success(res?.data?.message || res?.message || 'Curriculum synchronized across cohort sections');
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to sync cohort subjects');
+    } finally {
+      setSyncingCohort(false);
     }
   };
 
@@ -745,6 +758,19 @@ const SUBJECT_COLS = [
             <Button variant="ghost" size="sm" onClick={() => setShowImport('electives')} className="text-navy border border-muted hover:bg-offwhite">
               <Upload size={14} /> Bulk Map Electives
             </Button>
+            {classData.subjectAssignments?.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={handleSyncCohortSubjects}
+                disabled={syncingCohort}
+                className="text-navy border border-muted hover:bg-offwhite flex items-center gap-1.5"
+                title={`Sync these ${classData.subjectAssignments.length} subjects across all sections in Semester ${classData.semester}`}
+              >
+                <Share2 size={14} /> {syncingCohort ? 'Syncing...' : 'Sync to Cohort'}
+              </Button>
+            )}
           </div>
         )}
 

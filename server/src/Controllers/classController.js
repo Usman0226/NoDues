@@ -188,9 +188,28 @@ export const createClass = async (req, res, next) => {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
+    // Auto-inherit cohort syllabus: if any peer class in the same department and semester has subjects, inherit them
+    const peerWithSubjects = await Class.findOne({
+      departmentId,
+      semester: Number(semester),
+      isActive: true,
+      'subjectAssignments.0': { $exists: true },
+    }).session(session).lean();
+
+    const inheritedSubjects = (peerWithSubjects?.subjectAssignments || []).map(sa => ({
+      subjectId: sa.subjectId,
+      subjectName: sa.subjectName,
+      subjectCode: sa.subjectCode,
+      isElective: sa.isElective || false,
+      facultyId: null,
+      facultyName: null,
+    }));
+
     const clsArray = await Class.create([{
-      name, departmentId, semester, academicYear,
+      name, departmentId, semester: Number(semester), academicYear,
       classTeacherId: classTeacherId || null,
+      subjectAssignments: inheritedSubjects,
+      studentIds: [],
     }], { session });
 
     const cls = clsArray[0];
@@ -200,6 +219,7 @@ export const createClass = async (req, res, next) => {
     logger.info('class_created', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
       action: 'CREATE_CLASS', resource_id: cls._id.toString(),
+      inheritedSubjectCount: inheritedSubjects.length,
     });
 
     return res.status(201).json({
@@ -208,7 +228,7 @@ export const createClass = async (req, res, next) => {
         _id: cls._id, name: cls.name, departmentId: cls.departmentId,
         semester: cls.semester, academicYear: cls.academicYear,
         classTeacherId: cls.classTeacherId,
-        subjectAssignments: [], studentIds: [], isActive: true, createdAt: cls.createdAt,
+        subjectAssignments: cls.subjectAssignments || [], studentIds: [], isActive: true, createdAt: cls.createdAt,
       },
     });
   } catch (err) {
@@ -262,6 +282,31 @@ export const getClassById = async (req, res, next) => {
       .populate('mentorId', 'name')
       .sort({ rollNo: 1 })
       .lean();
+
+    // 2.7 Auto-inherit cohort curriculum if this class has no subjects assigned yet
+    if (!cls.subjectAssignments || cls.subjectAssignments.length === 0) {
+      const peerWithSubjects = await Class.findOne({
+        departmentId: cls.departmentId?._id || cls.departmentId,
+        semester: cls.semester,
+        _id: { $ne: cls._id },
+        isActive: true,
+        'subjectAssignments.0': { $exists: true },
+      }).lean();
+
+      if (peerWithSubjects && peerWithSubjects.subjectAssignments?.length > 0) {
+        const inherited = peerWithSubjects.subjectAssignments.map(sa => ({
+          subjectId: sa.subjectId,
+          subjectName: sa.subjectName,
+          subjectCode: sa.subjectCode,
+          isElective: sa.isElective || false,
+          facultyId: null,
+          facultyName: null,
+        }));
+        await Class.findByIdAndUpdate(cls._id, { $set: { subjectAssignments: inherited } });
+        cls.subjectAssignments = inherited;
+        invalidateEntityCache('class', cls._id);
+      }
+    }
 
     // 3. Robust Data Mapping with boundary checks
     const data = {
@@ -1167,6 +1212,23 @@ export const autoCreateTargetSections = async (req, res, next) => {
 
     const academicYear = sourceClasses[0]?.academicYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 4}`;
 
+    // Check if any peer class in the same department and target semester already has subjects to inherit
+    const peerWithSubjects = await Class.findOne({
+      departmentId,
+      semester: Number(targetSemester),
+      isActive: true,
+      'subjectAssignments.0': { $exists: true },
+    }).lean();
+
+    const inheritedSubjects = (peerWithSubjects?.subjectAssignments || []).map(sa => ({
+      subjectId: sa.subjectId,
+      subjectName: sa.subjectName,
+      subjectCode: sa.subjectCode,
+      isElective: sa.isElective || false,
+      facultyId: null,
+      facultyName: null,
+    }));
+
     const createdClasses = [];
     for (const name of sectionNames) {
       const cleanName = (name || '').trim();
@@ -1185,11 +1247,29 @@ export const autoCreateTargetSections = async (req, res, next) => {
           semester: Number(targetSemester),
           academicYear,
           studentIds: [],
-          subjectAssignments: [],
+          subjectAssignments: inheritedSubjects,
           isActive: true,
         }]);
         createdClasses.push(newClass);
       }
+    }
+
+    // Auto-update any existing sections in this target semester that currently have 0 subjects
+    if (inheritedSubjects.length > 0) {
+      await Class.updateMany(
+        {
+          departmentId,
+          semester: Number(targetSemester),
+          isActive: true,
+          $or: [
+            { subjectAssignments: { $exists: false } },
+            { subjectAssignments: { $size: 0 } },
+          ],
+        },
+        {
+          $set: { subjectAssignments: inheritedSubjects },
+        }
+      );
     }
 
     // Invalidate classes caches
@@ -1207,6 +1287,79 @@ export const autoCreateTargetSections = async (req, res, next) => {
       success: true,
       message: `Successfully provisioned ${createdClasses.length} section(s) in Semester ${targetSemester}`,
       data: createdClasses,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /api/classes/:id/propagate-cohort-subjects ───────────────────────────
+export const propagateCohortSubjects = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { overwrite = false, syncFaculty = false } = req.body;
+
+    const sourceClass = await Class.findById(id).lean();
+    if (!sourceClass) {
+      return next(new ErrorResponse('Source class not found', 404, 'NOT_FOUND'));
+    }
+
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && sourceClass.departmentId?.toString() !== req.user.departmentId?.toString()) {
+      return next(new ErrorResponse('Access denied for this department scope', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
+    if (!sourceClass.subjectAssignments || sourceClass.subjectAssignments.length === 0) {
+      return next(new ErrorResponse('Source class has no subjects to propagate', 400, 'VAL_002'));
+    }
+
+    const propagatedSubjects = sourceClass.subjectAssignments.map(sa => ({
+      subjectId: sa.subjectId,
+      subjectName: sa.subjectName,
+      subjectCode: sa.subjectCode,
+      isElective: sa.isElective || false,
+      facultyId: syncFaculty ? sa.facultyId : null,
+      facultyName: syncFaculty ? sa.facultyName : null,
+    }));
+
+    const filter = {
+      departmentId: sourceClass.departmentId,
+      semester: sourceClass.semester,
+      _id: { $ne: sourceClass._id },
+      isActive: true,
+    };
+
+    if (!overwrite) {
+      filter.$or = [
+        { subjectAssignments: { $exists: false } },
+        { subjectAssignments: { $size: 0 } },
+      ];
+    }
+
+    const result = await Class.updateMany(filter, {
+      $set: { subjectAssignments: propagatedSubjects },
+    });
+
+    invalidateEntityCache('class', 'bulk_update');
+
+    logger.info('cohort_subjects_propagated', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      sourceClassId: sourceClass._id,
+      departmentId: sourceClass.departmentId,
+      semester: sourceClass.semester,
+      updatedSections: result.modifiedCount,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully synchronized ${propagatedSubjects.length} subjects across ${result.modifiedCount} peer section(s) in Semester ${sourceClass.semester}`,
+      data: {
+        sourceClassId: sourceClass._id,
+        departmentId: sourceClass.departmentId,
+        semester: sourceClass.semester,
+        updatedSections: result.modifiedCount,
+        subjectCount: propagatedSubjects.length,
+      },
     });
   } catch (err) {
     next(err);

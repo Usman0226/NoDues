@@ -264,6 +264,34 @@ export async function commitTimetable(req, res, next) {
 
     await targetClass.save();
 
+    // Auto-propagate cohort syllabus: peer classes in the same department & semester with 0 subjects inherit the subject list
+    const inheritedForPeers = subjectsToCommit.map(s => ({
+      subjectId: s.subjectId,
+      subjectName: s.subjectName,
+      subjectCode: s.subjectCode,
+      isElective: s.isElective || false,
+      facultyId: null,
+      facultyName: null,
+    }));
+
+    if (inheritedForPeers.length > 0) {
+      await Class.updateMany(
+        {
+          departmentId: targetClass.departmentId,
+          semester: targetSem,
+          _id: { $ne: targetClass._id },
+          isActive: true,
+          $or: [
+            { subjectAssignments: { $exists: false } },
+            { subjectAssignments: { $size: 0 } },
+          ],
+        },
+        {
+          $set: { subjectAssignments: inheritedForPeers },
+        }
+      );
+    }
+
     // Mark upload record as committed
     if (uploadDoc) {
       uploadDoc.committed = true;

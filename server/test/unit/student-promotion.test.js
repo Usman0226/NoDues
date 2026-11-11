@@ -497,7 +497,28 @@ describe('Student Promotion & Historical Record Preservation', () => {
       assert.match(res.body.error?.message || res.body.message, /Multiple source sections are mapped to the same destination/i);
     });
 
-    it('POST /api/classes/auto-create-target-sections provisions missing sections in target semester', async () => {
+    it('POST /api/classes/auto-create-target-sections provisions missing sections and inherits cohort subjects', async () => {
+      // Add a subject to targetClass (Sem 5)
+      const sampleSubject = await mongoose.model('Subject').create({
+        name: 'Machine Learning',
+        code: '23CSD107',
+        semester: 5,
+        isActive: true,
+      });
+
+      await Class.findByIdAndUpdate(targetClass._id, {
+        $push: {
+          subjectAssignments: {
+            subjectId: sampleSubject._id,
+            subjectName: sampleSubject.name,
+            subjectCode: sampleSubject.code,
+            isElective: false,
+            facultyId: null,
+            facultyName: null,
+          },
+        },
+      });
+
       const res = await request(app)
         .post('/api/classes/auto-create-target-sections')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -516,6 +537,39 @@ describe('Student Promotion & Historical Record Preservation', () => {
       assert.ok(createdC);
       assert.equal(createdC.semester, 5);
       assert.equal(createdC.isActive, true);
+      assert.equal(createdC.subjectAssignments.length, 1, 'Newly provisioned section must inherit cohort subjects');
+      assert.equal(createdC.subjectAssignments[0].subjectCode, '23CSD107');
+    });
+
+    it('POST /api/classes/:id/propagate-cohort-subjects synchronizes subjects across peer cohort sections', async () => {
+      const sampleSubject = await mongoose.model('Subject').create({
+        name: 'Distributed Systems',
+        code: '23CSD110',
+        semester: 5,
+        isActive: true,
+      });
+
+      await Class.findByIdAndUpdate(targetClass._id, {
+        $push: {
+          subjectAssignments: {
+            subjectId: sampleSubject._id,
+            subjectName: sampleSubject.name,
+            subjectCode: sampleSubject.code,
+            isElective: false,
+            facultyId: null,
+            facultyName: null,
+          },
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/classes/${targetClass._id}/propagate-cohort-subjects`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ overwrite: true });
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.success, true);
+      assert.ok(res.body.data.updatedSections >= 1);
     });
   });
 });

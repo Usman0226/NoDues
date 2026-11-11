@@ -17,6 +17,7 @@ import {
   getCohortPromotionPreview,
   bulkPromoteClasses,
   autoCreateTargetSections,
+  propagateCohortSubjects,
 } from '../Controllers/classController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -63,6 +64,7 @@ router.route('/:id/subjects/:assignmentId')
 
 // Clone subjects
 router.post('/:id/clone-subjects', cloneSubjects);
+router.post('/:id/propagate-cohort-subjects', propagateCohortSubjects);
 
 // Batch initiation bridge
 router.post('/:id/initiate-batch', (req, res, next) => {
