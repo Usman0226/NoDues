@@ -24,6 +24,12 @@
     --status-hod-override: #6366f1;
 
     /* Premium Design Tokens */
+    --radius-micro: 0.375rem;   /* 6px  - Checkboxes, micro indicators */
+    --radius-chip: 0.5rem;      /* 8px  - Code tags, small icon buttons */
+    --radius-control: 0.75rem;  /* 12px - Inputs, textareas, selects, nested tiles */
+    --radius-surface: 1rem;     /* 16px - Cards, modals, tables, panels, dropzones */
+    --radius-pill: 9999px;      /* full - Buttons, badges, search pills, avatars */
+
     --surface-glass: rgba(255, 255, 255, 0.7);
     --surface-soft: #f8fafc;
     --border-premium: color-mix(in oklab, var(--muted) 40%, transparent);
@@ -173,6 +179,7 @@
   .premium-card {
     background: var(--surface);
     border: 1px solid var(--border-premium);
+    border-radius: var(--radius-surface);
     box-shadow: var(--shadow-premium);
     /* Let Framer Motion handle transforms for maximum smoothness */
     transition: 

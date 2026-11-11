@@ -252,7 +252,7 @@ const Batches = () => {
       </div>
 
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 px-1">
-        <div className="flex items-center gap-3 bg-white p-1 rounded-3xl border border-muted shadow-sm overflow-x-auto max-w-full no-scrollbar">
+        <div className="flex items-center gap-3 bg-white p-1 rounded-full border border-muted shadow-sm overflow-x-auto max-w-full no-scrollbar">
           {['all', 'active', 'closed'].map((f) => (
             <button key={f} onClick={() => { setStatusFilter(f); setPage(1); }}
               className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all whitespace-nowrap
@@ -271,7 +271,7 @@ const Batches = () => {
               await fetchBatches();
               hide();
             }} 
-            className="text-muted-foreground h-10 px-4 hover:bg-white border-transparent hover:border-muted rounded-2xl"
+            className="text-muted-foreground h-10 px-4 hover:bg-white border-transparent hover:border-muted rounded-full"
           >
             <RefreshCw size={14} className={`${loading ? 'animate-spin' : ''}`} />
             <span className="ml-2 text-[10px] font-black uppercase tracking-widest">Reload</span>
@@ -280,7 +280,7 @@ const Batches = () => {
       </div>
 
       {error ? (
-        <div className="text-center py-20 bg-white rounded-3xl border border-muted shadow-sm">
+        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
            <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
            <h3 className="text-navy font-black text-lg mb-1">Data Fetch Failed</h3>
            <p className="text-muted-foreground font-medium text-sm">{error}</p>

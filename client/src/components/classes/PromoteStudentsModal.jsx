@@ -294,7 +294,7 @@ export default function PromoteStudentsModal({
                     placeholder="Search name or roll no..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
                   />
                 </div>
               </div>

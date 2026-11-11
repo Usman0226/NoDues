@@ -231,7 +231,7 @@ const HodDashboard = () => {
       {/* Minimal Hero Section */}
       <div className="flex flex-col lg:flex-row gap-6 mb-10">
         {/* Progress Card */}
-        <div className="flex-1 bg-white rounded-3xl premium-card p-8 flex flex-col md:flex-row items-center gap-10 relative overflow-hidden group">
+        <div className="flex-1 bg-white rounded-2xl premium-card p-8 flex flex-col md:flex-row items-center gap-10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/[0.03] rounded-full translate-x-20 -translate-y-20 transition-transform group-hover:scale-110 duration-700" />
           
           <div className="relative h-44 w-44 shrink-0">
@@ -301,12 +301,12 @@ const HodDashboard = () => {
         </div>
 
         {/* Primary Action Card */}
-        <div className="w-full lg:w-[380px] bg-navy rounded-3xl p-8 text-white flex flex-col justify-between relative overflow-hidden shadow-2xl shadow-navy/20 group">
+        <div className="w-full lg:w-[380px] bg-navy rounded-2xl p-8 text-white flex flex-col justify-between relative overflow-hidden shadow-2xl shadow-navy/20 group">
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent pointer-events-none" />
           <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-gold/10 rounded-full blur-3xl" />
           
           <div className="relative z-10">
-             <div className="h-12 w-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-6">
+             <div className="h-12 w-12 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-6">
                 <ClipboardCheck size={24} className="text-gold" />
              </div>
              <h3 className="text-2xl font-black tracking-tight mb-2 text-white ">Start New Process</h3>
@@ -315,7 +315,7 @@ const HodDashboard = () => {
 
           <button 
              onClick={() => setIsBulkModalOpen(true)}
-             className="mt-8 w-full py-4 bg-white text-navy rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-lg hover:shadow-gold/20 active:scale-95 transition-all relative z-10 flex items-center justify-center gap-3 group/btn"
+             className="mt-8 w-full py-4 bg-white text-navy rounded-full text-[11px] font-black uppercase tracking-[0.2em] shadow-lg hover:shadow-gold/20 active:scale-95 transition-all relative z-10 flex items-center justify-center gap-3 group/btn"
           >
              INITIALIZE NODUES <RefreshCw size={14} className="group-hover/btn:rotate-180 transition-transform duration-700" />
           </button>
@@ -323,7 +323,7 @@ const HodDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10">
-        <div className="rounded-3xl lg:col-span-8 premium-card bg-white p-8 relative group overflow-hidden">
+        <div className="rounded-2xl lg:col-span-8 premium-card bg-white p-8 relative group overflow-hidden">
            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/[0.02] rounded-full translate-x-32 -translate-y-32" />
            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-10 relative z-10">
               <div>
@@ -403,7 +403,7 @@ const HodDashboard = () => {
         </div>
 
         {/* Pending Bottlenecks & Insights */}
-        <div className="rounded-3xl lg:col-span-4 premium-card bg-white p-8 flex flex-col relative overflow-hidden">
+        <div className="rounded-2xl lg:col-span-4 premium-card bg-white p-8 flex flex-col relative overflow-hidden">
            <div className="w-full text-left mb-8">
               <h3 className="text-sm font-black text-navy uppercase tracking-[0.2em]">Pending Bottlenecks</h3>
               <p className="text-[10px] text-zinc-400 font-medium tracking-tight">Top 5 faculty with pending approvals</p>
@@ -412,7 +412,7 @@ const HodDashboard = () => {
            <div className="flex-1 space-y-4">
               {chartData.bottlenecks.length > 0 ? (
                 chartData.bottlenecks.map((faculty, idx) => (
-                  <div key={faculty._id} className="flex items-center justify-between p-4 rounded-2xl bg-zinc-50/50 border border-transparent hover:border-indigo-100 hover:bg-white transition-all group">
+                  <div key={faculty._id} className="flex items-center justify-between p-4 rounded-xl bg-zinc-50/50 border border-transparent hover:border-indigo-100 hover:bg-white transition-all group">
                     <div className="flex items-center gap-4">
                       <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs shadow-sm">
                         {idx + 1}
@@ -483,7 +483,7 @@ const HodDashboard = () => {
                 <div 
                   key={batch.batchId} 
                   onClick={() => navigate(`/hod/batch/${batch.batchId}`)} 
-                  className="rounded-3xl premium-card p-6 bg-white group cursor-pointer relative overflow-hidden"
+                  className="rounded-2xl premium-card p-6 bg-white group cursor-pointer relative overflow-hidden"
                 >
                     <div className="absolute top-0 left-0 h-1 bg-zinc-50 w-full overflow-hidden">
                       <motion.div 
@@ -493,7 +493,7 @@ const HodDashboard = () => {
                       />
                     </div>
                     <div className="flex items-center justify-between mb-6">
-                      <div className="h-12 w-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all duration-500">
+                      <div className="h-12 w-12 rounded-xl bg-zinc-50 flex items-center justify-center text-zinc-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all duration-500">
                         <GraduationCap size={24} strokeWidth={2.5} />
                       </div>
                       <div className="text-right">
@@ -522,14 +522,14 @@ const HodDashboard = () => {
 
         {/* Activity: Polished Bento-style sidebar (§10.1) */}
         <div className="lg:col-span-4 space-y-6">
-           <div className="premium-card bg-white rounded-[2rem] p-8 overflow-hidden relative group">
+           <div className="premium-card bg-white rounded-2xl p-8 overflow-hidden relative group">
             <div className="absolute top-0 right-0 p-6 opacity-[0.02] pointer-events-none group-hover:rotate-12 transition-transform duration-1000">
                <History size={120} />
             </div>
             
             <div className="flex items-center justify-between mb-10">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
                   <Activity size={20} strokeWidth={2.5} />
                 </div>
                 <div>

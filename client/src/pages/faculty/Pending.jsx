@@ -754,7 +754,7 @@ const Pending = () => {
               <Button variant="primary" onClick={() => fetchApprovals()}>Retry Sync</Button>
             </div>
           ) : approvals.length === 0 && !loading ? (
-            <div className="bg-white border border-dashed border-zinc-200 rounded-3xl p-16 text-center">
+            <div className="bg-white border border-dashed border-zinc-200 rounded-2xl p-16 text-center">
               <div className="bg-zinc-50 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6">
                 {searchValue || selectedBatch !== 'all' ? (
                   <Eye className="text-zinc-300" size={40} />

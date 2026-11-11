@@ -67,7 +67,7 @@ const FileDropzone = ({
       onDragOver={handleDrag}
       onDrop={handleDrop}
       onClick={() => !file && !isLoading && inputRef.current?.click()}
-      className={`relative border-2 border-dashed rounded-xl p-8 sm:p-10 text-center cursor-pointer transition-all duration-200
+      className={`relative border-2 border-dashed rounded-2xl p-8 sm:p-10 text-center cursor-pointer transition-all duration-200
         ${dragActive ? 'border-indigo-500 bg-indigo-50/20 scale-[1.01]' : 'border-zinc-300 hover:border-indigo-400 hover:bg-zinc-50/50'}
         ${file || isLoading ? 'cursor-default' : ''}`}
     >
@@ -88,7 +88,7 @@ const FileDropzone = ({
         </>
       ) : (
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-100 border border-zinc-200">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-100 border border-zinc-200">
             <FileText size={18} className="text-indigo-600 shrink-0" />
             <span className="text-xs font-bold text-navy truncate max-w-xs">{file.name}</span>
             <span className="text-[11px] text-zinc-500 tabular-nums">({(file.size / 1024).toFixed(1)} KB)</span>
@@ -100,7 +100,7 @@ const FileDropzone = ({
               e.stopPropagation();
               clearFile();
             }}
-            className="text-xs font-bold text-red-600 hover:text-red-800 hover:bg-red-50 px-2.5 py-1 rounded-md transition-colors flex items-center gap-1"
+            className="text-xs font-bold text-red-600 hover:text-red-800 hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1"
           >
             <X size={14} />
             <span>Remove</span>

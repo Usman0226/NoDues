@@ -44,7 +44,7 @@ const History = () => {
           <input 
             type="text" 
             placeholder="Search by session or semester..."
-            className="w-full bg-white border border-zinc-200 rounded-2xl py-3 pl-12 pr-4 text-xs font-bold text-navy placeholder:text-zinc-300 focus:outline-none focus:ring-4 focus:ring-navy/5 focus:border-navy/20 transition-all shadow-sm"
+            className="w-full bg-white border border-zinc-200 rounded-xl py-3 pl-12 pr-4 text-xs font-bold text-navy placeholder:text-zinc-300 focus:outline-none focus:ring-4 focus:ring-navy/5 focus:border-navy/20 transition-all shadow-sm"
           />
         </div>
 
@@ -58,14 +58,14 @@ const History = () => {
             >
               <Link 
                 to={`/student/history/${record.requestId}`}
-                className="block bg-white border border-zinc-100 rounded-[2rem] p-5 sm:p-7 group hover:shadow-2xl hover:shadow-navy/5 transition-all duration-500 active:scale-[0.98] relative overflow-hidden"
+                className="block bg-white border border-zinc-100 rounded-2xl p-5 sm:p-7 group hover:shadow-2xl hover:shadow-navy/5 transition-all duration-500 active:scale-[0.98] relative overflow-hidden"
               >
                 {/* Visual Flair */}
                 <div className="absolute top-0 right-0 w-24 h-24 bg-zinc-500/5 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
                 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
                   <div className="flex items-center gap-6">
-                    <div className="h-14 w-14 bg-zinc-50 rounded-2xl flex items-center justify-center text-zinc-300 group-hover:bg-navy/5 group-hover:text-navy transition-all duration-500 shrink-0 border border-zinc-100 shadow-sm">
+                    <div className="h-14 w-14 bg-zinc-50 rounded-xl flex items-center justify-center text-zinc-300 group-hover:bg-navy/5 group-hover:text-navy transition-all duration-500 shrink-0 border border-zinc-100 shadow-sm">
                       <FileCheck size={26} />
                     </div>
                     <div className="min-w-0">

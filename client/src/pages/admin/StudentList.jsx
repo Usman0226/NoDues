@@ -365,16 +365,16 @@ const StudentList = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Roll Number</label>
-              <input type="text" value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" placeholder="e.g. 24691A32XX"/>
+              <input type="text" value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} className="w-full px-4 py-3 border border-muted rounded-xl text-sm bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" placeholder="e.g. 24691A32XX"/>
             </div>
             <div>
               <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Full Name</label>
-              <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" />
+              <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border border-muted rounded-xl text-sm bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" />
             </div>
           </div>
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Email</label>
-            <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" placeholder="student@example.com" />
+            <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 border border-muted rounded-xl text-sm bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" placeholder="student@example.com" />
           </div>
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Academic Group</label>
@@ -401,16 +401,16 @@ const StudentList = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
                <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Roll Number</label>
-               <input type="text" value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all"/>
+               <input type="text" value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} className="w-full px-4 py-3 border border-muted rounded-xl text-sm bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all"/>
             </div>
             <div>
                <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Full Name</label>
-               <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" />
+               <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border border-muted rounded-xl text-sm bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" />
             </div>
           </div>
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Email</label>
-            <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-3 py-2 border border-muted rounded-lg text-sm bg-offwhite/50 focus:ring-1 focus:ring-navy transition-all" />
+            <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 border border-muted rounded-xl text-sm bg-offwhite/50 focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" />
           </div>
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-1">Academic Group</label>

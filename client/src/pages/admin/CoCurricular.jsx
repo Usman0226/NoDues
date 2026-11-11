@@ -432,7 +432,7 @@ const CoCurricular = () => {
                   type="text" 
                   value={formData.code}
                   onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
+                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-mono" 
                   placeholder="EX: INTERN-2024" 
                 />
               </div>
@@ -452,7 +452,7 @@ const CoCurricular = () => {
               {isHod && (
                   <div>
                     <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Department</label>
-                    <div className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite text-sm font-bold text-navy opacity-70">
+                    <div className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite text-sm font-bold text-navy opacity-70">
                       {user?.departmentName || 'Your Department'}
                     </div>
                   </div>
@@ -462,13 +462,13 @@ const CoCurricular = () => {
             <div className="grid grid-cols-1 gap-5">
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Visibility Type</label>
-                <div className="h-[46px] flex items-center px-4 rounded-lg border border-muted bg-offwhite/50">
+                <div className="h-[46px] flex items-center px-4 rounded-xl border border-muted bg-offwhite/50">
                    <label className="flex items-center gap-3 cursor-pointer">
                       <input 
                         type="checkbox" 
                         checked={formData.isOptional} 
                         onChange={e => setFormData({...formData, isOptional: e.target.checked})}
-                        className="w-4 h-4 rounded text-navy focus:ring-navy/10 border-muted"
+                        className="w-4 h-4 rounded-md text-navy focus:ring-navy/10 border-muted"
                       />
                       <span className="text-xs font-bold text-navy/70">Mark as Optional</span>
                    </label>
@@ -482,7 +482,7 @@ const CoCurricular = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="Ex: Summer Internship Clearance" 
               />
             </div>
@@ -491,7 +491,7 @@ const CoCurricular = () => {
               <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-4">Applicable Academic Years</label>
               <div className="flex gap-4">
                 {[1, 2, 3, 4].map(year => (
-                  <label key={year} className={`flex-1 flex items-center justify-center py-3 rounded-lg border cursor-pointer transition-all ${
+                  <label key={year} className={`flex-1 flex items-center justify-center py-3 rounded-xl border cursor-pointer transition-all ${
                     formData.applicableYears.includes(year) 
                       ? 'bg-navy border-navy text-white shadow-lg shadow-navy/20' 
                       : 'bg-offwhite border-muted text-muted-foreground hover:border-navy/30'
@@ -517,7 +517,7 @@ const CoCurricular = () => {
               <label className="block text-[10px] uppercase tracking-widest font-black text-navy">Approval </label>
               
               <div className="grid grid-cols-3 gap-3">
-                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${formData.requiresMentorApproval && !formData.requiresClassTeacherApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
+                <label className={`flex flex-col p-3 rounded-xl border cursor-pointer transition-colors ${formData.requiresMentorApproval && !formData.requiresClassTeacherApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <input 
                       type="radio" 
@@ -530,7 +530,7 @@ const CoCurricular = () => {
                   <p className="text-[10px] text-muted-foreground pl-5 leading-tight">Routed to each student's specific mentor.</p>
                 </label>
 
-                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${formData.requiresClassTeacherApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
+                <label className={`flex flex-col p-3 rounded-xl border cursor-pointer transition-colors ${formData.requiresClassTeacherApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <input 
                       type="radio" 
@@ -543,7 +543,7 @@ const CoCurricular = () => {
                   <p className="text-[10px] text-muted-foreground pl-5 leading-tight">Routed to student's class teacher.</p>
                 </label>
 
-                <label className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${!formData.requiresMentorApproval && !formData.requiresClassTeacherApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
+                <label className={`flex flex-col p-3 rounded-xl border cursor-pointer transition-colors ${!formData.requiresMentorApproval && !formData.requiresClassTeacherApproval ? 'bg-white border-navy shadow-sm' : 'bg-white/50 border-muted hover:border-navy/30'}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <input 
                       type="radio" 
@@ -583,7 +583,7 @@ const CoCurricular = () => {
 
                <div className="space-y-3">
                   {formData.fields.map((field, idx) => (
-                    <div key={idx} className="flex gap-3 items-start p-3 rounded-lg bg-offwhite/50 border border-muted/50 group">
+                    <div key={idx} className="flex gap-3 items-start p-3 rounded-xl bg-offwhite/50 border border-muted/50 group">
                        <div className="pt-2 text-muted-foreground">
                           <GripVertical size={14} />
                        </div>
@@ -596,7 +596,7 @@ const CoCurricular = () => {
                           />
                           <div className="flex items-center gap-4">
                              <select 
-                                className="text-[10px] bg-white border border-muted rounded px-2 py-1 outline-none"
+                                className="text-[10px] bg-white border border-muted rounded-lg px-2 py-1 outline-none"
                                 value={field.type}
                                 onChange={(e) => handleFieldChange(idx, 'type', e.target.value)}
                              >
@@ -609,7 +609,7 @@ const CoCurricular = () => {
                                   type="checkbox" 
                                   checked={field.required}
                                   onChange={(e) => handleFieldChange(idx, 'required', e.target.checked)}
-                                  className="w-3 h-3 rounded text-navy border-muted"
+                                  className="w-3 h-3 rounded-md text-navy border-muted"
                                 />
                                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Required</span>
                              </label>
@@ -688,7 +688,7 @@ const CoCurricular = () => {
                 <div className="space-y-3">
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground">Assignment Strategy</label>
                   
-                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${assignMode === 'per_mentor' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
+                  <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${assignMode === 'per_mentor' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
                     <div className="pt-0.5">
                       <input 
                         type="radio" 
@@ -705,7 +705,7 @@ const CoCurricular = () => {
                     </div>
                   </label>
 
-                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${assignMode === 'per_class_teacher' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
+                  <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${assignMode === 'per_class_teacher' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
                     <div className="pt-0.5">
                       <input 
                         type="radio" 
@@ -722,7 +722,7 @@ const CoCurricular = () => {
                     </div>
                   </label>
 
-                  <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${assignMode === 'single_faculty' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
+                  <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${assignMode === 'single_faculty' ? 'bg-navy/5 border-navy/20' : 'bg-white border-muted hover:border-navy/20'}`}>
                     <div className="pt-0.5">
                       <input 
                         type="radio" 

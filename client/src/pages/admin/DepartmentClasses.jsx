@@ -394,7 +394,7 @@ const DepartmentClasses = () => {
                 <div className="h-4 w-32 bg-muted/10 rounded-full animate-pulse"></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                    {[1, 2, 3].map(i => (
-                     <div key={i} className="bg-white rounded-xl border border-muted p-6 h-[180px] space-y-3 animate-pulse">
+                     <div key={i} className="bg-white rounded-2xl border border-muted p-6 h-[180px] space-y-3 animate-pulse">
                         <div className="flex justify-between">
                            <div className="space-y-2">
                               <div className="h-5 w-32 bg-muted/10 rounded-lg"></div>
@@ -411,7 +411,7 @@ const DepartmentClasses = () => {
             key="error"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm"
+            className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm"
           >
              <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
              <p className="text-muted-foreground font-medium">{error || 'Failed to initialize session'}</p>
@@ -421,7 +421,7 @@ const DepartmentClasses = () => {
             key="empty"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center py-16 px-6 bg-white rounded-3xl border border-muted/60 shadow-sm border-dashed max-w-2xl mx-auto space-y-5 my-6"
+            className="text-center py-16 px-6 bg-white rounded-2xl border border-muted/60 shadow-sm border-dashed max-w-2xl mx-auto space-y-5 my-6"
           >
              <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto text-indigo-600 shadow-xs">
                <Wand2 size={32} />
@@ -564,7 +564,7 @@ const DepartmentClasses = () => {
             {activeSemester && (
               <div>
                 {activeOperationalSections.length === 0 ? (
-                  <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-border p-6 space-y-4 max-w-xl mx-auto">
+                  <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-border p-6 space-y-4 max-w-xl mx-auto">
                     <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto text-indigo-600">
                       <Users size={24} />
                     </div>
@@ -596,7 +596,7 @@ const DepartmentClasses = () => {
                       <motion.div key={cls._id} variants={itemVariants} layout>
                         <Link 
                           to={isHod ? `/hod/class/${cls._id}` : `/admin/class/${cls._id}`}
-                          className="group block bg-white rounded-3xl border border-muted/50 p-6 shadow-sm hover:shadow-xl hover:border-navy/20 transition-all duration-300 relative"
+                          className="group block bg-white rounded-2xl border border-muted/50 p-6 shadow-sm hover:shadow-xl hover:border-navy/20 transition-all duration-300 relative"
                         >
                           {!cls.isActive && (
                             <div className="absolute top-0 right-0 px-3 py-1 bg-muted/20 text-[9px] font-black uppercase tracking-widest text-muted-foreground rounded-bl-xl border-b border-l border-muted/50">
@@ -701,7 +701,7 @@ const DepartmentClasses = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="e.g. CSE-A Sem 5" 
               />
             </div>
@@ -725,7 +725,7 @@ const DepartmentClasses = () => {
                   type="text" 
                   value={formData.academicYear}
                   onChange={e => setFormData({...formData, academicYear: e.target.value})}
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
+                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
                   placeholder="2025-26" 
                 />
               </div>
@@ -760,7 +760,7 @@ const DepartmentClasses = () => {
                 type="text" 
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
+                className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold" 
                 placeholder="e.g. CSE-A Sem 5" 
               />
             </div>
@@ -784,7 +784,7 @@ const DepartmentClasses = () => {
                   type="text" 
                   value={formData.academicYear}
                   onChange={e => setFormData({...formData, academicYear: e.target.value})}
-                  className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
+                  className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all" 
                   placeholder="2025-26" 
                 />
               </div>

@@ -92,7 +92,9 @@ const SearchableSelect = ({
   }, [options, searchValue, labelKey, subLabelKey, onSearch]);
 
   const triggerClasses = useMemo(() => {
-    const base = "w-full flex items-center justify-between transition-all duration-300 rounded-[inherit] group";
+    const hasCustomRadius = /\brounded-/.test(className);
+    const radiusClass = hasCustomRadius ? 'rounded-[inherit]' : 'rounded-xl';
+    const base = `w-full flex items-center justify-between transition-all duration-300 ${radiusClass} group`;
     const padding = size === 'sm' ? 'py-1.5 px-2.5' : 'py-3 px-4';
     
     if (variant === 'ghost') {
@@ -100,7 +102,7 @@ const SearchableSelect = ({
     }
     
     return `${base} ${padding} border ${disabled ? 'bg-zinc-50 border-zinc-200 opacity-60' : 'bg-white border-zinc-200 hover:border-indigo-300 focus:ring-4 focus:ring-indigo-100'} ${isOpen ? 'border-indigo-500 ring-4 ring-indigo-100' : ''}`;
-  }, [size, variant, disabled, isOpen]);
+  }, [size, variant, disabled, isOpen, className]);
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>

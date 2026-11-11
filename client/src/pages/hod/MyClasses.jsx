@@ -39,7 +39,7 @@ const MyClasses = () => {
     >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {classes.length === 0 ? (
-          <div className="col-span-full bg-white border border-dashed border-zinc-200 rounded-3xl p-12 text-center">
+          <div className="col-span-full bg-white border border-dashed border-zinc-200 rounded-2xl p-12 text-center">
             <div className="bg-zinc-50 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6">
               <GraduationCap className="text-zinc-300" size={40} />
             </div>
@@ -53,13 +53,13 @@ const MyClasses = () => {
           classes.map((c, idx) => (
             <div 
               key={`${c._id}-${idx}`}
-              className="group bg-white rounded-3xl border border-zinc-200 p-6 hover:shadow-2xl hover:shadow-indigo-900/10 hover:border-indigo-200 transition-all duration-300 relative overflow-hidden"
+              className="group bg-white rounded-2xl border border-zinc-200 p-6 hover:shadow-2xl hover:shadow-indigo-900/10 hover:border-indigo-200 transition-all duration-300 relative overflow-hidden"
             >
               {/* Background Decoration */}
               <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-50/50 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
               
               <div className="flex justify-between items-start mb-6">
-                <div className={`p-3 rounded-2xl ${c.roleTag === 'classTeacher' ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                <div className={`p-3 rounded-xl ${c.roleTag === 'classTeacher' ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'}`}>
                   {c.roleTag === 'classTeacher' ? <UserCheck size={20} /> : <BookOpen size={20} />}
                 </div>
                 <div className="flex flex-col items-end">

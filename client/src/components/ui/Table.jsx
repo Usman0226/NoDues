@@ -11,7 +11,7 @@ const TableSkeletonRows = ({ columns, rowCount, selectable }) => (
       <tr key={`sk-${ri}`} className={ri % 2 === 1 ? 'bg-zinc-50/30' : 'bg-white'}>
         {selectable && (
           <td className="px-4 sm:px-6 py-4">
-             <div className="w-5 h-5 rounded bg-zinc-200 animate-pulse" />
+             <div className="w-5 h-5 rounded-md bg-zinc-200 animate-pulse" />
           </td>
         )}
         {columns.map((col, ci) => (
@@ -44,13 +44,13 @@ const Checkbox = ({ checked, indeterminate, onChange, disabled }) => {
         checked={checked}
         onChange={onChange}
         disabled={disabled}
-        className="w-5 h-5 min-w-[20px] min-h-[20px] shrink-0 aspect-square rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed appearance-none border flex items-center justify-center checked:bg-indigo-600 checked:border-indigo-600"
+        className="w-5 h-5 min-w-[20px] min-h-[20px] shrink-0 aspect-square rounded-md border-zinc-300 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed appearance-none border flex items-center justify-center checked:bg-indigo-600 checked:border-indigo-600"
       />
       {checked && !indeterminate && (
         <Check size={12} className="absolute inset-0 m-auto text-white pointer-events-none" />
       )}
       {indeterminate && (
-        <div className="absolute inset-0 m-auto w-2.5 h-0.5 bg-white pointer-events-none rounded" />
+        <div className="absolute inset-0 m-auto w-2.5 h-0.5 bg-white pointer-events-none rounded-full" />
       )}
     </div>
   );
@@ -226,7 +226,7 @@ const Table = ({
             initial={{ y: 100, x: '-50%', opacity: 0 }}
             animate={{ y: 0, x: '-50%', opacity: 1 }}
             exit={{ y: 100, x: '-50%', opacity: 0 }}
-            className="fixed z-[500] bottom-6 left-1/2 flex items-center p-2 bg-white/95 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_24px_80px_rgba(0,0,0,0.25)] border border-indigo-100/50 select-none w-[calc(100vw-32px)] sm:w-auto sm:min-w-[400px] max-w-[95vw]"
+            className="fixed z-[500] bottom-6 left-1/2 flex items-center p-2 bg-white/95 backdrop-blur-2xl rounded-2xl sm:rounded-full shadow-[0_24px_80px_rgba(0,0,0,0.25)] border border-indigo-100/50 select-none w-[calc(100vw-32px)] sm:w-auto sm:min-w-[400px] max-w-[95vw]"
           >
             {/* Selection Info */}
             <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 border border-indigo-100/50 rounded-full shrink-0">

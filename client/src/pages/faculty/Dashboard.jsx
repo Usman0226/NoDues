@@ -222,13 +222,13 @@ const FacultyDashboard = () => {
           variants={itemVariants}
           className="lg:px-2"
         >
-          <div id="tour-queue-status" className="rounded-3xl premium-card p-6 sm:p-8 bg-gradient-to-br from-white to-indigo-50/30 border-zinc-200/60 shadow-xl shadow-navy/5 relative overflow-hidden group">
+          <div id="tour-queue-status" className="rounded-2xl premium-card p-6 sm:p-8 bg-gradient-to-br from-white to-indigo-50/30 border-zinc-200/60 shadow-xl shadow-navy/5 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full translate-x-32 -translate-y-32 group-hover:scale-110 transition-transform duration-1000"></div>
             <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
               <div className="flex items-center gap-6">
                 <div className="relative">
                   <div className="absolute inset-0 blur-xl bg-indigo-500/20 rounded-full animate-pulse"></div>
-                  <div className="h-14 w-14 rounded-2xl bg-white border border-indigo-100 flex items-center justify-center shrink-0 shadow-sm relative">
+                  <div className="h-14 w-14 rounded-xl bg-white border border-indigo-100 flex items-center justify-center shrink-0 shadow-sm relative">
                     <AlertCircle size={26} className="text-indigo-600" />
                   </div>
                 </div>
@@ -248,13 +248,13 @@ const FacultyDashboard = () => {
                 <Button 
                   id="tour-process-button"
                   variant="primary" 
-                  className="w-full md:w-auto px-10 h-14 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-navy/20 hover:shadow-xl transition-all active:scale-95" 
+                  className="w-full md:w-auto px-10 h-14 font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-navy/20 hover:shadow-xl transition-all active:scale-95" 
                   onClick={() => navigate('/faculty/pending', { state: { from: 'faculty-dashboard' } })}
                 >
                   PROCESS QUEUE <ArrowRight size={14} className="ml-2" />
                 </Button>
               ) : (
-                <div className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-50 border border-emerald-100/50 text-emerald-600">
+                <div className="flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-50 border border-emerald-100/50 text-emerald-600">
                   <ClipboardCheck size={18} />
                   <span className="text-[10px] font-black uppercase tracking-widest">All Clear</span>
                 </div>
@@ -279,7 +279,7 @@ const FacultyDashboard = () => {
                     key={item.id} 
                     variants={itemVariants}
                   >
-                    <div className="rounded-3xl premium-card p-6 scale-hover border-zinc-200/60 relative group overflow-hidden h-full flex flex-col justify-between">
+                    <div className="rounded-2xl premium-card p-6 scale-hover border-zinc-200/60 relative group overflow-hidden h-full flex flex-col justify-between">
                       <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                       
                       <div className="relative z-10">
@@ -296,7 +296,7 @@ const FacultyDashboard = () => {
                             <div className={`absolute inset-0 blur-xl opacity-20 rounded-full transition-all duration-500 group-hover:opacity-30 ${
                               item.pending > 0 ? 'bg-amber-400' : 'bg-emerald-400'
                             }`} />
-                            <div className={`h-11 w-11 rounded-2xl flex items-center justify-center relative border transition-all duration-500 group-hover:scale-110 ${
+                            <div className={`h-11 w-11 rounded-xl flex items-center justify-center relative border transition-all duration-500 group-hover:scale-110 ${
                               item.pending > 0 
                                 ? 'bg-amber-50 border-amber-100/50 text-amber-600' 
                                 : 'bg-emerald-50 border-emerald-100/50 text-emerald-600'
@@ -337,7 +337,7 @@ const FacultyDashboard = () => {
                                 from: 'faculty-dashboard' 
                               } 
                             })} 
-                            className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 border group/btn relative z-10 ${
+                            className={`w-full py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 border group/btn relative z-10 ${
                               item.pending > 0 
                                 ? 'bg-navy text-white border-navy shadow-lg shadow-navy/10 hover:shadow-xl active:scale-[0.97]' 
                                 : 'bg-white text-navy border-divider hover:bg-zinc-50'
@@ -356,7 +356,7 @@ const FacultyDashboard = () => {
           ) : (
             <motion.div 
               variants={itemVariants}
-              className="group text-center py-24 bg-white/40 backdrop-blur rounded-[2rem] border border-dashed border-muted/50 transition-colors hover:border-gold/30"
+              className="group text-center py-24 bg-white/40 backdrop-blur rounded-2xl border border-dashed border-muted/50 transition-colors hover:border-gold/30"
             >
                <Layers size={48} className="mx-auto text-muted/10 mb-4 group-hover:text-gold/20 transition-colors" />
                <p className="text-[11px] font-black text-navy/20 uppercase tracking-[0.3em]">No active duties found</p>

@@ -705,12 +705,12 @@ const SUBJECT_COLS = [
           {/* Stats Skeleton */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-pulse">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-24 bg-muted/5 rounded-xl border border-muted"></div>
+              <div key={i} className="h-24 bg-muted/5 rounded-2xl border border-muted"></div>
             ))}
           </div>
 
           {/* Table Skeleton */}
-          <div className="bg-white rounded-xl border border-muted shadow-sm overflow-hidden animate-pulse">
+          <div className="bg-white rounded-2xl border border-muted shadow-sm overflow-hidden animate-pulse">
             <div className="h-12 bg-muted/5 border-b border-muted"></div>
             <div className="space-y-4 p-4">
               {[1, 2, 3, 4, 5].map(i => (
@@ -726,7 +726,7 @@ const SUBJECT_COLS = [
   if (error) {
     return (
       <PageWrapper title="Sync Error" subtitle="Academic record unavailable">
-        <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
+        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
            <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
            <p className="text-muted-foreground font-medium">{error}</p>
            <Button variant="primary" className="mt-6" onClick={() => fetchClass()}>Retry Sync</Button>
@@ -897,7 +897,7 @@ const SUBJECT_COLS = [
       {!classData?.isMaster && (
         <div className={tab === 'batch' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
           {activeBatch ? (
-            <div className="bg-white rounded-3xl border border-navy/10 p-8 mb-10 shadow-md shadow-navy/5 relative overflow-hidden transition-all duration-300 hover:shadow-lg">
+            <div className="bg-white rounded-2xl border border-navy/10 p-8 mb-10 shadow-md shadow-navy/5 relative overflow-hidden transition-all duration-300 hover:shadow-lg">
               <div className="absolute top-0 right-0 p-1 bg-navy text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl">LIVE SESSION</div>
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -911,7 +911,7 @@ const SUBJECT_COLS = [
               </Button>
             </div>
           ) : (
-            <div className="bg-white rounded-3xl border border-muted border-dashed p-12 mb-10 text-center transition-all duration-300 hover:border-navy/30 hover:bg-offwhite/50">
+            <div className="bg-white rounded-2xl border border-muted border-dashed p-12 mb-10 text-center transition-all duration-300 hover:border-navy/30 hover:bg-offwhite/50">
               <Layers size={48} className="text-muted-foreground/30 mx-auto mb-4" />
               <h4 className="text-lg font-black text-navy mb-2">Cycle Inactive</h4>
               <p className="text-sm text-muted-foreground mb-8 max-w-[300px] mx-auto">No live clearance session detected for this academic group.</p>
@@ -965,7 +965,7 @@ const SUBJECT_COLS = [
               <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Target Completion Deadline (Optional)</label>
               <input 
                 type="date"
-                className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                 value={initiateForm.deadline}
                 min={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setInitiateForm({ ...initiateForm, deadline: e.target.value })}
@@ -1053,7 +1053,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Roll Number</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono font-bold"
+                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono font-bold"
                     placeholder="e.g. 21691A0501"
                     value={addStudentFormData.rollNo}
                     onChange={(e) => setAddStudentFormData({...addStudentFormData, rollNo: e.target.value.toUpperCase()})}
@@ -1062,7 +1062,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Candidate Name</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     placeholder="Full Name"
                     value={addStudentFormData.name}
                     onChange={(e) => setAddStudentFormData({...addStudentFormData, name: e.target.value})}
@@ -1073,7 +1073,7 @@ const SUBJECT_COLS = [
                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Email Identity (Institutional)</label>
                  <input 
                     type="email"
-                    className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     placeholder="name@mits.ac.in"
                     value={addStudentFormData.email}
                     onChange={(e) => setAddStudentFormData({...addStudentFormData, email: e.target.value})}
@@ -1128,7 +1128,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Roll Number</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 font-mono border-dashed opacity-70 cursor-not-allowed"
+                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 font-mono border-dashed opacity-70 cursor-not-allowed"
                     value={studentFormData.rollNo}
                     disabled
                   />
@@ -1137,7 +1137,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Candidate Name</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     value={studentFormData.name}
                     onChange={(e) => setStudentFormData({...studentFormData, name: e.target.value})}
                   />
@@ -1147,7 +1147,7 @@ const SUBJECT_COLS = [
                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Email Identity</label>
                  <input 
                     type="email"
-                    className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     value={studentFormData.email}
                     onChange={(e) => setStudentFormData({...studentFormData, email: e.target.value})}
                   />
@@ -1208,18 +1208,18 @@ const SUBJECT_COLS = [
       {showManageElectives && (
         <Modal isOpen={showManageElectives} title="Manual Elective Mapping" onClose={() => setShowManageElectives(false)}>
            <div className="space-y-6">
-              <div className="p-5 rounded-2xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm">
+              <div className="p-5 rounded-xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm">
                  <p className="text-xs font-bold text-navy mb-1">{selectedStudent?.name}</p>
                  <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Toggle component enrollment for this candidate</p>
               </div>
               
               <div className="space-y-2">
                  {subjects.filter(s => s.isElective).map(e => (
-                   <label key={e.subjectId} className="flex items-center gap-3 p-4 rounded-2xl border border-muted/30 hover:bg-offwhite/50 cursor-pointer transition-all duration-300 hover:shadow-sm">
+                   <label key={e.subjectId} className="flex items-center gap-3 p-4 rounded-xl border border-muted/30 hover:bg-offwhite/50 cursor-pointer transition-all duration-300 hover:shadow-sm">
                       <div className="flex items-center gap-3">
                          <input 
                            type="checkbox"
-                           className="w-4 h-4 rounded border-muted text-navy focus:ring-navy"
+                           className="w-4 h-4 rounded-md border-muted text-navy focus:ring-navy"
                            checked={studentElectiveSelections[e.subjectId] || false}
                            onChange={(evt) => setStudentElectiveSelections({ ...studentElectiveSelections, [e.subjectId]: evt.target.checked })}
                          />
@@ -1294,7 +1294,7 @@ const SUBJECT_COLS = [
              <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Code (Optional override)</label>
                 <input 
-                  className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
+                  className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
                   placeholder="Leave empty for subject default"
                   value={subjectFormData.subjectCode}
                   onChange={(e) => setSubjectFormData({...subjectFormData, subjectCode: e.target.value})}
@@ -1321,7 +1321,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Code</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 font-mono font-bold focus:ring-2 focus:ring-navy/5"
+                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 font-mono font-bold focus:ring-2 focus:ring-navy/5"
                     placeholder="e.g. 20CSE101"
                     value={quickSubjectForm.code}
                     onChange={(e) => setQuickSubjectForm({...quickSubjectForm, code: e.target.value.toUpperCase()})}
@@ -1330,7 +1330,7 @@ const SUBJECT_COLS = [
                 <div>
                   <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Name</label>
                   <input 
-                    className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
+                    className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     placeholder="e.g. Data Structures"
                     value={quickSubjectForm.name}
                     onChange={(e) => setQuickSubjectForm({...quickSubjectForm, name: e.target.value})}
@@ -1341,7 +1341,7 @@ const SUBJECT_COLS = [
               <label className="flex items-center gap-3 p-4 rounded-xl border border-muted/30 cursor-pointer hover:bg-offwhite/30 transition-all">
                 <input 
                   type="checkbox"
-                  className="w-5 h-5 rounded border-muted text-navy focus:ring-navy"
+                  className="w-5 h-5 rounded-md border-muted text-navy focus:ring-navy"
                   checked={quickSubjectForm.isElective}
                   onChange={(e) => setQuickSubjectForm({...quickSubjectForm, isElective: e.target.checked})}
                 />
@@ -1364,7 +1364,7 @@ const SUBJECT_COLS = [
       {showEditSubject && (
         <Modal isOpen={showEditSubject} title="Edit Subject" onClose={() => setShowEditSubject(false)}>
           <div className="space-y-6">
-             <div className="p-5 rounded-2xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm text-xs font-bold text-navy">
+             <div className="p-5 rounded-xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm text-xs font-bold text-navy">
                 {selectedSubject?.subjectName} ({selectedSubject?.subjectCode})
              </div>
 
@@ -1385,7 +1385,7 @@ const SUBJECT_COLS = [
              <div>
                 <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Alias Subject Code</label>
                 <input 
-                  className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
+                  className="w-full px-4 py-3 rounded-xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
                   placeholder="Set context-specific code"
                   value={subjectFormData.subjectCode}
                   onChange={(e) => setSubjectFormData({...subjectFormData, subjectCode: e.target.value})}
@@ -1416,7 +1416,7 @@ const SUBJECT_COLS = [
       {showMapElective && (
         <Modal isOpen={showMapElective} title="Assign Elective Students" onClose={() => setShowMapElective(false)}>
            <div className="space-y-6">
-             <div className="p-5 rounded-2xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm">
+             <div className="p-5 rounded-xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm">
                 <p className="text-xs font-bold text-navy/80 mb-1 flex items-center gap-2"><Users size={14} className="text-navy/40"/> Batch Enroll</p>
                 <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest leading-relaxed">
                   {selectedElective?.subjectName} ({selectedElective?.subjectCode}) handled by {selectedElective?.faculty?.name}
@@ -1430,7 +1430,7 @@ const SUBJECT_COLS = [
                     <label key={s._id} className="flex items-center gap-3 p-3 hover:bg-offwhite/50 cursor-pointer transition-colors">
                       <input 
                         type="checkbox" 
-                        className="w-4 h-4 rounded border-muted text-navy focus:ring-navy"
+                        className="w-4 h-4 rounded-md border-muted text-navy focus:ring-navy"
                         checked={electiveSelections[s._id] || false}
                         onChange={(e) => setElectiveSelections({ ...electiveSelections, [s._id]: e.target.checked })}
                       />

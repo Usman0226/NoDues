@@ -131,7 +131,7 @@ const GuidedTour = ({ steps, onComplete, onSkip, onStepChange, tourId = 'default
             <div className="sr-only">Guided walkthrough in progress. Click overlay to skip.</div>
             {coords && (
               <motion.div
-                className="absolute rounded-[24px] pointer-events-none ring-[9999px] ring-slate-950/70 shadow-[inset_0_0_120px_rgba(0,0,0,0.5)]"
+                className="absolute rounded-2xl pointer-events-none ring-[9999px] ring-slate-950/70 shadow-[inset_0_0_120px_rgba(0,0,0,0.5)]"
                 initial={false}
                 animate={{
                   top: coords.top - 12,
@@ -161,7 +161,7 @@ const GuidedTour = ({ steps, onComplete, onSkip, onStepChange, tourId = 'default
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
               className="absolute w-[calc(100vw-32px)] sm:w-[380px] pointer-events-auto z-[10000]"
             >
-              <div className="bg-white rounded-[2.5rem] p-7 shadow-[0_40px_120px_rgba(0,0,0,0.4)] border border-indigo-100 relative overflow-hidden group">
+              <div className="bg-white rounded-2xl p-7 shadow-[0_40px_120px_rgba(0,0,0,0.4)] border border-indigo-100 relative overflow-hidden group">
                 {/* Decorative background gradients */}
                 <div className="absolute -top-12 -right-12 w-40 h-40 bg-indigo-50/50 rounded-full blur-3xl opacity-60 group-hover:bg-indigo-100 transition-colors" />
                 <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-blue-50/30 rounded-full blur-3xl opacity-40" />
@@ -177,7 +177,7 @@ const GuidedTour = ({ steps, onComplete, onSkip, onStepChange, tourId = 'default
                   >
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-indigo-50 to-white border border-indigo-100/50 flex items-center justify-center text-indigo-600 shadow-sm">
+                        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-50 to-white border border-indigo-100/50 flex items-center justify-center text-indigo-600 shadow-sm">
                           <Sparkles size={20} />
                         </div>
                         <div className="flex flex-col">
@@ -219,7 +219,7 @@ const GuidedTour = ({ steps, onComplete, onSkip, onStepChange, tourId = 'default
                         {currentStepIndex > 0 && (
                           <button
                             onClick={handleBack}
-                            className="p-3.5 rounded-2xl bg-zinc-50 text-zinc-600 hover:bg-zinc-100 transition-all active:scale-95 border border-zinc-200/50"
+                            className="p-3.5 rounded-full bg-zinc-50 text-zinc-600 hover:bg-zinc-100 transition-all active:scale-95 border border-zinc-200/50"
                             title="Previous step"
                           >
                             <ChevronLeft size={20} />
@@ -227,7 +227,7 @@ const GuidedTour = ({ steps, onComplete, onSkip, onStepChange, tourId = 'default
                         )}
                         <button
                           onClick={handleNext}
-                          className="px-8 py-3.5 rounded-2xl bg-navy text-white font-black text-[11px] uppercase tracking-widest shadow-[0_12px_24px_rgba(2,6,23,0.2)] hover:shadow-[0_15px_30px_rgba(2,6,23,0.3)] active:scale-95 flex items-center gap-2.5 transition-all border border-white/10"
+                          className="px-8 py-3.5 rounded-full bg-navy text-white font-black text-[11px] uppercase tracking-widest shadow-[0_12px_24px_rgba(2,6,23,0.2)] hover:shadow-[0_15px_30px_rgba(2,6,23,0.3)] active:scale-95 flex items-center gap-2.5 transition-all border border-white/10"
                         >
                           {currentStepIndex === steps.length - 1 ? 'Complete' : 'Continue'}
                           <ChevronRight size={18} />
@@ -261,7 +261,7 @@ const GuidedTour = ({ steps, onComplete, onSkip, onStepChange, tourId = 'default
                 height: coords.height + 32,
               }}
               transition={{ type: "spring", damping: 30, stiffness: 200 }}
-              className="absolute border-[4px] border-indigo-500 rounded-[28px] pointer-events-none shadow-[0_0_30px_rgba(99,102,241,0.3)] opacity-60"
+              className="absolute border-[4px] border-indigo-500 rounded-3xl pointer-events-none shadow-[0_0_30px_rgba(99,102,241,0.3)] opacity-60"
             />
           )}
         </motion.div>,

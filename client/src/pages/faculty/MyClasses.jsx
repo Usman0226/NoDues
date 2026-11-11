@@ -46,7 +46,7 @@ const MyClasses = () => {
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="col-span-full bg-white/40 backdrop-blur-xl border border-dashed border-zinc-200 rounded-[2.5rem] p-16 text-center shadow-inner"
+            className="col-span-full bg-white/40 backdrop-blur-xl border border-dashed border-zinc-200 rounded-2xl p-16 text-center shadow-inner"
           >
             <div className="bg-zinc-50/50 h-24 w-24 rounded-full flex items-center justify-center mx-auto mb-8 border border-white">
               <GraduationCap className="text-zinc-300" size={48} />
@@ -63,7 +63,7 @@ const MyClasses = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.1, duration: 0.4, ease: "easeOut" }}
               key={`${c._id}-${idx}`}
-              className="rounded-3xl premium-card p-8 hover:-translate-y-2 hover:shadow-2xl hover:shadow-navy/5 transition-all duration-500 flex flex-col justify-between group relative overflow-hidden"
+              className="rounded-2xl premium-card p-8 hover:-translate-y-2 hover:shadow-2xl hover:shadow-navy/5 transition-all duration-500 flex flex-col justify-between group relative overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
               
@@ -73,7 +73,7 @@ const MyClasses = () => {
                     <div className={`absolute inset-0 blur-xl opacity-20 rounded-full transition-all duration-500 group-hover:opacity-30 ${
                       c.roleTag === 'classTeacher' ? 'bg-amber-400' : 'bg-indigo-400'
                     }`} />
-                    <div className={`h-12 w-12 rounded-2xl flex items-center justify-center relative border transition-all duration-500 group-hover:scale-110 ${
+                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center relative border transition-all duration-500 group-hover:scale-110 ${
                       c.roleTag === 'classTeacher' 
                         ? 'bg-amber-50 border-amber-100/50 text-amber-600 shadow-sm shadow-amber-500/10' 
                         : 'bg-indigo-50 border-indigo-100/50 text-indigo-600 shadow-sm shadow-indigo-500/10'

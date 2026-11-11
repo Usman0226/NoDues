@@ -94,7 +94,7 @@ const Departments = () => {
     return (
       <PageWrapper title="Departments" subtitle="Fetching academic structure...">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-pulse">
-           {[1, 2].map(i => <div key={i} className="h-64 bg-muted/5 rounded-xl border border-muted"></div>)}
+           {[1, 2].map(i => <div key={i} className="h-64 bg-muted/5 rounded-2xl border border-muted"></div>)}
         </div>
       </PageWrapper>
     );
@@ -103,7 +103,7 @@ const Departments = () => {
   if (error) {
     return (
       <PageWrapper title="Departments" subtitle="Sync interrupted">
-        <div className="text-center py-16 bg-white rounded-xl border border-muted shadow-sm">
+        <div className="text-center py-16 bg-white rounded-2xl border border-muted shadow-sm">
           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
           <h2 className="text-xl font-black text-navy mb-2">Structure Unavailable</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
@@ -150,7 +150,7 @@ const Departments = () => {
       </div>
 
       {depts.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border border-muted shadow-sm border-dashed">
+        <div className="text-center py-16 bg-white rounded-2xl border border-muted shadow-sm border-dashed">
            <Building2 className="mx-auto text-muted-foreground/20 mb-4" size={64} />
            <p className="text-muted-foreground font-medium">No departments found. Create one to get started.</p>
         </div>
@@ -158,7 +158,7 @@ const Departments = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {(depts || []).map((dept) => (
             <Link key={dept._id} to={`/admin/departments/${dept._id}/classes`}
-              className="bg-white rounded-xl border border-muted shadow-sm p-8 flex flex-col hover:shadow-md transition-academic group relative">
+              className="bg-white rounded-2xl border border-muted shadow-sm p-8 flex flex-col hover:shadow-md transition-academic group relative">
               <div className="flex items-start justify-between mb-6">
                 <div className="flex items-center gap-4">
                   <div className="h-14 w-14 rounded-xl bg-offwhite flex items-center justify-center group-hover:bg-navy/5 transition-colors">
@@ -212,7 +212,7 @@ const Departments = () => {
               type="text" 
               value={formData.name}
               onChange={e => setFormData({...formData, name: e.target.value})}
-              className="w-full px-4 py-3 rounded-lg border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold uppercase" 
+              className="w-full px-4 py-3 rounded-xl border border-muted bg-offwhite/50 text-sm focus:outline-none focus:ring-2 focus:ring-navy/5 transition-all font-bold uppercase" 
               placeholder="e.g. CSE" 
             />
           </div>

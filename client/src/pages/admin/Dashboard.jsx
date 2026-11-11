@@ -148,7 +148,7 @@ const AdminDashboard = () => {
             <h2 className="text-sm font-semibold text-zinc-600">Recent batches</h2>
             <button
               type="button"
-              className="text-xs font-semibold text-navy hover:text-gold shrink-0 min-h-11 px-2 sm:min-h-0 rounded-lg sm:rounded-none"
+              className="text-xs font-semibold text-navy hover:text-gold shrink-0 min-h-11 px-2 sm:min-h-0 rounded-lg"
               onClick={() => navigate(`${basePath}/batches`)}
             >
               View all batches
@@ -165,7 +165,7 @@ const AdminDashboard = () => {
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden /> Live
              </span>
           </div>
-          <div className="bg-white rounded-xl border border-muted shadow-sm p-6 space-y-6">
+          <div className="bg-white rounded-2xl border border-muted shadow-sm p-6 space-y-6">
             <div className="flex gap-4 items-start group">
               <div className="h-2 w-2 rounded-full bg-gold mt-1.5 shrink-0 group-hover:scale-125 transition-transform" />
               <div>

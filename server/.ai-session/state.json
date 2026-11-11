@@ -50,6 +50,11 @@
       "context": "Write conflict (code 112) when bulk removing subjects mapping",
       "decision": "Replaced frontend Promise.all parallel individual DELETE requests with an atomic POST /api/classes/:id/subjects/bulk-remove endpoint and bulkSyncSubjectRemoval, backed by exponential backoff write conflict retry logic",
       "trade_offs": "Consolidates N concurrent database transactions into 1 atomic mutation, eliminating race conditions and WiredTiger lock contention."
+    },
+    {
+      "context": "Inconsistent border radii across forms, SearchableSelect (0px inherited bug), cards, and modals",
+      "decision": "Established formal CSS custom properties (--radius-micro 6px, --radius-chip 8px, --radius-control 12px/rounded-xl, --radius-surface 16px/rounded-2xl, --radius-pill 9999px/rounded-full) in index.css and normalized all UI primitives, form controls, and cards across client/src",
+      "trade_offs": "Eliminates arbitrary border-radius overrides and achieves concentric geometry throughout the application."
     }
   ],
   "blockers": []

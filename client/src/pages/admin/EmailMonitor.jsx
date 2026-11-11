@@ -252,7 +252,7 @@ const EmailMonitor = () => {
       {errorModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-navy/40 backdrop-blur-sm" onClick={() => setErrorModal(null)} />
-          <div className="relative bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden border border-white/20">
+          <div className="relative bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden border border-white/20">
             <div className="px-8 py-6 border-b border-muted">
               <h3 className="text-lg font-black text-navy flex items-center gap-3">
                 <XCircle className="text-status-due" size={20} />
@@ -260,7 +260,7 @@ const EmailMonitor = () => {
               </h3>
             </div>
             <div className="px-8 py-8">
-              <div className="bg-red-50 p-6 rounded-2xl border border-red-100 mb-6">
+              <div className="bg-red-50 p-6 rounded-xl border border-red-100 mb-6">
                 <p className="text-xs font-black text-red-800 uppercase tracking-widest mb-2">Error Message</p>
                 <p className="text-sm font-bold text-red-900 leading-relaxed font-mono">
                   {errorModal.message || 'Unknown error'}

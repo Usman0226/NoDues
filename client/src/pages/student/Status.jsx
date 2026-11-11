@@ -194,7 +194,7 @@ const MemoizedClearanceCard = React.memo(({
         isPendingCoordinator ? 'border-l-[6px] border-l-amber-400' : 'border-l-[6px] border-l-zinc-300'
       }`}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[2rem] pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl pointer-events-none" />
 
       {/* Top Right Status Logo */}
       <div className="absolute top-5 right-5 sm:top-6 sm:right-6 z-10 flex items-center justify-center">
@@ -227,7 +227,7 @@ const MemoizedClearanceCard = React.memo(({
             {/* Removed Expensive Blur for Mobile Performance */}
             <div 
               style={{ transition: 'all 0.8s var(--ease-lux)' }}
-              className={`h-14 w-14 sm:h-16 sm:w-16 rounded-[1.5rem] flex items-center justify-center relative border group-hover:rotate-6 group-hover:scale-110 ${
+              className={`h-14 w-14 sm:h-16 sm:w-16 rounded-xl flex items-center justify-center relative border group-hover:rotate-6 group-hover:scale-110 ${
               isApproved ? 'bg-emerald-50 border-emerald-100/50 text-emerald-600 shadow-sm shadow-emerald-500/10' : 
               (isDue || isRejected) ? 'bg-red-50 border-red-100/50 text-red-600 shadow-sm shadow-red-500/10' : 
               'bg-zinc-50 border-zinc-100 text-zinc-400 shadow-sm'
@@ -493,7 +493,7 @@ const StudentStatus = () => {
       <PageWrapper title="Approval Status" subtitle="Syncing clearance data...">
         <div className="space-y-8 px-4 sm:px-0">
            {/* Progress Card Skeleton */}
-           <div className="h-48 sm:h-56 bg-zinc-50 rounded-3xl border border-zinc-100 animate-pulse relative overflow-hidden">
+           <div className="h-48 sm:h-56 bg-zinc-50 rounded-2xl border border-zinc-100 animate-pulse relative overflow-hidden">
              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-sweep" />
            </div>
            
@@ -520,7 +520,7 @@ const StudentStatus = () => {
             <motion.div 
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="h-20 w-20 sm:h-24 sm:w-24 bg-zinc-50 rounded-[2rem] sm:rounded-[2.5rem] flex items-center justify-center mb-8 border border-zinc-100 shadow-inner"
+              className="h-20 w-20 sm:h-24 sm:w-24 bg-zinc-50 rounded-2xl flex items-center justify-center mb-8 border border-zinc-100 shadow-inner"
             >
               <Calendar size={32} className="text-zinc-300" />
             </motion.div>
@@ -531,13 +531,13 @@ const StudentStatus = () => {
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto px-4 sm:px-0">
               <Link 
                 to="/student/history"
-                className="px-8 py-4 bg-navy text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-navy/90 hover:shadow-2xl hover:shadow-navy/20 transition-all flex items-center justify-center gap-3 active:scale-95"
+                className="px-8 py-4 bg-navy text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-navy/90 hover:shadow-2xl hover:shadow-navy/20 transition-all flex items-center justify-center gap-3 active:scale-95"
               >
                 <HistoryIcon size={16} strokeWidth={3} /> View Previous Records
               </Link>
               <button 
                 onClick={() => handleRefresh('manual')}
-                className="px-8 py-4 bg-white border border-zinc-200 text-navy rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-zinc-50 transition-all flex items-center justify-center gap-3 active:scale-95 text-nowrap"
+                className="px-8 py-4 bg-white border border-zinc-200 text-navy rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-zinc-50 transition-all flex items-center justify-center gap-3 active:scale-95 text-nowrap"
               >
                 <RefreshCw size={16} /> Reload Dashboard
               </button>
@@ -569,7 +569,7 @@ const StudentStatus = () => {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="premium-card p-6 sm:p-10 relative overflow-hidden group glow-indigo rounded-3xl"
+          className="premium-card p-6 sm:p-10 relative overflow-hidden group glow-indigo rounded-2xl"
         >
           <div className="absolute top-0 right-0 w-64 h-64 bg-navy/[0.03] rounded-full translate-x-32 -translate-y-32 group-hover:scale-110 transition-transform duration-1000 pointer-events-none"></div>
           <CircularProgress 

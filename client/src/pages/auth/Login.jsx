@@ -147,7 +147,7 @@ const Login = () => {
             layout: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
             scale: { type: 'spring', stiffness: 100, damping: 25 }
           }}
-          className="relative z-10 w-full max-w-md bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border p-6 sm:p-10"
+          className="relative z-10 w-full max-w-md bg-white/80 backdrop-blur-3xl rounded-2xl border p-6 sm:p-10"
         >
           <div className="text-center mb-6 min-h-[62px]">
             <h1 className="text-4xl sm:text-5xl font-brand text-navy leading-none tracking-tight">
@@ -223,7 +223,7 @@ const Login = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="youremail@mits.ac.in"
-                        className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-all"
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-all"
                       />
                     </div>
                     <div>
@@ -234,7 +234,7 @@ const Login = () => {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="********"
-                          className="w-full rounded-full border border-zinc-200 bg-white pl-4 pr-12 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-all"
+                          className="w-full rounded-xl border border-zinc-200 bg-white pl-4 pr-12 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-all"
                         />
                         <button
                           type="button"
@@ -267,10 +267,10 @@ const Login = () => {
                         value={rollNo}
                         onChange={(e) => setRollNo(e.target.value.toUpperCase())}
                         placeholder="24691A32XX"
-                        className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-sm font-mono tracking-wider font-black focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-all"
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-mono tracking-wider font-black focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-all"
                       />
                     </div>
-                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs font-semibold text-zinc-500">
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs font-semibold text-zinc-500">
                       Don't include @mits.ac.in. Just your Roll Number
                     </div>
                     <Button type="submit" className="w-full rounded-full py-3" loading={loading}>
@@ -306,7 +306,7 @@ const Login = () => {
 
                 {forgotSent ? (
                   <div className="space-y-4">
-                    <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-emerald-800 text-xs font-semibold leading-relaxed text-center">
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-emerald-800 text-xs font-semibold leading-relaxed text-center">
                       If the email exists, you should have received a temporary password.
                     </div>
                     <Button 
@@ -339,7 +339,7 @@ const Login = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="yourname@mits.ac.in"
-                        className="w-full rounded-full border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-all"
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition-all"
                       />
                     </div>
                     <Button type="submit" className="w-full rounded-full py-3" loading={loading}>
