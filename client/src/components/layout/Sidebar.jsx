@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
@@ -33,7 +33,7 @@ const NAV_CONFIG = {
       { label: 'Co-Curricular', path: '/admin/co-curricular', icon: ClipboardCheck },
     ]},
   ],
-  [ROLES.HOD || ROLES.AO]: [
+  [ROLES.HOD]: [
     { label: 'Dashboard', path: '/hod', icon: LayoutDashboard },
     { label: 'My Classes', path: '/hod/my-classes', icon: GraduationCap },
     { label: 'Approvals (Dept.)', path: '/faculty/pending', icon: ClipboardCheck },
@@ -65,23 +65,28 @@ const NAV_CONFIG = {
 
 NAV_CONFIG[ROLES.AO] = NAV_CONFIG[ROLES.HOD];
 
-const SidebarLink = ({ item, collapsed, location, onMobileClose, isSubItem = false }) => {
-  const getIsActive = () => {
-    if (item.path === '/hod/classes') {
-      return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
-    }
-    if (item.path === '/hod/my-classes') {
-      return location.pathname.startsWith('/hod/my-classes');
-    }
-    if (item.path === '/admin/setup' || item.path === '/hod/setup') {
-      return location.pathname.startsWith('/admin/setup') || location.pathname.startsWith('/hod/setup');
-    }
-    return location.pathname === item.path ||
-      (item.path.endsWith('/batches') && location.pathname.includes('/batch/')) ||
-      (item.path !== '/' && !['/admin', '/hod', '/faculty'].includes(item.path) && location.pathname.startsWith(item.path + '/'));
-  };
+const isNavItemActive = (itemPath, pathname) => {
+  if (itemPath === '/hod/classes') {
+    return pathname.startsWith('/hod/classes') || pathname.includes('/hod/class/');
+  }
+  if (itemPath === '/hod/my-classes') {
+    return pathname.startsWith('/hod/my-classes');
+  }
+  if (itemPath === '/admin/setup' || itemPath === '/hod/setup') {
+    return pathname.startsWith('/admin/setup') || pathname.startsWith('/hod/setup');
+  }
+  if (['/admin', '/hod', '/faculty'].includes(itemPath)) {
+    return pathname === itemPath;
+  }
+  return (
+    pathname === itemPath ||
+    (itemPath.endsWith('/batches') && pathname.includes('/batch/')) ||
+    (itemPath !== '/' && pathname.startsWith(`${itemPath}/`))
+  );
+};
 
-  const isActive = getIsActive();
+const SidebarLink = ({ item, collapsed, location, onMobileClose }) => {
+  const isActive = isNavItemActive(item.path, location.pathname);
   const Icon = item.icon;
 
   return (
@@ -103,29 +108,13 @@ const SidebarLink = ({ item, collapsed, location, onMobileClose, isSubItem = fal
 };
 
 const SidebarSection = ({ section, collapsed, location, onMobileClose, isExpanded, onToggle }) => {
-  const getHasActiveChild = () => {
-    return section.items.some(item => {
-      if (item.path === '/hod/classes') {
-        return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
-      }
-      if (item.path === '/admin/setup' || item.path === '/hod/setup') {
-        return location.pathname.startsWith('/admin/setup') || location.pathname.startsWith('/hod/setup');
-      }
-      // Strict matching for base routes to avoid multi-section highlights
-      if (['/admin', '/hod', '/faculty'].includes(item.path)) {
-        return location.pathname === item.path;
-      }
-      return location.pathname === item.path || location.pathname.startsWith(item.path + '/');
-    });
-  };
-
-  const hasActiveChild = getHasActiveChild();
-
+  const hasActiveChild = section.items.some((item) => isNavItemActive(item.path, location.pathname));
   const Icon = section.icon;
 
   return (
     <div className="space-y-1">
       <button
+        type="button"
         onClick={onToggle}
         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group border
           ${hasActiveChild && !collapsed
@@ -153,13 +142,12 @@ const SidebarSection = ({ section, collapsed, location, onMobileClose, isExpande
         <div className="overflow-hidden">
           <div className="pl-6 space-y-1 mt-1">
             {section.items.map((item) => (
-              <SidebarLink 
-                key={item.path} 
-                item={item} 
-                collapsed={collapsed} 
-                location={location} 
+              <SidebarLink
+                key={item.path}
+                item={item}
+                collapsed={collapsed}
+                location={location}
                 onMobileClose={onMobileClose}
-                isSubItem={true}
               />
             ))}
           </div>
@@ -170,50 +158,42 @@ const SidebarSection = ({ section, collapsed, location, onMobileClose, isExpande
 };
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {
-  const { sidebarCollapsed: collapsed, setSidebarCollapsed: setCollapsed } = useUI();
+  const { sidebarCollapsed: collapsed } = useUI();
   const { user } = useAuth();
   const location = useLocation();
   const { isFeedbackOpen, openFeedback, closeFeedback } = useFeedback();
   const { isEnabled: wizardEnabled } = useSetupWizardFlag();
-  const navItems = React.useMemo(() => {
+  const navItems = useMemo(() => {
     const baseConfig = NAV_CONFIG[user?.role] || [];
     // If setup wizard is explicitly disabled by feature flag, filter it out
     if (wizardEnabled === false) {
-      return baseConfig.map((section) => ({
-        ...section,
-        items: section.items?.filter((item) => item.path !== '/admin/setup' && item.path !== '/hod/setup'),
-      }));
+      return baseConfig.map((section) =>
+        section.items
+          ? {
+              ...section,
+              items: section.items.filter((item) => item.path !== '/admin/setup' && item.path !== '/hod/setup'),
+            }
+          : section
+      );
     }
     return baseConfig;
   }, [user?.role, wizardEnabled]);
 
-  const [expandedSection, setExpandedSection] = useState(null);
-
-  useEffect(() => {
-    const activeSection = navItems.find(section => 
-      section.items?.some(item => {
-        if (item.path === '/hod/classes') {
-          return location.pathname.startsWith('/hod/classes') || location.pathname.includes('/hod/class/');
-        }
-        if (item.path === '/admin/setup' || item.path === '/hod/setup') {
-          return location.pathname.startsWith('/admin/setup') || location.pathname.startsWith('/hod/setup');
-        }
-        // Strict matching for base routes to avoid incorrect expansion
-        if (['/admin', '/hod', '/faculty'].includes(item.path)) {
-          return location.pathname === item.path;
-        }
-        return location.pathname === item.path || location.pathname.startsWith(item.path + '/');
-      })
+  const activeSectionLabel = useMemo(() => {
+    const activeSection = navItems.find((section) =>
+      section.items?.some((item) => isNavItemActive(item.path, location.pathname))
     );
-    if (activeSection) {
-      setExpandedSection(activeSection.label);
-    }
+    return activeSection?.label ?? null;
   }, [location.pathname, navItems]);
+
+  const [sectionToggle, setSectionToggle] = useState({ routeKey: null, label: null });
+  const currentRouteKey = `${location.pathname}::${activeSectionLabel ?? ''}`;
+  const expandedSection = sectionToggle.routeKey === currentRouteKey ? sectionToggle.label : activeSectionLabel;
 
   const [isHovered, setIsHovered] = useState(false);
   const displayCollapsed = collapsed && !isHovered;
 
-  const lastPath = React.useRef(location.pathname);
+  const lastPath = useRef(location.pathname);
   
   useEffect(() => {
     if (lastPath.current !== location.pathname) {
@@ -257,7 +237,12 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
                 location={location}
                 onMobileClose={onMobileClose}
                 isExpanded={expandedSection === item.label}
-                onToggle={() => setExpandedSection(expandedSection === item.label ? null : item.label)}
+                onToggle={() =>
+                  setSectionToggle({
+                    routeKey: currentRouteKey,
+                    label: expandedSection === item.label ? null : item.label,
+                  })
+                }
               />
             );
           }
@@ -275,6 +260,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
 
         {/* Give Feedback Item */}
         <button
+          type="button"
           onClick={openFeedback}
           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group border border-transparent text-indigo-100/55 hover:bg-indigo-500/10 hover:text-white hover:border-indigo-500/20 mt-4`}
         >
@@ -299,7 +285,6 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
           </p>
         </div>
       </div>
-      <FeedbackModal isOpen={isFeedbackOpen} onClose={closeFeedback} />
     </>
   );
 
@@ -339,6 +324,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
           </div>
         )}
       </AnimatePresence>
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={closeFeedback} />
     </>
   );
 };
