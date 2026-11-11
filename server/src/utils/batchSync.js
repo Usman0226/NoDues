@@ -83,6 +83,66 @@ export const syncSubjectRemoval = async (classId, subjectId) => {
   }
 };
 
+// ── bulkSyncSubjectRemoval ──────────────────────────────────────────────────
+export const bulkSyncSubjectRemoval = async (classId, subjectIds) => {
+  if (!subjectIds || !subjectIds.length) return;
+  let succeeded = false;
+  const session = await mongoose.startSession();
+  try {
+    await startSafeTransaction(session);
+
+    const activeBatch = await NodueBatch.findOne({ classId, status: 'active' }).session(session).lean();
+    if (!activeBatch) {
+      await commitSafeTransaction(session);
+      return;
+    }
+
+    logger.info('bulk_sync_subject_removal_started', { batchId: activeBatch._id, subjectIds });
+
+    // 1. Bulk Update Requests: Unset all removed subjects from facultySnapshot
+    const unsetFields = {};
+    for (const sid of subjectIds) {
+      unsetFields[`facultySnapshot.${sid}`] = "";
+    }
+
+    await NodueRequest.updateMany(
+      { batchId: activeBatch._id },
+      { $unset: unsetFields },
+      getSessionOptions(session)
+    );
+
+    // 2. Bulk Delete Approvals for all removed subjects
+    const deleteResult = await NodueApproval.deleteMany(
+      { batchId: activeBatch._id, subjectId: { $in: subjectIds }, approvalType: 'subject' },
+      getSessionOptions(session)
+    );
+
+    // 3. Bulk Recalculate Status for all affected students
+    const affectedRequests = await NodueRequest.find({ batchId: activeBatch._id }).session(session).select('_id').lean();
+    const requestIds = affectedRequests.map((r) => r._id);
+    await bulkRecalcRequestStatus(requestIds, session);
+
+    await commitSafeTransaction(session);
+    succeeded = true;
+
+    logger.audit('BULK_SYNC_SUBJECT_REMOVED', {
+      batchId: activeBatch._id.toString(),
+      subjectCount: subjectIds.length,
+      approvalsDeleted: deleteResult.deletedCount,
+    });
+  } catch (err) {
+    await abortSafeTransaction(session);
+    logger.error('bulk_sync_subject_removal_failed', { classId, subjectIds, error: err.message });
+  } finally {
+    session.endSession();
+  }
+
+  if (succeeded) {
+    invalidateEntityCache('student', 'all');
+    invalidateEntityCache('class', classId);
+  }
+};
+
 // ── syncSubjectUpdate ─────────────────────────────────────────────────────────
 export const syncSubjectUpdate = async (classId, subjectId, facultyData) => {
   let succeeded = false;

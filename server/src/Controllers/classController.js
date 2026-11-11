@@ -9,7 +9,7 @@ import NodueApproval from '../models/NodueApproval.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import cache from '../config/cache.js';
 import logger from '../utils/logger.js';
-import { syncSubjectRemoval, syncSubjectUpdate, syncSubjectAddition, bulkSyncClassTeacherUpdate } from '../utils/batchSync.js';
+import { syncSubjectRemoval, bulkSyncSubjectRemoval, syncSubjectUpdate, syncSubjectAddition, bulkSyncClassTeacherUpdate } from '../utils/batchSync.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction, getSessionOptions, executeSafeTransaction } from '../utils/safeTransaction.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
@@ -718,48 +718,154 @@ export const updateSubjectAssignment = async (req, res, next) => {
 
 // ── DELETE /api/classes/:id/subjects/:assignmentId ────────────────────────────
 export const removeSubjectAssignment = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  try {
-    await startSafeTransaction(session);
-    const { id, assignmentId } = req.params;
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      await startSafeTransaction(session);
+      const { id, assignmentId } = req.params;
 
-    const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
-    if (!cls) {
+      const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
+      if (!cls) {
+        await abortSafeTransaction(session);
+        return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+      }
+
+      if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
+        await abortSafeTransaction(session);
+        return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+      }
+
+      const assignment = cls.subjectAssignments.id(assignmentId);
+      if (!assignment) {
+        await abortSafeTransaction(session);
+        return next(new ErrorResponse('Assignment not found', 404, 'NOT_FOUND'));
+      }
+
+      const subjectIdToSync = assignment.subjectId;
+      const facultyIdToInvalidate = assignment.facultyId;
+      assignment.deleteOne();
+      await cls.save({ session });
+
+      await commitSafeTransaction(session);
+
+      // ✅ Sync AFTER commit
+      await syncSubjectRemoval(id, subjectIdToSync);
+
+      // Invalidate faculty cache if a faculty was assigned to this removed subject
+      if (facultyIdToInvalidate) {
+        invalidateEntityCache('faculty', facultyIdToInvalidate);
+      }
+      invalidateEntityCache('class', id);
+
+      return res.status(200).json({ success: true, data: { message: 'Subject assignment removed' } });
+    } catch (err) {
       await abortSafeTransaction(session);
-      return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
-    }
+      const isWriteConflict =
+        err.code === 112 ||
+        err.codeName === 'WriteConflict' ||
+        err.message?.includes('Write conflict');
 
-    if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
+      if (isWriteConflict && attempt < maxRetries) {
+        logger.warn('removeSubjectAssignment: Write conflict encountered, retrying attempt', {
+          attempt,
+          classId: req.params.id,
+          assignmentId: req.params.assignmentId,
+        });
+        const delay = Math.random() * 50 * Math.pow(2, attempt);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      return next(err);
+    } finally {
+      session.endSession();
+    }
+  }
+};
+
+// ── POST /api/classes/:id/subjects/bulk-remove ────────────────────────
+export const bulkRemoveSubjectAssignments = async (req, res, next) => {
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const session = await mongoose.startSession();
+    try {
+      await startSafeTransaction(session);
+      const { id } = req.params;
+      const { assignmentIds } = req.body;
+
+      if (!Array.isArray(assignmentIds) || assignmentIds.length === 0) {
+        await abortSafeTransaction(session);
+        return next(new ErrorResponse('Please provide an array of assignmentIds', 400, 'VAL_001'));
+      }
+
+      const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
+      if (!cls) {
+        await abortSafeTransaction(session);
+        return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+      }
+
+      if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
+        await abortSafeTransaction(session);
+        return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+      }
+
+      const targetSet = new Set(assignmentIds.map((aId) => String(aId)));
+      const removedSubjectIds = [];
+      const removedFacultyIds = [];
+
+      const remaining = [];
+      for (const a of cls.subjectAssignments) {
+        if (targetSet.has(String(a._id))) {
+          if (a.subjectId) removedSubjectIds.push(a.subjectId.toString());
+          if (a.facultyId) removedFacultyIds.push(a.facultyId.toString());
+        } else {
+          remaining.push(a);
+        }
+      }
+
+      const removedCount = cls.subjectAssignments.length - remaining.length;
+      cls.subjectAssignments = remaining;
+      await cls.save({ session });
+
+      await commitSafeTransaction(session);
+
+      // Batch sync active batch requests & approvals
+      if (removedSubjectIds.length > 0) {
+        await bulkSyncSubjectRemoval(id, removedSubjectIds);
+      }
+
+      for (const fid of removedFacultyIds) {
+        invalidateEntityCache('faculty', fid);
+      }
+      invalidateEntityCache('class', id);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          removedCount,
+          message: `${removedCount} subject mappings removed successfully`,
+        },
+      });
+    } catch (err) {
       await abortSafeTransaction(session);
-      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+      const isWriteConflict =
+        err.code === 112 ||
+        err.codeName === 'WriteConflict' ||
+        err.message?.includes('Write conflict');
+
+      if (isWriteConflict && attempt < maxRetries) {
+        logger.warn('bulkRemoveSubjectAssignments: Write conflict encountered, retrying attempt', {
+          attempt,
+          classId: req.params.id,
+        });
+        const delay = Math.random() * 50 * Math.pow(2, attempt);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      return next(err);
+    } finally {
+      session.endSession();
     }
-
-    const assignment = cls.subjectAssignments.id(assignmentId);
-    if (!assignment) {
-      await abortSafeTransaction(session);
-      return next(new ErrorResponse('Assignment not found', 404, 'NOT_FOUND'));
-    }
-
-    const subjectIdToSync = assignment.subjectId;
-    assignment.deleteOne();
-    await cls.save({ session });
-
-    await commitSafeTransaction(session);
-
-    // ✅ Sync AFTER commit
-    await syncSubjectRemoval(id, subjectIdToSync);
-
-    // Invalidate faculty cache if a faculty was assigned to this removed subject
-    if (assignment.facultyId) {
-      invalidateEntityCache('faculty', assignment.facultyId);
-    }
-
-    return res.status(200).json({ success: true, data: { message: 'Subject assignment removed' } });
-  } catch (err) {
-    await abortSafeTransaction(session);
-    next(err);
-  } finally {
-    session.endSession();
   }
 };
 

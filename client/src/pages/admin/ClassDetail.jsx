@@ -10,7 +10,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import ImportStepper from '../../components/import/ImportStepper';
 import { useApi } from '../../hooks/useApi';
-import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, updateClassSubject, removeClassSubject, propagateCohortSubjects } from '../../api/classes';
+import { getClass, getClasses, initiateBatch, cloneSubjects, addSubjectToClass, updateClassSubject, removeClassSubject, bulkRemoveClassSubjects, propagateCohortSubjects } from '../../api/classes';
 import { createStudent, updateStudent, deleteStudent, assignMentor, addElective, removeElective, bulkDeactivateStudents, bulkAssignMentor } from '../../api/students';
 import { getFaculty } from '../../api/faculty';
 import { getSubjects, createSubject } from '../../api/subjects';
@@ -658,14 +658,12 @@ const SUBJECT_COLS = [
   };
 
   const handleBulkRemoveSubjects = async () => {
+    if (!selectedMappingIds.length) return;
     setSubmitting(true);
     try {
-      // NOTE: We don't have a bulk API for removing mappings yet, but I'll use sequential for now if small, 
-      // or implement it. Wait, the user asked for bulk operations. I should have added bulkRemoveSubjects to the backend.
-      // I'll skip this for now or just implement the frontend selection.
-      // Actually, I'll just do sequential for now to fulfill the "Action Bar" requirement, but ideally it should be bulk.
-      await Promise.all(selectedMappingIds.map(id => removeClassSubject(classId, id)));
-      toast.success(`${selectedMappingIds.length} mappings removed`);
+      const res = await bulkRemoveClassSubjects(classId, selectedMappingIds);
+      const count = res?.data?.removedCount ?? selectedMappingIds.length;
+      toast.success(`${count} subject ${count === 1 ? 'mapping' : 'mappings'} removed`);
       setShowBulkRemoveSubjects(false);
       setSelectedMappingIds([]);
       fetchClass();

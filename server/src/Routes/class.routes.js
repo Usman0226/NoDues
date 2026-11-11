@@ -11,6 +11,7 @@ import {
   addSubjectAssignment,
   updateSubjectAssignment,
   removeSubjectAssignment,
+  bulkRemoveSubjectAssignments,
   cloneSubjects,
   getPromotionCandidates,
   promoteStudents,
@@ -67,6 +68,8 @@ router.patch('/:id/class-teacher', assignClassTeacher);
 // Subject assignments
 router.route('/:id/subjects')
   .post(addSubjectAssignment);
+
+router.post('/:id/subjects/bulk-remove', bulkRemoveSubjectAssignments);
 
 router.route('/:id/subjects/:assignmentId')
   .patch(updateSubjectAssignment)
