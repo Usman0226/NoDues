@@ -284,5 +284,27 @@ describe('Timetable Multi-Page PDF Ingestion & Targeted Parsing', () => {
       assert.strictEqual(res.body.data.selectedPage, 1);
       assert.ok(Array.isArray(res.body.data.rows));
     });
+
+    it('batch imports all detected sections and hydrates master curriculum', async () => {
+      const res = await request(app)
+        .post('/api/timetable/batch-import')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .field('departmentId', testDepartment._id.toString())
+        .attach('file', path.join(FIXTURES_DIR, 'timetable_multipage_sample.pdf'));
+
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.data.totalSections, 3);
+      assert.ok(res.body.data.provisionedCount >= 1);
+      assert.ok(Array.isArray(res.body.data.sections));
+
+      // Verify Master Curriculum was created
+      const masterClass = await Class.findOne({
+        departmentId: testDepartment._id,
+        isMaster: true,
+      }).lean();
+      assert.ok(masterClass, 'Master curriculum should be hydrated');
+      assert.ok(masterClass.subjectAssignments.length > 0, 'Master curriculum should contain subjects');
+    });
   });
 });

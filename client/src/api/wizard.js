@@ -61,6 +61,16 @@ export const previewTimetable = (formData) =>
   });
 
 /**
+ * Batch provisions all detected sections from a multi-page timetable PDF
+ * @param {FormData} formData
+ * @returns {Promise<{ success: boolean, data: any }>}
+ */
+export const batchImportTimetable = (formData) =>
+  api.post('/timetable/batch-import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+
+/**
  * Commit reviewed timetable rows into class semester subjects
  * @param {Object} payload
  * @returns {Promise<{ success: boolean, data: any }>}

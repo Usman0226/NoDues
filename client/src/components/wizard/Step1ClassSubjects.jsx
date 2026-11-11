@@ -4,6 +4,7 @@ import {
   inspectTimetablePdf,
   previewTimetable,
   commitTimetable,
+  batchImportTimetable,
   cloneClassSubjects,
 } from '../../api/wizard';
 import { getDepartments } from '../../api/departments';
@@ -14,6 +15,7 @@ import { ROLES } from '../../utils/constants';
 import { getAcademicYearRoman, formatSectionDisplayName } from '../../utils/formatters';
 import FileDropzone from '../ui/FileDropzone';
 import Button from '../ui/Button';
+import Modal from '../ui/Modal';
 import { StepTableSkeleton } from './WizardSkeleton';
 import {
   FileText,
@@ -26,15 +28,13 @@ import {
   Search,
   ArrowRight,
   BookOpen,
-  UserCheck,
-  Building2,
   Check,
   ChevronRight,
   Upload,
   Copy,
-  AlertCircle,
-  RefreshCw,
-  X,
+  Users,
+  GraduationCap,
+  Clock,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -62,7 +62,10 @@ const Step1ClassSubjects = ({
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
 
-  // Extracted preview state
+  // In-memory cache for parsed pages (ensures instant 0ms switching)
+  const [pageCache, setPageCache] = useState({});
+
+  // Extracted preview state for the currently active page
   const [uploadId, setUploadId] = useState(null);
   const [resolvedClassId, setResolvedClassId] = useState(initialClassId || null);
   const [resolvedClassData, setResolvedClassData] = useState(initialData || null);
@@ -70,11 +73,16 @@ const Step1ClassSubjects = ({
   const [subjectFilter, setSubjectFilter] = useState('all'); // 'all' | 'flagged' | 'matched' | 'excluded'
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Editable header fields from preview
+  // Batch import state
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [isBatchImporting, setIsBatchImporting] = useState(false);
+  const [batchResult, setBatchResult] = useState(null);
+
+  // Editable section attributes
   const [sectionForm, setSectionForm] = useState({
     name: initialData?.name || '',
     semester: initialData?.semester || 1,
-    academicYear: initialData?.academicYear || '2025-26',
+    academicYear: initialData?.academicYear || '2026-27',
     departmentId: defaultDeptId,
     classTeacherId: initialData?.classTeacherId?._id || initialData?.classTeacherId || '',
   });
@@ -100,7 +108,7 @@ const Step1ClassSubjects = ({
 
   const { data: facultyRes } = useQuery({
     queryKey: ['wizard', 'faculty', activeDepartmentId],
-    queryFn: () => getFaculty(activeDepartmentId ? { departmentId: activeDepartmentId, limit: 120 } : { limit: 120 }),
+    queryFn: () => getFaculty(activeDepartmentId ? { departmentId: activeDepartmentId, limit: 150 } : { limit: 150 }),
     enabled: true,
   });
   const facultyList = facultyRes?.data || facultyRes?.faculty || [];
@@ -118,7 +126,7 @@ const Step1ClassSubjects = ({
   });
   const batchesList = batchRes?.data || batchRes?.batches || [];
 
-  // Find Master syllabus for current semester
+  // Master syllabus for current semester
   const masterClass = useMemo(() => {
     return allClasses.find(
       (c) =>
@@ -128,115 +136,179 @@ const Step1ClassSubjects = ({
     );
   }, [allClasses, sectionForm.semester, activeDepartmentId]);
 
-  // If initialClassId is passed and no PDF uploaded yet, preload class info
+  // Group inspected pages by semester
+  const groupedPages = useMemo(() => {
+    if (!inspection?.pages || inspection.pages.length === 0) return {};
+    const groups = {};
+    for (const page of inspection.pages) {
+      const sem = page.detectedSemester || 1;
+      if (!groups[sem]) groups[sem] = [];
+      groups[sem].push(page);
+    }
+    return groups;
+  }, [inspection]);
+
+  // Preload initial class data if passed
   useEffect(() => {
     if (initialClassId && !resolvedClassData) {
-      getClass(initialClassId).then((res) => {
-        const cls = res?.data || res;
-        if (cls) {
-          setResolvedClassData(cls);
-          setResolvedClassId(cls._id);
-          setSectionForm({
-            name: cls.name,
-            semester: cls.semester || 1,
-            academicYear: cls.academicYear || '2025-26',
-            departmentId: cls.departmentId?._id || cls.departmentId || defaultDeptId,
-            classTeacherId: cls.classTeacherId?._id || cls.classTeacherId || '',
-          });
-          if (Array.isArray(cls.subjectAssignments) && cls.subjectAssignments.length > 0) {
-            setExtractedRows(
-              cls.subjectAssignments.map((s) => ({
-                subjectCode: s.subjectCode || s.code || '',
-                subjectName: s.subjectName || s.name || '',
-                subjectId: s.subjectId?._id || s.subjectId,
-                facultyName: s.facultyName || s.facultyId?.name || 'Unassigned',
-                facultyId: s.facultyId?._id || s.facultyId || null,
-                hours: s.hours || 3,
-                isElective: Boolean(s.isElective),
-                status: s.facultyId ? 'matched' : 'flagged',
-                requiresReview: !s.facultyId,
-                reviewReasons: !s.facultyId ? ['No faculty assigned'] : [],
-              }))
-            );
+      getClass(initialClassId)
+        .then((res) => {
+          const cls = res?.data || res;
+          if (cls) {
+            setResolvedClassData(cls);
+            setResolvedClassId(cls._id);
+            setSectionForm({
+              name: cls.name,
+              semester: cls.semester || 1,
+              academicYear: cls.academicYear || '2026-27',
+              departmentId: cls.departmentId?._id || cls.departmentId || defaultDeptId,
+              classTeacherId: cls.classTeacherId?._id || cls.classTeacherId || '',
+            });
+            if (Array.isArray(cls.subjectAssignments) && cls.subjectAssignments.length > 0) {
+              setExtractedRows(
+                cls.subjectAssignments.map((s) => ({
+                  subjectCode: s.subjectCode || s.code || '',
+                  subjectName: s.subjectName || s.name || '',
+                  subjectId: s.subjectId?._id || s.subjectId,
+                  facultyName: s.facultyName || s.facultyId?.name || 'Unassigned',
+                  facultyId: s.facultyId?._id || s.facultyId || null,
+                  hours: s.hours || 3,
+                  isElective: Boolean(s.isElective),
+                  status: s.facultyId ? 'matched' : 'flagged',
+                  requiresReview: !s.facultyId,
+                  reviewReasons: !s.facultyId ? ['No faculty assigned'] : [],
+                }))
+              );
+            }
           }
-        }
-      }).catch((e) => console.warn('Could not load initial class in Step 1:', e?.message));
+        })
+        .catch((e) => console.warn('Could not load initial class in Step 1:', e?.message));
     }
   }, [initialClassId, resolvedClassData, defaultDeptId]);
 
-  // Trigger preview for selected page
-  const runPreviewForPage = useCallback(async (file, pageNum) => {
-    if (!file) return;
-    setIsParsing(true);
-    setParseError(null);
+  // ─────────────────────────────────────────────────────────────────────────────
+  // RUN PREVIEW FOR SPECIFIC PAGE
+  // ─────────────────────────────────────────────────────────────────────────────
+  const runPreviewForPage = useCallback(
+    async (file, pageNum) => {
+      if (!file) return;
 
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      if (pageNum) fd.append('page', String(pageNum));
-      if (activeDepartmentId) fd.append('departmentId', activeDepartmentId);
-      if (resolvedClassId) fd.append('classId', resolvedClassId);
-
-      const res = await previewTimetable(fd);
-      const data = res?.data?.rows !== undefined ? res.data : (res?.rows !== undefined ? res : (res?.data || res));
-
-      setUploadId(data.uploadId);
-      setResolvedClassId(data.classId);
-      setExtractedRows(data.rows || []);
-
-      const detectedName = data.className || data.metadata?.detectedClassName || 'Section A';
-      const detectedSem = data.targetSemester || data.metadata?.detectedSemester || 1;
-      const detectedTeacherId = data.classTeacher?._id || '';
-
-      setSectionForm((prev) => ({
-        ...prev,
-        name: detectedName,
-        semester: detectedSem,
-        academicYear: data.metadata?.academicYear || prev.academicYear,
-        classTeacherId: detectedTeacherId || prev.classTeacherId,
-      }));
-
-      // Fetch or synthesize resolved class data
-      setResolvedClassData({
-        _id: data.classId,
-        name: detectedName,
-        semester: detectedSem,
-        academicYear: data.metadata?.academicYear || '2025-26',
-        departmentId: activeDepartmentId,
-        classTeacher: data.classTeacher,
-        classTeacherId: data.classTeacher?._id || null,
-      });
-
-      if (data.detectedTeacher && !data.classTeacher) {
-        toast(`Detected Class Teacher "${data.detectedTeacher}" could not be matched automatically. Please select from the dropdown below.`, {
-          icon: 'ℹ️',
-          duration: 4000,
+      // Check cache first for instant 0ms switching
+      if (pageCache[pageNum]) {
+        const cached = pageCache[pageNum];
+        setUploadId(cached.uploadId);
+        setResolvedClassId(cached.classId);
+        setExtractedRows(cached.rows || []);
+        setSectionForm({
+          name: cached.name,
+          semester: cached.semester,
+          academicYear: cached.academicYear,
+          departmentId: cached.departmentId || activeDepartmentId,
+          classTeacherId: cached.classTeacherId || '',
         });
-      } else if (data.classTeacher) {
-        toast.success(`Matched Class Teacher: ${data.classTeacher.name}`);
+        setResolvedClassData(cached.classData);
+        return;
       }
 
-      onDirtyChange?.(true);
-    } catch (err) {
-      console.error('Preview parsing error:', err);
-      setParseError(err?.response?.data?.error?.message || err?.message || 'Failed to parse timetable.');
-      toast.error('Failed to extract subjects from PDF page.');
-    } finally {
-      setIsParsing(false);
-    }
-  }, [activeDepartmentId, resolvedClassId, onDirtyChange]);
+      setIsParsing(true);
+      setParseError(null);
+
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        if (pageNum) fd.append('page', String(pageNum));
+        if (activeDepartmentId) fd.append('departmentId', activeDepartmentId);
+        if (resolvedClassId) fd.append('classId', resolvedClassId);
+
+        const res = await previewTimetable(fd);
+        const data =
+          res?.data?.rows !== undefined
+            ? res.data
+            : res?.rows !== undefined
+            ? res
+            : res?.data || res;
+
+        const detectedName = data.className || data.metadata?.detectedClassName || 'Section A';
+        const detectedSem = data.targetSemester || data.metadata?.detectedSemester || 1;
+        const detectedTeacherId = data.classTeacher?._id || '';
+        const resolvedDept = data.departmentId || activeDepartmentId;
+
+        setUploadId(data.uploadId);
+        setResolvedClassId(data.classId);
+        setExtractedRows(data.rows || []);
+
+        const newForm = {
+          name: detectedName,
+          semester: detectedSem,
+          academicYear: data.metadata?.academicYear || '2026-27',
+          departmentId: resolvedDept,
+          classTeacherId: detectedTeacherId || '',
+        };
+        setSectionForm(newForm);
+
+        const classObj = {
+          _id: data.classId,
+          name: detectedName,
+          semester: detectedSem,
+          academicYear: data.metadata?.academicYear || '2026-27',
+          departmentId: resolvedDept,
+          classTeacher: data.classTeacher,
+          classTeacherId: data.classTeacher?._id || null,
+        };
+        setResolvedClassData(classObj);
+
+        // Save to cache
+        setPageCache((prev) => ({
+          ...prev,
+          [pageNum]: {
+            uploadId: data.uploadId,
+            classId: data.classId,
+            name: detectedName,
+            semester: detectedSem,
+            academicYear: data.metadata?.academicYear || '2026-27',
+            departmentId: resolvedDept,
+            classTeacherId: detectedTeacherId,
+            classData: classObj,
+            rows: data.rows || [],
+          },
+        }));
+
+        if (data.detectedTeacher && !data.classTeacher) {
+          toast(
+            `Detected Class Teacher "${data.detectedTeacher}" could not be auto-matched. Please select from the dropdown below.`,
+            { icon: 'ℹ️', duration: 4000 }
+          );
+        } else if (data.classTeacher) {
+          toast.success(`Matched Class Teacher: ${data.classTeacher.name}`);
+        }
+
+        onDirtyChange?.(true);
+      } catch (err) {
+        console.error('Preview parsing error:', err);
+        setParseError(err?.response?.data?.error?.message || err?.message || 'Failed to parse timetable.');
+        toast.error('Failed to extract subjects from PDF page.');
+      } finally {
+        setIsParsing(false);
+      }
+    },
+    [activeDepartmentId, resolvedClassId, pageCache, onDirtyChange]
+  );
 
   // ─────────────────────────────────────────────────────────────────────────────
   // FILE SELECTION / INSPECT HANDLER
   // ─────────────────────────────────────────────────────────────────────────────
   const handleResetFile = () => {
     setPdfFile(null);
+    setIsInspecting(false);
     setInspection(null);
     setSelectedPage(null);
     setExtractedRows([]);
+    setPageCache({});
     setResolvedClassId(null);
     setResolvedClassData(null);
     setParseError(null);
+    setBatchResult(null);
+    setBatchModalOpen(false);
     onDirtyChange?.(false);
   };
 
@@ -256,7 +328,9 @@ const Step1ClassSubjects = ({
     setParseError(null);
     setSelectedPage(null);
     setExtractedRows([]);
+    setPageCache({});
     setResolvedClassId(null);
+    setBatchResult(null);
 
     try {
       const fd = new FormData();
@@ -265,28 +339,38 @@ const Step1ClassSubjects = ({
       if (resolvedClassId) fd.append('classId', resolvedClassId);
 
       const res = await inspectTimetablePdf(fd);
-      const inspData = res?.data?.pages !== undefined ? res.data : (res?.pages !== undefined ? res : (res?.data || res));
+      const inspData =
+        res?.data?.pages !== undefined
+          ? res.data
+          : res?.pages !== undefined
+          ? res
+          : res?.data || res;
       setInspection(inspData);
 
       // Auto-resolve department for Admin if not set
+      let effectiveDeptId = activeDepartmentId;
       if (!sectionForm.departmentId && inspData.pages?.[0]?.detectedDepartment && departments?.length > 0) {
         const code = inspData.pages[0].detectedDepartment.toUpperCase();
-        const matchedDept = departments.find(d => d.code?.toUpperCase() === code || d.name?.toUpperCase().includes(code));
+        const matchedDept = departments.find(
+          (d) => d.code?.toUpperCase() === code || d.name?.toUpperCase().includes(code)
+        );
         if (matchedDept) {
-          setSectionForm(prev => ({ ...prev, departmentId: matchedDept._id }));
+          effectiveDeptId = matchedDept._id;
+          setSectionForm((prev) => ({ ...prev, departmentId: matchedDept._id }));
         }
       }
 
-      // If document has only 1 page, auto-select it directly
-      if (!inspData.isMultiPage || inspData.pageCount === 1) {
-        setSelectedPage(1);
-        await runPreviewForPage(file, 1);
-      } else {
-        // Multi-page document: auto-preview the recommended page or page 1 so user immediately sees preview!
-        const targetPage = inspData.recommendedPage || 1;
-        setSelectedPage(targetPage);
-        await runPreviewForPage(file, targetPage);
-        toast.success(`Detected ${inspData.pageCount} section pages. Previewing ${inspData.pages?.[targetPage - 1]?.displayName || ('Section ' + targetPage)}.`);
+      // Auto-select page 1 or recommended page
+      const targetPage = inspData.recommendedPage || 1;
+      setSelectedPage(targetPage);
+      await runPreviewForPage(file, targetPage);
+
+      if (inspData.pageCount > 1) {
+        toast.success(
+          `Detected ${inspData.pageCount} section pages. Previewing ${
+            inspData.pages?.[targetPage - 1]?.displayName || 'Section ' + targetPage
+          }.`
+        );
       }
     } catch (err) {
       console.error('Inspection error:', err);
@@ -302,19 +386,47 @@ const Step1ClassSubjects = ({
     runPreviewForPage(pdfFile, pageNum);
   };
 
-  // Filter multi-page inspection list
-  const filteredPages = useMemo(() => {
-    if (!inspection?.pages) return [];
-    if (!pageSearchQuery.trim()) return inspection.pages;
-    const q = pageSearchQuery.toLowerCase();
-    return inspection.pages.filter((p) => {
-      const cls = (p.displayName || p.detectedClassName || '').toLowerCase();
-      const header = (p.header || '').toLowerCase();
-      const teacher = (p.detectedTeacher || '').toLowerCase();
-      const sem = `semester ${p.detectedSemester || ''} sem ${p.detectedSemester || ''}`;
-      return cls.includes(q) || header.includes(q) || teacher.includes(q) || sem.includes(q);
+  // ─────────────────────────────────────────────────────────────────────────────
+  // BATCH PROVISIONING
+  // ─────────────────────────────────────────────────────────────────────────────
+  const handleBatchImport = async () => {
+    if (!pdfFile) return;
+    setIsBatchImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', pdfFile);
+      if (activeDepartmentId) fd.append('departmentId', activeDepartmentId);
+
+      const res = await batchImportTimetable(fd);
+      const data = res?.data || res;
+      setBatchResult(data);
+      toast.success(`Provisioned all ${data.provisionedCount || data.sections?.length || 0} sections successfully!`);
+    } catch (err) {
+      console.error('Batch import error:', err);
+      toast.error(err?.response?.data?.error?.message || err?.message || 'Failed to batch provision sections.');
+    } finally {
+      setIsBatchImporting(false);
+    }
+  };
+
+  const handleSelectBatchSection = (sec) => {
+    setBatchModalOpen(false);
+    const classDisplayName = formatSectionDisplayName(sec.name, sec.semester);
+    const summary = `${classDisplayName} · Sem ${sec.semester} · ${sec.subjectCount} subjects provisioned`;
+
+    onSave({
+      classId: sec.classId,
+      classData: {
+        _id: sec.classId,
+        name: sec.name,
+        semester: sec.semester,
+        academicYear: sec.academicYear,
+        classTeacherId: sec.classTeacher?._id || null,
+      },
+      summary,
+      completedTimetable: true,
     });
-  }, [inspection, pageSearchQuery]);
+  };
 
   // ─────────────────────────────────────────────────────────────────────────────
   // SUBJECT ROW MUTATION HANDLERS
@@ -330,7 +442,7 @@ const Step1ClassSubjects = ({
       if (facultyId) {
         target.status = 'matched';
         target.requiresReview = false;
-        target.reviewReasons = target.reviewReasons.filter((r) => !r.includes('faculty'));
+        target.reviewReasons = (target.reviewReasons || []).filter((r) => !r.includes('faculty'));
       }
       updated[index] = target;
       return updated;
@@ -412,7 +524,7 @@ const Step1ClassSubjects = ({
       });
     } catch (err) {
       console.error('Commit timetable error:', err);
-      toast.error(err?.response?.data?.error?.message || err?.message || 'Failed to commit timetable configuration.');
+      toast.error(err?.response?.data?.error?.message || err?.message || 'Failed to save timetable configuration.');
     } finally {
       setIsSubmitting(false);
     }
@@ -453,13 +565,12 @@ const Step1ClassSubjects = ({
         }
       }
 
-      // If manualSource is master curriculum
       if (manualSource === 'master' && masterClass) {
         await cloneClassSubjects(targetClsId, masterClass._id);
         toast.success(`Inherited Master Syllabus subjects for Semester ${sectionForm.semester}!`);
       } else if (manualSource === 'clone' && cloneSourceClassId) {
         await cloneClassSubjects(targetClsId, cloneSourceClassId);
-        toast.success('Cloned subjects from source section!');
+        toast.success('Copied subjects from source section!');
       }
 
       const refreshed = await getClass(targetClsId);
@@ -521,7 +632,7 @@ const Step1ClassSubjects = ({
 
         <p className="text-xs text-zinc-500 font-medium hidden md:block">
           {activeTab === 'pdf'
-            ? 'Drops PDF right here to auto-provision section, semester, class teacher & subjects.'
+            ? 'Drop institutional timetable PDF here. Section, semester, class teacher & subjects will be detected automatically.'
             : 'Select an existing class or inherit directly from the department master blueprint.'}
         </p>
       </div>
@@ -539,10 +650,9 @@ const Step1ClassSubjects = ({
                 onFileSelected={handleFileDrop}
                 accept=".pdf,application/pdf"
                 title="Drop Institutional Timetable PDF Here"
-                subtitle="Upload official timetable PDF. Automatically extracts section name, semester, class teacher, and curriculum subjects."
+                subtitle="Upload official timetable PDF. Extracts section name, semester, class teacher, and curriculum subjects."
                 loading={isInspecting}
                 isProcessing={isInspecting}
-                file={pdfFile}
                 icon={FileText}
               />
             </div>
@@ -550,46 +660,73 @@ const Step1ClassSubjects = ({
 
           {/* Active File Summary Banner (shown when PDF is chosen) */}
           {pdfFile && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white border border-zinc-200/90 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-zinc-200/90 shadow-xs">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200/60 flex items-center justify-center text-indigo-600 shrink-0">
-                  <FileText size={18} />
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200/60 flex items-center justify-center text-indigo-600 shrink-0">
+                  <FileText size={20} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="text-xs font-black text-navy">{pdfFile.name}</h4>
-                    <span className="text-[11px] text-zinc-500 tabular-nums">({(pdfFile.size / 1024).toFixed(1)} KB)</span>
+                    <h4 className="text-sm font-black text-navy">{pdfFile.name}</h4>
+                    <span className="text-xs text-zinc-500 tabular-nums">
+                      ({(pdfFile.size / 1024).toFixed(1)} KB)
+                    </span>
                     {inspection?.pageCount && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/60">
                         {inspection.pageCount} Sections Detected
                       </span>
                     )}
+                    {Object.keys(groupedPages).length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200/60">
+                        {Object.keys(groupedPages).length} Semesters
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-zinc-500 mt-0.5">
-                    Official document verified. Pick any section page to configure its curriculum.
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Select any section below to review subjects, or provision all sections in one click.
                   </p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleResetFile}
-                className="text-xs font-bold text-zinc-600 hover:text-navy px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 self-start sm:self-auto flex items-center gap-1.5 transition-colors"
-              >
-                <RotateCcw size={13} className="text-zinc-500" />
-                <span>Upload Different PDF</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                {inspection?.isMultiPage && inspection.pages?.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setBatchModalOpen(true)}
+                    className="text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 font-bold flex items-center gap-1.5"
+                  >
+                    <Sparkles size={14} className="text-indigo-600" />
+                    <span>Batch Provision All {inspection.pageCount} Sections</span>
+                  </Button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleResetFile}
+                  className="text-xs font-bold text-zinc-600 hover:text-navy px-3 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 flex items-center gap-1.5 transition-colors"
+                >
+                  <RotateCcw size={13} className="text-zinc-500" />
+                  <span>Change PDF</span>
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Multi-Section Interactive Strip (when multi-page PDF inspected) */}
+          {/* Multi-Section Interactive Grouped Strip */}
           {inspection?.isMultiPage && inspection.pages?.length > 1 && (
-            <div className="p-4 rounded-2xl bg-white border border-zinc-200/90 shadow-xs space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <h4 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-indigo-600" />
-                  <span>Choose Section ({inspection.pageCount} Available)</span>
-                </h4>
+            <div className="p-5 rounded-2xl bg-white border border-zinc-200/90 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-100">
+                <div>
+                  <h4 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers size={14} className="text-indigo-600" />
+                    <span>Choose Section to Configure ({inspection.pageCount} Available)</span>
+                  </h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                    Organized by semester cohort. Switching sections saves your edits in memory.
+                  </p>
+                </div>
 
                 <div className="relative w-full sm:w-60">
                   <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
@@ -598,43 +735,88 @@ const Step1ClassSubjects = ({
                     value={pageSearchQuery}
                     onChange={(e) => setPageSearchQuery(e.target.value)}
                     placeholder="Filter sections..."
-                    className="w-full pl-7 pr-3 py-1 rounded-lg border border-zinc-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-zinc-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
               </div>
 
-              {/* Horizontal / Grid Section Pills */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 pt-1">
-                {filteredPages.map((page) => {
-                  const isCurrent = selectedPage === page.pageNumber;
-                  const displayName = page.displayName || page.detectedClassName || `Page ${page.pageNumber}`;
+              {/* Grouped by Semester */}
+              <div className="space-y-4">
+                {Object.entries(groupedPages).map(([sem, pages]) => {
+                  const filtered = pages.filter((p) => {
+                    if (!pageSearchQuery.trim()) return true;
+                    const q = pageSearchQuery.toLowerCase();
+                    const cls = (p.displayName || p.detectedClassName || '').toLowerCase();
+                    const teacher = (p.detectedTeacher || '').toLowerCase();
+                    return cls.includes(q) || teacher.includes(q);
+                  });
+                  if (filtered.length === 0) return null;
+
+                  const yearRoman = getAcademicYearRoman(Number(sem));
                   return (
-                    <button
-                      key={page.pageNumber}
-                      type="button"
-                      onClick={() => handleSelectPage(page.pageNumber)}
-                      className={`p-2.5 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
-                        isCurrent
-                          ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20'
-                          : 'border-zinc-200 bg-zinc-50/50 hover:bg-white hover:border-zinc-300 text-navy'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <span className={`text-[9px] font-black uppercase tracking-wider ${isCurrent ? 'text-indigo-100' : 'text-zinc-500'}`}>
-                          P.{page.pageNumber}
+                    <div key={sem} className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-md">
+                          Semester {sem} ({yearRoman} Year)
                         </span>
-                        {isCurrent && <Check size={12} className="stroke-[3]" />}
+                        <span className="text-[11px] text-zinc-500 font-bold">
+                          {filtered.length} {filtered.length === 1 ? 'Section' : 'Sections'}
+                        </span>
                       </div>
 
-                      <div className="mt-1">
-                        <p className={`text-xs font-black leading-tight ${isCurrent ? 'text-white' : 'text-navy'}`}>
-                          {displayName}
-                        </p>
-                        <p className={`text-[10px] font-semibold mt-0.5 ${isCurrent ? 'text-indigo-200' : 'text-zinc-500'}`}>
-                          Sem {page.detectedSemester || '—'}
-                        </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                        {filtered.map((page) => {
+                          const isCurrent = selectedPage === page.pageNumber;
+                          const displayName =
+                            page.displayName || page.detectedClassName || `Page ${page.pageNumber}`;
+                          const isCached = Boolean(pageCache[page.pageNumber]);
+                          return (
+                            <button
+                              key={page.pageNumber}
+                              type="button"
+                              onClick={() => handleSelectPage(page.pageNumber)}
+                              className={`p-3 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
+                                isCurrent
+                                  ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20'
+                                  : 'border-zinc-200 bg-zinc-50/60 hover:bg-white hover:border-zinc-300 text-navy'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span
+                                  className={`text-[9px] font-black uppercase tracking-wider ${
+                                    isCurrent ? 'text-indigo-100' : 'text-zinc-500'
+                                  }`}
+                                >
+                                  P.{page.pageNumber}
+                                </span>
+                                {isCurrent ? (
+                                  <Check size={13} className="stroke-[3]" />
+                                ) : isCached ? (
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full bg-emerald-500"
+                                    title="Parsed & cached"
+                                  />
+                                ) : null}
+                              </div>
+
+                              <div className="mt-2">
+                                <p className={`text-sm font-black leading-tight ${isCurrent ? 'text-white' : 'text-navy'}`}>
+                                  {displayName}
+                                </p>
+                                <p
+                                  className={`text-[11px] font-medium mt-1 truncate ${
+                                    isCurrent ? 'text-indigo-100' : 'text-zinc-500'
+                                  }`}
+                                  title={page.detectedTeacher || 'No class teacher'}
+                                >
+                                  {page.detectedTeacher ? `CT: ${page.detectedTeacher}` : 'No class teacher'}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -646,7 +828,7 @@ const Step1ClassSubjects = ({
             <div className="p-6 rounded-2xl bg-white border border-zinc-200/80 shadow-xs">
               <StepTableSkeleton />
               <div className="text-center pt-4 text-xs font-semibold text-indigo-700 animate-pulse">
-                Extracting timetable table lines, matching registered faculty & verifying subject codes...
+                Extracting timetable schedule, matching registered faculty & verifying subjects...
               </div>
             </div>
           )}
@@ -691,7 +873,7 @@ const Step1ClassSubjects = ({
                         </span>
                       </div>
                       <p className="text-xs text-zinc-500 font-medium">
-                        Confirm or adjust class parameters before importing enrolled students.
+                        Confirm or adjust class details before continuing to enrolled students.
                       </p>
                     </div>
                   </div>
@@ -736,7 +918,7 @@ const Step1ClassSubjects = ({
                       <span>Assigned Class Teacher</span>
                       {sectionForm.classTeacherId && (
                         <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
-                          <Check size={10} /> Ready for Pre-flight
+                          <Check size={10} /> Matched
                         </span>
                       )}
                     </label>
@@ -768,7 +950,7 @@ const Step1ClassSubjects = ({
                       Extracted Curriculum Subjects ({extractedRows.length})
                     </h4>
                     <p className="text-xs text-zinc-500">
-                      Verify faculty assignments. Subjects without a assigned teacher can be mapped or excluded.
+                      Verify faculty assignments. Subjects without an assigned teacher can be mapped or excluded.
                     </p>
                   </div>
 
@@ -995,7 +1177,7 @@ const Step1ClassSubjects = ({
                     setSectionForm({
                       name: cls.name,
                       semester: cls.semester || 1,
-                      academicYear: cls.academicYear || '2025-26',
+                      academicYear: cls.academicYear || '2026-27',
                       departmentId: cls.departmentId?._id || cls.departmentId || defaultDeptId,
                       classTeacherId: cls.classTeacherId?._id || cls.classTeacherId || '',
                     });
@@ -1049,7 +1231,7 @@ const Step1ClassSubjects = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="2025-26"
+                  placeholder="2026-27"
                   value={sectionForm.academicYear}
                   onChange={(e) => setSectionForm((p) => ({ ...p, academicYear: e.target.value }))}
                   className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
@@ -1180,6 +1362,112 @@ const Step1ClassSubjects = ({
           </div>
         </div>
       )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          BATCH PROVISIONING MODAL
+      ───────────────────────────────────────────────────────────────────────── */}
+      <Modal
+        isOpen={batchModalOpen}
+        onClose={() => setBatchModalOpen(false)}
+        title="Batch Provision All Sections"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {!batchResult ? (
+            <>
+              <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200/60 text-xs text-indigo-900 space-y-2">
+                <p className="font-bold flex items-center gap-1.5 text-sm text-indigo-950">
+                  <Sparkles size={16} className="text-indigo-600" />
+                  <span>Automatic Institutional Timetable Ingestion</span>
+                </p>
+                <p>
+                  The uploaded timetable contains <strong>{inspection?.pageCount} section pages</strong> across <strong>{Object.keys(groupedPages).length} semesters</strong>.
+                </p>
+                <p>
+                  Starting batch provisioning will automatically:
+                </p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Create or match all {inspection?.pageCount} section classes (e.g. III CSD-A through IV CSD-C).</li>
+                  <li>Assign detected class teachers to their respective sections.</li>
+                  <li>Save all extracted curriculum subjects for each section.</li>
+                  <li>Hydrate the Master Curriculum for Semesters {Object.keys(groupedPages).join(', ')}.</li>
+                </ul>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBatchModalOpen(false)}
+                  disabled={isBatchImporting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleBatchImport}
+                  loading={isBatchImporting}
+                  disabled={isBatchImporting}
+                  className="gap-1.5"
+                >
+                  <Sparkles size={14} />
+                  <span>Start Batch Provisioning</span>
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={18} className="text-emerald-600" />
+                  <h4 className="text-sm font-bold">
+                    Successfully Provisioned {batchResult.provisionedCount} Sections!
+                  </h4>
+                </div>
+                <p>
+                  All classes, subjects, and Master Curriculum blueprints are hydrated in the database.
+                </p>
+              </div>
+
+              <div>
+                <h5 className="text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
+                  Pick a section to continue setup (Students, Mentors, Launch):
+                </h5>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1">
+                  {batchResult.sections?.map((sec) => (
+                    <button
+                      key={sec.classId}
+                      type="button"
+                      onClick={() => handleSelectBatchSection(sec)}
+                      className="p-3 rounded-xl border border-zinc-200 hover:border-indigo-600 hover:bg-indigo-50/40 text-left transition-all flex items-center justify-between group"
+                    >
+                      <div>
+                        <p className="text-xs font-black text-navy group-hover:text-indigo-700">
+                          {sec.displayName || sec.name}
+                        </p>
+                        <p className="text-[11px] text-zinc-500">
+                          Sem {sec.semester} · {sec.subjectCount} subjects · {sec.classTeacher?.name ? `CT: ${sec.classTeacher.name}` : (sec.detectedTeacher ? `CT: ${sec.detectedTeacher}` : 'No CT')}
+                        </p>
+                      </div>
+                      <ArrowRight
+                        size={14}
+                        className="text-zinc-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-transform"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-zinc-100">
+                <Button variant="ghost" size="sm" onClick={() => setBatchModalOpen(false)}>
+                  Close & Review Active Section
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };

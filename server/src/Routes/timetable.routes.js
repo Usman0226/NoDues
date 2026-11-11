@@ -4,6 +4,7 @@ import {
   inspectTimetablePdf,
   previewTimetable,
   commitTimetable,
+  batchImportTimetable,
   getClassSubjectHistory,
 } from '../Controllers/timetableController.js';
 import { protect } from '../middlewares/auth.js';
@@ -29,10 +30,11 @@ const upload = multer({
 router.use(protect);
 router.use(RoleGuard(['admin', 'hod', 'ao']));
 
-// Timetable parser inspect, preview, and commit (FR-C1 to FR-C8, Multi-Page Ingestion)
+// Timetable parser inspect, preview, commit, and batch import (FR-C1 to FR-C8, Multi-Page Ingestion)
 router.post('/inspect', upload.single('file'), inspectTimetablePdf);
 router.post('/preview', upload.single('file'), previewTimetable);
 router.post('/commit', commitTimetable);
+router.post('/batch-import', upload.single('file'), batchImportTimetable);
 
 // Class subject history across archived and active semesters (FR-B5)
 router.get('/history/:classId', getClassSubjectHistory);

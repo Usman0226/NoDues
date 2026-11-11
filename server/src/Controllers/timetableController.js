@@ -3,9 +3,13 @@ import Class from '../models/Class.js';
 import Subject from '../models/Subject.js';
 import Faculty from '../models/Faculty.js';
 import Department from '../models/Department.js';
+import Admin from '../models/Admin.js';
 import { parseTimetablePdf, inspectPdfPages, normalizeFacultyName, extractClassMetadataFromText } from '../services/timetableParser.js';
 import { PDFParse } from 'pdf-parse';
 import logger from '../utils/logger.js';
+
+const ROMAN_YEARS = { 1: 'I', 2: 'I', 3: 'II', 4: 'II', 5: 'III', 6: 'III', 7: 'IV', 8: 'IV' };
+const getAcademicYearRoman = (sem) => ROMAN_YEARS[sem] || 'I';
 
 /**
  * Inspects an uploaded timetable PDF document structure.
@@ -191,12 +195,20 @@ export async function previewTimetable(req, res, next) {
       await targetClass.populate('classTeacherId', 'name email employeeId');
     }
 
+    // Resolve uploader defensively
+    let uploaderId = req.user?._id || req.user?.userId || req.user?.id;
+    if (!uploaderId) {
+      const adminDoc = await Admin.findOne().lean();
+      uploaderId = adminDoc?._id;
+    }
+    const uploaderModel = (req.user?.role === 'admin' || req.user?.role === 'Admin') ? 'Admin' : 'Faculty';
+
     // Create an audit record for this upload (MON-4)
     const uploadRecord = await TimetableUpload.create({
       classId: targetClass._id,
       targetSemester: targetClass.semester,
-      uploadedBy: req.user?._id || req.user?.userId || null,
-      uploaderModel: req.user?.role === 'admin' ? 'Admin' : 'Faculty',
+      uploadedBy: uploaderId,
+      uploaderModel,
       originalFileName: req.file.originalname || 'timetable.pdf',
       parsedRowCount: parsedData.parsedRowCount,
       matchedRowCount: parsedData.matchedRowCount,
@@ -217,6 +229,7 @@ export async function previewTimetable(req, res, next) {
         classId: targetClass._id,
         className: targetClass.name,
         targetSemester: targetClass.semester,
+        departmentId: targetClass.departmentId,
         classTeacher: targetClass.classTeacherId ? {
           _id: targetClass.classTeacherId._id || targetClass.classTeacherId,
           name: targetClass.classTeacherId.name,
@@ -493,6 +506,248 @@ export async function getClassSubjectHistory(req, res, next) {
         currentSemester: targetClass.semester,
         semesterSubjects: history,
         legacySubjectAssignments: targetClass.subjectAssignments,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Batch provisions all detected sections from a multi-page timetable PDF.
+ * Auto-creates/matches classes, assigns detected class teachers, updates subject curriculum,
+ * and hydrates the Master Curriculum (SSOT) for all affected semesters.
+ */
+export async function batchImportTimetable(req, res, next) {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VAL_001', message: 'Please upload a PDF timetable file.' },
+      });
+    }
+
+    let deptId = req.body.departmentId || req.user?.departmentId || (req.user?.department?._id || req.user?.department);
+
+    // Inspect document structure
+    const inspection = await inspectPdfPages(req.file.buffer, { departmentId: deptId });
+    const pages = inspection.data?.pages || [];
+    if (pages.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VAL_001', message: 'No extractable pages found in timetable PDF.' },
+      });
+    }
+
+    // Auto-resolve deptId if not provided
+    if (!deptId && pages[0]?.detectedDepartment) {
+      const code = pages[0].detectedDepartment.toUpperCase();
+      const foundDept = await Department.findOne({
+        $or: [
+          { code: new RegExp(`^${code}$`, 'i') },
+          { name: new RegExp(code, 'i') },
+        ],
+      });
+      if (foundDept) deptId = foundDept._id;
+    }
+    if (!deptId) {
+      const anyDept = await Department.findOne({ isActive: true });
+      if (anyDept) deptId = anyDept._id;
+    }
+
+    // Fetch active faculty for matching
+    const allFaculty = await Faculty.find({ isActive: true }).lean();
+    const deptFaculty = allFaculty.filter(f => f.departmentId?.toString() === deptId?.toString());
+
+    const provisionedSections = [];
+    const hydratedSemesters = new Set();
+
+    for (const pageInfo of pages) {
+      const pageNum = pageInfo.pageNumber;
+      try {
+        const parsedResult = await parseTimetablePdf(req.file.buffer, {
+          departmentId: deptId,
+          semester: pageInfo.detectedSemester || undefined,
+          page: pageNum,
+        });
+
+        const parsedData = parsedResult.data;
+        const metadata = parsedData.metadata || {};
+        const resolvedSem = pageInfo.detectedSemester || metadata.detectedSemester || 1;
+        const detectedClsName = pageInfo.detectedClassName || metadata.detectedClassName || `Section ${pageNum}`;
+
+        // Canonical normalization
+        const cleanSection = detectedClsName.replace(/^(I|II|III|IV)[\s\-_]+/i, '').trim();
+        const escapedClean = cleanSection.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const nameRegex = new RegExp(`^((I|II|III|IV)[\\s\\-_]+)?${escapedClean}$`, 'i');
+
+        let targetClass = await Class.findOne({
+          name: nameRegex,
+          semester: resolvedSem,
+          isMaster: { $ne: true },
+          departmentId: deptId,
+        });
+
+        const academicYear = metadata.academicYear || metadata.detectedAcademicYear || '2026-27';
+        const startYear = parseInt(String(academicYear).split(/[-/]/)[0], 10) || new Date().getFullYear();
+        const yearOffset = Math.floor((resolvedSem - 1) / 2);
+        const entryYear = startYear - yearOffset;
+        const batch = `${entryYear}-${String(entryYear + 4).slice(-2)}`;
+
+        if (!targetClass) {
+          targetClass = await Class.create({
+            name: detectedClsName,
+            semester: resolvedSem,
+            academicYear,
+            batch,
+            departmentId: deptId,
+            isActive: true,
+            subjectAssignments: [],
+          });
+        }
+
+        // Match Class Teacher
+        const teacherName = metadata.classTeacher || pageInfo.detectedTeacher;
+        if (teacherName && !targetClass.classTeacherId) {
+          const normTeacher = normalizeFacultyName(teacherName);
+          const matchedFac = deptFaculty.find(f => normalizeFacultyName(f.name) === normTeacher)
+            || allFaculty.find(f => normalizeFacultyName(f.name) === normTeacher);
+          if (matchedFac) {
+            targetClass.classTeacherId = matchedFac._id;
+          }
+        }
+
+        // Map and resolve subjects
+        const rows = parsedData.rows || [];
+        const subjectsToCommit = [];
+        for (const r of rows) {
+          const cleanSubjectName = (r.subjectName || r.subjectCode || '').replace(/^[\s\-–—:]+/, '').trim();
+          let resolvedSubjectId = r.subjectId;
+          if (!resolvedSubjectId && r.subjectCode) {
+            let sub = await Subject.findOne({ code: r.subjectCode.toUpperCase() });
+            if (!sub) {
+              sub = await Subject.create({
+                code: r.subjectCode.toUpperCase(),
+                name: cleanSubjectName,
+                semester: resolvedSem,
+                departmentId: deptId,
+                isActive: true,
+              });
+            }
+            resolvedSubjectId = sub._id;
+          }
+
+          subjectsToCommit.push({
+            subjectId: resolvedSubjectId,
+            subjectName: cleanSubjectName,
+            subjectCode: r.subjectCode,
+            facultyId: r.facultyId || null,
+            facultyName: r.facultyName || null,
+            coFacultyIds: r.coFacultyIds || [],
+            source: 'timetable_parse',
+          });
+        }
+
+        targetClass.subjectAssignments = subjectsToCommit.map(s => ({
+          subjectId: s.subjectId,
+          subjectName: s.subjectName,
+          subjectCode: s.subjectCode,
+          facultyId: s.facultyId,
+          facultyName: s.facultyName,
+        }));
+        targetClass.semester = resolvedSem;
+        targetClass.academicYear = academicYear;
+        await targetClass.save();
+
+        hydratedSemesters.add(resolvedSem);
+
+        const matchedTeacherObj = targetClass.classTeacherId
+          ? allFaculty.find(f => f._id.toString() === targetClass.classTeacherId?.toString())
+          : null;
+
+        provisionedSections.push({
+          pageNumber: pageNum,
+          classId: targetClass._id,
+          name: targetClass.name,
+          displayName: pageInfo.displayName || `${getAcademicYearRoman(resolvedSem)} ${targetClass.name}`,
+          semester: resolvedSem,
+          academicYear: targetClass.academicYear,
+          subjectCount: subjectsToCommit.length,
+          classTeacher: matchedTeacherObj ? {
+            _id: matchedTeacherObj._id,
+            name: matchedTeacherObj.name,
+            email: matchedTeacherObj.email,
+          } : null,
+          detectedTeacher: teacherName || null,
+        });
+      } catch (pageErr) {
+        logger.warn(`Failed to process page ${pageNum} in batch import`, { error: pageErr?.message });
+      }
+    }
+
+    // Hydrate Master Curriculum (SSOT) for all affected semesters
+    for (const sem of hydratedSemesters) {
+      try {
+        const semesterClasses = await Class.find({
+          departmentId: deptId,
+          semester: sem,
+          isMaster: { $ne: true },
+          isActive: true,
+        }).lean();
+
+        const uniqueSubjectsMap = new Map();
+        for (const cls of semesterClasses) {
+          for (const sub of (cls.subjectAssignments || [])) {
+            const key = (sub.subjectCode || '').toUpperCase();
+            if (key && !uniqueSubjectsMap.has(key)) {
+              uniqueSubjectsMap.set(key, {
+                subjectId: sub.subjectId,
+                subjectCode: sub.subjectCode,
+                subjectName: sub.subjectName,
+                facultyId: null,
+                facultyName: 'Unassigned',
+                hours: 3,
+                isElective: false,
+                source: 'master_hydrate',
+              });
+            }
+          }
+        }
+
+        const masterAssignments = Array.from(uniqueSubjectsMap.values());
+        let masterCls = await Class.findOne({
+          departmentId: deptId,
+          semester: sem,
+          isMaster: true,
+          isActive: true,
+        });
+
+        if (masterCls) {
+          masterCls.subjectAssignments = masterAssignments;
+          await masterCls.save();
+        } else {
+          await Class.create({
+            name: `Semester ${sem} Curriculum Master`,
+            semester: sem,
+            academicYear: '2026-27',
+            departmentId: deptId,
+            isMaster: true,
+            isActive: true,
+            subjectAssignments: masterAssignments,
+          });
+        }
+      } catch (mErr) {
+        logger.warn(`Failed to hydrate Master Curriculum for semester ${sem}`, { error: mErr?.message });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalSections: pages.length,
+        provisionedCount: provisionedSections.length,
+        sections: provisionedSections,
+        hydratedMasterSemesters: Array.from(hydratedSemesters),
       },
     });
   } catch (err) {
