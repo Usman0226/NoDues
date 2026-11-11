@@ -20,7 +20,8 @@ import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal'
 import BulkPromoteCohortModal from '../../components/classes/BulkPromoteCohortModal';
 import DepartmentRolloverModal from '../../components/classes/DepartmentRolloverModal';
 
-export { getAcademicYearRoman, formatSectionDisplayName } from '../../utils/formatters';
+import { getAcademicYearRoman, formatSectionDisplayName } from '../../utils/formatters';
+export { getAcademicYearRoman, formatSectionDisplayName };
 
 const containerVariants = {
   hidden: { opacity: 0 },
