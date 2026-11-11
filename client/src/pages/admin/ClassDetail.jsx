@@ -737,27 +737,74 @@ const SUBJECT_COLS = [
     );
   }
 
+  const masterDeptCode = useMemo(() => {
+    return classData?.departmentCode || 
+           classData?.departmentName?.split(' ')[0] || 
+           'CSD';
+  }, [classData]);
+
   return (
     <PageWrapper 
+      cardHeader
+      tag={masterDeptCode}
+      meta={`Semester ${classData?.semester || ''} | A.Y. ${classData?.academicYear || '2024-2028'}`}
       title={classData?.isMaster ? `Semester ${classData?.semester} Master Syllabus` : formatSectionDisplayName(classData?.name, classData?.semester)} 
       subtitle={
         classData?.isMaster 
-          ? `${classData?.departmentName ? `${classData.departmentName} · ` : ''}Semester ${classData?.semester || ''} · Master subject list for all sections`
-          : `${classData?.departmentName ? `${classData.departmentName} · ` : ''}Semester ${classData?.semester || ''} · ${classData?.academicYear || ''}`
+          ? `Single source of truth syllabus inherited by all Semester ${classData?.semester} sections in ${classData?.departmentName || 'department'}`
+          : `Class Teacher: ${classData?.classTeacher?.name || 'Not Assigned'} · Academic Year: ${classData?.academicYear || '2024-28'}`
+      }
+      subtitleIcon={classData?.isMaster ? BookOpen : Users}
+      badge={classData?.isMaster ? 'Master Syllabus Blueprint' : (classData?.isActive === false ? 'Inactive' : (classData?.activeBatch ? 'Clearance in Progress' : 'Active Section'))}
+      stats={
+        classData?.isMaster
+          ? [
+              { label: 'Master Subjects', value: subjects.length, icon: BookOpen, color: 'indigo' },
+              { label: 'Inheriting Sections', value: otherClasses.filter(c => !c.isMaster && c.semester === classData?.semester).length, icon: Layers, color: 'emerald' }
+            ]
+          : [
+              { label: 'Enrolled Students', value: studentsList.length, icon: Users, color: 'rose' },
+              { label: 'Assigned Subjects', value: subjects.length, icon: BookOpen, color: 'indigo' }
+            ]
+      }
+      headerActions={
+        classData?.isMaster ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}>
+              <Plus size={14} /> Add Subject
+            </Button>
+            <Button variant="secondary" size="sm" type="button" onClick={() => setShowClone(true)} className="text-slate-700 border border-slate-200 hover:bg-slate-50">
+              <Copy size={14} /> Import Subjects
+            </Button>
+            {((classData?.subjectAssignments?.length > 0) || classData?.isMaster) && (
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={handleSyncCohortSubjects}
+                disabled={syncingCohort || (classData?.subjectAssignments?.length || 0) === 0}
+                className="text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 font-bold"
+                title={`Copy these ${classData?.subjectAssignments?.length || 0} subjects to all sections in Semester ${classData?.semester}`}
+              >
+                <Share2 size={14} className="text-indigo-600" />
+                <span>{syncingCohort ? 'Copying...' : 'Copy to All Sections'}</span>
+              </Button>
+            )}
+          </div>
+        ) : null
       }
       isRefreshing={refreshing}
-      badge={classData?.isMaster ? 'Master Syllabus' : (classData?.isActive === false ? 'INACTIVE' : (classData?.activeBatch ? 'CLEARANCE IN PROGRESS' : 'ACTIVE'))}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="overflow-x-auto no-scrollbar pb-1 -mb-1">
           {classData?.isMaster ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-navy uppercase tracking-wider bg-slate-100 px-3.5 py-1.5 rounded-full border border-slate-200">
-                Semester {classData?.semester} Subjects ({subjects.length})
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-100 px-3.5 py-1.5 rounded-full border border-slate-200">
+                Master Curriculum Subjects ({subjects.length})
               </span>
             </div>
           ) : (
-            <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-full p-1.5 w-fit min-w-full sm:min-w-0">
+            <div className="flex gap-1 bg-white border border-slate-200 shadow-xs rounded-full p-1.5 w-fit min-w-full sm:min-w-0">
               {tabs.map((t) => {
                 const Icon = t.icon;
                 return (
@@ -797,7 +844,7 @@ const SUBJECT_COLS = [
           </div>
         )}
 
-        {tab === 'subjects' && (
+        {!classData?.isMaster && tab === 'subjects' && (
           <div className="flex items-center gap-2">
             <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}>
               <Plus size={14} /> Add Subject
@@ -805,23 +852,21 @@ const SUBJECT_COLS = [
             <Button variant="secondary" size="sm" type="button" onClick={() => setShowClone(true)} className="text-navy border border-zinc-200 hover:bg-zinc-50">
               <Copy size={14} /> Import Subjects
             </Button>
-            {!classData?.isMaster && (
-              <Button variant="ghost" size="sm" onClick={() => setShowImport('electives')} className="text-navy border border-muted hover:bg-offwhite">
-                <Upload size={14} /> Assign Electives
-              </Button>
-            )}
-            {((classData?.subjectAssignments?.length > 0) || classData?.isMaster) && (
+            <Button variant="ghost" size="sm" onClick={() => setShowImport('electives')} className="text-navy border border-muted hover:bg-offwhite">
+              <Upload size={14} /> Assign Electives
+            </Button>
+            {classData?.subjectAssignments?.length > 0 && (
               <Button
                 variant="secondary"
                 size="sm"
                 type="button"
                 onClick={handleSyncCohortSubjects}
-                disabled={syncingCohort || (classData?.subjectAssignments?.length || 0) === 0}
+                disabled={syncingCohort}
                 className="text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 font-bold"
                 title={`Copy these ${classData?.subjectAssignments?.length || 0} subjects to all sections in Semester ${classData?.semester}`}
               >
                 <Share2 size={14} className="text-indigo-600" />
-                <span>{syncingCohort ? 'Copying...' : classData?.isMaster ? 'Copy to All Sections' : 'Sync to Sections'}</span>
+                <span>{syncingCohort ? 'Copying...' : 'Sync to Sections'}</span>
               </Button>
             )}
           </div>

@@ -34,6 +34,7 @@ import {
   Copy,
   AlertCircle,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -85,7 +86,6 @@ const Step1ClassSubjects = ({
   const [manualSelectedClassId, setManualSelectedClassId] = useState(initialClassId || '');
   const [manualSource, setManualSource] = useState('master'); // 'master' | 'clone'
   const [cloneSourceClassId, setCloneSourceClassId] = useState('');
-  const [manualTouched, setManualTouched] = useState({});
 
   // ─────────────────────────────────────────────────────────────────────────────
   // QUERIES
@@ -210,7 +210,7 @@ const Step1ClassSubjects = ({
       if (data.detectedTeacher && !data.classTeacher) {
         toast(`Detected Class Teacher "${data.detectedTeacher}" could not be matched automatically. Please select from the dropdown below.`, {
           icon: 'ℹ️',
-          duration: 5000,
+          duration: 4000,
         });
       } else if (data.classTeacher) {
         toast.success(`Matched Class Teacher: ${data.classTeacher.name}`);
@@ -229,8 +229,22 @@ const Step1ClassSubjects = ({
   // ─────────────────────────────────────────────────────────────────────────────
   // FILE SELECTION / INSPECT HANDLER
   // ─────────────────────────────────────────────────────────────────────────────
+  const handleResetFile = () => {
+    setPdfFile(null);
+    setInspection(null);
+    setSelectedPage(null);
+    setExtractedRows([]);
+    setResolvedClassId(null);
+    setResolvedClassData(null);
+    setParseError(null);
+    onDirtyChange?.(false);
+  };
+
   const handleFileDrop = async (file) => {
-    if (!file) return;
+    if (!file) {
+      handleResetFile();
+      return;
+    }
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       toast.error('Only PDF documents are supported for timetable parsing.');
       return;
@@ -241,6 +255,8 @@ const Step1ClassSubjects = ({
     setInspection(null);
     setParseError(null);
     setSelectedPage(null);
+    setExtractedRows([]);
+    setResolvedClassId(null);
 
     try {
       const fd = new FormData();
@@ -252,14 +268,25 @@ const Step1ClassSubjects = ({
       const inspData = res?.data || res;
       setInspection(inspData);
 
+      // Auto-resolve department for Admin if not set
+      if (!sectionForm.departmentId && inspData.pages?.[0]?.detectedDepartment && departments?.length > 0) {
+        const code = inspData.pages[0].detectedDepartment.toUpperCase();
+        const matchedDept = departments.find(d => d.code?.toUpperCase() === code || d.name?.toUpperCase().includes(code));
+        if (matchedDept) {
+          setSectionForm(prev => ({ ...prev, departmentId: matchedDept._id }));
+        }
+      }
+
       // If document has only 1 page, auto-select it directly
       if (!inspData.isMultiPage || inspData.pageCount === 1) {
         setSelectedPage(1);
         await runPreviewForPage(file, 1);
       } else {
-        // Multi-page document: recommend the best matched page or prompt selection
-        const recommended = inspData.recommendedPage || 1;
-        toast.success(`Detected ${inspData.pageCount} section pages. Please select your target section.`);
+        // Multi-page document: auto-preview the recommended page or page 1 so user immediately sees preview!
+        const targetPage = inspData.recommendedPage || 1;
+        setSelectedPage(targetPage);
+        await runPreviewForPage(file, targetPage);
+        toast.success(`Detected ${inspData.pageCount} section pages. Previewing ${inspData.pages?.[targetPage - 1]?.displayName || ('Section ' + targetPage)}.`);
       }
     } catch (err) {
       console.error('Inspection error:', err);
@@ -270,6 +297,7 @@ const Step1ClassSubjects = ({
   };
 
   const handleSelectPage = (pageNum) => {
+    if (pageNum === selectedPage && extractedRows.length > 0) return;
     setSelectedPage(pageNum);
     runPreviewForPage(pdfFile, pageNum);
   };
@@ -503,55 +531,80 @@ const Step1ClassSubjects = ({
       ───────────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'pdf' && (
         <div className="space-y-6">
-          {/* File Dropzone Area (shown if no preview yet, or if user requests replacement) */}
-          {(!extractedRows.length || !resolvedClassId) && (
+          {/* File Dropzone (shown if no PDF selected yet) */}
+          {!pdfFile && (
             <div className="space-y-4">
               <FileDropzone
+                onFileSelect={handleFileDrop}
                 onFileSelected={handleFileDrop}
                 accept=".pdf,application/pdf"
-                title="Drop Timetable PDF Here"
-                subtitle="Upload the official department timetable PDF. Extracts class, semester, class teacher, and all subject rows automatically."
+                title="Drop Institutional Timetable PDF Here"
+                subtitle="Upload official timetable PDF. Automatically extracts section name, semester, class teacher, and curriculum subjects."
+                loading={isInspecting}
                 isProcessing={isInspecting}
+                file={pdfFile}
                 icon={FileText}
               />
-
-              {isInspecting && (
-                <div className="flex items-center justify-center gap-2 py-4 text-xs font-semibold text-indigo-700 animate-pulse">
-                  <RefreshCw size={16} className="animate-spin" />
-                  <span>Inspecting document pages and reading timetable text layers...</span>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Multi-Page Selection Grid (if multi-page PDF inspected) */}
-          {inspection?.isMultiPage && inspection.pages?.length > 1 && (!extractedRows.length || selectedPage === null) && (
-            <div className="space-y-4 p-5 rounded-2xl bg-white border border-zinc-200/90 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Active File Summary Banner (shown when PDF is chosen) */}
+          {pdfFile && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white border border-zinc-200/90 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200/60 flex items-center justify-center text-indigo-600 shrink-0">
+                  <FileText size={18} />
+                </div>
                 <div>
-                  <h3 className="text-sm font-black text-navy flex items-center gap-2">
-                    <Sparkles size={16} className="text-indigo-600" />
-                    <span>Multiple Sections Detected ({inspection.pageCount} Pages)</span>
-                  </h3>
-                  <p className="text-xs text-zinc-600 mt-0.5">
-                    Select the section page you want to configure for this setup cycle.
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-xs font-black text-navy">{pdfFile.name}</h4>
+                    <span className="text-[11px] text-zinc-500 tabular-nums">({(pdfFile.size / 1024).toFixed(1)} KB)</span>
+                    {inspection?.pageCount && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                        {inspection.pageCount} Sections Detected
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                    Official document verified. Pick any section page to configure its curriculum.
                   </p>
                 </div>
+              </div>
 
-                <div className="relative w-full sm:w-64">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <button
+                type="button"
+                onClick={handleResetFile}
+                className="text-xs font-bold text-zinc-600 hover:text-navy px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 self-start sm:self-auto flex items-center gap-1.5 transition-colors"
+              >
+                <RotateCcw size={13} className="text-zinc-500" />
+                <span>Upload Different PDF</span>
+              </button>
+            </div>
+          )}
+
+          {/* Multi-Section Interactive Strip (when multi-page PDF inspected) */}
+          {inspection?.isMultiPage && inspection.pages?.length > 1 && (
+            <div className="p-4 rounded-2xl bg-white border border-zinc-200/90 shadow-xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h4 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-indigo-600" />
+                  <span>Choose Section ({inspection.pageCount} Available)</span>
+                </h4>
+
+                <div className="relative w-full sm:w-60">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                   <input
                     type="text"
                     value={pageSearchQuery}
                     onChange={(e) => setPageSearchQuery(e.target.value)}
-                    placeholder="Search section, semester, CT..."
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                    placeholder="Filter sections..."
+                    className="w-full pl-7 pr-3 py-1 rounded-lg border border-zinc-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
               </div>
 
-              {/* Grid of Section Pages */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+              {/* Horizontal / Grid Section Pills */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 pt-1">
                 {filteredPages.map((page) => {
                   const isCurrent = selectedPage === page.pageNumber;
                   const displayName = page.displayName || page.detectedClassName || `Page ${page.pageNumber}`;
@@ -560,62 +613,26 @@ const Step1ClassSubjects = ({
                       key={page.pageNumber}
                       type="button"
                       onClick={() => handleSelectPage(page.pageNumber)}
-                      className={`text-left p-4 rounded-xl border transition-all relative overflow-hidden flex flex-col justify-between ${
+                      className={`p-2.5 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
                         isCurrent
-                          ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/30'
-                          : 'border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm'
+                          ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20'
+                          : 'border-zinc-200 bg-zinc-50/50 hover:bg-white hover:border-zinc-300 text-navy'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200/50">
-                            Page {page.pageNumber}
-                          </span>
-                          <h4 className="text-base font-black text-navy mt-1.5 leading-snug">
-                            {displayName}
-                          </h4>
-                        </div>
-                        {page.detectedSemester && (
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-200">
-                            Sem {page.detectedSemester}
-                          </span>
-                        )}
+                      <div className="flex items-center justify-between w-full">
+                        <span className={`text-[9px] font-black uppercase tracking-wider ${isCurrent ? 'text-indigo-100' : 'text-zinc-500'}`}>
+                          P.{page.pageNumber}
+                        </span>
+                        {isCurrent && <Check size={12} className="stroke-[3]" />}
                       </div>
 
-                      <div className="space-y-1.5 mt-3 pt-3 border-t border-zinc-100 text-xs">
-                        <div className="flex items-center gap-1.5 text-zinc-700">
-                          <UserCheck size={12} className="text-zinc-400 shrink-0" />
-                          <span className="font-semibold truncate">
-                            {page.detectedTeacher ? `CT: ${page.detectedTeacher}` : 'CT: Not detected'}
-                          </span>
-                        </div>
-                        {page.detectedAcademicYear && (
-                          <p className="text-[11px] text-zinc-500 font-medium">
-                            Academic Year: {page.detectedAcademicYear}
-                          </p>
-                        )}
-                        {page.detectedSubjectCodes?.length > 0 && (
-                          <div className="flex items-center gap-1 pt-1 flex-wrap">
-                            {page.detectedSubjectCodes.slice(0, 4).map((code) => (
-                              <span
-                                key={code}
-                                className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600"
-                              >
-                                {code}
-                              </span>
-                            ))}
-                            {page.detectedSubjectCodes.length > 4 && (
-                              <span className="text-[9px] text-zinc-400 font-bold">
-                                +{page.detectedSubjectCodes.length - 4} more
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-4 pt-2 flex items-center justify-between text-xs font-bold text-indigo-600">
-                        <span>Select this section</span>
-                        <ChevronRight size={14} />
+                      <div className="mt-1">
+                        <p className={`text-xs font-black leading-tight ${isCurrent ? 'text-white' : 'text-navy'}`}>
+                          {displayName}
+                        </p>
+                        <p className={`text-[10px] font-semibold mt-0.5 ${isCurrent ? 'text-indigo-200' : 'text-zinc-500'}`}>
+                          Sem {page.detectedSemester || '—'}
+                        </p>
                       </div>
                     </button>
                   );
@@ -643,11 +660,7 @@ const Step1ClassSubjects = ({
                 <p className="mt-0.5 text-amber-800">{parseError}</p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setExtractedRows([]);
-                    setResolvedClassId(null);
-                    setParseError(null);
-                  }}
+                  onClick={handleResetFile}
                   className="mt-2 text-xs font-bold text-indigo-700 hover:underline"
                 >
                   Upload another PDF or choose a different page
@@ -682,21 +695,6 @@ const Step1ClassSubjects = ({
                       </p>
                     </div>
                   </div>
-
-                  {pdfFile && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExtractedRows([]);
-                        setResolvedClassId(null);
-                        setPdfFile(null);
-                        setInspection(null);
-                      }}
-                      className="text-xs font-bold text-zinc-600 hover:text-navy px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 self-start sm:self-auto"
-                    >
-                      Change PDF / Select Other Section
-                    </button>
-                  )}
                 </div>
 
                 {/* Form Controls Grid for Section Attributes */}

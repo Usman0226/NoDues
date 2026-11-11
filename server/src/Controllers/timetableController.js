@@ -3,7 +3,8 @@ import Class from '../models/Class.js';
 import Subject from '../models/Subject.js';
 import Faculty from '../models/Faculty.js';
 import Department from '../models/Department.js';
-import { parseTimetablePdf, inspectPdfPages, normalizeFacultyName } from '../services/timetableParser.js';
+import { parseTimetablePdf, inspectPdfPages, normalizeFacultyName, extractClassMetadataFromText } from '../services/timetableParser.js';
+import { PDFParse } from 'pdf-parse';
 import logger from '../utils/logger.js';
 
 /**
@@ -98,6 +99,31 @@ export async function previewTimetable(req, res, next) {
       deptId = targetClass.departmentId;
     }
 
+    // If deptId is still unknown, attempt to resolve from targeted page text
+    if (!deptId) {
+      try {
+        const quickParser = new PDFParse({ data: req.file.buffer });
+        const quickRes = await quickParser.getText(selectedPage ? { partial: [selectedPage] } : {});
+        const quickText = quickRes.pages?.[0]?.text || quickRes.text || '';
+        const quickMeta = extractClassMetadataFromText(quickText);
+        if (quickMeta.detectedDepartment) {
+          const foundDept = await Department.findOne({
+            $or: [
+              { code: new RegExp(`^${quickMeta.detectedDepartment}$`, 'i') },
+              { name: new RegExp(quickMeta.detectedDepartment, 'i') },
+            ],
+          });
+          if (foundDept) deptId = foundDept._id;
+        }
+      } catch (e) {
+        // Fallback
+      }
+      if (!deptId) {
+        const anyDept = await Department.findOne({ isActive: true });
+        if (anyDept) deptId = anyDept._id;
+      }
+    }
+
     const parsedSem = parseInt(targetSemester, 10);
     const requestedSem = parsedSem && parsedSem >= 1 && parsedSem <= 8 ? parsedSem : (targetClass?.semester || undefined);
 
@@ -115,22 +141,6 @@ export async function previewTimetable(req, res, next) {
     if (!targetClass) {
       const resolvedSem = requestedSem || metadata.detectedSemester || 1;
       const detectedClsName = metadata.detectedClassName || req.body.className || 'Section A';
-
-      // If deptId is still unknown, attempt to resolve from detectedDepartment code
-      if (!deptId && metadata.detectedDepartment) {
-        const foundDept = await Department.findOne({
-          $or: [
-            { code: new RegExp(`^${metadata.detectedDepartment}$`, 'i') },
-            { name: new RegExp(metadata.detectedDepartment, 'i') },
-          ],
-        });
-        if (foundDept) deptId = foundDept._id;
-      }
-      if (!deptId) {
-        // Fallback to first active department
-        const anyDept = await Department.findOne({ isActive: true });
-        if (anyDept) deptId = anyDept._id;
-      }
 
       // Check if class exists
       const clsQuery = { name: detectedClsName, semester: resolvedSem };
@@ -159,8 +169,9 @@ export async function previewTimetable(req, res, next) {
     // Auto-assign class teacher if detected in PDF and not yet set on class
     if (targetClass && !targetClass.classTeacherId && metadata.classTeacher) {
       const normName = normalizeFacultyName(metadata.classTeacher);
-      const faculties = await Faculty.find({ departmentId: targetClass.departmentId, isActive: true }).lean();
-      const matched = faculties.find((f) => normalizeFacultyName(f.name) === normName);
+      const allFacs = await Faculty.find({ isActive: true }).lean();
+      const matched = allFacs.find((f) => f.departmentId?.toString() === targetClass.departmentId?.toString() && normalizeFacultyName(f.name) === normName)
+        || allFacs.find((f) => normalizeFacultyName(f.name) === normName);
       if (matched) {
         targetClass.classTeacherId = matched._id;
         await targetClass.save();

@@ -11,6 +11,7 @@ import Button from '../ui/Button';
  */
 const StepContainer = ({
   stepNumber,
+  totalSteps = 6,
   stepId,
   title,
   subtitle,
@@ -123,7 +124,7 @@ const StepContainer = ({
       {/* Active Step Heading */}
       <div className="border-b border-zinc-100 pb-3.5 mb-4">
         <div className="flex items-center gap-1.5 mb-1 text-[11px] font-bold text-indigo-600">
-          <span>STEP {stepNumber} OF 7</span>
+          <span>STEP {stepNumber} OF {totalSteps}</span>
           <span className="text-zinc-300">·</span>
           <span className="text-zinc-500 uppercase">In Progress</span>
         </div>
