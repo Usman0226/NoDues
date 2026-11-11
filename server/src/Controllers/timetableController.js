@@ -1,7 +1,9 @@
 import TimetableUpload from '../models/TimetableUpload.js';
 import Class from '../models/Class.js';
 import Subject from '../models/Subject.js';
-import { parseTimetablePdf, inspectPdfPages } from '../services/timetableParser.js';
+import Faculty from '../models/Faculty.js';
+import Department from '../models/Department.js';
+import { parseTimetablePdf, inspectPdfPages, normalizeFacultyName } from '../services/timetableParser.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -73,29 +75,6 @@ export async function previewTimetable(req, res, next) {
     }
 
     const { classId, targetSemester, page } = req.body;
-    if (!classId) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VAL_001', message: 'classId is required.' },
-      });
-    }
-
-    const targetSem = parseInt(targetSemester, 10);
-    if (!targetSem || targetSem < 1 || targetSem > 8) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VAL_001', message: 'targetSemester must be an integer between 1 and 8.' },
-      });
-    }
-
-    const targetClass = await Class.findById(classId).lean();
-    if (!targetClass) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'DB_002', message: 'Target class not found.' },
-      });
-    }
-
     const selectedPage = page ? parseInt(page, 10) : null;
     if (selectedPage && (isNaN(selectedPage) || selectedPage < 1)) {
       return res.status(400).json({
@@ -104,21 +83,101 @@ export async function previewTimetable(req, res, next) {
       });
     }
 
+    // Resolve target class (either from explicit classId or auto-detected from PDF page)
+    let targetClass = null;
+    let deptId = req.body.departmentId || req.user?.departmentId || (req.user?.department?._id || req.user?.department);
+
+    if (classId) {
+      targetClass = await Class.findById(classId);
+      if (!targetClass) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'DB_002', message: 'Target class not found.' },
+        });
+      }
+      deptId = targetClass.departmentId;
+    }
+
+    const parsedSem = parseInt(targetSemester, 10);
+    const requestedSem = parsedSem && parsedSem >= 1 && parsedSem <= 8 ? parsedSem : (targetClass?.semester || undefined);
+
     // Parse the PDF text layer (targeting specific page if provided)
     const result = await parseTimetablePdf(req.file.buffer, {
-      departmentId: targetClass.departmentId,
-      semester: targetSem,
+      departmentId: deptId,
+      semester: requestedSem,
       page: selectedPage,
     });
 
     const parsedData = result.data;
+    const metadata = parsedData.metadata || {};
+
+    // Auto-resolve or provision Class if classId was not provided upfront
+    if (!targetClass) {
+      const resolvedSem = requestedSem || metadata.detectedSemester || 1;
+      const detectedClsName = metadata.detectedClassName || req.body.className || 'Section A';
+
+      // If deptId is still unknown, attempt to resolve from detectedDepartment code
+      if (!deptId && metadata.detectedDepartment) {
+        const foundDept = await Department.findOne({
+          $or: [
+            { code: new RegExp(`^${metadata.detectedDepartment}$`, 'i') },
+            { name: new RegExp(metadata.detectedDepartment, 'i') },
+          ],
+        });
+        if (foundDept) deptId = foundDept._id;
+      }
+      if (!deptId) {
+        // Fallback to first active department
+        const anyDept = await Department.findOne({ isActive: true });
+        if (anyDept) deptId = anyDept._id;
+      }
+
+      // Check if class exists
+      const clsQuery = { name: detectedClsName, semester: resolvedSem };
+      if (deptId) clsQuery.departmentId = deptId;
+      targetClass = await Class.findOne(clsQuery);
+
+      if (!targetClass) {
+        const academicYear = metadata.academicYear || metadata.detectedAcademicYear || '2025-26';
+        const startYear = parseInt(String(academicYear).split(/[-/]/)[0], 10) || new Date().getFullYear();
+        const yearOffset = Math.floor((resolvedSem - 1) / 2);
+        const entryYear = startYear - yearOffset;
+        const batch = `${entryYear}-${String(entryYear + 4).slice(-2)}`;
+
+        targetClass = await Class.create({
+          name: detectedClsName,
+          semester: resolvedSem,
+          academicYear,
+          batch,
+          departmentId: deptId,
+          isActive: true,
+          subjectAssignments: [],
+        });
+      }
+    }
+
+    // Auto-assign class teacher if detected in PDF and not yet set on class
+    if (targetClass && !targetClass.classTeacherId && metadata.classTeacher) {
+      const normName = normalizeFacultyName(metadata.classTeacher);
+      const faculties = await Faculty.find({ departmentId: targetClass.departmentId, isActive: true }).lean();
+      const matched = faculties.find((f) => normalizeFacultyName(f.name) === normName);
+      if (matched) {
+        targetClass.classTeacherId = matched._id;
+        await targetClass.save();
+      }
+    }
+
+    // Populate classTeacher for rich client return
+    if (targetClass.classTeacherId) {
+      await targetClass.populate('classTeacherId', 'name email employeeId');
+    }
 
     // Create an audit record for this upload (MON-4)
     const uploadRecord = await TimetableUpload.create({
       classId: targetClass._id,
-      targetSemester: targetSem,
-      uploadedBy: req.user._id || req.user.userId,
-      uploaderModel: req.user.role === 'admin' ? 'Admin' : 'Faculty',
+      targetSemester: targetClass.semester,
+      uploadedBy: req.user?._id || req.user?.userId || null,
+      uploaderModel: req.user?.role === 'admin' ? 'Admin' : 'Faculty',
       originalFileName: req.file.originalname || 'timetable.pdf',
       parsedRowCount: parsedData.parsedRowCount,
       matchedRowCount: parsedData.matchedRowCount,
@@ -138,7 +197,13 @@ export async function previewTimetable(req, res, next) {
         uploadId: uploadRecord._id,
         classId: targetClass._id,
         className: targetClass.name,
-        targetSemester: targetSem,
+        targetSemester: targetClass.semester,
+        classTeacher: targetClass.classTeacherId ? {
+          _id: targetClass.classTeacherId._id || targetClass.classTeacherId,
+          name: targetClass.classTeacherId.name,
+          email: targetClass.classTeacherId.email,
+        } : null,
+        detectedTeacher: metadata.classTeacher || null,
         selectedPage: parsedData.selectedPage,
         pageCount: parsedData.pageCount,
         isMultiPage: parsedData.isMultiPage,
@@ -151,6 +216,7 @@ export async function previewTimetable(req, res, next) {
           durationMs: parsedData.durationMs,
         },
         rows: parsedData.rows,
+        metadata,
       },
     });
   } catch (err) {
@@ -174,7 +240,7 @@ export async function previewTimetable(req, res, next) {
  */
 export async function commitTimetable(req, res, next) {
   try {
-    const { uploadId, classId, targetSemester, confirmedRows } = req.body;
+    const { uploadId, classId, targetSemester, confirmedRows, classTeacherId } = req.body;
 
     if (!classId || !targetSemester || !Array.isArray(confirmedRows)) {
       return res.status(400).json({
@@ -193,6 +259,10 @@ export async function commitTimetable(req, res, next) {
         success: false,
         error: { code: 'DB_002', message: 'Class not found.' },
       });
+    }
+
+    if (classTeacherId) {
+      targetClass.classTeacherId = classTeacherId;
     }
 
     // Verify upload audit record if provided
@@ -262,7 +332,20 @@ export async function commitTimetable(req, res, next) {
     }));
     targetClass.semester = targetSem;
 
+    // Update wizard progress for class_info and timetable_subjects
+    if (!targetClass.wizardProgress) {
+      targetClass.wizardProgress = { completedSteps: [], stepData: {} };
+    }
+    const completed = new Set(targetClass.wizardProgress.completedSteps || []);
+    completed.add('class_info');
+    completed.add('timetable_subjects');
+    targetClass.wizardProgress.completedSteps = Array.from(completed);
+    targetClass.wizardProgress.currentStep = 'students';
+
     await targetClass.save();
+    if (targetClass.classTeacherId) {
+      await targetClass.populate('classTeacherId', 'name email employeeId');
+    }
 
     // Auto-propagate cohort syllabus: peer classes in the same department & semester with 0 subjects inherit the subject list
     const inheritedForPeers = subjectsToCommit.map(s => ({
@@ -303,7 +386,7 @@ export async function commitTimetable(req, res, next) {
       classId: targetClass._id,
       semester: targetSem,
       subjectCount: subjectsToCommit.length,
-      actor: req.user._id || req.user.userId,
+      actor: req.user?._id || req.user?.userId || null,
     });
 
     return res.status(200).json({
@@ -314,6 +397,7 @@ export async function commitTimetable(req, res, next) {
         className: targetClass.name,
         semester: targetSem,
         committedCount: subjectsToCommit.length,
+        classData: targetClass,
       },
     });
   } catch (err) {

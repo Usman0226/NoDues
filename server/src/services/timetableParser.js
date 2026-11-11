@@ -36,6 +36,87 @@ export function isWithoutTeacher(facultyName) {
 }
 
 /**
+ * Extracts class and header metadata from a timetable page.
+ * Detects patterns like:
+ * - "III CSD A I SEM" -> Year: III, Dept: CSD, Section: A, Sem: 5
+ * - "IV CSD B I SEM" -> Year: IV, Dept: CSD, Section: B, Sem: 7
+ * - "II CSD A II SEM" -> Year: II, Dept: CSD, Section: A, Sem: 4
+ * - "Class Teacher: <Name>"
+ * - "Academic Year: <Year>"
+ * - "Department of <Name>"
+ */
+export function extractClassMetadataFromText(text) {
+  if (!text || typeof text !== 'string') return {};
+
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const header = lines[0] || '';
+
+  let detectedClassName = null;
+  let displayName = null;
+  let detectedSemester = null;
+  let detectedDepartment = null;
+
+  // Pattern 1: Roman Year + Dept + Section + Roman Sem (e.g. "III CSD A I SEM")
+  const romanPattern = /\b(I|II|III|IV)\s+([A-Za-z]+)\s+([A-Za-z0-9]+)\s+(I|II)\s+SEM\b/i;
+  const romanMatch = header.match(romanPattern) || text.match(romanPattern);
+  if (romanMatch) {
+    const yearRoman = romanMatch[1].toUpperCase();
+    const deptCode = romanMatch[2].toUpperCase();
+    const sec = romanMatch[3].toUpperCase();
+    const semRoman = romanMatch[4].toUpperCase();
+    const yearNum = { I: 1, II: 2, III: 3, IV: 4 }[yearRoman] || 1;
+    const semInYear = semRoman === 'II' ? 2 : 1;
+    detectedSemester = (yearNum - 1) * 2 + semInYear;
+    detectedClassName = `${deptCode}-${sec}`;
+    displayName = `${yearRoman} ${deptCode}-${sec}`;
+    detectedDepartment = deptCode;
+  }
+
+  // Pattern 2: "III CSD-A" or "III CSE B" without Sem on same line
+  if (!detectedClassName) {
+    const simpleClassMatch = header.match(/\b(I|II|III|IV)\s+([A-Za-z]+)[-\s]+([A-Za-z0-9]+)\b/i);
+    if (simpleClassMatch) {
+      const yearRoman = simpleClassMatch[1].toUpperCase();
+      const deptCode = simpleClassMatch[2].toUpperCase();
+      const sec = simpleClassMatch[3].toUpperCase();
+      detectedClassName = `${deptCode}-${sec}`;
+      displayName = `${yearRoman} ${deptCode}-${sec}`;
+      detectedDepartment = deptCode;
+    }
+  }
+
+  // Fallback: Detect Semester number
+  if (!detectedSemester) {
+    const semDigitMatch = text.match(/\b(?:semester|sem)[-:\s]+([1-8])\b/i);
+    if (semDigitMatch) {
+      detectedSemester = parseInt(semDigitMatch[1], 10);
+    }
+  }
+
+  // Fallback: Section name
+  if (!detectedClassName) {
+    const secMatch = text.match(/\b(?:section|sec)[-:\s]+([A-Z0-9]+)\b/i);
+    if (secMatch) {
+      detectedClassName = secMatch[1].toUpperCase();
+      displayName = `Section ${secMatch[1].toUpperCase()}`;
+    }
+  }
+
+  const ctMatch = text.match(/Class Teacher:\s*([^\t\r\n]+)/i);
+  const ayMatch = text.match(/Academic Year:\s*([^\t\r\n]+)/i);
+  const deptMatch = text.match(/Department of ([^\t\r\n\(\)]+)/i);
+
+  return {
+    detectedClassName,
+    displayName: displayName || detectedClassName,
+    detectedSemester,
+    detectedTeacher: ctMatch ? ctMatch[1].trim() : null,
+    detectedAcademicYear: ayMatch ? ayMatch[1].trim() : null,
+    detectedDepartment: detectedDepartment || (deptMatch ? deptMatch[1].trim() : null),
+  };
+}
+
+/**
  * Parses raw text lines to detect subject summary table rows.
  * Supports both high-precision aSc tab-delimited tables and fallback line-by-line regex.
  * Extracts: subjectCode, subjectName, facultyName, hours, isElective.
@@ -362,12 +443,20 @@ export async function inspectPdfPages(pdfBuffer, options = {}) {
       bestPageNumber = pageNum;
     }
 
+    const meta = extractClassMetadataFromText(pageText);
+
     inspectedPages.push({
       pageNumber: pageNum,
       textLength,
       hasTextLayer,
       header: detectedHeader || `Page ${pageNum}`,
       snippet: snippet || (hasTextLayer ? 'Text extracted' : 'No extractable text detected'),
+      detectedClassName: meta.detectedClassName,
+      displayName: meta.displayName,
+      detectedSemester: meta.detectedSemester,
+      detectedTeacher: meta.detectedTeacher,
+      detectedAcademicYear: meta.detectedAcademicYear,
+      detectedDepartment: meta.detectedDepartment,
       detectedSubjectCodes: Array.from(foundCodes),
       matchScore: score,
       isRecommended: false,
@@ -607,11 +696,16 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
     const wefMatch = extractedText.match(/w\.e\.f\s*([^\t\r\n]+)/i);
     const deptMatch = extractedText.match(/Department of ([^\t\r\n\(\)]+)/i);
     const totalScheduledHours = rawRows.reduce((acc, r) => acc + (r.hours || 0), 0);
+    const classMeta = extractClassMetadataFromText(extractedText);
 
     metadata = {
       classTitle: title || null,
-      classTeacher: ctMatch ? ctMatch[1].trim() : null,
-      academicYear: ayMatch ? ayMatch[1].trim() : null,
+      detectedClassName: classMeta.detectedClassName || null,
+      displayName: classMeta.displayName || null,
+      detectedSemester: classMeta.detectedSemester || null,
+      detectedDepartment: classMeta.detectedDepartment || null,
+      classTeacher: ctMatch ? ctMatch[1].trim() : classMeta.detectedTeacher || null,
+      academicYear: ayMatch ? ayMatch[1].trim() : classMeta.detectedAcademicYear || null,
       wef: wefMatch ? wefMatch[1].trim() : null,
       departmentName: deptMatch ? deptMatch[1].trim() : null,
       totalScheduledHours,

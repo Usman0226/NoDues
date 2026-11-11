@@ -189,10 +189,10 @@ const Step6Preflight = ({
             <div className="pt-2 mt-2 border-t border-red-100">
               <button
                 type="button"
-                onClick={() => onNavigateToStep(2)}
+                onClick={() => onNavigateToStep(1)}
                 className="text-[11px] font-bold text-red-700 hover:text-red-900 underline flex items-center gap-1"
               >
-                Go to Step 3 (Import Students) →
+                Go to Step 2 (Enrolled Students) →
               </button>
             </div>
           )}
@@ -228,10 +228,10 @@ const Step6Preflight = ({
             <div className="pt-2 mt-2 border-t border-red-100">
               <button
                 type="button"
-                onClick={() => onNavigateToStep(1)}
+                onClick={() => onNavigateToStep(0)}
                 className="text-[11px] font-bold text-red-700 hover:text-red-900 underline flex items-center gap-1"
               >
-                Go to Step 2 (Timetable) →
+                Go to Step 1 (Class & Subjects) →
               </button>
             </div>
           )}

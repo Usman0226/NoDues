@@ -162,10 +162,14 @@ export async function saveWizardProgress(classId, { step, markCompleted = false,
   // FR-E1 Order Enforcement:
   // Cannot jump to step N unless all steps 0..(N-1) are completed (or this is class_info, step 0)
   // Exception: electives is conditional, but mentors and previous must be done
+  // Unified Step 1 compatibility: timetable_subjects is satisfied if class_info is completed with subjects
   for (let i = 0; i < targetIndex; i++) {
     const requiredStep = WIZARD_STEPS[i];
     // Electives is conditional, so it can be skipped if class has no electives
     if (requiredStep === 'electives') continue;
+
+    // In unified flow, completing class_info satisfies timetable_subjects check
+    if (requiredStep === 'timetable_subjects' && completedSet.has('class_info')) continue;
 
     if (!completedSet.has(requiredStep) && cls.wizardProgress?.currentStep !== requiredStep) {
       throw new ErrorResponse(
@@ -178,6 +182,9 @@ export async function saveWizardProgress(classId, { step, markCompleted = false,
 
   if (markCompleted && !completedSet.has(step)) {
     completedSet.add(step);
+    if (step === 'class_info' && data.subjectsConfigured) {
+      completedSet.add('timetable_subjects');
+    }
   }
 
   const existingStepData = cls.wizardProgress?.stepData || {};

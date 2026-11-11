@@ -268,5 +268,21 @@ describe('Timetable Multi-Page PDF Ingestion & Targeted Parsing', () => {
       assert.strictEqual(uploadRecord.parsedData.pageCount, 3);
       assert.strictEqual(uploadRecord.parsedData.isMultiPage, true);
     });
+
+    it('successfully previews without upfront classId by auto-resolving class from page metadata', async () => {
+      const res = await request(app)
+        .post('/api/timetable/preview')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .field('departmentId', testDepartment._id.toString())
+        .field('page', '1')
+        .attach('file', path.join(FIXTURES_DIR, 'timetable_multipage_sample.pdf'));
+
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.ok(res.body.data.classId, 'Auto-provisioned or found classId should be returned');
+      assert.ok(res.body.data.className, 'Class name should be returned');
+      assert.strictEqual(res.body.data.selectedPage, 1);
+      assert.ok(Array.isArray(res.body.data.rows));
+    });
   });
 });

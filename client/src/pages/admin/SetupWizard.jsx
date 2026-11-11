@@ -10,8 +10,7 @@ import { useNavigationStack } from '../../hooks/useNavigationStack';
 import WizardProgressHeader, { STEPS_CONFIG } from '../../components/wizard/WizardProgressHeader';
 import StepContainer from '../../components/wizard/StepContainer';
 import { WizardPageSkeleton } from '../../components/wizard/WizardSkeleton';
-import Step1ClassInfo from '../../components/wizard/Step1ClassInfo';
-import Step2Timetable from '../../components/wizard/Step2Timetable';
+import Step1ClassSubjects from '../../components/wizard/Step1ClassSubjects';
 import Step3Students from '../../components/wizard/Step3Students';
 import Step4Mentors from '../../components/wizard/Step4Mentors';
 import Step5Electives from '../../components/wizard/Step5Electives';
@@ -97,7 +96,7 @@ const SetupWizard = () => {
   };
 
   // Step 1 Save Handler
-  const handleStep1Save = async ({ classId: newClassId, classData, summary }) => {
+  const handleStep1Save = async ({ classId: newClassId, classData, summary, completedTimetable }) => {
     setClassId(newClassId);
     setSelectedClass(classData);
     setIsDirty(false);
@@ -109,13 +108,20 @@ const SetupWizard = () => {
       await updateWizardProgress(newClassId, {
         step: 'class_info',
         markCompleted: true,
-        data: { name: classData.name, semester: classData.semester },
+        data: { name: classData.name, semester: classData.semester, subjectsConfigured: true },
       });
+      if (completedTimetable) {
+        await updateWizardProgress(newClassId, {
+          step: 'timetable_subjects',
+          markCompleted: true,
+          data: { subjectsConfigured: true },
+        });
+      }
     } catch (err) {
       console.warn('Backend progress save failed:', err?.message);
     }
 
-    announce(`Step 1 completed. Moving to Step 2: Subjects & Timetable.`);
+    announce('Step 1 completed. Advanced to Step 2: Enrolled Students.');
   };
 
   // Generic Step Save Handler
@@ -208,19 +214,19 @@ const SetupWizard = () => {
 
         {/* Step Container Flow with Progressive Disclosure */}
         <div className="space-y-3">
-          {/* STEP 1: CLASS INFO */}
+          {/* STEP 1: CLASS & SUBJECTS SETUP (PDF UPLOAD OR MANUAL) */}
           <StepContainer
             stepNumber={1}
             stepId="class_info"
-            title="Class & Section Details"
-            subtitle="Choose an existing operational section or create a new section for this semester."
+            title="Class & Subjects Setup"
+            subtitle="Drop institutional timetable PDF to auto-detect section, semester, class teacher & subjects, or configure manually."
             summary={stepSummaries.class_info}
             isActive={activeStepIndex === 0}
             isCompleted={completedSteps.includes('class_info')}
             isLocked={false}
             onEdit={() => handleEditStep(0)}
           >
-            <Step1ClassInfo
+            <Step1ClassSubjects
               user={user}
               initialClassId={classId}
               initialData={selectedClass}
@@ -229,19 +235,19 @@ const SetupWizard = () => {
             />
           </StepContainer>
 
-          {/* STEP 2: TIMETABLE & SUBJECTS */}
+          {/* STEP 2: ENROLLED STUDENTS */}
           <StepContainer
             stepNumber={2}
-            stepId="timetable_subjects"
-            title="Subjects & Timetable"
-            subtitle="Set up semester subjects by inheriting the master syllabus, uploading a timetable PDF, or copying from another section."
-            summary={stepSummaries.timetable_subjects}
+            stepId="students"
+            title="Enrolled Students"
+            subtitle="Verify students currently enrolled in this section, promote prior cohort, or import CSV roster."
+            summary={stepSummaries.students}
             isActive={activeStepIndex === 1}
-            isCompleted={completedSteps.includes('timetable_subjects')}
+            isCompleted={completedSteps.includes('students')}
             isLocked={!completedSteps.includes('class_info') && activeStepIndex < 1}
             onEdit={() => handleEditStep(1)}
           >
-            <Step2Timetable
+            <Step3Students
               classId={classId}
               targetClass={selectedClass}
               onSave={handleStepSave}
@@ -250,19 +256,19 @@ const SetupWizard = () => {
             />
           </StepContainer>
 
-          {/* STEP 3: STUDENTS */}
+          {/* STEP 3: MENTOR ASSIGNMENT */}
           <StepContainer
             stepNumber={3}
-            stepId="students"
-            title="Enrolled Students"
-            subtitle="Verify students currently enrolled in this section or import new student records."
-            summary={stepSummaries.students}
+            stepId="mentors"
+            title="Mentor Faculty Allocation"
+            subtitle="Assign academic mentors to enrolled students individually, in bulk, or using auto-distribution."
+            summary={stepSummaries.mentors}
             isActive={activeStepIndex === 2}
-            isCompleted={completedSteps.includes('students')}
-            isLocked={!completedSteps.includes('timetable_subjects') && activeStepIndex < 2}
+            isCompleted={completedSteps.includes('mentors')}
+            isLocked={!completedSteps.includes('students') && activeStepIndex < 2}
             onEdit={() => handleEditStep(2)}
           >
-            <Step3Students
+            <Step4Mentors
               classId={classId}
               targetClass={selectedClass}
               onSave={handleStepSave}
@@ -271,19 +277,19 @@ const SetupWizard = () => {
             />
           </StepContainer>
 
-          {/* STEP 4: MENTOR ASSIGNMENT */}
+          {/* STEP 4: ELECTIVE ASSIGNMENT */}
           <StepContainer
             stepNumber={4}
-            stepId="mentors"
-            title="Mentor Faculty Allocation"
-            subtitle="Assign academic mentors to enrolled students individually, in bulk, or using auto-distribution."
-            summary={stepSummaries.mentors}
+            stepId="electives"
+            title="Elective Subject Mapping"
+            subtitle="Map open or professional electives if applicable for this semester."
+            summary={stepSummaries.electives}
             isActive={activeStepIndex === 3}
-            isCompleted={completedSteps.includes('mentors')}
-            isLocked={!completedSteps.includes('students') && activeStepIndex < 3}
+            isCompleted={completedSteps.includes('electives')}
+            isLocked={!completedSteps.includes('mentors') && activeStepIndex < 3}
             onEdit={() => handleEditStep(3)}
           >
-            <Step4Mentors
+            <Step5Electives
               classId={classId}
               targetClass={selectedClass}
               onSave={handleStepSave}
@@ -292,64 +298,43 @@ const SetupWizard = () => {
             />
           </StepContainer>
 
-          {/* STEP 5: ELECTIVE ASSIGNMENT */}
+          {/* STEP 5: PRE-FLIGHT CHECK */}
           <StepContainer
             stepNumber={5}
-            stepId="electives"
-            title="Elective Subject Mapping"
-            subtitle="Map open or professional electives if applicable for this semester."
-            summary={stepSummaries.electives}
-            isActive={activeStepIndex === 4}
-            isCompleted={completedSteps.includes('electives')}
-            isLocked={!completedSteps.includes('mentors') && activeStepIndex < 4}
-            onEdit={() => handleEditStep(4)}
-          >
-            <Step5Electives
-              classId={classId}
-              targetClass={selectedClass}
-              onSave={handleStepSave}
-              onBack={() => setActiveStepIndex(3)}
-              onDirtyChange={setIsDirty}
-            />
-          </StepContainer>
-
-          {/* STEP 6: PRE-FLIGHT CHECK */}
-          <StepContainer
-            stepNumber={6}
             stepId="preflight"
             title="Review & Pre-Flight Check"
             subtitle="Verify enrolled students, active subjects, and class teacher before launching clearance."
             summary={stepSummaries.preflight}
-            isActive={activeStepIndex === 5}
+            isActive={activeStepIndex === 4}
             isCompleted={completedSteps.includes('preflight')}
-            isLocked={!completedSteps.includes('electives') && activeStepIndex < 5}
-            onEdit={() => handleEditStep(5)}
+            isLocked={!completedSteps.includes('electives') && activeStepIndex < 4}
+            onEdit={() => handleEditStep(4)}
           >
             <Step6Preflight
               classId={classId}
               targetClass={selectedClass}
               onSave={handleStepSave}
-              onBack={() => setActiveStepIndex(4)}
+              onBack={() => setActiveStepIndex(3)}
               onNavigateToStep={(stepIdx) => setActiveStepIndex(stepIdx)}
             />
           </StepContainer>
 
-          {/* STEP 7: INITIATION */}
+          {/* STEP 6: INITIATION */}
           <StepContainer
-            stepNumber={7}
+            stepNumber={6}
             stepId="initiation"
             title="Launch Clearance Cycle"
             subtitle="Final confirmation to activate the official No-Due clearance cycle for this section."
             summary={stepSummaries.initiation}
-            isActive={activeStepIndex === 6}
+            isActive={activeStepIndex === 5}
             isCompleted={completedSteps.includes('initiation')}
-            isLocked={!completedSteps.includes('preflight') && activeStepIndex < 6}
-            onEdit={() => handleEditStep(6)}
+            isLocked={!completedSteps.includes('preflight') && activeStepIndex < 5}
+            onEdit={() => handleEditStep(5)}
           >
             <Step7Initiation
               classId={classId}
               targetClass={selectedClass}
-              onBack={() => setActiveStepIndex(5)}
+              onBack={() => setActiveStepIndex(4)}
               onResetWizard={handleResetWizard}
             />
           </StepContainer>

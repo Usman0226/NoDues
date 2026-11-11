@@ -4,13 +4,12 @@ import { ROLES } from '../../utils/constants';
 import { formatSectionDisplayName } from '../../utils/formatters';
 
 export const STEPS_CONFIG = [
-  { id: 'class_info', number: 1, label: 'Class & Section', short: 'Class' },
-  { id: 'timetable_subjects', number: 2, label: 'Subjects & Timetable', short: 'Subjects' },
-  { id: 'students', number: 3, label: 'Students', short: 'Students' },
-  { id: 'mentors', number: 4, label: 'Mentors', short: 'Mentors' },
-  { id: 'electives', number: 5, label: 'Electives', short: 'Electives' },
-  { id: 'preflight', number: 6, label: 'Review & Check', short: 'Review' },
-  { id: 'initiation', number: 7, label: 'Launch Clearance', short: 'Launch' },
+  { id: 'class_info', number: 1, label: 'Class & Subjects', short: 'Setup' },
+  { id: 'students', number: 2, label: 'Enrolled Students', short: 'Students' },
+  { id: 'mentors', number: 3, label: 'Mentors Allocation', short: 'Mentors' },
+  { id: 'electives', number: 4, label: 'Electives Mapping', short: 'Electives' },
+  { id: 'preflight', number: 5, label: 'Review & Pre-Flight', short: 'Review' },
+  { id: 'initiation', number: 6, label: 'Launch Clearance', short: 'Launch' },
 ];
 
 const WizardProgressHeader = ({
