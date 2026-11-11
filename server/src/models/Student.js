@@ -96,6 +96,14 @@ const studentSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isGraduated: {
+      type: Boolean,
+      default: false,
+    },
+    graduationYear: {
+      type: String,
+      default: null,
+    },
     role: {
       type: String,
       enum: ['student'],

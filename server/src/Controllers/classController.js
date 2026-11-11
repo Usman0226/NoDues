@@ -158,6 +158,7 @@ export const getClasses = async (req, res, next) => {
         subjectCount:   c.subjectAssignments?.length ?? 0,
         hasActiveBatch: !!activeBatchMap[c._id.toString()],
         isActive:       c.isActive,
+        isMaster:       c.isMaster || false,
       })),
       pagination: {
         page: Number(page), limit: Number(limit), total,
@@ -1335,9 +1336,40 @@ export const propagateCohortSubjects = async (req, res, next) => {
       ];
     }
 
-    const result = await Class.updateMany(filter, {
-      $set: { subjectAssignments: propagatedSubjects },
-    });
+    const targetSections = await Class.find(filter);
+    let updatedCount = 0;
+
+    for (const section of targetSections) {
+      const existingFacultyMap = new Map();
+      for (const sa of (section.subjectAssignments || [])) {
+        const key = (sa.subjectCode || sa.subjectId?.toString() || '').trim().toUpperCase();
+        if (key && sa.facultyId) {
+          existingFacultyMap.set(key, {
+            facultyId: sa.facultyId,
+            facultyName: sa.facultyName,
+          });
+        }
+      }
+
+      const mergedAssignments = sourceClass.subjectAssignments.map((sa) => {
+        const key = (sa.subjectCode || sa.subjectId?.toString() || '').trim().toUpperCase();
+        const existing = existingFacultyMap.get(key);
+
+        return {
+          subjectId: sa.subjectId,
+          subjectName: sa.subjectName,
+          subjectCode: sa.subjectCode,
+          isElective: sa.isElective || false,
+          facultyId: syncFaculty ? sa.facultyId : (existing?.facultyId || null),
+          facultyName: syncFaculty ? sa.facultyName : (existing?.facultyName || null),
+        };
+      });
+
+      section.subjectAssignments = mergedAssignments;
+      await section.save();
+      invalidateEntityCache('class', section._id, sourceClass.departmentId);
+      updatedCount++;
+    }
 
     invalidateEntityCache('class', 'bulk_update');
 
@@ -1347,18 +1379,585 @@ export const propagateCohortSubjects = async (req, res, next) => {
       sourceClassId: sourceClass._id,
       departmentId: sourceClass.departmentId,
       semester: sourceClass.semester,
-      updatedSections: result.modifiedCount,
+      updatedSections: updatedCount,
     });
 
     return res.status(200).json({
       success: true,
-      message: `Successfully synchronized ${propagatedSubjects.length} subjects across ${result.modifiedCount} peer section(s) in Semester ${sourceClass.semester}`,
+      message: `Successfully synchronized ${sourceClass.subjectAssignments.length} subjects across ${updatedCount} peer section(s) in Semester ${sourceClass.semester}`,
       data: {
         sourceClassId: sourceClass._id,
         departmentId: sourceClass.departmentId,
         semester: sourceClass.semester,
-        updatedSections: result.modifiedCount,
-        subjectCount: propagatedSubjects.length,
+        updatedSections: updatedCount,
+        subjectCount: sourceClass.subjectAssignments.length,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── GET /api/classes/master-curriculum ─────────────────────────────────────────
+export const getMasterCurriculum = async (req, res, next) => {
+  try {
+    const { departmentId, semester } = req.query;
+    if (!departmentId || !semester) {
+      return next(new ErrorResponse('departmentId and semester are required', 400, 'VAL_001'));
+    }
+
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId?.toString() !== departmentId.toString()) {
+      return next(new ErrorResponse('Access denied for this department scope', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
+    const numSemester = Number(semester);
+
+    let master = await Class.findOne({
+      departmentId,
+      semester: numSemester,
+      isMaster: true,
+      isActive: true,
+    }).lean();
+
+    if (!master) {
+      // Find peer with subjects if any exists
+      const peerWithSubjects = await Class.findOne({
+        departmentId,
+        semester: numSemester,
+        isActive: true,
+        'subjectAssignments.0': { $exists: true },
+      }).lean();
+
+      const academicYear = peerWithSubjects?.academicYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 4}`;
+      const inheritedSubjects = (peerWithSubjects?.subjectAssignments || []).map((sa) => ({
+        subjectId: sa.subjectId,
+        subjectName: sa.subjectName,
+        subjectCode: sa.subjectCode,
+        isElective: sa.isElective || false,
+        facultyId: null,
+        facultyName: null,
+      }));
+
+      const created = await Class.create({
+        name: `Semester ${numSemester} Curriculum Master`,
+        departmentId,
+        semester: numSemester,
+        academicYear,
+        isMaster: true,
+        isActive: true,
+        studentIds: [],
+        subjectAssignments: inheritedSubjects,
+      });
+
+      master = created.toObject();
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: master,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /api/classes/master-curriculum/sync ──────────────────────────────────
+export const syncMasterCurriculum = async (req, res, next) => {
+  try {
+    const { departmentId, semester, syncFaculty = false } = req.body;
+    if (!departmentId || !semester) {
+      return next(new ErrorResponse('departmentId and semester are required', 400, 'VAL_001'));
+    }
+
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId?.toString() !== departmentId.toString()) {
+      return next(new ErrorResponse('Access denied for this department scope', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
+    const numSemester = Number(semester);
+
+    const master = await Class.findOne({
+      departmentId,
+      semester: numSemester,
+      isMaster: true,
+      isActive: true,
+    }).lean();
+
+    if (!master || !master.subjectAssignments?.length) {
+      return next(new ErrorResponse('Master class has no subjects to synchronize. Please add subjects to the master class first.', 400, 'VAL_002'));
+    }
+
+    const targetSections = await Class.find({
+      departmentId,
+      semester: numSemester,
+      isMaster: { $ne: true },
+      isActive: true,
+    });
+
+    let updatedCount = 0;
+    for (const section of targetSections) {
+      const existingFacultyMap = new Map();
+      for (const sa of (section.subjectAssignments || [])) {
+        const key = (sa.subjectCode || sa.subjectId?.toString() || '').trim().toUpperCase();
+        if (key && sa.facultyId) {
+          existingFacultyMap.set(key, {
+            facultyId: sa.facultyId,
+            facultyName: sa.facultyName,
+          });
+        }
+      }
+
+      const mergedAssignments = master.subjectAssignments.map((ms) => {
+        const key = (ms.subjectCode || ms.subjectId?.toString() || '').trim().toUpperCase();
+        const existing = existingFacultyMap.get(key);
+
+        return {
+          subjectId: ms.subjectId,
+          subjectName: ms.subjectName,
+          subjectCode: ms.subjectCode,
+          isElective: ms.isElective || false,
+          facultyId: syncFaculty ? ms.facultyId : (existing?.facultyId || null),
+          facultyName: syncFaculty ? ms.facultyName : (existing?.facultyName || null),
+        };
+      });
+
+      section.subjectAssignments = mergedAssignments;
+      await section.save();
+      invalidateEntityCache('class', section._id, departmentId);
+      updatedCount++;
+    }
+
+    logger.info('master_curriculum_synced', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      departmentId,
+      semester: numSemester,
+      subjectCount: master.subjectAssignments.length,
+      updatedSections: updatedCount,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Synchronized ${master.subjectAssignments.length} subjects to ${updatedCount} section(s) in Semester ${numSemester}.`,
+      data: {
+        departmentId,
+        semester: numSemester,
+        subjectCount: master.subjectAssignments.length,
+        updatedSectionsCount: updatedCount,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── GET /api/classes/department-rollover-preview ──────────────────────────────
+export const getDepartmentRolloverPreview = async (req, res, next) => {
+  try {
+    const { departmentId } = req.query;
+    if (!departmentId) {
+      return next(new ErrorResponse('departmentId is required', 400, 'VAL_001'));
+    }
+
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId?.toString() !== departmentId.toString()) {
+      return next(new ErrorResponse('Access denied for this department scope', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
+    // 1. Fetch all active operational sections
+    const allClasses = await Class.find({
+      departmentId,
+      isActive: true,
+      isMaster: { $ne: true },
+    }).sort({ semester: 1, name: 1 }).lean();
+
+    const classIds = allClasses.map((c) => c._id);
+
+    // 2. Check for active clearance batches across all classes
+    const activeBatches = await NodueBatch.find({
+      classId: { $in: classIds },
+      status: 'active',
+    }).select('classId').lean();
+
+    const activeBatchMap = new Set(activeBatches.map((b) => b.classId.toString()));
+
+    // 3. Count active students per class
+    const studentCountMap = new Map();
+    await Promise.all(
+      allClasses.map(async (cls) => {
+        const count = await Student.countDocuments({
+          $or: [
+            { classId: cls._id },
+            { _id: { $in: cls.studentIds || [] } },
+          ],
+          isActive: { $ne: false },
+        });
+        studentCountMap.set(cls._id.toString(), count);
+      })
+    );
+
+    // Group classes by semester
+    const semMap = new Map();
+    for (const cls of allClasses) {
+      const s = cls.semester;
+      if (!semMap.has(s)) semMap.set(s, []);
+      semMap.get(s).push({
+        _id: cls._id,
+        name: cls.name,
+        semester: cls.semester,
+        academicYear: cls.academicYear,
+        studentCount: studentCountMap.get(cls._id.toString()) || 0,
+        hasActiveBatch: activeBatchMap.has(cls._id.toString()),
+      });
+    }
+
+    const availableSemesters = [...semMap.keys()].sort((a, b) => b - a); // Descending (8 down to 1)
+
+    // Analyze transitions
+    const semesterTransitions = [];
+    let totalMissingSections = 0;
+    let totalStudentsPromoting = 0;
+    let totalGraduatingStudents = 0;
+    let totalBlockedSections = 0;
+
+    for (const sourceSem of availableSemesters) {
+      const sourceSections = semMap.get(sourceSem) || [];
+      const isGraduating = sourceSem >= 8;
+      const targetSem = isGraduating ? null : sourceSem + 1;
+      const targetSections = !isGraduating ? (semMap.get(targetSem) || []) : [];
+
+      const semStudents = sourceSections.reduce((sum, sec) => sum + sec.studentCount, 0);
+      if (isGraduating) {
+        totalGraduatingStudents += semStudents;
+      } else {
+        totalStudentsPromoting += semStudents;
+      }
+
+      // Compute missing sections in target semester
+      const missingInTarget = [];
+      if (!isGraduating) {
+        for (const src of sourceSections) {
+          const cleanSrc = (src.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
+          const match = targetSections.some((tgt) => {
+            const cleanTgt = (tgt.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
+            return cleanSrc === cleanTgt;
+          });
+          if (!match && !missingInTarget.includes(src.name)) {
+            missingInTarget.push(src.name);
+          }
+        }
+      }
+
+      totalMissingSections += missingInTarget.length;
+      const semHasActiveBatch = sourceSections.some((s) => s.hasActiveBatch);
+      if (semHasActiveBatch) totalBlockedSections++;
+
+      semesterTransitions.push({
+        sourceSemester: sourceSem,
+        targetSemester: targetSem,
+        isGraduating,
+        sourceSections,
+        targetSections,
+        missingSections: missingInTarget,
+        totalStudents: semStudents,
+        hasActiveBatch: semHasActiveBatch,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        departmentId,
+        totalSemesters: availableSemesters.length,
+        totalSections: allClasses.length,
+        totalStudents: totalStudentsPromoting + totalGraduatingStudents,
+        advancingStudents: totalStudentsPromoting,
+        graduatingStudents: totalGraduatingStudents,
+        missingSectionsCount: totalMissingSections,
+        blockedByActiveBatchCount: totalBlockedSections,
+        transitions: semesterTransitions,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /api/classes/department-rollover ─────────────────────────────────────
+export const executeDepartmentRollover = async (req, res, next) => {
+  try {
+    const {
+      departmentId,
+      autoCreateMissingSections = true,
+      resetElectives = true,
+      resetFaculty = true,
+      excludedStudentIds = [],
+    } = req.body;
+
+    if (!departmentId) {
+      return next(new ErrorResponse('departmentId is required', 400, 'VAL_001'));
+    }
+
+    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId?.toString() !== departmentId.toString()) {
+      return next(new ErrorResponse('Access denied for this department scope', 403, 'AUTH_DEPARTMENT_SCOPE'));
+    }
+
+    const excludedSet = new Set((excludedStudentIds || []).map((id) => id.toString()));
+
+    // 1. Guard against active clearance batches in the department
+    const activeBatches = await NodueBatch.find({
+      departmentId,
+      status: 'active',
+    }).select('_id name classId').lean();
+
+    if (activeBatches.length > 0) {
+      return next(new ErrorResponse(
+        'Cannot execute Department Rollover while clearance batches are active. Please complete or close active batches before proceeding.',
+        400,
+        'VAL_002'
+      ));
+    }
+
+    // 2. Fetch existing classes
+    let allClasses = await Class.find({
+      departmentId,
+      isActive: true,
+      isMaster: { $ne: true },
+    }).lean();
+
+    // 3. Pre-provision missing target sections if autoCreateMissingSections is true
+    if (autoCreateMissingSections) {
+      const semMap = new Map();
+      for (const cls of allClasses) {
+        if (!semMap.has(cls.semester)) semMap.set(cls.semester, []);
+        semMap.get(cls.semester).push(cls);
+      }
+
+      const availableSemesters = [...semMap.keys()].filter((s) => s < 8).sort((a, b) => b - a);
+
+      for (const sourceSem of availableSemesters) {
+        const sourceSections = semMap.get(sourceSem) || [];
+        const targetSem = sourceSem + 1;
+        const targetSections = semMap.get(targetSem) || [];
+
+        const missingNames = [];
+        for (const src of sourceSections) {
+          const cleanSrc = (src.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
+          const match = targetSections.some((tgt) => {
+            const cleanTgt = (tgt.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
+            return cleanSrc === cleanTgt;
+          });
+          if (!match && !missingNames.includes(src.name)) {
+            missingNames.push(src.name);
+          }
+        }
+
+        if (missingNames.length > 0) {
+          // Look up Master Class or peer with subjects in targetSem
+          let masterOrPeer = await Class.findOne({
+            departmentId,
+            semester: targetSem,
+            isMaster: true,
+            isActive: true,
+            'subjectAssignments.0': { $exists: true },
+          }).lean();
+
+          if (!masterOrPeer) {
+            masterOrPeer = await Class.findOne({
+              departmentId,
+              semester: targetSem,
+              isActive: true,
+              'subjectAssignments.0': { $exists: true },
+            }).lean();
+          }
+
+          const inheritedSubjects = (masterOrPeer?.subjectAssignments || []).map((sa) => ({
+            subjectId: sa.subjectId,
+            subjectName: sa.subjectName,
+            subjectCode: sa.subjectCode,
+            isElective: sa.isElective || false,
+            facultyId: null,
+            facultyName: null,
+          }));
+
+          const academicYear = sourceSections[0]?.academicYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 4}`;
+
+          for (const name of missingNames) {
+            const created = await Class.create({
+              name,
+              departmentId,
+              semester: targetSem,
+              academicYear,
+              studentIds: [],
+              subjectAssignments: inheritedSubjects,
+              isActive: true,
+            });
+            if (!semMap.has(targetSem)) semMap.set(targetSem, []);
+            semMap.get(targetSem).push(created.toObject());
+          }
+        }
+      }
+
+      // Refresh allClasses
+      allClasses = await Class.find({
+        departmentId,
+        isActive: true,
+        isMaster: { $ne: true },
+      }).lean();
+    }
+
+    // 4. Group by semester descending (Waterfall execution)
+    const semGrouped = new Map();
+    for (const cls of allClasses) {
+      if (!semGrouped.has(cls.semester)) semGrouped.set(cls.semester, []);
+      semGrouped.get(cls.semester).push(cls);
+    }
+
+    const descendingSemesters = [...semGrouped.keys()].sort((a, b) => b - a);
+
+    let totalGraduated = 0;
+    let totalAdvancing = 0;
+    const executionResults = [];
+    const affectedClassIds = new Set();
+    const affectedStudentIds = new Set();
+
+    // 5. Execute Top-Down Waterfall in Safe Transaction
+    await executeSafeTransaction(async (session, opt) => {
+      for (const sem of descendingSemesters) {
+        const sections = semGrouped.get(sem) || [];
+
+        // Final Year Graduation (Semester 8)
+        if (sem >= 8) {
+          for (const sec of sections) {
+            affectedClassIds.add(sec._id.toString());
+            const students = await Student.find({
+              $or: [{ classId: sec._id }, { _id: { $in: sec.studentIds || [] } }],
+              isActive: { $ne: false },
+            }).select('_id').lean();
+
+            const eligibleIds = students.map((s) => s._id).filter((id) => !excludedSet.has(id.toString()));
+
+            if (eligibleIds.length > 0) {
+              await Class.findByIdAndUpdate(sec._id, { $pullAll: { studentIds: eligibleIds } }, opt);
+              await Student.updateMany(
+                { _id: { $in: eligibleIds } },
+                {
+                  $set: {
+                    isActive: false,
+                    isGraduated: true,
+                    graduationYear: new Date().getFullYear().toString(),
+                  },
+                },
+                opt
+              );
+
+              eligibleIds.forEach((id) => affectedStudentIds.add(id.toString()));
+              totalGraduated += eligibleIds.length;
+            }
+
+            executionResults.push({
+              sourceSemester: sem,
+              sourceClass: sec.name,
+              action: 'GRADUATED',
+              count: eligibleIds.length,
+            });
+          }
+        } else {
+          // Standard Advancement (Sem -> Sem + 1)
+          const targetSem = sem + 1;
+          const targetSections = semGrouped.get(targetSem) || [];
+
+          for (const sec of sections) {
+            affectedClassIds.add(sec._id.toString());
+            const cleanSrc = (sec.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
+
+            // Match target section
+            const targetSec = targetSections.find((tgt) => {
+              const cleanTgt = (tgt.name || '').replace(/^(I|II|III|IV)\s+/i, '').trim().toLowerCase();
+              return cleanSrc === cleanTgt;
+            });
+
+            if (!targetSec) {
+              executionResults.push({
+                sourceSemester: sem,
+                sourceClass: sec.name,
+                action: 'SKIPPED_NO_TARGET_SECTION',
+                count: 0,
+              });
+              continue;
+            }
+
+            affectedClassIds.add(targetSec._id.toString());
+
+            const students = await Student.find({
+              $or: [{ classId: sec._id }, { _id: { $in: sec.studentIds || [] } }],
+              isActive: { $ne: false },
+            }).select('_id').lean();
+
+            const eligibleIds = students.map((s) => s._id).filter((id) => !excludedSet.has(id.toString()));
+
+            if (eligibleIds.length > 0) {
+              await Class.findByIdAndUpdate(sec._id, { $pullAll: { studentIds: eligibleIds } }, opt);
+              await Class.findByIdAndUpdate(targetSec._id, { $addToSet: { studentIds: { $each: eligibleIds } } }, opt);
+
+              const studentUpdatePayload = {
+                classId: targetSec._id,
+                departmentId: targetSec.departmentId,
+                semester: targetSec.semester,
+                currentSemester: targetSec.semester,
+                academicYear: targetSec.academicYear,
+                yearOfStudy: Math.ceil(targetSec.semester / 2),
+              };
+
+              if (resetFaculty) studentUpdatePayload.mentorId = null;
+              if (resetElectives) studentUpdatePayload.electiveSubjects = [];
+
+              await Student.updateMany(
+                { _id: { $in: eligibleIds } },
+                { $set: studentUpdatePayload },
+                opt
+              );
+
+              eligibleIds.forEach((id) => affectedStudentIds.add(id.toString()));
+              totalAdvancing += eligibleIds.length;
+            }
+
+            executionResults.push({
+              sourceSemester: sem,
+              sourceClass: sec.name,
+              targetSemester: targetSem,
+              targetClass: targetSec.name,
+              action: 'PROMOTED',
+              count: eligibleIds.length,
+            });
+          }
+        }
+      }
+    });
+
+    // 6. Invalidate caches
+    invalidateEntityCache('department', departmentId);
+    affectedClassIds.forEach((cid) => invalidateEntityCache('class', cid, departmentId));
+    affectedStudentIds.forEach((sid) => invalidateEntityCache('student', sid));
+    cache.del('students:list:*');
+    cache.del(`classes:list:dept_${departmentId}:*`);
+
+    logger.info('department_academic_rollover_completed', {
+      timestamp: new Date().toISOString(),
+      actor: req.user.userId,
+      departmentId,
+      totalGraduated,
+      totalAdvancing,
+      totalAffectedStudents: totalGraduated + totalAdvancing,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Department Academic Rollover completed: ${totalAdvancing} students advanced, ${totalGraduated} students graduated.`,
+      data: {
+        departmentId,
+        totalGraduated,
+        totalAdvancing,
+        totalAffectedStudents: totalGraduated + totalAdvancing,
+        results: executionResults,
       },
     });
   } catch (err) {

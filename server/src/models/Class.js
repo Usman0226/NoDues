@@ -135,6 +135,10 @@ const classSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isMaster: {
+      type: Boolean,
+      default: false,
+    },
     wizardProgress: {
       currentStep: {
         type: String,
@@ -173,6 +177,7 @@ const classSchema = new mongoose.Schema(
 classSchema.index({ batchId: 1 });
 classSchema.index({ departmentId: 1, isActive: 1 });
 classSchema.index({ departmentId: 1, semester: 1, academicYear: 1 });
+classSchema.index({ departmentId: 1, semester: 1, isMaster: 1 });
 classSchema.index({ classTeacherId: 1 });
 
 // ── Cache Invalidation Hooks ──────────────────────────────────────────────────

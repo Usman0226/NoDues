@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {motion, AnimatePresence } from 'framer-motion';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Button from '../../components/ui/Button';
@@ -9,13 +9,14 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
-import { getClasses, createClass, updateClass, deleteClass, activateClass } from '../../api/classes';
+import { getClasses, createClass, updateClass, deleteClass, activateClass, getMasterCurriculum, syncMasterCurriculum } from '../../api/classes';
 import { getFaculty } from '../../api/faculty';
-import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Plus, BookOpen, Users, GraduationCap, Layers, ArrowRight, Copy, RefreshCw, AlertCircle, Edit, Trash2, ChevronLeft, ChevronRight, Inbox, CheckCircle, Sparkles } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import BackHeader from '../../components/ui/BackHeader';
 import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal';
 import BulkPromoteCohortModal from '../../components/classes/BulkPromoteCohortModal';
+import DepartmentRolloverModal from '../../components/classes/DepartmentRolloverModal';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -52,6 +53,39 @@ const DepartmentClasses = () => {
   const [promoteClassId, setPromoteClassId] = useState(null);
   const [showCohortPromote, setShowCohortPromote] = useState(false);
   const [cohortPromoteSem, setCohortPromoteSem] = useState(1);
+  const [showDepartmentRollover, setShowDepartmentRollover] = useState(false);
+  const [syncingSem, setSyncingSem] = useState(null);
+
+  const navigate = useNavigate();
+
+  const handleOpenMasterCurriculum = async (sem) => {
+    if (!activeDeptId) return toast.error('Department context missing');
+    try {
+      const res = await getMasterCurriculum({ departmentId: activeDeptId, semester: sem });
+      const master = res?.data?.data || res?.data;
+      if (master?._id) {
+        navigate(isHod ? `/hod/class/${master._id}` : `/admin/class/${master._id}`);
+      } else {
+        toast.error('Could not locate master curriculum class');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Failed to open master curriculum');
+    }
+  };
+
+  const handleSyncMaster = async (sem) => {
+    if (!activeDeptId) return toast.error('Department context missing');
+    setSyncingSem(sem);
+    try {
+      const res = await syncMasterCurriculum({ departmentId: activeDeptId, semester: sem });
+      toast.success(res?.data?.message || `Synchronized Semester ${sem} master curriculum to all sections!`);
+      fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+    } catch (err) {
+      toast.error(err?.message || err?.response?.data?.message || 'Failed to synchronize curriculum');
+    } finally {
+      setSyncingSem(null);
+    }
+  };
 
 
   // Pagination State
@@ -235,6 +269,14 @@ const DepartmentClasses = () => {
             >
               <GraduationCap size={14} /> Bulk Promote Cohort
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDepartmentRollover(true)}
+              className="border-purple-200 text-purple-700 hover:bg-purple-50 font-semibold gap-1.5"
+            >
+              <Layers size={14} /> Academic Rollover
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => fetchClasses({ departmentId: deptId, page, limit, includeInactive })} className="text-muted-foreground"><RefreshCw size={14} /> Reload</Button>
         </div>
 
@@ -303,32 +345,80 @@ const DepartmentClasses = () => {
           >
             {Object.entries(grouped)
               .sort(([a], [b]) => Number(a) - Number(b))
-              .map(([sem, semClasses]) => (
-              <div key={sem} className="space-y-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-navy flex items-center justify-center text-xs font-black text-white shadow-lg shadow-navy/20">
-                      S{sem}
+              .map(([sem, semClasses]) => {
+                const masterClass = semClasses.find((c) => c.isMaster);
+                const operationalSections = semClasses.filter((c) => !c.isMaster);
+                const cohortSubjectCount = masterClass?.subjectCount ?? operationalSections[0]?.subjectCount ?? 0;
+
+                return (
+                  <div key={sem} className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-navy flex items-center justify-center text-xs font-black text-white shadow-lg shadow-navy/20">
+                          S{sem}
+                        </div>
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-navy/40">Semester {sem} Groups</h3>
+                      </div>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] tracking-wider uppercase gap-1.5"
+                        onClick={() => {
+                          setCohortPromoteSem(Number(sem));
+                          setShowCohortPromote(true);
+                        }}
+                      >
+                        <GraduationCap size={12} />
+                        Promote Semester {sem} ({operationalSections.length} Sections)
+                      </Button>
                     </div>
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-navy/40">Semester {sem} Groups</h3>
-                  </div>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] tracking-wider uppercase gap-1.5"
-                    onClick={() => {
-                      setCohortPromoteSem(Number(sem));
-                      setShowCohortPromote(true);
-                    }}
-                  >
-                    <GraduationCap size={12} />
-                    Promote Semester {sem} ({semClasses.length} Sections)
-                  </Button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {semClasses.map((cls) => (
-                    <motion.div key={cls._id} variants={itemVariants} layout>
+
+                    {/* Semester Master Curriculum Blueprint Banner */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-indigo-50/90 via-white to-purple-50/40 rounded-2xl border border-indigo-100/90 shadow-xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold">
+                          <BookOpen size={16} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-navy">Semester {sem} Curriculum Master</span>
+                            <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                              Single Source of Truth
+                            </span>
+                            <span className="text-[10px] font-bold text-muted-foreground">
+                              • {cohortSubjectCount} Subjects
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            All {operationalSections.length} operational sections inherit this syllabus. Faculty are mapped per section.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          className="text-xs font-semibold gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                          onClick={() => handleOpenMasterCurriculum(Number(sem))}
+                        >
+                          <BookOpen size={13} /> Manage Master Syllabus
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="text-xs font-semibold gap-1.5 text-muted-foreground hover:text-indigo-600"
+                          onClick={() => handleSyncMaster(Number(sem))}
+                          disabled={syncingSem === Number(sem)}
+                        >
+                          <RefreshCw size={13} className={syncingSem === Number(sem) ? 'animate-spin' : ''} /> Sync All Sections
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                      {operationalSections.map((cls) => (
+                        <motion.div key={cls._id} variants={itemVariants} layout>
                        <Link 
                         to={isHod ? `/hod/class/${cls._id}` : `/admin/class/${cls._id}`}
                         className="group block bg-white rounded-2xl border border-muted p-4 sm:p-6 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] hover:border-indigo-200 transition-all duration-300 relative overflow-hidden"
@@ -399,7 +489,8 @@ const DepartmentClasses = () => {
                   ))}
                 </div>
               </div>
-            ))}
+            );
+          })}
           </motion.div>
         )}
       </AnimatePresence>
@@ -583,6 +674,19 @@ const DepartmentClasses = () => {
           onSuccess={() => {
             fetchClasses({ departmentId: deptId, page, limit, includeInactive });
             setShowCohortPromote(false);
+          }}
+        />
+      )}
+
+      {showDepartmentRollover && (
+        <DepartmentRolloverModal
+          isOpen={showDepartmentRollover}
+          onClose={() => setShowDepartmentRollover(false)}
+          departmentId={activeDeptId}
+          departmentName={classes[0]?.departmentName || 'Department'}
+          onSuccess={() => {
+            fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+            setShowDepartmentRollover(false);
           }}
         />
       )}

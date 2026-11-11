@@ -19,4 +19,8 @@ export const getCohortPromotionPreview = (params) => api.get('/classes/cohort-pr
 export const bulkPromoteClasses = (data) => api.post('/classes/bulk-promote', data);
 export const autoCreateTargetSections = (data) => api.post('/classes/auto-create-target-sections', data);
 export const propagateCohortSubjects = (id, data) => api.post(`/classes/${id}/propagate-cohort-subjects`, data);
+export const getMasterCurriculum = (params) => api.get('/classes/master-curriculum', { params });
+export const syncMasterCurriculum = (data) => api.post('/classes/master-curriculum/sync', data);
+export const getDepartmentRolloverPreview = (params) => api.get('/classes/department-rollover-preview', { params });
+export const executeDepartmentRollover = (data) => api.post('/classes/department-rollover', data);
 

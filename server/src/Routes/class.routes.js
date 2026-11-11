@@ -18,6 +18,10 @@ import {
   bulkPromoteClasses,
   autoCreateTargetSections,
   propagateCohortSubjects,
+  getMasterCurriculum,
+  syncMasterCurriculum,
+  getDepartmentRolloverPreview,
+  executeDepartmentRollover,
 } from '../Controllers/classController.js';
 import { protect } from '../middlewares/auth.js';
 import { RoleGuard } from '../middlewares/RoleGuard.js';
@@ -27,6 +31,12 @@ const router = Router();
 
 router.use(protect);
 router.use(RoleGuard(['admin', 'hod', 'ao']));
+
+// Master curriculum & Bulk cohort promotion routes (must precede /:id)
+router.get('/master-curriculum', getMasterCurriculum);
+router.post('/master-curriculum/sync', syncMasterCurriculum);
+router.get('/department-rollover-preview', getDepartmentRolloverPreview);
+router.post('/department-rollover', executeDepartmentRollover);
 
 // Collection routes
 router.route('/')

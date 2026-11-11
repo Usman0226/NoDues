@@ -572,4 +572,109 @@ describe('Student Promotion & Historical Record Preservation', () => {
       assert.ok(res.body.data.updatedSections >= 1);
     });
   });
+
+  describe('Department Academic Rollover & Central Master Curriculum', () => {
+    it('GET /api/classes/master-curriculum auto-provisions or retrieves semester master curriculum', async () => {
+      const res = await request(app)
+        .get(`/api/classes/master-curriculum?departmentId=${testDept._id}&semester=5`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.success, true);
+      assert.ok(res.body.data);
+      assert.equal(res.body.data.isMaster, true);
+      assert.equal(res.body.data.semester, 5);
+    });
+
+    it('POST /api/classes/master-curriculum/sync broadcasts master subjects while preserving assigned faculty', async () => {
+      // 1. Get or create master class and attach a master subject
+      const masterSubject = await mongoose.model('Subject').create({
+        name: 'Cloud Computing',
+        code: '23CSD115',
+        semester: 5,
+        isActive: true,
+      });
+
+      const master = await Class.findOneAndUpdate(
+        { departmentId: testDept._id, semester: 5, isMaster: true },
+        {
+          $set: {
+            subjectAssignments: [{
+              subjectId: masterSubject._id,
+              subjectName: masterSubject.name,
+              subjectCode: masterSubject.code,
+              isElective: false,
+              facultyId: null,
+              facultyName: null,
+            }],
+          },
+        },
+        { new: true, upsert: true }
+      );
+
+      // 2. Set an existing faculty on targetClass for that subject
+      await Class.findByIdAndUpdate(targetClass._id, {
+        $set: {
+          subjectAssignments: [{
+            subjectId: masterSubject._id,
+            subjectName: 'Old Cloud Name',
+            subjectCode: '23CSD115',
+            isElective: false,
+            facultyId: hodUser._id,
+            facultyName: 'Dr. Test Faculty',
+          }],
+        },
+      });
+
+      // 3. Sync from master curriculum
+      const res = await request(app)
+        .post('/api/classes/master-curriculum/sync')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ departmentId: testDept._id, semester: 5, syncFaculty: false });
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.success, true);
+
+      // Verify targetClass updated subject details but KEPT existing assigned faculty
+      const updatedTarget = await Class.findById(targetClass._id).lean();
+      assert.equal(updatedTarget.subjectAssignments.length, 1);
+      assert.equal(updatedTarget.subjectAssignments[0].subjectName, 'Cloud Computing');
+      assert.equal(updatedTarget.subjectAssignments[0].facultyId.toString(), hodUser._id.toString());
+      assert.equal(updatedTarget.subjectAssignments[0].facultyName, 'Dr. Test Faculty');
+    });
+
+    it('GET /api/classes/department-rollover-preview generates department waterfall simulation', async () => {
+      const res = await request(app)
+        .get(`/api/classes/department-rollover-preview?departmentId=${testDept._id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.success, true);
+      assert.ok(res.body.data.transitions);
+      assert.ok(Array.isArray(res.body.data.transitions));
+      assert.ok(res.body.data.totalStudents >= 1);
+    });
+
+    it('POST /api/classes/department-rollover executes atomic top-down waterfall rollover', async () => {
+      const res = await request(app)
+        .post('/api/classes/department-rollover')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          departmentId: testDept._id,
+          autoCreateMissingSections: true,
+          resetElectives: true,
+          resetFaculty: true,
+        });
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.success, true);
+      assert.ok(res.body.data.totalAffectedStudents >= 1);
+
+      // Verify student 1 was promoted to next semester
+      const updatedStudent = await Student.findById(student1._id).lean();
+      assert.equal(updatedStudent.semester, 5);
+      assert.equal(updatedStudent.currentSemester, 5);
+      assert.equal(updatedStudent.classId.toString(), targetClass._id.toString());
+    });
+  });
 });
