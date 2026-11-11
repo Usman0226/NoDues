@@ -178,7 +178,7 @@ const Step1ClassSubjects = ({
       if (resolvedClassId) fd.append('classId', resolvedClassId);
 
       const res = await previewTimetable(fd);
-      const data = res?.data || res;
+      const data = res?.data?.rows !== undefined ? res.data : (res?.rows !== undefined ? res : (res?.data || res));
 
       setUploadId(data.uploadId);
       setResolvedClassId(data.classId);
@@ -265,7 +265,7 @@ const Step1ClassSubjects = ({
       if (resolvedClassId) fd.append('classId', resolvedClassId);
 
       const res = await inspectTimetablePdf(fd);
-      const inspData = res?.data || res;
+      const inspData = res?.data?.pages !== undefined ? res.data : (res?.pages !== undefined ? res : (res?.data || res));
       setInspection(inspData);
 
       // Auto-resolve department for Admin if not set

@@ -142,8 +142,16 @@ export async function previewTimetable(req, res, next) {
       const resolvedSem = requestedSem || metadata.detectedSemester || 1;
       const detectedClsName = metadata.detectedClassName || req.body.className || 'Section A';
 
-      // Check if class exists
-      const clsQuery = { name: detectedClsName, semester: resolvedSem };
+      // Check if class exists using canonical section normalization (matches e.g. CSD-A, III CSD-A, or III CSD-E)
+      const cleanSection = detectedClsName.replace(/^(I|II|III|IV)[\s\-_]+/i, '').trim();
+      const escapedClean = cleanSection.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const nameRegex = new RegExp(`^((I|II|III|IV)[\\s\\-_]+)?${escapedClean}$`, 'i');
+
+      const clsQuery = { 
+        name: nameRegex, 
+        semester: resolvedSem,
+        isMaster: { $ne: true }
+      };
       if (deptId) clsQuery.departmentId = deptId;
       targetClass = await Class.findOne(clsQuery);
 
@@ -374,6 +382,7 @@ export async function commitTimetable(req, res, next) {
           departmentId: targetClass.departmentId,
           semester: targetSem,
           _id: { $ne: targetClass._id },
+          isMaster: { $ne: true },
           isActive: true,
           $or: [
             { subjectAssignments: { $exists: false } },
@@ -384,6 +393,41 @@ export async function commitTimetable(req, res, next) {
           $set: { subjectAssignments: inheritedForPeers },
         }
       );
+
+      // Also ensure Master Curriculum (SSOT) is hydrated with the master subject blueprint
+      try {
+        const masterClass = await Class.findOne({
+          departmentId: targetClass.departmentId,
+          semester: targetSem,
+          isMaster: true,
+          isActive: true,
+        });
+
+        if (masterClass) {
+          const existingCodes = new Set((masterClass.subjectAssignments || []).map((s) => (s.subjectCode || '').toUpperCase()));
+          const mergedAssignments = [...(masterClass.subjectAssignments || [])];
+          for (const peerSub of inheritedForPeers) {
+            if (!existingCodes.has((peerSub.subjectCode || '').toUpperCase())) {
+              mergedAssignments.push(peerSub);
+              existingCodes.add((peerSub.subjectCode || '').toUpperCase());
+            }
+          }
+          masterClass.subjectAssignments = mergedAssignments;
+          await masterClass.save();
+        } else {
+          await Class.create({
+            name: `Semester ${targetSem} Curriculum Master`,
+            semester: targetSem,
+            academicYear: targetClass.academicYear,
+            departmentId: targetClass.departmentId,
+            isMaster: true,
+            isActive: true,
+            subjectAssignments: inheritedForPeers,
+          });
+        }
+      } catch (masterErr) {
+        logger.warn('Failed to auto-hydrate master curriculum from timetable commit', { error: masterErr?.message });
+      }
     }
 
     // Mark upload record as committed

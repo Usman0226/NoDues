@@ -1839,6 +1839,15 @@ export const executeDepartmentRollover = async (req, res, next) => {
 
             if (eligibleIds.length > 0) {
               await Class.findByIdAndUpdate(sec._id, { $pullAll: { studentIds: eligibleIds } }, opt);
+              
+              const priorHistoryEntry = {
+                classId: sec._id,
+                className: sec.name,
+                semester: sec.semester,
+                academicYear: sec.academicYear,
+                promotedAt: new Date(),
+              };
+
               await Student.updateMany(
                 { _id: { $in: eligibleIds } },
                 {
@@ -1847,6 +1856,7 @@ export const executeDepartmentRollover = async (req, res, next) => {
                     isGraduated: true,
                     graduationYear: new Date().getFullYear().toString(),
                   },
+                  $push: { classHistory: priorHistoryEntry },
                 },
                 opt
               );
@@ -1912,9 +1922,20 @@ export const executeDepartmentRollover = async (req, res, next) => {
               if (resetFaculty) studentUpdatePayload.mentorId = null;
               if (resetElectives) studentUpdatePayload.electiveSubjects = [];
 
+              const priorHistoryEntry = {
+                classId: sec._id,
+                className: sec.name,
+                semester: sec.semester,
+                academicYear: sec.academicYear,
+                promotedAt: new Date(),
+              };
+
               await Student.updateMany(
                 { _id: { $in: eligibleIds } },
-                { $set: studentUpdatePayload },
+                { 
+                  $set: studentUpdatePayload,
+                  $push: { classHistory: priorHistoryEntry },
+                },
                 opt
               );
 
@@ -2152,9 +2173,20 @@ export const promoteStudents = async (req, res, next) => {
         studentUpdatePayload.electiveSubjects = [];
       }
 
+      const priorHistoryEntry = {
+        classId: sourceClass._id,
+        className: sourceClass.name,
+        semester: sourceClass.semester,
+        academicYear: sourceClass.academicYear,
+        promotedAt: new Date(),
+      };
+
       await Student.updateMany(
         { _id: { $in: actualStudentIds } },
-        { $set: studentUpdatePayload },
+        { 
+          $set: studentUpdatePayload,
+          $push: { classHistory: priorHistoryEntry },
+        },
         opt
       );
     });

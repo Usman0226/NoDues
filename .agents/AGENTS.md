@@ -6,3 +6,4 @@ This file defines the agent guidelines for the NoDues project adhering to the En
 - No placeholder data or half-built components.
 - Zero console errors, fully responsive, error boundaries at root and route levels.
 - Strict adherence to state logging and error taxonomies.
+

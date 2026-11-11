@@ -104,6 +104,29 @@ const studentSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    classHistory: [
+      {
+        classId: {
+          type: mongoose.Schema.ObjectId,
+          ref: 'Class',
+        },
+        className: {
+          type: String,
+          trim: true,
+        },
+        semester: {
+          type: Number,
+        },
+        academicYear: {
+          type: String,
+          trim: true,
+        },
+        promotedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     role: {
       type: String,
       enum: ['student'],
