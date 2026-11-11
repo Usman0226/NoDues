@@ -24,7 +24,8 @@
     "TRD Phase 3: Human Review Gate enforcement (NC-4) and persistent class merge commit engine (scripts/commitClassMerge.js)",
     "TRD Phase 3: Comprehensive unit and integration test suite with 5/5 passing tests (server/test/unit/phase3-consolidation.test.js)",
     "TRD Phase 4: Shadow-mode comparison engine and structured mismatch logging with 8/8 passing tests (server/src/services/shadowVerification.js & server/test/unit/phase4-shadow.test.js)",
-    "TRD Phase 5: Setup Wizard service, pre-flight gate, progress persistence, and cutover flag endpoints with 9/9 passing tests (server/src/services/wizardService.js & server/test/unit/phase5-wizard.test.js)"
+    "TRD Phase 5: Setup Wizard service, pre-flight gate, progress persistence, and cutover flag endpoints with 9/9 passing tests (server/src/services/wizardService.js & server/test/unit/phase5-wizard.test.js)",
+    "Setup Wizard Step 1: Multi-page institutional timetable ingestion, instant in-memory section preview cache, batch provisioning engine (POST /api/timetable/batch-import), and automated Curriculum Master (SSOT) hydration"
   ],
   "in_progress": [],
   "pending": [],
@@ -78,6 +79,11 @@
       "context": "Setup Wizard Gating & Persistence (FR-E1 to FR-E4, FR-F3 to FR-F5)",
       "decision": "Enforced strict step ordering (class_info -> timetable_subjects -> students -> mentors -> electives -> preflight -> initiation). Guarded wizard endpoints under 'setup_wizard_enabled' feature flag with <=10s cache invalidation. Block batch initiation unless pre-flight checklist passes.",
       "trade_offs": "Prevents incomplete or corrupted class setups while allowing existing standalone admin pages to operate in parallel without disruption."
+    },
+    {
+      "context": "Multi-Page Timetable Ingestion & Batch Provisioning (Setup Wizard Step 1)",
+      "decision": "Added automatic page inspection and batch provisioning endpoint (POST /api/timetable/batch-import). Inspecting an institutional PDF detects all section pages, semesters, and teachers. Users can either configure a single section with instant in-memory preview caching or provision all sections in one click while automatically hydrating each semester's Master Curriculum (SSOT).",
+      "trade_offs": "Eliminates repetitive multi-step wizard runs for large departments while maintaining fine-grained per-section editability."
     }
   ],
   "blockers": []
