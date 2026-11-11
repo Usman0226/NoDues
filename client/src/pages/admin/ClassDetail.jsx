@@ -129,8 +129,8 @@ const ClassDetail = () => {
     if (!classData?.name) return;
     const deptName = classData.departmentName || 'Department';
     const deptId = typeof departmentId === 'object' ? departmentId?._id : departmentId;
-    const displayName = classData?.isMaster ? classData.name : formatSectionDisplayName(classData.name, classData.semester);
-    const tabLabel = classData?.isMaster ? 'Curriculum' : tab === 'students' ? 'Students' : tab === 'subjects' ? 'Subjects' : 'History';
+    const displayName = classData?.isMaster ? `Semester ${classData.semester} Master Syllabus` : formatSectionDisplayName(classData.name, classData.semester);
+    const tabLabel = classData?.isMaster ? 'Subjects' : tab === 'students' ? 'Students' : tab === 'subjects' ? 'Subjects' : 'History';
 
     const crumbs = [
       { label: 'NoDues', path: isHod ? '/hod' : '/admin' },
@@ -281,7 +281,7 @@ const ClassDetail = () => {
     try {
       const parentDept = classData.departmentId;
       const res = await createSubject({ ...quickSubjectForm, departmentId: parentDept });
-      toast.success('Global component created');
+      toast.success('Subject created successfully');
       
       await fetchGlobalSubjects();
       
@@ -291,7 +291,7 @@ const ClassDetail = () => {
       setShowQuickAddSubject(false);
       setQuickSubjectForm({ name: '', code: '', isElective: false });
     } catch (err) {
-      toast.error(err?.message || 'Failed to create global component');
+      toast.error(err?.message || 'Failed to create subject');
     } finally {
       setSubmitting(false);
     }
@@ -329,11 +329,11 @@ const ClassDetail = () => {
     setSubmitting(true);
     try {
       await addSubjectToClass(classId, subjectFormData);
-      toast.success('Component mapped successfully');
+      toast.success('Subject added to class');
       setShowAddSubject(false);
       fetchClass();
     } catch (err) {
-      toast.error(err?.message || 'Failed to map component');
+      toast.error(err?.message || 'Failed to add subject');
     } finally {
       setSubmitting(false);
     }
@@ -576,7 +576,7 @@ const SUBJECT_COLS = [
     { key: 'subjectCode', label: 'Code', width: '90px', render: (v) => <span className="font-mono text-[10px] bg-offwhite px-1.5 py-0.5 rounded border border-muted/50">{v}</span> },
     { 
       key: 'subjectName', 
-      label: 'Component Name', 
+      label: 'Subject Name', 
       render: (v) => {
         const clean = typeof v === 'string' ? v.replace(/^[\s\-–—:]+/, '').trim() : v;
         return <span className="font-bold text-navy truncate block" title={clean}>{clean}</span>;
@@ -607,16 +607,16 @@ const SUBJECT_COLS = [
         />
       )
     },
-    { key: 'isElective', label: 'Category', width: '100px', align: 'center', render: (v) => (
+    { key: 'isElective', label: 'Type', width: '100px', align: 'center', render: (v) => (
       <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${!v ? 'bg-navy/5 text-navy/70' : 'bg-amber-50 text-amber-700'}`}>{!v ? 'Core' : 'Elective'}</span>
     )},
     { key: 'actions', label: '', width: '50px', sortable: false, align: 'right', render: (_, row) => (
       <div className="flex justify-end">
         <ActionMenu
           actions={[
-            { label: 'Edit Mapping', icon: Edit, onClick: () => handleEditSubjectClick(row) },
-            ...((row.isElective && !classData?.isMaster) ? [{ label: 'Map Students', icon: Users, onClick: () => handleMapElectiveClick(row) }] : []),
-            { label: 'Remove Component', icon: Trash2, onClick: () => handleDeleteSubjectClick(row), variant: 'danger' },
+            { label: 'Edit Subject', icon: Edit, onClick: () => handleEditSubjectClick(row) },
+            ...((row.isElective && !classData?.isMaster) ? [{ label: 'Assign Students', icon: Users, onClick: () => handleMapElectiveClick(row) }] : []),
+            { label: 'Remove Subject', icon: Trash2, onClick: () => handleDeleteSubjectClick(row), variant: 'danger' },
           ]}
         />
       </div>
@@ -739,21 +739,22 @@ const SUBJECT_COLS = [
 
   return (
     <PageWrapper 
-      title={classData?.isMaster ? classData?.name : formatSectionDisplayName(classData?.name, classData?.semester)} 
+      title={classData?.isMaster ? `Semester ${classData?.semester} Master Syllabus` : formatSectionDisplayName(classData?.name, classData?.semester)} 
       subtitle={
         classData?.isMaster 
-          ? `${classData?.departmentName ? `${classData.departmentName} · ` : ''}Semester ${classData?.semester || ''} · Curriculum Blueprint (Single Source of Truth)`
+          ? `${classData?.departmentName ? `${classData.departmentName} · ` : ''}Semester ${classData?.semester || ''} · Master subject list for all sections`
           : `${classData?.departmentName ? `${classData.departmentName} · ` : ''}Semester ${classData?.semester || ''} · ${classData?.academicYear || ''}`
       }
       isRefreshing={refreshing}
-      badge={classData?.isMaster ? 'CURRICULUM MASTER' : (classData?.isActive === false ? 'INACTIVE' : (classData?.activeBatch ? 'CLEARANCE IN PROGRESS' : 'ACTIVE'))}
+      badge={classData?.isMaster ? 'Master Syllabus' : (classData?.isActive === false ? 'INACTIVE' : (classData?.activeBatch ? 'CLEARANCE IN PROGRESS' : 'ACTIVE'))}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="overflow-x-auto no-scrollbar pb-1 -mb-1">
           {classData?.isMaster ? (
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-xs font-bold shadow-xs">
-              <BookOpen size={14} className="text-indigo-600" />
-              <span>Curriculum Master Blueprint (SSOT)</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-navy uppercase tracking-wider bg-slate-100 px-3.5 py-1.5 rounded-full border border-slate-200">
+                Semester {classData?.semester} Subjects ({subjects.length})
+              </span>
             </div>
           ) : (
             <div className="flex gap-1 bg-white border border-muted/40 shadow-sm rounded-full p-1.5 w-fit min-w-full sm:min-w-0">
@@ -798,34 +799,33 @@ const SUBJECT_COLS = [
 
         {tab === 'subjects' && (
           <div className="flex items-center gap-2">
-            <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}><Plus size={14} /> New assignment</Button>
-            <Button variant="ghost" size="sm" type="button" onClick={() => setShowClone(true)} className="text-navy border border-muted hover:bg-offwhite">
+            <Button variant="primary" size="sm" onClick={() => setShowAddSubject(true)}>
+              <Plus size={14} /> Add Subject
+            </Button>
+            <Button variant="secondary" size="sm" type="button" onClick={() => setShowClone(true)} className="text-navy border border-zinc-200 hover:bg-zinc-50">
               <Copy size={14} /> Import Subjects
             </Button>
             {!classData?.isMaster && (
               <Button variant="ghost" size="sm" onClick={() => setShowImport('electives')} className="text-navy border border-muted hover:bg-offwhite">
-                <Upload size={14} /> Bulk Map Electives
+                <Upload size={14} /> Assign Electives
               </Button>
             )}
             {((classData?.subjectAssignments?.length > 0) || classData?.isMaster) && (
               <Button
-                variant={classData?.isMaster ? 'secondary' : 'ghost'}
+                variant="secondary"
                 size="sm"
                 type="button"
                 onClick={handleSyncCohortSubjects}
                 disabled={syncingCohort || (classData?.subjectAssignments?.length || 0) === 0}
-                className={classData?.isMaster 
-                  ? "bg-indigo-600 text-white hover:bg-indigo-700 border-none shadow-sm flex items-center gap-1.5 font-bold" 
-                  : "text-navy border border-muted hover:bg-offwhite flex items-center gap-1.5"}
-                title={`Sync these ${classData?.subjectAssignments?.length || 0} subjects across all sections in Semester ${classData?.semester}`}
+                className="text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 font-bold"
+                title={`Copy these ${classData?.subjectAssignments?.length || 0} subjects to all sections in Semester ${classData?.semester}`}
               >
-                <Share2 size={14} /> {syncingCohort ? 'Syncing...' : classData?.isMaster ? 'Sync Blueprint to All Sections' : 'Sync to Cohort'}
+                <Share2 size={14} className="text-indigo-600" />
+                <span>{syncingCohort ? 'Copying...' : classData?.isMaster ? 'Copy to All Sections' : 'Sync to Sections'}</span>
               </Button>
             )}
           </div>
         )}
-
-
       </div>
 
       {!classData?.isMaster && (
@@ -869,29 +869,9 @@ const SUBJECT_COLS = [
 
       <div className={tab === 'subjects' ? 'animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out' : 'hidden'}>
           {classData?.isMaster && (
-            <div className="mb-4 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-indigo-950">
-              <div className="flex items-start sm:items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                  <BookOpen size={18} />
-                </div>
-                <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-indigo-900">
-                    Semester {classData.semester} Curriculum Blueprint (Single Source of Truth)
-                  </h4>
-                  <p className="text-xs text-indigo-700/90 mt-0.5">
-                    All operational sections in Semester {classData.semester} inherit their core and elective syllabus from this master blueprint.
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleSyncCohortSubjects}
-                disabled={syncingCohort || (classData?.subjectAssignments?.length || 0) === 0}
-                className="shrink-0 bg-indigo-600 text-white hover:bg-indigo-700 border-none shadow-sm flex items-center gap-1.5 font-bold text-xs"
-              >
-                <Share2 size={13} /> {syncingCohort ? 'Syncing...' : 'Sync to All Sections'}
-              </Button>
+            <div className="mb-4 px-4 py-3 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center gap-3 text-xs text-indigo-900">
+              <BookOpen size={16} className="text-indigo-600 shrink-0" />
+              <span>These subjects will be copied to every Semester {classData.semester} section in {classData.departmentName || 'this department'}.</span>
             </div>
           )}
 
@@ -902,12 +882,12 @@ const SUBJECT_COLS = [
             showCount={true} 
             selectable
             searchable
-            searchPlaceholder="Search components by code or name..."
+            searchPlaceholder="Search by subject code or name..."
             selection={selectedMappingIds}
             onSelectionChange={setSelectedMappingIds}
             bulkActions={[
               { 
-                label: 'Remove Bulk', 
+                label: 'Remove Selected', 
                 icon: Trash2, 
                 onClick: () => setShowBulkRemoveSubjects(true),
                 variant: 'danger'
@@ -1113,14 +1093,14 @@ const SUBJECT_COLS = [
       )}
 
       {showClone && (
-        <Modal isOpen={showClone} title="Inherit Subject Plan" onClose={() => setShowClone(false)}>
+        <Modal isOpen={showClone} title="Import Subjects from Another Class" onClose={() => setShowClone(false)}>
            <div className="space-y-6">
              <div className="p-5 rounded-2xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm">
-                <p className="text-xs font-bold text-navy/80 mb-1 flex items-center gap-2"><Copy size={14} className="text-navy/40"/> Batch Component Inheritance</p>
-                <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest leading-relaxed">Clone subject mappings from another academic group directly. Previous component mappings on this class will be cleared.</p>
+                <p className="text-xs font-bold text-navy/80 mb-1 flex items-center gap-2"><Copy size={14} className="text-navy/40"/> Copy Subjects</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest leading-relaxed">Copy all subjects from another class into this one. Any existing subjects in this class will be replaced.</p>
              </div>
              <div>
-                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Select Source Group</label>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Select Class</label>
                  <SearchableSelect 
                     options={otherClasses.map(c => ({
                       value: c._id,
@@ -1129,14 +1109,14 @@ const SUBJECT_COLS = [
                     }))}
                     value={cloneSourceId}
                     onChange={(val) => setCloneSourceId(val)}
-                    placeholder="Choose Academic Group"
+                    placeholder="Select Class"
                   />
              </div>
              
              <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowClone(false)}>Cancel</Button>
               <Button variant="primary" onClick={handleCloneSubjects} loading={submitting} className="gap-2">
-                Inherit Structure
+                Import Subjects
               </Button>
             </div>
            </div>
@@ -1271,17 +1251,17 @@ const SUBJECT_COLS = [
       )}
 
       {showAddSubject && (
-        <Modal isOpen={showAddSubject} title="Create Component Mapping" onClose={() => setShowAddSubject(false)}>
+        <Modal isOpen={showAddSubject} title="Add Subject to Class" onClose={() => setShowAddSubject(false)}>
           <div className="space-y-6">
-             <div className="p-5 rounded-2xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm text-xs text-muted-foreground">
-                Map a new core or elective component to this academic group and explicitly assign the handling faculty member.
+             <div className="p-4 rounded-xl bg-offwhite/50 border border-muted/40 mb-4 text-xs text-muted-foreground">
+                Select a subject to add to this class and optionally assign a faculty member.
              </div>
              
              <div>
                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground">Global Component</label>
+                    <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground">Select Subject</label>
                     <button type="button" onClick={() => setShowQuickAddSubject(true)} className="text-[10px] uppercase tracking-widest font-black text-navy hover:underline">
-                       + Create New in Subjects
+                       + Create New Subject
                     </button>
                  </div>
                  <SearchableSelect 
@@ -1295,7 +1275,7 @@ const SUBJECT_COLS = [
                       const subj = globalSubjects.find(s => s._id === val);
                       setSubjectFormData({...subjectFormData, subjectId: val, subjectCode: subj ? subj.code : ''});
                     }}
-                    placeholder="Subjects Lookup"
+                    placeholder="Search subjects..."
                   />
               </div>
 
@@ -1314,10 +1294,10 @@ const SUBJECT_COLS = [
              </div>
 
              <div>
-                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Alias Subject Code (Optional)</label>
+                <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Code (Optional override)</label>
                 <input 
                   className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-mono"
-                  placeholder="Leave empty for Subject default"
+                  placeholder="Leave empty for subject default"
                   value={subjectFormData.subjectCode}
                   onChange={(e) => setSubjectFormData({...subjectFormData, subjectCode: e.target.value})}
                 />
@@ -1326,7 +1306,7 @@ const SUBJECT_COLS = [
              <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowAddSubject(false)}>Cancel</Button>
               <Button variant="primary" onClick={handleAddSubjectSubmit} loading={submitting}>
-                Establish Mapping
+                Add Subject
               </Button>
             </div>
            </div>
@@ -1334,14 +1314,14 @@ const SUBJECT_COLS = [
       )}
 
       {showQuickAddSubject && (
-        <Modal isOpen={showQuickAddSubject} title="New Subject Component" onClose={() => setShowQuickAddSubject(false)}>
+        <Modal isOpen={showQuickAddSubject} title="Create New Subject" onClose={() => setShowQuickAddSubject(false)}>
            <div className="space-y-6">
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-800 uppercase font-black tracking-widest leading-relaxed">
-                 Warning: This creates a permanent component in the Global Subject for {classData?.departmentName}.
+                 This will add a new subject to the department catalogue for {classData?.departmentName}.
               </div>
               <div className="grid grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Comp. Code</label>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Code</label>
                   <input 
                     className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 font-mono font-bold focus:ring-2 focus:ring-navy/5"
                     placeholder="e.g. 20CSE101"
@@ -1350,7 +1330,7 @@ const SUBJECT_COLS = [
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Comp. Name</label>
+                  <label className="block text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-2">Subject Name</label>
                   <input 
                     className="w-full px-4 py-3 rounded-2xl border border-muted/60 bg-offwhite/50 text-sm shadow-sm hover:bg-white hover:border-navy/30 transition-all duration-300 focus:ring-2 focus:ring-navy/5 font-bold"
                     placeholder="e.g. Data Structures"
@@ -1368,15 +1348,15 @@ const SUBJECT_COLS = [
                   onChange={(e) => setQuickSubjectForm({...quickSubjectForm, isElective: e.target.checked})}
                 />
                 <div>
-                   <p className="text-xs font-black text-navy uppercase tracking-tight">Elective Component</p>
-                   <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest">Enable for student-specific enrollment</p>
+                   <p className="text-xs font-black text-navy uppercase tracking-tight">Elective Subject</p>
+                   <p className="text-[10px] text-muted-foreground">Enable if students choose this subject individually</p>
                 </div>
               </label>
 
              <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
               <Button variant="ghost" onClick={() => setShowQuickAddSubject(false)}>Cancel</Button>
               <Button variant="primary" onClick={handleQuickSubjectSubmit} loading={submitting}>
-                Create Subject Entry
+                Create Subject
               </Button>
             </div>
            </div>
@@ -1384,7 +1364,7 @@ const SUBJECT_COLS = [
       )}
 
       {showEditSubject && (
-        <Modal isOpen={showEditSubject} title="Edit Component Mapping" onClose={() => setShowEditSubject(false)}>
+        <Modal isOpen={showEditSubject} title="Edit Subject" onClose={() => setShowEditSubject(false)}>
           <div className="space-y-6">
              <div className="p-5 rounded-2xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm text-xs font-bold text-navy">
                 {selectedSubject?.subjectName} ({selectedSubject?.subjectCode})
@@ -1428,15 +1408,15 @@ const SUBJECT_COLS = [
         isOpen={showDeleteSubject}
         onClose={() => setShowDeleteSubject(false)}
         onConfirm={handleDeleteSubjectConfirm}
-        title="Remove Component Mapping"
-        description={`Are you sure you want to remove ${selectedSubject?.subjectName} from this class? This will also remove any related pending no-due records for this component if a batch is active.`}
-        confirmText="Remove Mapping"
+        title="Remove Subject"
+        description={`Are you sure you want to remove ${selectedSubject?.subjectName} from this class? Any pending dues for this subject will also be cancelled.`}
+        confirmText="Remove Subject"
         isDestructive={true}
         loading={submitting}
       />
 
       {showMapElective && (
-        <Modal isOpen={showMapElective} title="Elective Batch Assignment" onClose={() => setShowMapElective(false)}>
+        <Modal isOpen={showMapElective} title="Assign Elective Students" onClose={() => setShowMapElective(false)}>
            <div className="space-y-6">
              <div className="p-5 rounded-2xl bg-offwhite/50 border border-muted/40 mb-5 shadow-sm">
                 <p className="text-xs font-bold text-navy/80 mb-1 flex items-center gap-2"><Users size={14} className="text-navy/40"/> Batch Enroll</p>

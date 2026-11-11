@@ -105,7 +105,7 @@ export default function DepartmentRolloverModal({
             <span>Department Academic Rollover</span>
           </div>
           <p className="text-xs font-semibold text-slate-500 mt-0.5 tracking-normal">
-            {departmentName ? `${departmentName} Department · ` : ''}Waterfall Progression & Safety Simulation
+            {departmentName ? `${departmentName} Department · ` : ''}Department Promotion Review & Simulation
           </p>
         </div>
       }
@@ -228,7 +228,7 @@ export default function DepartmentRolloverModal({
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-navy">
                 <span className="uppercase tracking-wider text-[11px] text-slate-500 font-bold">
-                  Waterfall Progression Order
+                  Promotion Order (Higher Semesters First)
                 </span>
                 <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <ShieldCheck size={12} /> Vacate-First Order Guaranteed
@@ -336,7 +336,7 @@ export default function DepartmentRolloverModal({
                   <span>Final Confirmation: Execute Department Rollover</span>
                 </div>
                 <p className="text-[11px] text-indigo-700 leading-relaxed">
-                  This operation will advance all {previewData.advancingStudents || 0} active students in this department in top-down waterfall order. Final-year Sem 8 students will be marked as Graduated. All past clearance approvals remain permanently archived.
+                  This operation will advance all {previewData.advancingStudents || 0} active students in this department in semester progression order. Final-year Sem 8 students will be marked as Graduated. All past clearance approvals remain permanently archived.
                 </p>
               </div>
             )}

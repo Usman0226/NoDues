@@ -485,16 +485,16 @@ const DepartmentClasses = () => {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-black text-navy uppercase tracking-wider">
-                      Semester {activeSemester} Curriculum Master
+                      Semester {activeSemester} Master Syllabus
                     </span>
                     <span className="text-[9px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                      Single Source of Truth
+                      Master Syllabus
                     </span>
                     <span className="text-[11px] font-bold text-muted-foreground">
                       • {activeCohortSubjectCount} Subjects
                     </span>
                     <span className="text-[11px] text-muted-foreground hidden sm:inline">
-                      (Inherited by all {activeOperationalSections.length} sections)
+                      (Shared with all {activeOperationalSections.length} sections)
                     </span>
                   </div>
                 </div>
@@ -506,7 +506,7 @@ const DepartmentClasses = () => {
                     className="text-[10px] font-black uppercase tracking-wider gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 py-1.5 px-3"
                     onClick={() => handleOpenMasterCurriculum(Number(activeSemester))}
                   >
-                    <BookOpen size={12} /> Manage Master Syllabus
+                    <BookOpen size={12} /> Manage Subjects
                   </Button>
                   <Button
                     size="sm"
@@ -515,7 +515,7 @@ const DepartmentClasses = () => {
                     onClick={() => handleSyncMaster(Number(activeSemester))}
                     disabled={syncingSem === Number(activeSemester)}
                   >
-                    <RefreshCw size={12} className={syncingSem === Number(activeSemester) ? 'animate-spin' : ''} /> Sync All Sections
+                    <RefreshCw size={12} className={syncingSem === Number(activeSemester) ? 'animate-spin' : ''} /> Sync to Sections
                   </Button>
                 </div>
               </div>
