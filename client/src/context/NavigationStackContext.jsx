@@ -1,9 +1,8 @@
-import React, { createContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useLocation, matchPath } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { ROLES } from '../utils/constants';
-
-export const NavigationStackContext = createContext(null);
+import { NavigationStackContext } from './navigationStackStore';
 
 // Route definition mapping for deterministic auto-fallback breadcrumb resolution
 const ROUTE_DEFINITIONS = [
@@ -130,12 +129,9 @@ const ROUTE_DEFINITIONS = [
 export const NavigationStackProvider = ({ children }) => {
   const location = useLocation();
   const { user } = useAuth();
-  const [customCrumbs, setCustomCrumbsState] = useState(null);
+  const [customEntry, setCustomEntry] = useState(null);
 
-  // Automatically reset custom breadcrumbs whenever route path changes to prevent stale leak
-  useEffect(() => {
-    setCustomCrumbsState(null);
-  }, [location.pathname]);
+  const customCrumbs = customEntry?.pathname === location.pathname ? customEntry.crumbs : null;
 
   // Determine role-based root path and label
   const rootCrumb = useMemo(() => {
@@ -213,11 +209,11 @@ export const NavigationStackProvider = ({ children }) => {
   }, [customCrumbs, routeDerivedCrumbs, rootCrumb]);
 
   const setBreadcrumbs = useCallback((crumbs) => {
-    setCustomCrumbsState(crumbs);
-  }, []);
+    setCustomEntry({ pathname: location.pathname, crumbs });
+  }, [location.pathname]);
 
   const clearBreadcrumbs = useCallback(() => {
-    setCustomCrumbsState(null);
+    setCustomEntry(null);
   }, []);
 
   return (

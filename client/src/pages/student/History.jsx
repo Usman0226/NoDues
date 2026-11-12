@@ -30,6 +30,17 @@ const History = () => {
     );
   }
 
+  if (error && !data) {
+    return (
+      <PageWrapper title="Clearance History" subtitle="Archive of all academic clearance cycles">
+        <div className="p-6 rounded-2xl bg-red-50 border border-red-200 text-center space-y-2">
+          <AlertCircle className="mx-auto text-status-due" size={32} />
+          <p className="text-sm font-bold text-red-900">{error}</p>
+        </div>
+      </PageWrapper>
+    );
+  }
+
   return (
     <PageWrapper 
       title="Clearance History" 

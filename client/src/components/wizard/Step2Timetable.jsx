@@ -55,7 +55,7 @@ const Step2Timetable = ({
   // Preview state from timetable parser or loaded subjects
   const [uploadId, setUploadId] = useState(null);
   const [rows, setRows] = useState([]);
-  const [summary, setSummary] = useState(null);
+  const [, setSummary] = useState(null);
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -85,22 +85,23 @@ const Step2Timetable = ({
     queryKey: ['wizard', 'all-classes', departmentId],
     queryFn: () => getClasses({ limit: 150 }),
   });
-  const allClasses = classRes?.data || classRes?.classes || [];
 
   // Find Master Syllabus class for this semester
   const masterClass = useMemo(() => {
+    const allClasses = classRes?.data || classRes?.classes || [];
     return allClasses.find(
       (c) =>
         c.isMaster &&
         Number(c.semester) === Number(targetSemester) &&
         (c.departmentId?._id || c.departmentId) === departmentId
     );
-  }, [allClasses, targetSemester, departmentId]);
+  }, [classRes, targetSemester, departmentId]);
 
   // Operational classes for cloning
   const availableCloneClasses = useMemo(() => {
+    const allClasses = classRes?.data || classRes?.classes || [];
     return allClasses.filter((c) => c._id !== classId && !c.isMaster);
-  }, [allClasses, classId]);
+  }, [classRes, classId]);
 
   // Check if existing class already has subjects assigned
   const existingSubjects = useMemo(() => {
@@ -295,8 +296,6 @@ const Step2Timetable = ({
     const matchPageNum = String(p.pageNumber).includes(q);
     return matchHeader || matchSnippet || matchCodes || matchPageNum;
   });
-
-  const selectedPageObj = inspection?.pages?.find((p) => p.pageNumber === selectedPage);
 
   // Handle Commit & Continue
   const handleCommit = async () => {

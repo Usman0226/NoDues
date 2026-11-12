@@ -11,6 +11,8 @@ const useSSE = (url, onMessage, eventNames = []) => {
     onMessageRef.current = onMessage;
   });
 
+  const serializedEventNames = JSON.stringify(eventNames);
+
   const connect = useCallback(() => {
     if (!url) return;
 
@@ -49,8 +51,9 @@ const useSSE = (url, onMessage, eventNames = []) => {
     source.onmessage = handleEvent;
 
     // Specific event listeners
-    if (eventNames && eventNames.length > 0) {
-      eventNames.forEach(name => {
+    const parsedEvents = JSON.parse(serializedEventNames);
+    if (Array.isArray(parsedEvents) && parsedEvents.length > 0) {
+      parsedEvents.forEach((name) => {
         source.addEventListener(name, handleEvent);
       });
     }
@@ -67,7 +70,7 @@ const useSSE = (url, onMessage, eventNames = []) => {
       console.log(`[SSE] Retrying in ${delay}ms... (Attempt ${retryCountRef.current})`);
       retryTimerRef.current = setTimeout(() => connectRef.current?.(), delay);
     };
-  }, [url, JSON.stringify(eventNames)]); // Re-connect if URL or event list changes
+  }, [url, serializedEventNames]); // Re-connect if URL or event list changes
 
   useEffect(() => {
     connectRef.current = connect;

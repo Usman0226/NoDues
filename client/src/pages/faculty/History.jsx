@@ -126,27 +126,26 @@ const FacultyHistory = () => {
   const [reviewModal, setReviewModal] = useState(null);
 
   // Resolve facultyId: prefer live navigation state, fall back to sessionStorage on refresh
-  const [facultyId, setFacultyId] = useState(() => {
-    if (location.state?.facultyId != null) return location.state.facultyId;
+  const storedFacultyId = (() => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(HISTORY_CTX_KEY) || 'null');
       return saved?.facultyId ?? null;
     } catch { return null; }
-  });
+  })();
+  const facultyId = location.state?.facultyId ?? storedFacultyId;
 
   const { showGlobalLoader } = useUI();
   const { user } = useAuth();
   const { data: response, loading, error, request: fetchHistory } = useApi(getApprovalHistory);
 
-  // Persist / clear context on navigation
+  // Sync navigation context with sessionStorage
   useEffect(() => {
     if (location.state?.facultyId) {
       sessionStorage.setItem(HISTORY_CTX_KEY, JSON.stringify({ facultyId: location.state.facultyId }));
-      setFacultyId(location.state.facultyId);
     } else if (!location.state) {
       sessionStorage.removeItem(HISTORY_CTX_KEY);
     }
-  }, [location.key]);
+  }, [location.key, location.state]);
 
   // Debounce search input
   useEffect(() => {

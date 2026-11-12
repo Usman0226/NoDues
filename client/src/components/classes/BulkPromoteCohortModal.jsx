@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -50,7 +50,7 @@ export default function BulkPromoteCohortModal({
   }, [initialSemester]);
 
   // Fetch cohort promotion preview
-  const fetchPreview = (srcSem, tgtSem) => {
+  const fetchPreview = useCallback((srcSem, tgtSem) => {
     if (!srcSem) return;
     setLoading(true);
     setError(null);
@@ -96,13 +96,13 @@ export default function BulkPromoteCohortModal({
       .finally(() => {
         setLoading(false);
       });
-  };
+  }, [departmentId]);
 
   useEffect(() => {
     if (isOpen) {
       fetchPreview(selectedSemester, targetSemester);
     }
-  }, [isOpen, departmentId, selectedSemester, targetSemester]);
+  }, [isOpen, selectedSemester, targetSemester, fetchPreview]);
 
   // Compute eligible classes (those without active batches)
   const eligibleClasses = useMemo(() => {

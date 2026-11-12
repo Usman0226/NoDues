@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { NavigationStackContext } from '../context/NavigationStackContext';
+import { NavigationStackContext } from '../context/navigationStackStore';
 
 export const useNavigationStack = () => {
   const context = useContext(NavigationStackContext);

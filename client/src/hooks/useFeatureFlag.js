@@ -13,7 +13,7 @@ export const useSetupWizardFlag = () => {
         const res = await getWizardStatus();
         const flagVal = res?.data?.enabled ?? res?.enabled;
         return flagVal !== undefined ? Boolean(flagVal) : true;
-      } catch (err) {
+      } catch {
         // Safe default: enabled for administrators/staff
         return true;
       }

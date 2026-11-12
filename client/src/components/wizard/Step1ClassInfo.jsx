@@ -49,25 +49,23 @@ const Step1ClassInfo = ({
     queryKey: ['wizard', 'classes', isHod ? defaultDeptId : 'all'],
     queryFn: () => getClasses({ limit: 150 }),
   });
-  const rawClassesList = classRes?.data || classRes?.classes || [];
-
   // Filter out Master syllabus classes (only operational sections can be set up for students)
   const operationalClasses = useMemo(() => {
+    const rawClassesList = classRes?.data || classRes?.classes || [];
     return rawClassesList.filter((c) => !c.isMaster);
-  }, [rawClassesList]);
+  }, [classRes]);
 
-  const { data: facultyRes, isLoading: loadingFaculty } = useQuery({
+  const { data: facultyRes } = useQuery({
     queryKey: ['wizard', 'faculty', formData.departmentId],
     queryFn: () => getFaculty({ departmentId: formData.departmentId, limit: 100 }),
     enabled: Boolean(formData.departmentId),
   });
   const facultyList = facultyRes?.data || facultyRes?.faculty || [];
 
-  const { data: batchRes } = useQuery({
+  useQuery({
     queryKey: ['wizard', 'batches'],
     queryFn: () => getBatches({ limit: 50 }),
   });
-  const batchesList = batchRes?.data || batchRes?.batches || [];
 
   // When selected class changes in 'existing' mode, load its values
   useEffect(() => {

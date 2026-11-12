@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Spinner from '../ui/Spinner';
@@ -34,7 +34,7 @@ export default function DepartmentRolloverModal({
   const [resetFaculty, setResetFaculty] = useState(true);
   const [confirmStep, setConfirmStep] = useState(false);
 
-  const fetchPreview = () => {
+  const fetchPreview = useCallback(() => {
     if (!departmentId) return;
     setLoading(true);
     setError(null);
@@ -51,14 +51,14 @@ export default function DepartmentRolloverModal({
       .finally(() => {
         setLoading(false);
       });
-  };
+  }, [departmentId]);
 
   useEffect(() => {
     if (isOpen) {
       setConfirmStep(false);
       fetchPreview();
     }
-  }, [isOpen, departmentId]);
+  }, [isOpen, fetchPreview]);
 
   const hasActiveBatch = useMemo(() => {
     return (previewData?.blockedByActiveBatchCount || 0) > 0;

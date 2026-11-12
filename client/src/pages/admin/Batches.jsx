@@ -63,7 +63,7 @@ const Batches = () => {
     };
     if (isStaff) params.departmentId = user.departmentId;
     fetchBatches(params);
-  }, [fetchBatches, user?.role, user?.departmentId, page, limit, debouncedSearch, statusFilter]);
+  }, [fetchBatches, isStaff, user?.departmentId, page, limit, debouncedSearch, statusFilter]);
 
 
   const handleBulkCloseConfirm = async () => {

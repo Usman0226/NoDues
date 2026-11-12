@@ -171,7 +171,7 @@ const Pending = () => {
       // User navigated here fresh (not from My Classes) — clear the persisted context
       sessionStorage.removeItem(PENDING_CTX_KEY);
     }
-  }, [location.key]);
+  }, [location.key, location.state]);
   const [selection, setSelection]         = useState([]);
   const [actionLoading, setActionLoading] = useState(null); 
   const [dueModal, setDueModal]           = useState(null); 
@@ -441,7 +441,7 @@ const Pending = () => {
     } finally {
       setActionLoading(null);
     }
-  }, [selection, bulkApproveRecords, setResponse, useDummyData]);
+  }, [selection, setResponse, useDummyData]);
 
   const handleUpdate = async (id, data) => {
     setActionLoading(id);

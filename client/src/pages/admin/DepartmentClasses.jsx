@@ -20,7 +20,7 @@ import PromoteStudentsModal from '../../components/classes/PromoteStudentsModal'
 import BulkPromoteCohortModal from '../../components/classes/BulkPromoteCohortModal';
 import DepartmentRolloverModal from '../../components/classes/DepartmentRolloverModal';
 
-import { getAcademicYearRoman, formatSectionDisplayName } from '../../utils/formatters';
+import { formatSectionDisplayName } from '../../utils/formatters';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -56,7 +56,7 @@ const DepartmentClasses = () => {
   const [submitting, setSubmitting] = useState(false);
   const [promoteClassId, setPromoteClassId] = useState(null);
   const [showCohortPromote, setShowCohortPromote] = useState(false);
-  const [cohortPromoteSem, setCohortPromoteSem] = useState(1);
+  const [cohortPromoteSem] = useState(1);
   const [showDepartmentRollover, setShowDepartmentRollover] = useState(false);
   const [syncingSem, setSyncingSem] = useState(null);
 
@@ -182,10 +182,6 @@ const DepartmentClasses = () => {
   const activeCohortSubjectCount = useMemo(() => {
     return activeMasterClass?.subjectCount ?? activeOperationalSections[0]?.subjectCount ?? 0;
   }, [activeMasterClass, activeOperationalSections]);
-
-  const activeTotalStudents = useMemo(() => {
-    return activeOperationalSections.reduce((sum, cls) => sum + (cls.studentCount || 0), 0);
-  }, [activeOperationalSections]);
 
   const { setBreadcrumbs } = useNavigationStack();
   const [departmentName, setDepartmentName] = useState('');
