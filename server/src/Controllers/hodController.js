@@ -8,6 +8,7 @@ import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import { withCache, invalidateKeys } from '../utils/withCache.js';
 import { pushEvent } from './sseController.js';
+import { invalidateStudentStatusCache } from './studentPortalController.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 
 // Convenience: extract HoD's departmentId from token
@@ -338,6 +339,8 @@ export const overrideDues = async (req, res, next) => {
 
     // Bust the HoD overview cache so the dashboard reflects this override immediately
     invalidateKeys(`hod_overview:${batch.departmentId.toString()}`);
+    // Bust the student's cached status so they see hod_override without waiting 30s
+    invalidateStudentStatusCache(request.studentId.toString(), requestId);
 
     logger.info('hod_override', {
       timestamp: new Date().toISOString(), actor: req.user.userId,
@@ -435,6 +438,8 @@ export const bulkOverrideDues = async (req, res, next) => {
     // Bust HoD overview so the dashboard reflects bulk overrides immediately
     // deptId is constant across all eligible batches since we already filtered by it
     invalidateKeys(`hod_overview:${deptId}`);
+    // Bust each student's cached status so they see hod_override without waiting 30s
+    studentIds.forEach(sId => invalidateStudentStatusCache(sId));
 
     pushEvent(studentIds, 'HOD_OVERRIDE', {
       status: 'hod_override',

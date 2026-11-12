@@ -20,13 +20,13 @@ const removeClient = (userId, res) => {
 // De-duplication cache: Map<userId_eventName_payloadHash, lastSentTimestamp>
 const recentEvents = new Map();
 
-// Cleanup interval for the de-duplication cache (every 5 minutes)
+// Cleanup interval for the de-duplication cache (every 2 minutes)
 setInterval(() => {
   const now = Date.now();
   for (const [key, timestamp] of recentEvents.entries()) {
     if (now - timestamp > 5000) recentEvents.delete(key);
   }
-}, 300_000);
+}, 120_000);
 
 
 export const pushEvent = (userIds, eventName, payload) => {
@@ -101,7 +101,19 @@ export const sseConnect = (req, res) => {
       return;
     }
     // Standard SSE comment heartbeat to keep connection alive
-    res.write(': heartbeat\n\n');
+    try {
+      res.write(': heartbeat\n\n');
+    } catch (e) {
+      clearInterval(heartbeat);
+      removeClient(userId, res);
+      logger.warn('sse_heartbeat_failed', {
+        timestamp: new Date().toISOString(),
+        actor: userId,
+        action: 'SSE_HEARTBEAT_ERROR',
+        resource_id: null,
+        message: e.message,
+      });
+    }
   }, 15_000);
 
   // Clean up on disconnect

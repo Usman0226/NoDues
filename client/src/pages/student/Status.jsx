@@ -409,7 +409,7 @@ const StudentStatus = () => {
   // Track the last time an SSE event arrived — used by the polling fallback below
   const lastSseEventRef = React.useRef(Date.now());
 
-  const sseEvents = React.useMemo(() => ['APPROVAL_UPDATED', 'REQUEST_STATUS_CHANGE'], []);
+  const sseEvents = React.useMemo(() => ['APPROVAL_UPDATED', 'REQUEST_STATUS_CHANGE', 'HOD_OVERRIDE'], []);
   
   useSSE(clearanceData?.batchId && !isHistoryMode ? getBatchSSEUrl(clearanceData.batchId) : null, (eventObj) => {
     const name = eventObj?.event?.toUpperCase();
