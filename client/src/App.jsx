@@ -25,7 +25,8 @@ import {
 import { useFeedback } from './hooks/useFeedback';
 import FeedbackModal from './components/Feedback/FeedbackModal';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './config/queryClient';
 import ScrollToTop from './components/ui/ScrollToTop';
 import FeedbackButton from './components/ui/FeedbackButton';
 
@@ -184,17 +185,6 @@ const RoleRedirect = () => {
   if (!user) return <Navigate to="/login" replace />;
   return <Navigate to={getRoleRedirect(user.role)} replace />;
 };
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      cacheTime: 1000 * 60 * 30, // 30 minutes
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
 
 const AppContent = () => {
   const { isGlobalLoading, loadingMessage } = useUI();

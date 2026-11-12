@@ -2,6 +2,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 import * as authService from '../api/auth';
 import { toast } from 'react-hot-toast';
+import { queryClient } from '../config/queryClient';
 
 export const AuthContext = createContext(null);
 
@@ -98,6 +99,7 @@ export const AuthProvider = ({ children }) => {
       console.warn('Logout request failed, clearing local state anyway',error);
     } finally {
       localStorage.removeItem('nds_token');
+      queryClient.clear();
       setUser(null);
       toast.success('Logged out successfully');
     }

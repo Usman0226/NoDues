@@ -390,7 +390,7 @@ export const approveRequest = async (req, res, next) => {
 
     await commitSafeTransaction(session);
 
-    invalidateStudentStatusCache(approval.studentId.toString());
+    invalidateStudentStatusCache(approval.studentId.toString(), approval.requestId?.toString());
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
     // Bust HoD overview so the dashboard reflects this approval immediately
@@ -635,7 +635,7 @@ export const markDue = async (req, res, next) => {
     await commitSafeTransaction(session);
 
     // Invalidate caches: Student dashboard + HoD Grid + Faculty pending
-    invalidateStudentStatusCache(approval.studentId.toString());
+    invalidateStudentStatusCache(approval.studentId.toString(), approval.requestId?.toString());
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
     // Bust HoD overview so the dashboard reflects this mark-due immediately
@@ -745,7 +745,7 @@ export const updateApproval = async (req, res, next) => {
     await commitSafeTransaction(session);
 
     // Invalidate caches: Student dashboard + HoD Grid + Faculty pending
-    invalidateStudentStatusCache(approval.studentId.toString());
+    invalidateStudentStatusCache(approval.studentId.toString(), approval.requestId?.toString());
     invalidateEntityCache('request', approval.requestId, approval.studentId);
     invalidateEntityCache('approval', approval.facultyId, approval.batchId);
     // Bust HoD overview

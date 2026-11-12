@@ -752,11 +752,7 @@ const CoCurricular = () => {
                   </label>
                 </div>
 
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-                  <p className="text-[11px] text-amber-700 font-medium">
-                    ⚡ This operation is <strong>idempotent</strong> — calling it multiple times will not create duplicates.
-                  </p>
-                </div>
+                
                 <div className="flex justify-end gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setShowAssignMentors(false)}>Cancel</Button>
                   <Button

@@ -1,5 +1,6 @@
 import cache from '../config/cache.js';
 import logger from './logger.js';
+import { invalidateKeys } from './withCache.js';
 
 export const invalidateEntityCache = (entityType, entityId, additionalId = null) => {
   const keys = [];
@@ -7,16 +8,20 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
   if (entityId === 'all') {
     const allKeys = cache.keys();
     const pattern = `${entityType}:all`;
-    const listPattern = `${entityType}:list:*`;
     keys.push(...allKeys.filter(k => k === pattern || k.startsWith(`${entityType}:list:`)));
   }
 
   switch (entityType) {
     case 'student': {
+      const allKeys = cache.keys();
+      if (entityId === 'all') {
+        keys.push(...allKeys.filter(k => k.startsWith('student_status:')));
+        break;
+      }
+
       keys.push(`user:${entityId}`);
       keys.push(`student_status:${entityId}:active`);
       
-      const allKeys = cache.keys();
       // Invalidate specific request status keys for this student
       const requestStatusKeys = allKeys.filter(k => k.startsWith(`student_status:${entityId}:`));
       keys.push(...requestStatusKeys);
@@ -81,10 +86,10 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
 
     case 'request':
       // entityId = requestId, additionalId = studentId
-      // Pass batchId as a third param if available for targeted invalidation
-      if (additionalId) keys.push(`student_status:${additionalId}`);
-      // Note: callers should pass batchId via a separate direct cache.del call
-      // to avoid O(n) key scan. The hook in NodueRequest.js handles this.
+      if (additionalId) {
+        keys.push(`student_status:${additionalId}:active`);
+        if (entityId) keys.push(`student_status:${additionalId}:${entityId}`);
+      }
       break;
 
     case 'approval':
@@ -99,7 +104,7 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
   }
 
   if (keys.length > 0) {
-    cache.del(keys);
+    invalidateKeys(keys);
     logger.debug('cache_invalidated', { entityType, entityId, keys });
   }
 };

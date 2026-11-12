@@ -12,6 +12,7 @@ import cache from '../config/cache.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
 import { createNotification } from './notification.controller.js';
+import { invalidateStudentStatusCache } from './studentPortalController.js';
 import * as batchSync from '../utils/batchSync.js';
 
 // ── GET /api/co-curricular-types ──────────────────────────────────────────────
@@ -667,6 +668,7 @@ export const submitCoCurricular = async (req, res, next) => {
     }
 
     await commitSafeTransaction(session);
+    invalidateStudentStatusCache(studentId.toString());
 
     logger.info('co_curricular_submitted', {
         actor: studentId,

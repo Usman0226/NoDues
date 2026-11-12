@@ -26,7 +26,10 @@ const BatchStudentDetail = () => {
   const isHod = user?.role === 'hod' || user?.role === 'ao';
   const basePath = isHod ? '/hod' : '/admin';
 
-  const { data: detail, loading, error, request: fetchDetail } = useApi(() => getBatchStudentDetail(batchId, studentId), { immediate: true });
+  const { data: detail, loading, error, request: fetchDetail } = useApi(() => getBatchStudentDetail(batchId, studentId), {
+    immediate: true,
+    queryKey: ['batch-student-detail', batchId, studentId],
+  });
 
   const approvals = React.useMemo(() => detail?.approvals || [], [detail?.approvals]);
   const { setBreadcrumbs } = useNavigationStack();
