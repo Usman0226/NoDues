@@ -908,13 +908,13 @@ const Step1ClassSubjects = ({
 
   return (
     <>
-      {/* Top Mode Switcher Strip (Flush Studio Chrome) */}
-      <div className="shrink-0 px-5 py-2.5 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="inline-flex h-9 items-center rounded-xl bg-slate-200/85 p-1 border border-slate-300/80 self-start gap-1">
+      {/* Top Mode Switcher Strip (Compact Single-Line Studio Chrome) */}
+      <div className="shrink-0 px-4 sm:px-5 py-2 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex h-8 items-center rounded-lg bg-slate-200/85 p-0.5 border border-slate-300/80 gap-0.5">
           <button
             type="button"
             onClick={() => setActiveTab('pdf')}
-            className={`h-full inline-flex items-center gap-1.5 px-3 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+            className={`h-full inline-flex items-center gap-1.5 px-2.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'pdf'
                 ? 'bg-navy text-white shadow-xs'
                 : 'text-slate-700 hover:text-navy hover:bg-white/75'
@@ -934,50 +934,51 @@ const Step1ClassSubjects = ({
           <button
             type="button"
             onClick={() => setActiveTab('manual')}
-            className={`h-full inline-flex items-center gap-1.5 px-3 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+            className={`h-full inline-flex items-center gap-1.5 px-2.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'manual'
                 ? 'bg-navy text-white shadow-xs'
                 : 'text-slate-700 hover:text-navy hover:bg-white/75'
             }`}
           >
             <Layers size={12} />
-            <span>Manual / Master Syllabus</span>
+            <span>Manual Setup</span>
           </button>
         </div>
 
         {/* File Context Actions when a PDF is loaded */}
         {activeTab === 'pdf' && pdfFile && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-extrabold text-slate-900 truncate max-w-[180px]" title={pdfFile.name}>
-              {pdfFile.name}
-            </span>
-            {inspection?.pageCount && (
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-200/80 border border-slate-300 text-slate-800">
-                {inspection.pageCount} {inspection.pageCount === 1 ? 'Section' : 'Sections'}
+            <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 shadow-2xs">
+              <FileText size={12} className="text-indigo-700 shrink-0" />
+              <span className="truncate max-w-[150px]" title={pdfFile.name}>
+                {pdfFile.name}
               </span>
-            )}
+              {inspection?.pageCount && (
+                <span className="text-[11px] font-semibold text-slate-600 border-l border-slate-200 pl-1.5">
+                  {inspection.pageCount} {inspection.pageCount === 1 ? 'section' : 'sections'}
+                </span>
+              )}
+            </span>
+
             {hasMultiPages && (
-              <Button
+              <button
                 type="button"
-                variant="secondary"
-                size="xs"
                 onClick={() => setBatchModalOpen(true)}
-                className="!border-indigo-400 !bg-indigo-50 !text-indigo-950 hover:!bg-indigo-100 shadow-2xs"
+                className="h-7 px-2.5 rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-900 hover:bg-indigo-100 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Sparkles size={11} className="text-indigo-700" />
+                <Sparkles size={12} className="text-indigo-700" />
                 <span>Batch Provision ({inspection.pageCount})</span>
-              </Button>
+              </button>
             )}
-            <Button
+
+            <button
               type="button"
-              variant="secondary"
-              size="xs"
               onClick={handleResetFile}
-              className="!border-slate-300 !bg-white !text-slate-800 hover:!bg-slate-100 hover:!border-slate-400 shadow-2xs"
+              className="h-7 px-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:text-navy text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
             >
-              <RotateCcw size={11} />
+              <RotateCcw size={12} />
               <span>Change PDF</span>
-            </Button>
+            </button>
           </div>
         )}
       </div>
@@ -1123,14 +1124,14 @@ const Step1ClassSubjects = ({
             </div>
           )}
 
-          {/* State D: Flush OneSchema Studio PDF Review Workspace */}
+          {/* State D: Clean Simplified Studio PDF Review Workspace */}
           {pdfFile && !isInspecting && !isParsing && !parseError && extractedRows.length > 0 && (
             <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
-              {/* LEFT RAIL (Multi-Page Only): Clean Distinct Section Tree */}
+              {/* LEFT RAIL (Multi-Page Only): Simple Flat Section Tree */}
               {hasMultiPages && (
-                <aside className="lg:w-[232px] xl:w-[248px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50/95 p-3 flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between gap-2 px-0.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                <aside className="lg:w-[224px] xl:w-[240px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50/95 p-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
                       Sections ({selectedPageNumbers.length}/{inspection.pageCount})
                     </span>
                     <button
@@ -1144,7 +1145,7 @@ const Step1ClassSubjects = ({
                           allSelected ? (selectedPage ? [selectedPage] : []) : valid
                         );
                       }}
-                      className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 underline-offset-2 hover:underline cursor-pointer"
+                      className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline cursor-pointer"
                     >
                       {selectedPageNumbers.length > 1 ? 'Focus 1' : 'Select All'}
                     </button>
@@ -1161,7 +1162,7 @@ const Step1ClassSubjects = ({
                     />
                   </div>
 
-                  <div className="max-h-44 lg:max-h-[430px] overflow-y-auto space-y-3 pr-0.5">
+                  <div className="max-h-44 lg:max-h-[430px] overflow-y-auto space-y-2.5 pr-0.5">
                     {Object.entries(groupedPages).map(([sem, pages]) => {
                       const filtered = pages.filter((p) => {
                         if (!pageSearchQuery.trim()) return true;
@@ -1173,14 +1174,14 @@ const Step1ClassSubjects = ({
                       if (filtered.length === 0) return null;
 
                       return (
-                        <div key={sem} className="space-y-1">
-                          <div className="flex items-center justify-between px-1">
+                        <div key={sem} className="space-y-0.5">
+                          <div className="flex items-center justify-between px-1.5 py-0.5">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-600">
                               Sem {sem} ({getAcademicYearRoman(Number(sem))} Yr)
                             </span>
                             <span className="text-[10px] font-bold text-slate-600 tabular-nums">{filtered.length}</span>
                           </div>
-                          <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5">
+                          <div className="grid grid-cols-2 lg:grid-cols-1 gap-0.5">
                             {filtered.map((page) => {
                               const isCurrent = selectedPage === page.pageNumber;
                               const isChecked = selectedPageNumbers.includes(page.pageNumber);
@@ -1190,10 +1191,10 @@ const Step1ClassSubjects = ({
                               return (
                                 <div
                                   key={page.pageNumber}
-                                  className={`px-2.5 py-2 rounded-lg border transition-all flex items-center gap-2 ${
+                                  className={`px-2 py-1.5 rounded-lg border transition-all flex items-center gap-2 ${
                                     isCurrent
-                                      ? 'bg-indigo-50 border-navy ring-1 ring-navy/20 shadow-xs text-navy'
-                                      : 'bg-white border-slate-200 hover:border-slate-300 text-slate-800'
+                                      ? 'bg-white border-navy/40 ring-1 ring-navy/15 shadow-2xs text-navy'
+                                      : 'bg-transparent border-transparent hover:bg-slate-200/60 text-slate-800'
                                   }`}
                                 >
                                   <input
@@ -1210,21 +1211,21 @@ const Step1ClassSubjects = ({
                                     className="min-w-0 flex-1 flex items-center justify-between gap-1 text-left cursor-pointer"
                                   >
                                     <div className="min-w-0">
-                                      <p className={`text-xs truncate ${isCurrent ? 'font-black text-navy' : 'font-bold text-slate-900'}`}>
+                                      <p className={`text-xs truncate leading-snug ${isCurrent ? 'font-black text-navy' : 'font-semibold text-slate-900'}`}>
                                         {displayName}
                                       </p>
-                                      <p className={`text-[10px] truncate ${isCurrent ? 'text-indigo-900/80 font-medium' : 'text-slate-600'}`}>
+                                      <p className={`text-[10px] truncate leading-tight ${isCurrent ? 'text-indigo-800 font-medium' : 'text-slate-600'}`}>
                                         {isDisabled
-                                          ? 'No extractable text'
+                                          ? 'No text layer'
                                           : page.detectedTeacher
                                           ? page.detectedTeacher
                                           : `Page ${page.pageNumber}`}
                                       </p>
                                     </div>
                                     {isCurrent ? (
-                                      <span className="w-2 h-2 rounded-full bg-navy shrink-0" />
+                                      <span className="w-1.5 h-1.5 rounded-full bg-navy shrink-0" />
                                     ) : isCached ? (
-                                      <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" title="Reviewed" />
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" title="Reviewed" />
                                     ) : null}
                                   </button>
                                 </div>
@@ -1238,13 +1239,13 @@ const Step1ClassSubjects = ({
                 </aside>
               )}
 
-              {/* RIGHT WORKSPACE: High-Contrast Metadata Bar + Hairline Curriculum Sheet */}
+              {/* RIGHT WORKSPACE: Aligned Section Details + Single-Row Filter + 4-Column Table */}
               <div className="flex-1 min-w-0 flex flex-col bg-white">
                 {/* Inline Section Metadata Bar */}
-                <div className="px-4 sm:px-5 py-3 border-b border-slate-200 bg-slate-50/90 space-y-2.5">
+                <div className="px-4 sm:px-5 py-3 border-b border-slate-200 bg-slate-50/75 space-y-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-navy">
+                      <span className="text-sm font-black text-navy">
                         {formatSectionDisplayName(sectionForm.name || 'Section', sectionForm.semester)}
                       </span>
                       {(() => {
@@ -1284,9 +1285,9 @@ const Step1ClassSubjects = ({
                           aria-label="Target Department"
                           value={activeDepartmentId}
                           onChange={(e) => handleSectionFieldChange('departmentId', e.target.value)}
-                          className="h-7 px-2.5 rounded-lg border border-slate-300 bg-white text-[11px] font-bold text-slate-900 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
+                          className="h-7 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                         >
-                          <option value="">-- Choose Dept --</option>
+                          <option value="">Select dept...</option>
                           {departments.map((d) => (
                             <option key={d._id} value={d._id}>
                               {d.code || d.name}
@@ -1297,21 +1298,22 @@ const Step1ClassSubjects = ({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {/* Baseline-Aligned 4-Column Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-start">
                     <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
+                      <label className="block h-4 leading-4 text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
                         Section Name
                       </label>
                       <input
                         type="text"
                         value={sectionForm.name}
                         onChange={(e) => handleSectionFieldChange('name', e.target.value)}
-                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
+                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
+                      <label className="block h-4 leading-4 text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
                         Batch Year
                       </label>
                       <input
@@ -1319,18 +1321,18 @@ const Step1ClassSubjects = ({
                         value={sectionForm.academicYear}
                         onChange={(e) => handleSectionFieldChange('academicYear', e.target.value)}
                         placeholder="2026-27"
-                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
+                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
+                      <label className="block h-4 leading-4 text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
                         Semester
                       </label>
                       <select
                         value={sectionForm.semester}
                         onChange={(e) => handleSectionFieldChange('semester', Number(e.target.value))}
-                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
+                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                       >
                         {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                           <option key={s} value={s}>
@@ -1341,29 +1343,20 @@ const Step1ClassSubjects = ({
                     </div>
 
                     <div>
-                      <label className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
-                        <span>Class Teacher</span>
+                      <label className="flex items-center gap-1.5 h-4 leading-4 text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
                         <span
-                          className={`inline-flex items-center gap-1 normal-case font-bold px-1.5 py-0.5 rounded-full border ${
-                            sectionForm.classTeacherId
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                              : 'bg-amber-50 text-amber-900 border-amber-300'
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            sectionForm.classTeacherId ? 'bg-emerald-600' : 'bg-amber-500'
                           }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              sectionForm.classTeacherId ? 'bg-emerald-600' : 'bg-amber-600'
-                            }`}
-                          />
-                          {sectionForm.classTeacherId ? 'Matched' : 'Pending'}
-                        </span>
+                        />
+                        <span>Class Teacher</span>
                       </label>
                       <select
                         value={sectionForm.classTeacherId}
                         onChange={(e) => handleSectionFieldChange('classTeacherId', e.target.value)}
-                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
+                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                       >
-                        <option value="">-- Choose Class Teacher --</option>
+                        <option value="">Select teacher...</option>
                         {facultyList.map((f) => (
                           <option key={f._id} value={f._id}>
                             {f.name} {f.employeeId ? `(${f.employeeId})` : ''}
@@ -1379,29 +1372,24 @@ const Step1ClassSubjects = ({
                   </div>
                 </div>
 
-                {/* OneSchema Filter Toolbar */}
-                <div className="px-4 sm:px-5 py-2.5 border-b border-slate-200 bg-white flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-extrabold text-navy">
-                      Extracted Curriculum ({counts.matched + counts.flagged} active)
+                {/* Single-Row Curriculum Toolbar */}
+                <div className="px-4 sm:px-5 py-2 border-b border-slate-200 bg-white flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-extrabold text-navy whitespace-nowrap">
+                      Curriculum ({counts.matched + counts.flagged} active)
                     </span>
                     {extractedRows.some((r) => r.status !== 'excluded' && r.isElective) && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-200">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-200 whitespace-nowrap">
                         {extractedRows.filter((r) => r.status !== 'excluded' && r.isElective).length} Electives
-                      </span>
-                    )}
-                    {counts.flagged > 0 && (
-                      <span className="text-[11px] font-medium text-slate-600">
-                        · {counts.flagged} unmatched faculty (optional now)
                       </span>
                     )}
                   </div>
 
-                  <div className="inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-300/90 text-[11px] gap-0.5">
+                  <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 border border-slate-300/90 text-[11px] gap-0.5">
                     <button
                       type="button"
                       onClick={() => setSubjectFilter('all')}
-                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                      className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer whitespace-nowrap ${
                         subjectFilter === 'all'
                           ? 'bg-navy text-white shadow-xs'
                           : 'text-slate-700 hover:text-slate-950 hover:bg-white'
@@ -1412,7 +1400,7 @@ const Step1ClassSubjects = ({
                     <button
                       type="button"
                       onClick={() => setSubjectFilter('matched')}
-                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                      className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer whitespace-nowrap ${
                         subjectFilter === 'matched'
                           ? 'bg-navy text-white shadow-xs'
                           : 'text-slate-700 hover:text-slate-950 hover:bg-white'
@@ -1424,7 +1412,7 @@ const Step1ClassSubjects = ({
                       <button
                         type="button"
                         onClick={() => setSubjectFilter('flagged')}
-                        className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer whitespace-nowrap ${
                           subjectFilter === 'flagged'
                             ? 'bg-navy text-white shadow-xs'
                             : 'text-slate-700 hover:text-slate-950 hover:bg-white'
@@ -1437,7 +1425,7 @@ const Step1ClassSubjects = ({
                       <button
                         type="button"
                         onClick={() => setSubjectFilter('excluded')}
-                        className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer whitespace-nowrap ${
                           subjectFilter === 'excluded'
                             ? 'bg-navy text-white shadow-xs'
                             : 'text-slate-700 hover:text-slate-950 hover:bg-white'
@@ -1449,15 +1437,14 @@ const Step1ClassSubjects = ({
                   </div>
                 </div>
 
-                {/* Hairline Spreadsheet Review Table */}
+                {/* Clean 4-Column Curriculum Table */}
                 <div className="min-h-[340px] max-h-[470px] overflow-y-auto overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="sticky top-0 bg-slate-100 border-b border-slate-300 z-10">
                       <tr className="text-slate-700 uppercase tracking-wider text-[10px] font-extrabold">
                         <th className="py-2.5 px-4 whitespace-nowrap">Code</th>
-                        <th className="py-2.5 px-3">Subject Name</th>
+                        <th className="py-2.5 px-3">Subject</th>
                         <th className="py-2.5 px-3">Handling Faculty</th>
-                        <th className="py-2.5 px-2 text-center whitespace-nowrap">Status</th>
                         <th className="py-2.5 px-4 text-right whitespace-nowrap">Action</th>
                       </tr>
                     </thead>
@@ -1474,7 +1461,7 @@ const Step1ClassSubjects = ({
                                 : 'even:bg-slate-50/45 hover:bg-indigo-50/40 transition-colors'
                             }
                           >
-                            <td className="py-2.5 px-4 align-top whitespace-nowrap">
+                            <td className="py-2.5 px-4 align-middle whitespace-nowrap">
                               <span className="font-mono font-extrabold text-navy block">
                                 {row.subjectCode}
                               </span>
@@ -1484,59 +1471,52 @@ const Step1ClassSubjects = ({
                                 </span>
                               )}
                             </td>
-                            <td className="py-2.5 px-3 align-top font-semibold text-slate-900 min-w-[200px] leading-snug">
+                            <td className="py-2.5 px-3 align-middle font-semibold text-slate-900 min-w-[200px] leading-snug">
                               {row.subjectName}
                             </td>
-                            <td className="py-2.5 px-3 align-top min-w-[195px]">
+                            <td className="py-2.5 px-3 align-middle min-w-[220px]">
                               {isExcluded ? (
-                                <span className="text-slate-600 italic font-medium">Excluded</span>
+                                <span className="inline-flex items-center gap-1 text-slate-600 italic font-medium">
+                                  <Ban size={11} /> Excluded from section
+                                </span>
                               ) : (
-                                <div className="space-y-1">
-                                  <select
-                                    value={row.facultyId || ''}
-                                    onChange={(e) => handleFacultyChange(originalIdx, e.target.value)}
-                                    className="h-8 w-full px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
-                                  >
-                                    <option value="">-- Assign Faculty (Optional) --</option>
-                                    {facultyList.map((f) => (
-                                      <option key={f._id} value={f._id}>
-                                        {f.name} {f.employeeId ? `(${f.employeeId})` : ''}
-                                      </option>
-                                    ))}
-                                  </select>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      title={row.status === 'matched' ? 'Matched faculty' : 'Faculty assignment optional now'}
+                                      className={`w-2 h-2 rounded-full shrink-0 ${
+                                        row.status === 'matched' ? 'bg-emerald-600' : 'bg-amber-500'
+                                      }`}
+                                    />
+                                    <select
+                                      value={row.facultyId || ''}
+                                      onChange={(e) => handleFacultyChange(originalIdx, e.target.value)}
+                                      className="h-8 w-full px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
+                                    >
+                                      <option value="">Select faculty (optional)...</option>
+                                      {facultyList.map((f) => (
+                                        <option key={f._id} value={f._id}>
+                                          {f.name} {f.employeeId ? `(${f.employeeId})` : ''}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
                                   {!row.facultyId && row.facultyName && row.facultyName !== 'Unassigned' && (
-                                    <p className="text-[10px] font-medium text-slate-600 leading-tight pl-0.5">
+                                    <p className="text-[10px] font-medium text-slate-600 leading-tight pl-4 mt-1 truncate" title={`Detected in PDF: ${row.facultyName}`}>
                                       PDF: {row.facultyName}
                                     </p>
                                   )}
                                 </div>
                               )}
                             </td>
-                            <td className="py-2.5 px-2 align-top text-center whitespace-nowrap">
-                              {isExcluded ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-300">
-                                  <Ban size={11} /> Excluded
-                                </span>
-                              ) : row.status === 'matched' ? (
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300/80">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                                  Matched
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-300/90">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
-                                  Pending
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-4 align-top text-right whitespace-nowrap">
+                            <td className="py-2.5 px-4 align-middle text-right whitespace-nowrap">
                               <button
                                 type="button"
                                 onClick={() => handleToggleExclude(originalIdx)}
-                                className={`text-[11px] font-bold px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
+                                className={`h-7 text-[11px] font-bold px-2.5 rounded-md border transition-colors cursor-pointer ${
                                   isExcluded
                                     ? 'border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
-                                    : 'border-slate-300 bg-white text-slate-700 hover:border-rose-400 hover:bg-rose-50 hover:text-rose-700 shadow-2xs'
+                                    : 'border-slate-300 bg-white text-slate-700 hover:border-rose-400 hover:bg-rose-50 hover:text-rose-700'
                                 }`}
                               >
                                 {isExcluded ? 'Include' : 'Exclude'}

@@ -192,21 +192,14 @@ const Step6Preflight = ({
   return (
     <>
       <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
-        {/* Provisioned Multi-Section Switcher (when >1 section was extracted from PDF) */}
+        {/* Provisioned Multi-Section Switcher (compact pill bar when >1 section was extracted from PDF) */}
         {provisionedClasses.length > 1 && (
-          <div className="p-3.5 rounded-2xl border border-indigo-200/80 bg-indigo-50/40 space-y-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Layers size={15} className="text-indigo-600" />
-                <span className="text-xs font-black text-navy">
-                  All Sections Saved from PDF ({provisionedClasses.length} Sections)
-                </span>
-              </div>
-              <span className="text-[11px] font-semibold text-indigo-800">
-                Click any section below to inspect its readiness & extracted subjects
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
+          <div className="px-3.5 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50/60 flex flex-wrap items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-black text-navy shrink-0">
+              <Layers size={14} className="text-indigo-700" />
+              Saved Sections ({provisionedClasses.length}):
+            </span>
+            <div className="flex flex-wrap gap-1.5">
               {provisionedClasses.map((sec) => {
                 const secId = sec.classId || sec._id;
                 const isSelected = secId === classId;
@@ -216,19 +209,15 @@ const Step6Preflight = ({
                     key={secId}
                     type="button"
                     onClick={() => onSwitchClass?.(secId)}
-                    className={`px-3 py-1.5 rounded-xl border text-left transition-all flex items-center gap-2 ${
+                    className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                       isSelected
-                        ? 'bg-navy text-white border-navy shadow-xs'
-                        : 'bg-white border-indigo-200/80 text-navy hover:border-indigo-400'
+                        ? 'bg-navy text-white border-navy shadow-2xs'
+                        : 'bg-white border-slate-300 text-slate-800 hover:border-indigo-400 hover:text-navy'
                     }`}
                   >
-                    <span className="text-xs font-black">{label}</span>
-                    <span
-                      className={`text-[10px] font-bold ${
-                        isSelected ? 'text-indigo-100' : 'text-zinc-500'
-                      }`}
-                    >
-                      Sem {sec.semester} · {sec.subjectCount ?? '—'} subj
+                    <span>{label}</span>
+                    <span className={`text-[10px] font-semibold ${isSelected ? 'text-indigo-100' : 'text-slate-600'}`}>
+                      · {sec.subjectCount ?? '—'}
                     </span>
                   </button>
                 );
