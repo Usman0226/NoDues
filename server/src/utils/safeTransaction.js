@@ -140,6 +140,7 @@ export const executeSafeTransaction = async (workFn) => {
         err.codeName === 'NoSuchTransaction' ||
         err.codeName === 'IllegalOperation' ||
         err.message?.includes('does not match any in-progress transactions') ||
+        err.message?.includes('Only servers in a sharded cluster can start a new transaction') ||
         err.message?.includes('Transaction numbers are only allowed');
 
       if (isTxnError) {

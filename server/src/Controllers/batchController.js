@@ -13,7 +13,7 @@ import { pushEvent } from './sseController.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import Task from '../models/Task.js';
 import CoCurricularType from '../models/CoCurricularType.js';
-import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction, getSessionOptions } from '../utils/safeTransaction.js';
 import { createNotification } from './notification.controller.js';
 import { generateStudentSnapshotData } from '../utils/batchSync.js';
 
@@ -180,15 +180,15 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
     totalStudents:   students.length,
   }], { session });
 
-  // 3. Fetch necessary faculty info
-  const [hodAccount, ctInfo] = await Promise.all([
-    Faculty.findOne({ 
-      departmentId: cls.departmentId._id || cls.departmentId, 
-      roleTags: { $in: ['hod', 'ao'] }, 
-      isActive: true 
-    }).select('name roleTags').session(session).lean(),
-    cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() : null
-  ]);
+  // 3. Fetch necessary faculty info sequentially on transactional session
+  const hodAccount = await Faculty.findOne({
+    departmentId: cls.departmentId._id || cls.departmentId,
+    roleTags: { $in: ['hod', 'ao'] },
+    isActive: true,
+  }).select('name roleTags').session(session).lean();
+  const ctInfo = cls.classTeacherId
+    ? await Faculty.findById(cls.classTeacherId).select('name').session(session).lean()
+    : null;
 
   const allMentorIds = [...new Set(students.map(s => s.mentorId).filter(Boolean))];
   const mentors = await Faculty.find({ _id: { $in: allMentorIds } })
@@ -273,11 +273,9 @@ const _executeInitiation = async (cls, deadline, initiator, session) => {
     }
   }
 
-  // 5. Execute Bulk Writes
-  const [requestResult, approvalResult] = await Promise.all([
-    NodueRequest.bulkWrite(requestOps,  { ordered: false, session }),
-    NodueApproval.bulkWrite(approvalOps, { ordered: false, session }),
-  ]);
+  // 5. Execute Bulk Writes sequentially (replica sets reject parallel writes on one txn session)
+  const requestResult = await NodueRequest.bulkWrite(requestOps, { ordered: false, ...getSessionOptions(session) });
+  await NodueApproval.bulkWrite(approvalOps, { ordered: false, ...getSessionOptions(session) });
 
   // 6. Cache & Logs
   cache.set(`batch_summary:${batch._id}`, {
@@ -879,13 +877,12 @@ export const addStudentToBatch = async (req, res, next) => {
       return next(new ErrorResponse('studentId is required', 400, 'VALIDATION_ERROR'));
     }
 
-    const [batch, student] = await Promise.all([
-      NodueBatch.findById(batchId).session(session).lean(),
-      Student.findOne({ _id: studentId, isActive: true })
-        .select('_id rollNo name mentorId electiveSubjects classId departmentId')
-        .session(session)
-        .lean(),
-    ]);
+    // Serialized reads on active session
+    const batch = await NodueBatch.findById(batchId).session(session).lean();
+    const student = await Student.findOne({ _id: studentId, isActive: true })
+      .select('_id rollNo name mentorId electiveSubjects classId departmentId')
+      .session(session)
+      .lean();
 
     if (!batch) {
       await abortSafeTransaction(session);
@@ -917,15 +914,15 @@ export const addStudentToBatch = async (req, res, next) => {
       .session(session)
       .lean();
 
-    // ── Build Faculty Snapshot (Full implementation) ─────────────────────────
-    const [hodAccount, ctInfo] = await Promise.all([
-      Faculty.findOne({ 
-        departmentId: cls.departmentId._id || cls.departmentId, 
-        roleTags: { $in: ['hod', 'ao'] }, 
-        isActive: true 
-      }).select('name roleTags').session(session).lean(),
-      cls.classTeacherId ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() : null
-    ]);
+    // ── Build Faculty Snapshot (Serialized on transactional session) ──────────
+    const hodAccount = await Faculty.findOne({
+      departmentId: cls.departmentId._id || cls.departmentId,
+      roleTags: { $in: ['hod', 'ao'] },
+      isActive: true,
+    }).select('name roleTags').session(session).lean();
+    const ctInfo = cls.classTeacherId
+      ? await Faculty.findById(cls.classTeacherId).select('name').session(session).lean()
+      : null;
 
     const snapshot = {};
     if (hodAccount) {

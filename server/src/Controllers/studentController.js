@@ -140,20 +140,19 @@ export const createStudent = async (req, res, next) => {
 
     const activeBatch = await NodueBatch.findOne({ classId, status: 'active' }).session(session).lean();
     if (activeBatch) {
-      const [hodAccount, ctInfo, coCurricularItems] = await Promise.all([
-        Faculty.findOne({
-          departmentId: cls.departmentId,
-          roleTags: { $in: ['hod', 'ao'] },
-          isActive: true
-        }).select('name roleTags').session(session).lean(),
-        cls.classTeacherId 
-          ? Faculty.findById(cls.classTeacherId).select('name').session(session).lean() 
-          : null,
-        CoCurricularType.find({
-          departmentId: cls.departmentId,
-          isActive: true
-        }).populate('coordinatorId', 'name').session(session).lean()
-      ]);
+      // Serialized on active session to prevent replica-set concurrent transaction errors
+      const hodAccount = await Faculty.findOne({
+        departmentId: cls.departmentId,
+        roleTags: { $in: ['hod', 'ao'] },
+        isActive: true,
+      }).select('name roleTags').session(session).lean();
+      const ctInfo = cls.classTeacherId
+        ? await Faculty.findById(cls.classTeacherId).select('name').session(session).lean()
+        : null;
+      const coCurricularItems = await CoCurricularType.find({
+        departmentId: cls.departmentId,
+        isActive: true,
+      }).populate('coordinatorId', 'name').session(session).lean();
 
       const snapshot = generateStudentSnapshotData(student[0], cls, {
         hodAccount,
@@ -416,10 +415,9 @@ export const assignMentor = async (req, res, next) => {
       return next(new ErrorResponse('mentorId is required', 400, 'VALIDATION_ERROR'));
     }
 
-    const [student, mentor] = await Promise.all([
-      Student.findOne({ _id: id, isActive: true }).session(session),
-      Faculty.findOne({ _id: mentorId, isActive: true }).session(session).lean(),
-    ]);
+    // Serialized reads on active session
+    const student = await Student.findOne({ _id: id, isActive: true }).session(session);
+    const mentor = await Faculty.findOne({ _id: mentorId, isActive: true }).session(session).lean();
 
     if (!student) {
       await abortSafeTransaction(session);
@@ -483,11 +481,10 @@ export const addElective = async (req, res, next) => {
       return next(new ErrorResponse('subjectId and facultyId are required', 400, 'VALIDATION_ERROR'));
     }
 
-    const [student, subject, faculty] = await Promise.all([
-      Student.findOne({ _id: id, isActive: true }).session(session),
-      Subject.findOne({ _id: subjectId, isElective: true, isActive: true }).session(session).lean(),
-      Faculty.findOne({ _id: facultyId, isActive: true }).session(session).lean(),
-    ]);
+    // Serialized reads on active session
+    const student = await Student.findOne({ _id: id, isActive: true }).session(session);
+    const subject = await Subject.findOne({ _id: subjectId, isElective: true, isActive: true }).session(session).lean();
+    const faculty = await Faculty.findOne({ _id: facultyId, isActive: true }).session(session).lean();
 
     if (!student) {
       await abortSafeTransaction(session);
@@ -569,10 +566,9 @@ export const updateElective = async (req, res, next) => {
       return next(new ErrorResponse('facultyId is required', 400, 'VALIDATION_ERROR'));
     }
 
-    const [student, faculty] = await Promise.all([
-      Student.findOne({ _id: id, isActive: true }).session(session),
-      Faculty.findOne({ _id: facultyId, isActive: true }).session(session).lean(),
-    ]);
+    // Serialized reads on active session
+    const student = await Student.findOne({ _id: id, isActive: true }).session(session);
+    const faculty = await Faculty.findOne({ _id: facultyId, isActive: true }).session(session).lean();
 
     if (!student) {
       await abortSafeTransaction(session);

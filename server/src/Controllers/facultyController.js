@@ -9,7 +9,7 @@ import logger from '../utils/logger.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendCredentialEmail } from '../services/emailService.js';
-import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction } from '../utils/safeTransaction.js';
+import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction, getSessionOptions } from '../utils/safeTransaction.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 const generateTempPassword = () => crypto.randomBytes(4).toString('hex');
@@ -647,18 +647,18 @@ export const bulkResendCredentials = async (req, res, next) => {
     const faculties = await Faculty.find(query).session(session);
     
     const emailData = [];
-    const savePromises = [];
+    const sessionOpt = getSessionOptions(session);
 
     for (const faculty of faculties) {
       const tempPassword = crypto.randomBytes(4).toString('hex');
       faculty.password = tempPassword;
       faculty.mustChangePassword = true;
-      
-      savePromises.push(faculty.save({ session }));
+
+      // Save sequentially to avoid concurrent writes on a single transactional session
+      await faculty.save(sessionOpt);
       emailData.push({ email: faculty.email, name: faculty.name, tempPassword });
     }
 
-    await Promise.all(savePromises);
     await commitSafeTransaction(session);
 
     // Send emails after transaction commits
@@ -718,7 +718,8 @@ export const bulkUpdateRoles = async (req, res, next) => {
       });
     }
 
-    const savePromises = [];
+    const sessionOpt = getSessionOptions(session);
+    let affectedCount = 0;
     for (const faculty of targets) {
       let modified = false;
       if (action === 'add') {
@@ -735,11 +736,12 @@ export const bulkUpdateRoles = async (req, res, next) => {
       }
 
       if (modified) {
-        savePromises.push(faculty.save({ session }));
+        // Save sequentially to avoid concurrent txn writes on one session
+        await faculty.save(sessionOpt);
+        affectedCount++;
       }
     }
 
-    await Promise.all(savePromises);
     await commitSafeTransaction(session);
 
     // Invalidate caches
@@ -752,17 +754,17 @@ export const bulkUpdateRoles = async (req, res, next) => {
       details: { 
         targetRole, 
         action, 
-        affectedCount: savePromises.length,
-        skippedCount: faculties.length - savePromises.length
+        affectedCount,
+        skippedCount: faculties.length - affectedCount
       }
     });
 
     return res.status(200).json({
       success: true,
-      message: `Successfully ${action === 'add' ? 'assigned' : 'revoked'} ${targetRole === 'classTeacher' ? 'Co-ordinator' : targetRole.toUpperCase()} for ${savePromises.length} selected members.`,
+      message: `Successfully ${action === 'add' ? 'assigned' : 'revoked'} ${targetRole === 'classTeacher' ? 'Co-ordinator' : targetRole.toUpperCase()} for ${affectedCount} selected members.`,
       details: {
-        affectedCount: savePromises.length,
-        skippedCount: faculties.length - savePromises.length
+        affectedCount,
+        skippedCount: faculties.length - affectedCount
       }
     });
   } catch (err) {

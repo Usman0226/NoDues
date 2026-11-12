@@ -542,10 +542,11 @@ export const assignClassTeacher = async (req, res, next) => {
     const { id } = req.params;
     const { classTeacherId } = req.body;
 
-    const [cls, teacher] = await Promise.all([
-      Class.findOne({ _id: id, isActive: true }).session(session),
-      classTeacherId ? Faculty.findOne({ _id: classTeacherId, isActive: true }).session(session).lean() : Promise.resolve(null),
-    ]);
+    // Run sequentially on a transactional session (MongoDB replica sets forbid parallel ops per session)
+    const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
+    const teacher = classTeacherId
+      ? await Faculty.findOne({ _id: classTeacherId, isActive: true }).session(session).lean()
+      : null;
 
     if (!cls) {
       await abortSafeTransaction(session);
@@ -562,7 +563,7 @@ export const assignClassTeacher = async (req, res, next) => {
     }
 
     cls.classTeacherId = classTeacherId || null;
-    await cls.save({ session });
+    await cls.save(getSessionOptions(session));
 
     await commitSafeTransaction(session);
 
@@ -599,11 +600,12 @@ export const addSubjectAssignment = async (req, res, next) => {
       return next(new ErrorResponse('subjectId is required', 400, 'VALIDATION_ERROR'));
     }
 
-    const [cls, subject, faculty] = await Promise.all([
-      Class.findOne({ _id: id, isActive: true }).session(session),
-      Subject.findOne({ _id: subjectId, isActive: true }).session(session).lean(),
-      facultyId ? Faculty.findOne({ _id: facultyId, isActive: true }).session(session).lean() : Promise.resolve(null),
-    ]);
+    // Run sequentially to avoid parallel ops on a single transactional session
+    const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
+    const subject = await Subject.findOne({ _id: subjectId, isActive: true }).session(session).lean();
+    const faculty = facultyId
+      ? await Faculty.findOne({ _id: facultyId, isActive: true }).session(session).lean()
+      : null;
 
     if (!cls) {
       await abortSafeTransaction(session);
@@ -641,7 +643,7 @@ export const addSubjectAssignment = async (req, res, next) => {
     };
 
     cls.subjectAssignments.push(assignment);
-    await cls.save({ session });
+    await cls.save(getSessionOptions(session));
 
     await commitSafeTransaction(session);
 
@@ -722,7 +724,7 @@ export const updateSubjectAssignment = async (req, res, next) => {
       }
     }
 
-    await cls.save({ session });
+    await cls.save(getSessionOptions(session));
 
     await commitSafeTransaction(session);
 
@@ -922,10 +924,9 @@ export const cloneSubjects = async (req, res, next) => {
       return next(new ErrorResponse('sourceClassId is required', 400, 'VALIDATION_ERROR'));
     }
 
-    const [cls, source] = await Promise.all([
-      Class.findOne({ _id: id, isActive: true }).session(session),
-      Class.findOne({ _id: sourceClassId, isActive: true }).session(session).lean(),
-    ]);
+    // Execute sequentially on a transactional session (MongoDB replica sets forbid parallel ops per session)
+    const cls = await Class.findOne({ _id: id, isActive: true }).session(session);
+    const source = await Class.findOne({ _id: sourceClassId, isActive: true }).session(session).lean();
 
     if (!cls) {
       await abortSafeTransaction(session);
@@ -958,9 +959,10 @@ export const cloneSubjects = async (req, res, next) => {
     }));
 
     cls.subjectAssignments = cloned;
-    await cls.save({ session });
+    await cls.save(getSessionOptions(session));
 
     await commitSafeTransaction(session);
+    invalidateEntityCache('class', id, cls.departmentId?.toString());
 
     logger.info('subjects_cloned', {
       timestamp: new Date().toISOString(), actor: req.user.userId,

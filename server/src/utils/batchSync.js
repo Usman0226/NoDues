@@ -929,24 +929,22 @@ export const syncClassChange = async (studentId, oldClassId, newClassId) => {
       return;
     }
 
-    const [hodAccount, ctInfo, mentor, coCurricularItems] = await Promise.all([
-      Faculty.findOne({ 
-        departmentId: cls.departmentId._id, 
-        roleTags: { $in: ['hod', 'ao'] }, 
-        isActive: true 
-      })
-        .session(session).select('name roleTags').lean(),
-      cls.classTeacherId
-        ? Faculty.findById(cls.classTeacherId).session(session).select('name').lean()
-        : null,
-      student.mentorId
-        ? Faculty.findById(student.mentorId).session(session).select('name').lean()
-        : null,
-      CoCurricularType.find({
-        departmentId: cls.departmentId._id,
-        isActive: true
-      }).populate('coordinatorId', 'name').session(session).lean()
-    ]);
+    // Execute serially on transactional session to prevent parallel txnNumber collisions on replica sets
+    const hodAccount = await Faculty.findOne({
+      departmentId: cls.departmentId._id,
+      roleTags: { $in: ['hod', 'ao'] },
+      isActive: true,
+    }).session(session).select('name roleTags').lean();
+    const ctInfo = cls.classTeacherId
+      ? await Faculty.findById(cls.classTeacherId).session(session).select('name').lean()
+      : null;
+    const mentor = student.mentorId
+      ? await Faculty.findById(student.mentorId).session(session).select('name').lean()
+      : null;
+    const coCurricularItems = await CoCurricularType.find({
+      departmentId: cls.departmentId._id,
+      isActive: true,
+    }).populate('coordinatorId', 'name').session(session).lean();
 
     const mentorMap = new Map();
     if (student.mentorId && mentor) {
