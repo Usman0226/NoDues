@@ -275,5 +275,20 @@ describe('TRD Phase 5: Setup Wizard & Cutover (FR-E1 to FR-E4, FR-F3 to FR-F5)',
       assert.equal(res.body.success, true);
       assert.ok(Array.isArray(res.body.data?.classes || res.body.data));
     });
+
+    it('rejects wizard progress and preflight for soft-deleted classes (isActive: false)', async () => {
+      await setFeatureFlag('setup_wizard_enabled', true);
+      await Class.findByIdAndUpdate(testClass._id, { isActive: false });
+
+      const progressRes = await request(app)
+        .get(`/api/wizard/classes/${testClass._id}/progress`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      assert.equal(progressRes.status, 404);
+
+      const preflightRes = await request(app)
+        .get(`/api/wizard/classes/${testClass._id}/preflight`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      assert.equal(preflightRes.status, 404);
+    });
   });
 });

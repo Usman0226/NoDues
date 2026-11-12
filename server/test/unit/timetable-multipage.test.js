@@ -306,5 +306,41 @@ describe('Timetable Multi-Page PDF Ingestion & Targeted Parsing', () => {
       assert.ok(masterClass, 'Master curriculum should be hydrated');
       assert.ok(masterClass.subjectAssignments.length > 0, 'Master curriculum should contain subjects');
     });
+
+    it('creates fresh active classes rather than reusing soft-deleted (isActive: false) classes in preview and batch-import', async () => {
+      await Class.updateMany({ departmentId: testDepartment._id }, { $set: { isActive: false } });
+
+      const previewRes = await request(app)
+        .post('/api/timetable/preview')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .field('departmentId', testDepartment._id.toString())
+        .field('page', '1')
+        .attach('file', path.join(FIXTURES_DIR, 'timetable_multipage_sample.pdf'));
+
+      assert.strictEqual(previewRes.statusCode, 200);
+      const previewClassId = previewRes.body.data.classId;
+      assert.ok(previewClassId);
+      assert.notStrictEqual(previewClassId, testClassA._id.toString());
+
+      const getPreviewClassRes = await request(app)
+        .get(`/api/classes/${previewClassId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      assert.strictEqual(getPreviewClassRes.statusCode, 200);
+      assert.strictEqual(getPreviewClassRes.body.data.isActive, true);
+
+      const batchRes = await request(app)
+        .post('/api/timetable/batch-import')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .field('departmentId', testDepartment._id.toString())
+        .attach('file', path.join(FIXTURES_DIR, 'timetable_multipage_sample.pdf'));
+
+      assert.strictEqual(batchRes.statusCode, 200);
+      for (const sec of batchRes.body.data.sections) {
+        const clsRes = await request(app)
+          .get(`/api/classes/${sec.classId}`)
+          .set('Authorization', `Bearer ${adminToken}`);
+        assert.strictEqual(clsRes.statusCode, 200, `Provisioned section ${sec.classId} must be active and fetchable`);
+      }
+    });
   });
 });

@@ -31,7 +31,7 @@ export async function inspectTimetablePdf(req, res, next) {
     const classId = req.body.classId || req.query.classId;
     let targetClass = null;
     if (classId) {
-      targetClass = await Class.findById(classId).lean();
+      targetClass = await Class.findOne({ _id: classId, isActive: { $ne: false } }).lean();
     }
 
     const inspection = await inspectPdfPages(req.file.buffer, {
@@ -93,7 +93,7 @@ export async function previewTimetable(req, res, next) {
     let deptId = req.body.departmentId || req.user?.departmentId || (req.user?.department?._id || req.user?.department);
 
     if (classId) {
-      targetClass = await Class.findById(classId);
+      targetClass = await Class.findOne({ _id: classId, isActive: { $ne: false } });
       if (!targetClass) {
         return res.status(404).json({
           success: false,
@@ -154,7 +154,8 @@ export async function previewTimetable(req, res, next) {
       const clsQuery = { 
         name: nameRegex, 
         semester: resolvedSem,
-        isMaster: { $ne: true }
+        isMaster: { $ne: true },
+        isActive: true,
       };
       if (deptId) clsQuery.departmentId = deptId;
       targetClass = await Class.findOne(clsQuery);
@@ -291,6 +292,10 @@ export async function commitTimetable(req, res, next) {
         success: false,
         error: { code: 'DB_002', message: 'Class not found.' },
       });
+    }
+
+    if (targetClass.isActive === false) {
+      targetClass.isActive = true;
     }
 
     if (classTeacherId) {
@@ -585,6 +590,7 @@ export async function batchImportTimetable(req, res, next) {
           name: nameRegex,
           semester: resolvedSem,
           isMaster: { $ne: true },
+          isActive: true,
           departmentId: deptId,
         });
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
 import { useSetupWizardFlag } from '../../hooks/useFeatureFlag';
 import { ROLES } from '../../utils/constants';
@@ -98,7 +99,13 @@ const SetupWizard = () => {
       })
       .catch((err) => {
         if (active) {
-          console.warn('Could not restore saved wizard progress:', err?.message);
+          setClassId(null);
+          setSelectedClass(null);
+          if (err?.statusCode === 404) {
+            toast('Requested class is unavailable or deactivated. Ready for a new setup.', { icon: 'ℹ️' });
+          } else {
+            console.warn('Could not restore saved wizard progress:', err?.message);
+          }
         }
       });
 

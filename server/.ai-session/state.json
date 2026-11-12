@@ -65,6 +65,11 @@
       "context": "Setup Wizard vertical overflow, redundant accordion cards, student/mentor/elective import blockers, silent PDF failures, and missing batch launch / HoD route bugs",
       "decision": "Converted SetupWizard into a non-scrolling section-tabbed viewport shell using balanced 2-column layouts with internal table scrolling and sticky footers; built shared WizardImportPanel with authenticated .xlsx template downloads and row-level pre-commit validation; made Step 2 (Students), Step 3 (Mentors), and Step 4 (Electives) optional/skippable with exact Class/Directory destination guidance and deferred-setup exit to the role-aware Class Details page; fixed import.controller.js previewStudents ReferenceError, fuzzy header normalization in importUtils.js, email-optional student rows, Step 1 PDF error recovery & pageCache edit sync, URL ?classId progress restoration, and Step 6 actual NodueBatch initiation + HoD navigation paths.",
       "trade_offs": "FR-E2 preflight still gates actual batch launch on >=1 student, so admins skipping student import are routed cleanly to Save Draft & Open Class Page where students can be enrolled, manually added, or promoted before triggering clearance."
+    },
+    {
+      "context": "Setup Wizard Save & Open Class Page navigated to 404 Class not found when previously soft-deleted sections matched timetable auto-discovery",
+      "decision": "Scoped timetableController inspectTimetablePdf, previewTimetable, and batchImportTimetable queries to active classes (isActive: true) so soft-deleted sections are never hijacked; rejected inactive classes with 404 in wizardService; prevented infinite 404/403 retry toasts in ClassDetail and added Back Navigation recovery on Sync Error",
+      "trade_offs": "Soft-deleted historical sections remain safely preserved without obstructing fresh Setup Wizard runs for the same section name."
     }
   ],
   "blockers": []

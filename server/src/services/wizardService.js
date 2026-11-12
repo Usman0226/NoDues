@@ -32,7 +32,7 @@ export const WIZARD_STEPS = [
  */
 export async function validatePreflightChecklist(classId) {
   const cls = await Class.findById(classId).lean();
-  if (!cls) {
+  if (!cls || cls.isActive === false) {
     throw new ErrorResponse('Class not found', 404, 'NOT_FOUND');
   }
 
@@ -96,7 +96,7 @@ export async function validatePreflightChecklist(classId) {
  */
 export async function getWizardProgress(classId) {
   const cls = await Class.findById(classId).lean();
-  if (!cls) {
+  if (!cls || cls.isActive === false) {
     throw new ErrorResponse('Class not found', 404, 'NOT_FOUND');
   }
 
@@ -151,7 +151,7 @@ export async function saveWizardProgress(classId, { step, markCompleted = false,
   }
 
   const cls = await Class.findById(classId);
-  if (!cls) {
+  if (!cls || cls.isActive === false) {
     throw new ErrorResponse('Class not found', 404, 'NOT_FOUND');
   }
 

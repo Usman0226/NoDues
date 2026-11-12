@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   inspectTimetablePdf,
   previewTimetable,
@@ -87,6 +87,7 @@ const Step1ClassSubjects = ({
   const [cloneSourceClassId, setCloneSourceClassId] = useState('');
 
   const activeDepartmentId = sectionForm.departmentId || defaultDeptId;
+  const queryClient = useQueryClient();
 
   const { data: deptRes } = useQuery({
     queryKey: ['wizard', 'departments'],
@@ -412,6 +413,8 @@ const Step1ClassSubjects = ({
       const res = await batchImportTimetable(fd);
       const data = res?.data || res;
       setBatchResult(data);
+      queryClient.invalidateQueries({ queryKey: ['class'] });
+      queryClient.invalidateQueries({ queryKey: ['wizard', 'all-classes'] });
       toast.success(`Provisioned ${data.provisionedCount || data.sections?.length || 0} sections!`);
     } catch (err) {
       toast.error(err?.message || 'Failed to batch provision sections.');
@@ -517,6 +520,8 @@ const Step1ClassSubjects = ({
       const updatedClass = res?.data?.classData || resolvedClassData;
       const classDisplayName = formatSectionDisplayName(sectionForm.name, sectionForm.semester);
       toast.success(`Configured ${counts.matched + counts.flagged} active subjects for ${classDisplayName}!`);
+      queryClient.invalidateQueries({ queryKey: ['class'] });
+      queryClient.invalidateQueries({ queryKey: ['wizard', 'all-classes'] });
       onDirtyChange?.(false);
 
       onSave({
@@ -590,6 +595,8 @@ const Step1ClassSubjects = ({
       const finalClass = refreshed?.data || refreshed || targetClassObj;
       const classDisplayName = formatSectionDisplayName(finalClass.name, finalClass.semester);
       toast.success(`Class ${classDisplayName} configured!`);
+      queryClient.invalidateQueries({ queryKey: ['class'] });
+      queryClient.invalidateQueries({ queryKey: ['wizard', 'all-classes'] });
       onDirtyChange?.(false);
 
       onSave({

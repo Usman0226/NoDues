@@ -82,7 +82,10 @@ const ClassDetail = () => {
 
   const { data: response, loading, refreshing, error, request: fetchClass } = useApi(() => getClass(classId), { 
     immediate: true,
-    queryKey: ['class', classId]
+    queryKey: ['class', classId],
+    queryOptions: {
+      retry: (failureCount, err) => err?.statusCode !== 404 && err?.statusCode !== 403 && failureCount < 1,
+    },
   });
   const facultyOptions = useMemo(() => ({
     immediate: false,
@@ -726,10 +729,20 @@ const SUBJECT_COLS = [
   if (error) {
     return (
       <PageWrapper title="Sync Error" subtitle="Academic record unavailable">
-        <div className="text-center py-20 bg-white rounded-2xl border border-muted shadow-sm">
+        <div className="text-center py-20 px-6 bg-white rounded-2xl border border-muted shadow-sm max-w-2xl mx-auto">
            <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
-           <p className="text-muted-foreground font-medium">{error}</p>
-           <Button variant="primary" className="mt-6" onClick={() => fetchClass()}>Retry Sync</Button>
+           <p className="text-navy font-bold text-base">{error}</p>
+           <p className="text-xs text-muted-foreground mt-1.5 max-w-md mx-auto">
+             This section may have been deactivated or removed. You can restore inactivated records or set up a fresh section from the Classes view.
+           </p>
+           <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+             <Button variant="secondary" size="sm" onClick={() => navigate(isHod ? '/hod/classes' : '/admin/departments')}>
+               <ArrowLeft size={14} /> {isHod ? 'Back to Classes' : 'Back to Departments'}
+             </Button>
+             <Button variant="primary" size="sm" onClick={() => fetchClass()}>
+               <RefreshCw size={14} /> Retry Sync
+             </Button>
+           </div>
         </div>
       </PageWrapper>
     );
