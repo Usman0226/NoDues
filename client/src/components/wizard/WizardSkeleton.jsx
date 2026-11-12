@@ -1,31 +1,27 @@
 import React from 'react';
 
 export const WizardPageSkeleton = () => (
-  <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:px-8 space-y-4 animate-pulse" aria-label="Loading Setup Wizard">
-    {/* Header & Stepper Skeleton */}
-    <div className="space-y-3">
+  <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:px-8 space-y-3 animate-pulse" aria-label="Loading Setup Wizard">
+    {/* Slim Top Bar Skeleton */}
+    <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-4">
-        <div className="space-y-2">
-          <div className="h-7 w-60 bg-zinc-200 rounded-lg" />
-          <div className="h-3.5 w-44 bg-zinc-100 rounded-md" />
-        </div>
-        <div className="h-9 w-40 bg-zinc-200 rounded-full" />
+        <div className="h-6 w-52 bg-zinc-200 rounded-lg" />
+        <div className="h-8 w-36 bg-zinc-200 rounded-full" />
       </div>
-      <div className="h-1 w-full bg-zinc-200 rounded-full" />
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        {Array.from({ length: 6 }).map((_, idx) => (
-          <div key={idx} className="h-9 bg-zinc-200/80 rounded-xl" />
-        ))}
-      </div>
+      <div className="h-0.5 w-full bg-zinc-200 rounded-full" />
     </div>
 
-    {/* Single Workspace Panel Skeleton */}
-    <div className="bg-white border border-zinc-200 rounded-2xl shadow-sm p-6 space-y-5 min-h-[420px]">
-      <div className="h-5 w-52 bg-zinc-200 rounded" />
-      <div className="h-3.5 w-80 bg-zinc-100 rounded" />
-      <div className="h-48 bg-zinc-100/80 rounded-2xl border-2 border-dashed border-zinc-200" />
-      <div className="flex justify-end pt-3 border-t border-zinc-100">
-        <div className="h-10 w-44 bg-zinc-200 rounded-full" />
+    {/* Unified Studio Shell Skeleton (Left Step Rail + Main Canvas) */}
+    <div className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden flex flex-col lg:flex-row min-h-[520px]">
+      <div className="lg:w-[252px] xl:w-[268px] shrink-0 bg-zinc-50/60 border-b lg:border-b-0 lg:border-r border-zinc-100 p-4 space-y-2.5">
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <div key={idx} className="h-11 bg-zinc-200/60 rounded-xl" />
+        ))}
+      </div>
+      <div className="flex-1 p-6 space-y-5">
+        <div className="h-5 w-48 bg-zinc-200 rounded" />
+        <div className="h-3.5 w-72 bg-zinc-100 rounded" />
+        <div className="h-56 bg-zinc-100/70 rounded-2xl border-2 border-dashed border-zinc-200" />
       </div>
     </div>
   </div>

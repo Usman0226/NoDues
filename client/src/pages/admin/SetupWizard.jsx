@@ -7,7 +7,7 @@ import { ROLES } from '../../utils/constants';
 import { getWizardProgress, updateWizardProgress, bulkUpdateWizardProgress } from '../../api/wizard';
 import { getClass } from '../../api/classes';
 import { useNavigationStack } from '../../hooks/useNavigationStack';
-import WizardProgressHeader from '../../components/wizard/WizardProgressHeader';
+import WizardProgressHeader, { WizardStepRail } from '../../components/wizard/WizardProgressHeader';
 import { STEPS_CONFIG } from '../../components/wizard/wizardSteps';
 import StepContainer from '../../components/wizard/StepContainer';
 import { WizardPageSkeleton } from '../../components/wizard/WizardSkeleton';
@@ -435,14 +435,11 @@ const SetupWizard = () => {
         {liveAnnouncement || `Viewing ${activeConfig.label}`}
       </div>
 
-      {/* Sectioned Workspace Container fitting cleanly without clipping tables */}
+      {/* Studio Workspace Container */}
       <div className="max-w-7xl w-full mx-auto flex-1 min-h-0 flex flex-col gap-3">
         <WizardProgressHeader
           activeStepIndex={activeStepIndex}
           completedStepIds={completedSteps}
-          skippedStepIds={skippedSteps}
-          furthestUnlockedIndex={furthestUnlockedIndex}
-          onSelectStep={handleSelectStep}
           selectedClass={selectedClass}
           provisionedClasses={provisionedClasses}
           onSwitchClass={handleSwitchActiveClass}
@@ -450,8 +447,21 @@ const SetupWizard = () => {
           onReset={handleResetWizard}
         />
 
-        {/* Single Active Step Panel (No redundant vertical stacked accordions) */}
-        {renderActiveStep()}
+        {/* Unified Studio Shell: Left Vertical Step Rail (Amie style) + Right Active Step Canvas */}
+        <div className="flex-1 min-h-[540px] rounded-2xl border border-zinc-200/90 bg-white shadow-sm overflow-hidden flex flex-col lg:flex-row">
+          <WizardStepRail
+            activeStepIndex={activeStepIndex}
+            completedStepIds={completedSteps}
+            skippedStepIds={skippedSteps}
+            furthestUnlockedIndex={furthestUnlockedIndex}
+            onSelectStep={handleSelectStep}
+            selectedClass={selectedClass}
+            provisionedClasses={provisionedClasses}
+          />
+          <div className="flex-1 min-w-0 flex flex-col">
+            {renderActiveStep()}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -25,25 +25,25 @@ const StepContainer = ({
   return (
     <motion.section
       key={`step-panel-${stepId}`}
-      initial={shouldReduceMotion ? false : { opacity: 0, y: 6 }}
+      initial={shouldReduceMotion ? false : { opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       aria-current="step"
-      className="flex-1 min-h-0 flex flex-col rounded-2xl border border-zinc-200/90 bg-white shadow-sm overflow-hidden"
+      className="flex-1 min-h-0 flex flex-col bg-white overflow-hidden"
     >
-      {/* Compact Step Section Header */}
-      <div className="shrink-0 px-4 sm:px-5 py-3 border-b border-zinc-100 bg-zinc-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      {/* Clean Hairline Studio Step Header */}
+      <div className="shrink-0 px-5 py-3 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h2
               ref={headingRef}
               tabIndex={-1}
-              className="text-base sm:text-lg font-black text-navy tracking-tight outline-none leading-tight"
+              className="text-sm sm:text-base font-black text-navy tracking-tight outline-none leading-tight"
             >
               {title}
             </h2>
             {badge && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/70">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/70">
                 {badge}
               </span>
             )}
@@ -55,7 +55,7 @@ const StepContainer = ({
         {headerRight && <div className="shrink-0">{headerRight}</div>}
       </div>
 
-      {/* Step Content (Manages own internal scroll & sticky action footer) */}
+      {/* Step Content */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{children}</div>
     </motion.section>
   );

@@ -239,11 +239,7 @@ const Step6Preflight = ({
 
         {/* Top Readiness Banner */}
         <div
-          className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-            readyForInitiation
-              ? 'border-emerald-200 bg-emerald-50/70 text-emerald-950'
-              : 'border-amber-200 bg-amber-50/60 text-amber-950'
-          }`}
+          className="p-4 rounded-xl border border-zinc-200/80 bg-zinc-50/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
           role="status"
           aria-live="polite"
         >
@@ -251,22 +247,22 @@ const Step6Preflight = ({
             <div
               className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shrink-0 ${
                 readyForInitiation
-                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                  : 'bg-amber-100 text-amber-700 border border-amber-300'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}
             >
-              {readyForInitiation ? <ShieldCheck size={20} /> : <AlertTriangle size={20} />}
+              {readyForInitiation ? <ShieldCheck size={19} /> : <AlertTriangle size={19} />}
             </div>
             <div>
-              <h3 className="text-xs sm:text-sm font-black tracking-tight">
+              <h3 className="text-xs sm:text-sm font-black tracking-tight text-navy">
                 {readyForInitiation
                   ? `Verification Passed — ${classTitle} is Ready for Launch`
                   : 'Setup Saved — Items Pending Before Launch'}
               </h3>
-              <p className="text-xs opacity-80 mt-0.5">
+              <p className="text-xs text-zinc-500 mt-0.5">
                 {readyForInitiation
                   ? 'All mandatory requirements (students, subjects, and class teacher) are configured.'
-                  : 'You can resolve the pending items below now, or save and finish from the Class Page later.'}
+                  : 'Resolve pending items below now, or save and finish from the Class Page later.'}
               </p>
             </div>
           </div>
@@ -284,32 +280,26 @@ const Step6Preflight = ({
           </Button>
         </div>
 
-        {/* 3-Column Readiness Checklist */}
+        {/* 3-Column Bluejack-Style Clean Readiness Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3" aria-label="Pre-flight verification items">
           {/* Check 1: Students */}
-          <div
-            className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 transition-all ${
-              studentsCheck.passed
-                ? 'border-emerald-200 bg-white shadow-xs'
-                : 'border-amber-200 bg-amber-50/30'
-            }`}
-          >
+          <div className="p-4 rounded-xl border border-zinc-200/80 bg-white flex flex-col justify-between gap-3">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-navy">
-                  <Users size={14} className="text-indigo-600" /> Students
+                <span className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                  <Users size={13} className="text-indigo-600" /> Students
                 </span>
                 {studentsCheck.passed ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
-                    <CheckCircle2 size={11} /> Passed
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 size={10} /> Passed
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
-                    <Clock size={11} /> Deferred
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                    <Clock size={10} /> Deferred
                   </span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-zinc-700">{studentsCheck.message}</p>
+              <p className="text-xs font-bold text-navy">{studentsCheck.message}</p>
               {!studentsCheck.passed && (
                 <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
                   Import Excel/CSV here, or add/promote students later on the Class page.
@@ -318,50 +308,44 @@ const Step6Preflight = ({
             </div>
 
             {!studentsCheck.passed && (
-              <div className="pt-2.5 border-t border-amber-200/70">
+              <div className="pt-2.5 border-t border-zinc-100">
                 <button
                   type="button"
                   onClick={() => onNavigateToStep(1)}
-                  className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 underline inline-flex items-center gap-1"
+                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
                 >
-                  Go to Step 2 (Import Students) →
+                  Import Students (Step 2) →
                 </button>
               </div>
             )}
           </div>
 
           {/* Check 2: Subjects */}
-          <div
-            className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 transition-all ${
-              subjectsCheck.passed
-                ? 'border-emerald-200 bg-white shadow-xs'
-                : 'border-red-200 bg-red-50/40'
-            }`}
-          >
+          <div className="p-4 rounded-xl border border-zinc-200/80 bg-white flex flex-col justify-between gap-3">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-navy">
-                  <BookOpen size={14} className="text-indigo-600" /> Subjects
+                <span className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                  <BookOpen size={13} className="text-indigo-600" /> Subjects
                 </span>
                 {subjectsCheck.passed ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
-                    <CheckCircle2 size={11} /> Passed
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 size={10} /> Passed
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-red-800 bg-red-100 px-2 py-0.5 rounded-full">
-                    <XCircle size={11} /> Missing
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">
+                    <XCircle size={10} /> Missing
                   </span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-zinc-700">{subjectsCheck.message}</p>
+              <p className="text-xs font-bold text-navy">{subjectsCheck.message}</p>
             </div>
 
             {!subjectsCheck.passed && (
-              <div className="pt-2.5 border-t border-red-100">
+              <div className="pt-2.5 border-t border-zinc-100">
                 <button
                   type="button"
                   onClick={() => onNavigateToStep(0)}
-                  className="text-[11px] font-bold text-red-700 hover:text-red-900 underline inline-flex items-center gap-1"
+                  className="text-[11px] font-bold text-red-600 hover:text-red-800 inline-flex items-center gap-1"
                 >
                   Go to Step 1 (Class & Subjects) →
                 </button>
@@ -370,33 +354,27 @@ const Step6Preflight = ({
           </div>
 
           {/* Check 3: Class Teacher */}
-          <div
-            className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 transition-all ${
-              teacherCheck.passed
-                ? 'border-emerald-200 bg-white shadow-xs'
-                : 'border-amber-200 bg-amber-50/40'
-            }`}
-          >
+          <div className="p-4 rounded-xl border border-zinc-200/80 bg-white flex flex-col justify-between gap-3">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-navy">
-                  <GraduationCap size={14} className="text-indigo-600" /> Class Teacher
+                <span className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                  <GraduationCap size={13} className="text-indigo-600" /> Class Teacher
                 </span>
                 {teacherCheck.passed ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
-                    <CheckCircle2 size={11} /> Passed
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 size={10} /> Passed
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
-                    <XCircle size={11} /> Required
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                    <XCircle size={10} /> Required
                   </span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-zinc-700">{teacherCheck.message}</p>
+              <p className="text-xs font-bold text-navy">{teacherCheck.message}</p>
             </div>
 
             {!teacherCheck.passed && (
-              <div className="pt-2.5 border-t border-amber-200/70 space-y-2">
+              <div className="pt-2.5 border-t border-zinc-100 space-y-2">
                 <select
                   aria-label="Assign Class Teacher Inline"
                   value={selectedTeacherId}
