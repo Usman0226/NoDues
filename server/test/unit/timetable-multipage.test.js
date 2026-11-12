@@ -24,7 +24,11 @@ import Department from '../../src/models/Department.js';
 import Faculty from '../../src/models/Faculty.js';
 import Subject from '../../src/models/Subject.js';
 import TimetableUpload from '../../src/models/TimetableUpload.js';
-import { inspectPdfPages, parseTimetablePdf } from '../../src/services/timetableParser.js';
+import {
+  extractTableRowsFromText,
+  inspectPdfPages,
+  parseTimetablePdf,
+} from '../../src/services/timetableParser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -341,6 +345,144 @@ describe('Timetable Multi-Page PDF Ingestion & Targeted Parsing', () => {
           .set('Authorization', `Bearer ${adminToken}`);
         assert.strictEqual(clsRes.statusCode, 200, `Provisioned section ${sec.classId} must be active and fetchable`);
       }
+    });
+
+    it('keeps previewOnly non-mutating on Class collection and commits new section cleanly once with electives', async () => {
+      await Class.updateMany({ departmentId: testDepartment._id }, { $set: { isActive: false } });
+
+      // 1. Preview without creating any Class document
+      const previewRes = await request(app)
+        .post('/api/timetable/preview')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .field('departmentId', testDepartment._id.toString())
+        .field('page', '2')
+        .field('previewOnly', 'true')
+        .attach('file', path.join(FIXTURES_DIR, 'timetable_multipage_sample.pdf'));
+
+      assert.strictEqual(previewRes.statusCode, 200);
+      assert.strictEqual(previewRes.body.data.classId, null);
+      assert.strictEqual(previewRes.body.data.existingClassFound, false);
+      assert.ok(previewRes.body.data.rows.length > 0);
+
+      const activeAfterPreview = await Class.countDocuments({
+        departmentId: testDepartment._id,
+        isActive: true,
+        isMaster: { $ne: true },
+      });
+      assert.strictEqual(activeAfterPreview, 0, 'previewOnly must not create unconfirmed Class records');
+
+      // 2. Confirm/commit creates exactly one Class and persists isElective flag
+      const commitRes = await request(app)
+        .post('/api/timetable/commit')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          uploadId: previewRes.body.data.uploadId,
+          className: 'CSE-C',
+          academicYear: '2026-27',
+          departmentId: testDepartment._id.toString(),
+          targetSemester: 5,
+          confirmedRows: [
+            {
+              subjectCode: '23CSD4M01',
+              subjectName: 'Operating Systems',
+              facultyId: null,
+              facultyName: 'Unassigned',
+              hours: 3,
+              isElective: true,
+              status: 'flagged',
+            },
+          ],
+        });
+
+      assert.strictEqual(commitRes.statusCode, 200);
+      const committedId = commitRes.body.data.classId;
+      assert.ok(committedId);
+
+      const createdCls = await Class.findById(committedId).lean();
+      assert.strictEqual(createdCls.name, 'CSE-C');
+      assert.strictEqual(createdCls.subjectAssignments[0].subjectCode, '23CSD4M01');
+      assert.strictEqual(createdCls.subjectAssignments[0].isElective, true);
+
+      // 3. Re-committing with Roman prefix "III CSE-C" matches same Class without creating duplicate
+      const recomRes = await request(app)
+        .post('/api/timetable/commit')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          uploadId: previewRes.body.data.uploadId,
+          className: 'III CSE-C',
+          academicYear: '2026-27',
+          departmentId: testDepartment._id.toString(),
+          targetSemester: 5,
+          confirmedRows: [
+            {
+              subjectCode: '23CSD4M05',
+              subjectName: 'Fundamentals of Machine Learning',
+              facultyId: null,
+              facultyName: 'Unassigned',
+              hours: 4,
+              isElective: true,
+              status: 'flagged',
+            },
+          ],
+        });
+
+      assert.strictEqual(recomRes.statusCode, 200);
+      assert.strictEqual(recomRes.body.data.classId, committedId);
+
+      const totalActive = await Class.countDocuments({
+        departmentId: testDepartment._id,
+        isActive: true,
+        isMaster: { $ne: true },
+      });
+      assert.strictEqual(totalActive, 1, 'Canonical Roman-prefix re-commit must reuse existing Class');
+    });
+
+    it('rejects duplicate canonical section creation on POST /api/classes with 409 DB_003', async () => {
+      await Class.updateMany({ departmentId: testDepartment._id }, { $set: { isActive: false } });
+
+      const firstRes = await request(app)
+        .post('/api/classes')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          name: 'CSD-A',
+          semester: 5,
+          departmentId: testDepartment._id.toString(),
+          academicYear: '2026-27',
+        });
+      assert.strictEqual(firstRes.statusCode, 201);
+
+      const dupRes = await request(app)
+        .post('/api/classes')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          name: 'III CSD-A',
+          semester: 5,
+          departmentId: testDepartment._id.toString(),
+          academicYear: '2026-27',
+        });
+      assert.strictEqual(dupRes.statusCode, 409);
+      assert.strictEqual(dupRes.body.error.code, 'DB_003');
+    });
+  });
+
+  // ── 4. Alphanumeric Elective Code Extraction ────────────────────────────────
+  describe('extractTableRowsFromText() Alphanumeric Elective Codes', () => {
+    it('extracts codes like 23CSD4M01 and 23CSD4M05 completely without slicing into subject titles', () => {
+      const text = [
+        'Subject Name\tFaculty Name\tHours',
+        '23CSD4M01 Operating Systems\tDr. Alice\t3',
+        '23CSD4M05 Fundamentals of Machine Learning\tProf. Bob\t4',
+        'Time Table Incharge',
+      ].join('\n');
+
+      const rows = extractTableRowsFromText(text);
+      assert.strictEqual(rows.length, 2);
+      assert.strictEqual(rows[0].subjectCode, '23CSD4M01');
+      assert.strictEqual(rows[0].subjectName, 'Operating Systems');
+      assert.strictEqual(rows[0].isElective, true);
+      assert.strictEqual(rows[1].subjectCode, '23CSD4M05');
+      assert.strictEqual(rows[1].subjectName, 'Fundamentals of Machine Learning');
+      assert.strictEqual(rows[1].isElective, true);
     });
   });
 });

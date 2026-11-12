@@ -12,7 +12,7 @@ const FileDropzone = ({
   loading = false,
   isProcessing = false,
   file: controlledFile,
-  icon: Icon = Upload,
+  icon = Upload,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [internalFile, setInternalFile] = useState(null);
@@ -24,8 +24,8 @@ const FileDropzone = ({
 
   const emitFile = (f) => {
     setInternalFile(f);
-    onFileSelect?.(f);
-    onFileSelected?.(f);
+    const handler = onFileSelect || onFileSelected;
+    handler?.(f);
   };
 
   const handleDrag = (e) => {
@@ -80,7 +80,10 @@ const FileDropzone = ({
         </div>
       ) : !file ? (
         <>
-          <Icon size={32} className={`mx-auto mb-3 ${dragActive ? 'text-indigo-600' : 'text-zinc-400'}`} />
+          {React.createElement(icon, {
+            size: 32,
+            className: `mx-auto mb-3 ${dragActive ? 'text-indigo-600' : 'text-zinc-400'}`,
+          })}
           <p className="text-sm font-bold text-navy mb-1">{mainLabel}</p>
           <p className="text-xs text-zinc-500">
             {subtitle || `Drag & drop or click to browse · ${accept}`}

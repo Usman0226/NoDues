@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPreflightChecklist } from '../../api/wizard';
-import { updateClass } from '../../api/classes';
+import { getClass, updateClass } from '../../api/classes';
 import { getFaculty } from '../../api/faculty';
 import { ROLES } from '../../utils/constants';
-import { formatSectionDisplayName } from '../../utils/formatters';
+import { formatSectionDisplayName, getAcademicYearRoman } from '../../utils/formatters';
 import Button from '../ui/Button';
 import { PreflightCardSkeleton } from './WizardSkeleton';
 import {
@@ -33,12 +33,25 @@ const Step6Preflight = ({
   onNavigateToStep,
 }) => {
   const navigate = useNavigate();
-  const departmentId = targetClass?.departmentId?._id || targetClass?.departmentId;
+  const queryClient = useQueryClient();
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [isSavingTeacher, setIsSavingTeacher] = useState(false);
 
   const isHod = user?.role === ROLES.HOD || user?.role === 'hod';
   const classDetailPath = isHod ? `/hod/class/${classId}` : `/admin/class/${classId}`;
+
+  const { data: classDetailRes } = useQuery({
+    queryKey: ['wizard', 'class-summary', classId],
+    queryFn: () => getClass(classId),
+    enabled: Boolean(classId),
+    refetchOnWindowFocus: true,
+  });
+
+  const liveClass = classDetailRes?.data || classDetailRes || targetClass;
+  const departmentId = liveClass?.departmentId?._id || liveClass?.departmentId;
+  const subjectAssignments = Array.isArray(liveClass?.subjectAssignments)
+    ? liveClass.subjectAssignments
+    : [];
 
   const {
     data: preflightRes,
@@ -78,7 +91,12 @@ const Step6Preflight = ({
     try {
       await updateClass(classId, { classTeacherId: selectedTeacherId });
       toast.success('Class teacher assigned.');
-      await refetch();
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({ queryKey: ['wizard', 'class-summary', classId] }),
+        queryClient.invalidateQueries({ queryKey: ['class', classId] }),
+        queryClient.invalidateQueries({ queryKey: ['class'] }),
+      ]);
     } catch (err) {
       toast.error(err?.message || 'Failed to assign class teacher.');
     } finally {
@@ -126,7 +144,17 @@ const Step6Preflight = ({
     );
   }
 
-  const classTitle = formatSectionDisplayName(targetClass?.name, targetClass?.semester);
+  const classTitle = formatSectionDisplayName(
+    liveClass?.name || preflightData.className,
+    liveClass?.semester || preflightData.semester
+  );
+  const classSemester = liveClass?.semester || preflightData.semester || 1;
+  const classTeacherName =
+    liveClass?.classTeacherId?.name ||
+    liveClass?.classTeacher?.name ||
+    'Not assigned';
+  const deptTitle =
+    liveClass?.departmentId?.name || liveClass?.departmentName || '—';
 
   return (
     <>
@@ -317,6 +345,106 @@ const Step6Preflight = ({
             )}
           </div>
         </div>
+
+        {/* 2-Column Verified Section & Curriculum Summary */}
+        {liveClass && (
+          <div className="rounded-2xl border border-zinc-200/90 bg-white overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-zinc-100 bg-zinc-50/70 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-navy">
+                  Verified Section & Curriculum Summary
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                  {subjectAssignments.length} Subjects
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigateToStep(0)}
+                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+              >
+                Edit Class & Subjects →
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-zinc-100">
+              <div className="lg:col-span-4 p-4 bg-zinc-50/40 grid grid-cols-2 lg:grid-cols-1 gap-2.5 text-xs">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">
+                    Section
+                  </span>
+                  <span className="font-black text-navy">{classTitle}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">
+                    Semester & Batch
+                  </span>
+                  <span className="font-bold text-zinc-800">
+                    Sem {classSemester} ({getAcademicYearRoman(Number(classSemester))} Yr) · {liveClass.academicYear || '2026-27'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">
+                    Department
+                  </span>
+                  <span className="font-bold text-zinc-800">{deptTitle}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">
+                    Class Teacher
+                  </span>
+                  <span className={`font-bold ${teacherCheck.passed ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {classTeacherName}
+                  </span>
+                </div>
+              </div>
+
+              <div className="lg:col-span-8 max-h-[250px] overflow-y-auto overflow-x-auto">
+                {subjectAssignments.length > 0 ? (
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 bg-zinc-50 border-b border-zinc-200 z-10">
+                      <tr className="text-zinc-500 uppercase tracking-wider text-[10px] font-black">
+                        <th className="py-2 px-3 whitespace-nowrap">Code</th>
+                        <th className="py-2 px-3">Subject Name</th>
+                        <th className="py-2 px-3">Handling Faculty</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {subjectAssignments.map((subj, idx) => {
+                        const code = subj.subjectCode || subj.code || subj.subjectId?.code || '—';
+                        const name = subj.subjectName || subj.name || subj.subjectId?.name || 'Subject';
+                        const facName = subj.facultyId?.name || subj.facultyName || 'Unassigned';
+                        const hasFac = Boolean(subj.facultyId);
+                        return (
+                          <tr key={`${code}-${idx}`} className="hover:bg-zinc-50/50">
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              <span className="font-mono font-bold text-navy">{code}</span>
+                              {subj.isElective && (
+                                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-indigo-50 text-indigo-700">
+                                  Elective
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 font-semibold text-zinc-800">{name}</td>
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              <span className={hasFac ? 'font-medium text-zinc-700' : 'font-semibold text-amber-700'}>
+                                {facName}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="p-6 text-center text-xs text-zinc-500">
+                    No subjects configured yet for this section.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Pinned Step Footer */}

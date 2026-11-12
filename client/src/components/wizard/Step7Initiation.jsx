@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { initiateWizardBatch } from '../../api/wizard';
 import { initiateBatch } from '../../api/batch';
+import { getClass } from '../../api/classes';
 import { ROLES } from '../../utils/constants';
 import { formatSectionDisplayName } from '../../utils/formatters';
 import Button from '../ui/Button';
@@ -22,16 +24,29 @@ const Step7Initiation = ({
   onResetWizard,
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [deadline, setDeadline] = useState('');
   const [isInitiating, setIsInitiating] = useState(false);
   const [initiationSuccess, setInitiationSuccess] = useState(false);
   const [batchResult, setBatchResult] = useState(null);
 
+  const { data: classDetailRes } = useQuery({
+    queryKey: ['wizard', 'class-summary', classId],
+    queryFn: () => getClass(classId),
+    enabled: Boolean(classId),
+  });
+  const liveClass = classDetailRes?.data || classDetailRes || targetClass;
+  const subjectAssignments = Array.isArray(liveClass?.subjectAssignments)
+    ? liveClass.subjectAssignments
+    : [];
+
   const isHod = user?.role === ROLES.HOD || user?.role === 'hod';
   const classDetailPath = isHod ? `/hod/class/${classId}` : `/admin/class/${classId}`;
-  const semester = targetClass?.semester || 1;
-  const deptName = targetClass?.departmentId?.name || targetClass?.departmentName || 'Department';
-  const classTitle = formatSectionDisplayName(targetClass?.name, semester);
+  const semester = liveClass?.semester || 1;
+  const deptName = liveClass?.departmentId?.name || liveClass?.departmentName || 'Department';
+  const classTeacherName =
+    liveClass?.classTeacherId?.name || liveClass?.classTeacher?.name || 'Assigned';
+  const classTitle = formatSectionDisplayName(liveClass?.name, semester);
 
   const handleInitiate = async () => {
     setIsInitiating(true);
@@ -53,6 +68,8 @@ const Step7Initiation = ({
 
       setBatchResult(launchedBatch);
       setInitiationSuccess(true);
+      queryClient.invalidateQueries({ queryKey: ['class'] });
+      queryClient.invalidateQueries({ queryKey: ['batches'] });
       toast.success(`No-Due clearance cycle launched for ${classTitle}!`);
     } catch (err) {
       toast.error(err?.message || 'Failed to launch clearance cycle.');
@@ -142,11 +159,16 @@ const Step7Initiation = ({
           </div>
         </div>
 
-        {/* Verified Summary Grid + Deadline Option */}
+        {/* Verified Summary Grid + Curriculum + Deadline Option */}
         <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/90 space-y-3">
-          <h3 className="text-xs font-black uppercase tracking-wider text-navy">
-            Verified Section Summary
-          </h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-black uppercase tracking-wider text-navy">
+              Verified Section Summary
+            </h3>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+              {subjectAssignments.length} Active Subjects
+            </span>
+          </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
             <div className="p-3 rounded-xl bg-white border border-zinc-200/80">
@@ -154,18 +176,51 @@ const Step7Initiation = ({
               <p className="font-black text-navy text-sm mt-0.5">{classTitle}</p>
             </div>
             <div className="p-3 rounded-xl bg-white border border-zinc-200/80">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Semester</span>
-              <p className="font-black text-navy text-sm mt-0.5">Semester {semester}</p>
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Semester & Batch</span>
+              <p className="font-black text-navy text-sm mt-0.5">
+                Sem {semester} · {liveClass?.academicYear || '2026-27'}
+              </p>
             </div>
             <div className="p-3 rounded-xl bg-white border border-zinc-200/80">
               <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Department</span>
               <p className="font-black text-navy text-sm mt-0.5 truncate">{deptName}</p>
             </div>
             <div className="p-3 rounded-xl bg-white border border-zinc-200/80">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Academic Batch</span>
-              <p className="font-black text-navy text-sm mt-0.5">{targetClass?.academicYear || 'Current'}</p>
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Class Teacher</span>
+              <p className="font-black text-navy text-sm mt-0.5 truncate">{classTeacherName}</p>
             </div>
           </div>
+
+          {subjectAssignments.length > 0 && (
+            <div className="rounded-xl border border-zinc-200/80 bg-white overflow-hidden">
+              <div className="max-h-44 overflow-y-auto overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="sticky top-0 bg-zinc-50 border-b border-zinc-200">
+                    <tr className="text-zinc-500 uppercase tracking-wider text-[10px] font-black">
+                      <th className="py-2 px-3">Code</th>
+                      <th className="py-2 px-3">Subject</th>
+                      <th className="py-2 px-3">Faculty</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {subjectAssignments.map((subj, idx) => (
+                      <tr key={`${subj.subjectCode || idx}-${idx}`}>
+                        <td className="py-1.5 px-3 font-mono font-bold text-navy whitespace-nowrap">
+                          {subj.subjectCode || subj.code || subj.subjectId?.code || '—'}
+                        </td>
+                        <td className="py-1.5 px-3 font-semibold text-zinc-800">
+                          {subj.subjectName || subj.name || subj.subjectId?.name || 'Subject'}
+                        </td>
+                        <td className="py-1.5 px-3 text-zinc-600 whitespace-nowrap">
+                          {subj.facultyId?.name || subj.facultyName || 'Unassigned'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="pt-2 border-t border-zinc-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <label htmlFor="wizard-deadline" className="text-xs font-bold text-navy flex items-center gap-1.5">

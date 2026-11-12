@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-28T09:31:00Z",
+  "last_updated": "2026-11-12T10:07:00Z",
   "completed": [
     "Add all critical MongoDB indexes (NodueApproval x6, NodueRequest x3, Student rollNo unique + compound, Faculty departmentId+roleTags)",
     "Upgrade cache config: useClones:false, stdTTL 60s",
@@ -70,6 +70,11 @@
       "context": "Setup Wizard Save & Open Class Page navigated to 404 Class not found when previously soft-deleted sections matched timetable auto-discovery",
       "decision": "Scoped timetableController inspectTimetablePdf, previewTimetable, and batchImportTimetable queries to active classes (isActive: true) so soft-deleted sections are never hijacked; rejected inactive classes with 404 in wizardService; prevented infinite 404/403 retry toasts in ClassDetail and added Back Navigation recovery on Sync Error",
       "trade_offs": "Soft-deleted historical sections remain safely preserved without obstructing fresh Setup Wizard runs for the same section name."
+    },
+    {
+      "context": "Setup Wizard Step 1 double-upload race, unconfirmed preview class pollution, duplicate Roman-prefix sections, alphanumeric elective code truncation, crushed table height, and post-wizard curriculum visibility",
+      "decision": "Eliminated FileDropzone emitFile double-callback invocation and added inspectInFlightRef + sequence guards in Step1ClassSubjects; made previewTimetable read-only on Class when previewOnly=true so classes are provisioned only on Confirm or Batch Provision; introduced shared classIdentity canonical Roman-prefix regex + async in-process lock across classController and timetableController returning 409 DB_003 on duplicate active sections; fixed timetableParser code regexes across tabular/inspect/fallback branches for codes like 23CSD4M01; redesigned Step 1 into a roomy 2-column review layout (Section Details + Detected Sections left, spacious full-title Extracted Curriculum table right) and added Verified Section & Curriculum Summary panels in Step6Preflight and Step7Initiation.",
+      "trade_offs": "In-process lock serializes concurrent class mutations on a single Node instance; MongoDB unique partial index remains a future cluster-wide enhancement if multi-instance horizontal scaling is deployed without sticky routing or distributed locks."
     }
   ],
   "blockers": []

@@ -12,6 +12,7 @@ import logger from '../utils/logger.js';
 import { syncSubjectRemoval, bulkSyncSubjectRemoval, syncSubjectUpdate, syncSubjectAddition, bulkSyncClassTeacherUpdate } from '../utils/batchSync.js';
 import { startSafeTransaction, commitSafeTransaction, abortSafeTransaction, getSessionOptions, executeSafeTransaction } from '../utils/safeTransaction.js';
 import { invalidateEntityCache } from '../utils/cacheHooks.js';
+import { findActiveMatchingClass, withClassLock, buildClassLockKey } from '../utils/classIdentity.js';
 
 // Cache invalidation is now handled via Mongoose hooks in the model.
 
@@ -175,69 +176,89 @@ export const getClasses = async (req, res, next) => {
 };
 
 export const createClass = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  try {
-    await startSafeTransaction(session);
-    const { name, departmentId, semester, academicYear, classTeacherId } = req.body;
-    if (!name || !departmentId || !semester || !academicYear) {
-      await abortSafeTransaction(session);
-      return next(new ErrorResponse('name, departmentId, semester, academicYear required', 400, 'VALIDATION_ERROR'));
-    }
-
-    if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId !== departmentId) {
-      await abortSafeTransaction(session);
-      return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
-    }
-
-    // Auto-inherit cohort syllabus: if any peer class in the same department and semester has subjects, inherit them
-    const peerWithSubjects = await Class.findOne({
-      departmentId,
-      semester: Number(semester),
-      isActive: true,
-      'subjectAssignments.0': { $exists: true },
-    }).session(session).lean();
-
-    const inheritedSubjects = (peerWithSubjects?.subjectAssignments || []).map(sa => ({
-      subjectId: sa.subjectId,
-      subjectName: sa.subjectName,
-      subjectCode: sa.subjectCode,
-      isElective: sa.isElective || false,
-      facultyId: null,
-      facultyName: null,
-    }));
-
-    const clsArray = await Class.create([{
-      name, departmentId, semester: Number(semester), academicYear,
-      classTeacherId: classTeacherId || null,
-      subjectAssignments: inheritedSubjects,
-      studentIds: [],
-    }], { session });
-
-    const cls = clsArray[0];
-
-    await commitSafeTransaction(session);
-
-    logger.info('class_created', {
-      timestamp: new Date().toISOString(), actor: req.user.userId,
-      action: 'CREATE_CLASS', resource_id: cls._id.toString(),
-      inheritedSubjectCount: inheritedSubjects.length,
-    });
-
-    return res.status(201).json({
-      success: true,
-      data: {
-        _id: cls._id, name: cls.name, departmentId: cls.departmentId,
-        semester: cls.semester, academicYear: cls.academicYear,
-        classTeacherId: cls.classTeacherId,
-        subjectAssignments: cls.subjectAssignments || [], studentIds: [], isActive: true, createdAt: cls.createdAt,
-      },
-    });
-  } catch (err) {
-    await abortSafeTransaction(session);
-    next(err);
-  } finally {
-    session.endSession();
+  const { name, departmentId, semester, academicYear, classTeacherId } = req.body;
+  if (!name || !departmentId || !semester || !academicYear) {
+    return next(new ErrorResponse('name, departmentId, semester, academicYear required', 400, 'VALIDATION_ERROR'));
   }
+
+  if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId !== departmentId) {
+    return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
+  }
+
+  const lockKey = buildClassLockKey({ departmentId, semester, name });
+
+  return withClassLock(lockKey, async () => {
+    const session = await mongoose.startSession();
+    try {
+      await startSafeTransaction(session);
+
+      const duplicate = await findActiveMatchingClass({
+        name,
+        semester,
+        departmentId,
+        session,
+      });
+      if (duplicate) {
+        await abortSafeTransaction(session);
+        return next(
+          new ErrorResponse(
+            `Section "${duplicate.name}" for Semester ${semester} already exists in this department.`,
+            409,
+            'DB_003'
+          )
+        );
+      }
+
+      // Auto-inherit cohort syllabus: if any peer class in the same department and semester has subjects, inherit them
+      const peerWithSubjects = await Class.findOne({
+        departmentId,
+        semester: Number(semester),
+        isActive: true,
+        'subjectAssignments.0': { $exists: true },
+      }).session(session).lean();
+
+      const inheritedSubjects = (peerWithSubjects?.subjectAssignments || []).map(sa => ({
+        subjectId: sa.subjectId,
+        subjectName: sa.subjectName,
+        subjectCode: sa.subjectCode,
+        isElective: sa.isElective || false,
+        facultyId: null,
+        facultyName: null,
+      }));
+
+      const clsArray = await Class.create([{
+        name: name.trim(), departmentId, semester: Number(semester), academicYear,
+        classTeacherId: classTeacherId || null,
+        subjectAssignments: inheritedSubjects,
+        studentIds: [],
+      }], { session });
+
+      const cls = clsArray[0];
+
+      await commitSafeTransaction(session);
+
+      logger.info('class_created', {
+        timestamp: new Date().toISOString(), actor: req.user.userId,
+        action: 'CREATE_CLASS', resource_id: cls._id.toString(),
+        inheritedSubjectCount: inheritedSubjects.length,
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          _id: cls._id, name: cls.name, departmentId: cls.departmentId,
+          semester: cls.semester, academicYear: cls.academicYear,
+          classTeacherId: cls.classTeacherId,
+          subjectAssignments: cls.subjectAssignments || [], studentIds: [], isActive: true, createdAt: cls.createdAt,
+        },
+      });
+    } catch (err) {
+      await abortSafeTransaction(session);
+      next(err);
+    } finally {
+      session.endSession();
+    }
+  });
 };
 
 // ── GET /api/classes/:id ──────────────────────────────────────────────────────
@@ -382,7 +403,26 @@ export const updateClass = async (req, res, next) => {
       return next(new ErrorResponse('Access denied', 403, 'AUTH_DEPARTMENT_SCOPE'));
     }
 
-    if (name)         cls.name         = name;
+    if (name && name.trim() !== cls.name) {
+      const duplicate = await findActiveMatchingClass({
+        name: name.trim(),
+        semester: cls.semester,
+        departmentId: cls.departmentId,
+        excludeClassId: cls._id,
+        session,
+      });
+      if (duplicate) {
+        await abortSafeTransaction(session);
+        return next(
+          new ErrorResponse(
+            `Section "${duplicate.name}" for Semester ${cls.semester} already exists in this department.`,
+            409,
+            'DB_003'
+          )
+        );
+      }
+      cls.name = name.trim();
+    }
     if (academicYear) cls.academicYear = academicYear;
     
     if (classTeacherId !== undefined) {

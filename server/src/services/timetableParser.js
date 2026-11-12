@@ -155,12 +155,15 @@ export function extractTableRowsFromText(text) {
       let subjectName = '';
       let isElective = false;
 
-      // Extract standard code pattern (e.g. 23PHY102, 23CSD107, 23CSD4M01, 23CSD604, etc.)
-      const codeMatch = subjectCol.match(/\b([0-9]{2}[A-Z]{2,4}[0-9]{2,4}[A-Z0-9]?)\b/i);
+      // Extract standard code pattern (e.g. 23PHY102, 23CSD107, 23CSD4M01, 23CSD604)
+      const codeMatch = subjectCol.match(/\b([0-9]{2}[A-Z]{2,4}(?=[A-Z0-9]*[0-9])[A-Z0-9]{2,6})\b/i);
       if (codeMatch) {
         subjectCode = codeMatch[1].toUpperCase();
         subjectName = subjectCol.replace(codeMatch[0], '').replace(/^[\s\-–—:]+/, '').trim();
-        if (/PE\s*[-I|IV|V0-9]|\bMOOC\b|\bElective\b/i.test(subjectCol)) {
+        if (
+          /PE\s*[-I|IV|V0-9]|\bMOOC\b|\bElective\b/i.test(subjectCol) ||
+          /^[0-9]{2}[A-Z]{2,4}\d+[MEO]\d+[A-Z]?$/i.test(subjectCode)
+        ) {
           isElective = true;
         }
       } else {
@@ -227,7 +230,7 @@ export function extractTableRowsFromText(text) {
 
   // 2. Generic fallback for unstructured or synthetic fixture text
   const parsedRows = [];
-  const subjectCodePattern = /\b([0-9]{2}[A-Z]{2,4}[0-9]{3,4}[A-Z]?|[A-Z]{2,5}[- ]?[0-9]{3,4}[A-Z]?)\b/i;
+  const subjectCodePattern = /\b([0-9]{2}[A-Z]{2,4}(?=[A-Z0-9]*[0-9])[A-Z0-9]{2,6}|[A-Z]{2,5}[- ]?[0-9]{3,4}[A-Z]?)\b/i;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -275,12 +278,16 @@ export function extractTableRowsFromText(text) {
     }
 
     if (subjectCode && (subjectName || facultyField)) {
+      const fallbackElective =
+        /PE\s*[-I|IV|V0-9]|\bMOOC\b|\bElective\b/i.test(line) ||
+        /^[0-9]{2}[A-Z]{2,4}\d+[MEO]\d+[A-Z]?$/i.test(subjectCode);
       parsedRows.push({
         rawLine: line,
         subjectCode,
         subjectName: subjectName || subjectCode,
         facultyField: facultyField || 'Without Teacher',
         hours: hours || 0,
+        isElective: fallbackElective,
       });
     }
   }
@@ -337,8 +344,8 @@ export async function inspectPdfPages(pdfBuffer, options = {}) {
   const pageCount = textResult?.total || textResult?.pages?.length || 1;
   const rawPages = textResult?.pages || [];
 
-  // Subject code regex pattern
-  const subjectCodePattern = /\b([0-9]{2}[A-Z]{2,4}[0-9]{3,4}[A-Z]?|[A-Z]{2,5}[- ]?[0-9]{3,4}[A-Z]?)\b/gi;
+  // Subject code regex pattern (supports standard & alphanumeric minor/elective codes like 23CSD4M01)
+  const subjectCodePattern = /\b([0-9]{2}[A-Z]{2,4}(?=[A-Z0-9]*[0-9])[A-Z0-9]{2,6}|[A-Z]{2,5}[- ]?[0-9]{3,4}[A-Z]?)\b/gi;
 
   // Prepare tokens for recommendation scoring
   const targetName = (options.targetClassName || '').trim().toLowerCase();

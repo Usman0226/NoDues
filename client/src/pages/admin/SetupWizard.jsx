@@ -350,13 +350,13 @@ const SetupWizard = () => {
   };
 
   return (
-    <div className="min-h-full lg:h-full lg:overflow-hidden bg-offwhite flex flex-col py-4 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-full bg-offwhite flex flex-col py-3.5 px-4 sm:px-6 lg:px-8">
       {/* Screen Reader Live Region */}
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {liveAnnouncement || `Viewing ${activeConfig.label}`}
       </div>
 
-      {/* Sectioned Workspace Container fitting viewport height cleanly */}
+      {/* Sectioned Workspace Container fitting cleanly without clipping tables */}
       <div className="max-w-7xl w-full mx-auto flex-1 min-h-0 flex flex-col gap-3">
         <WizardProgressHeader
           activeStepIndex={activeStepIndex}

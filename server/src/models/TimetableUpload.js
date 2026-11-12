@@ -9,7 +9,8 @@ const timetableUploadSchema = new mongoose.Schema(
     classId: {
       type: mongoose.Schema.ObjectId,
       ref: 'Class',
-      required: [true, 'Class ID is required'],
+      required: false,
+      default: null,
     },
     targetSemester: {
       type: Number,

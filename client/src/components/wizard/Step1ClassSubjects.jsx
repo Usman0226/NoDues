@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   inspectTimetablePdf,
@@ -32,6 +32,13 @@ import { toast } from 'react-hot-toast';
 
 const EMPTY_CLASSES = [];
 
+const normalizeSectionKeyClient = (name) =>
+  String(name || '')
+    .replace(/^(?:I{1,3}|IV|VI{0,3}|IX|X)\s+(?=[A-Za-z])/i, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
 const Step1ClassSubjects = ({
   user,
   initialClassId,
@@ -62,9 +69,13 @@ const Step1ClassSubjects = ({
   const [uploadId, setUploadId] = useState(null);
   const [resolvedClassId, setResolvedClassId] = useState(initialClassId || null);
   const [resolvedClassData, setResolvedClassData] = useState(initialData || null);
+  const [matchedSectionInfo, setMatchedSectionInfo] = useState(null);
   const [extractedRows, setExtractedRows] = useState([]);
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const inspectInFlightRef = useRef(false);
+  const previewSeqRef = useRef(0);
 
   // Batch Provisioning Modal
   const [batchModalOpen, setBatchModalOpen] = useState(false);
@@ -203,21 +214,23 @@ const Step1ClassSubjects = ({
   const runPreviewForPage = useCallback(
     async (file, pageNum, deptOverride) => {
       if (!file) return;
+      const seq = ++previewSeqRef.current;
 
       if (pageCache[pageNum]) {
         const cached = pageCache[pageNum];
         setParseError(null);
         setUploadId(cached.uploadId);
-        setResolvedClassId(cached.classId);
+        setResolvedClassId(cached.classId || null);
+        setMatchedSectionInfo(cached.matchedSectionInfo || null);
         setExtractedRows(cached.rows || []);
         setSectionForm({
           name: cached.name,
           semester: cached.semester,
-          academicYear: cached.academicYear,
+          academicYear: cached.academicYear || '2026-27',
           departmentId: cached.departmentId || deptOverride || activeDepartmentId,
           classTeacherId: cached.classTeacherId || '',
         });
-        setResolvedClassData(cached.classData);
+        setResolvedClassData(cached.classData || null);
         return;
       }
 
@@ -227,11 +240,14 @@ const Step1ClassSubjects = ({
       try {
         const fd = new FormData();
         fd.append('file', file);
+        fd.append('previewOnly', 'true');
         if (pageNum) fd.append('page', String(pageNum));
         const deptToUse = deptOverride || activeDepartmentId;
         if (deptToUse) fd.append('departmentId', deptToUse);
 
         const res = await previewTimetable(fd);
+        if (seq !== previewSeqRef.current) return;
+
         const data =
           res?.data?.rows !== undefined
             ? res.data
@@ -242,41 +258,53 @@ const Step1ClassSubjects = ({
         const rows = data.rows || [];
         const detectedName = data.className || data.metadata?.detectedClassName || 'Section A';
         const detectedSem = data.targetSemester || data.metadata?.detectedSemester || 1;
+        const detectedAcademicYear = data.academicYear || data.metadata?.academicYear || '2026-27';
         const detectedTeacherId = data.classTeacher?._id || '';
         const resolvedDept = data.departmentId || deptToUse;
+        const matchedInfo = {
+          existingClassFound: Boolean(data.existingClassFound && data.classId),
+          matchedClassId: data.classId || null,
+          matchedName: detectedName,
+          matchedSemester: detectedSem,
+          detectedTeacher: data.detectedTeacher || '',
+        };
 
         setUploadId(data.uploadId);
-        setResolvedClassId(data.classId);
+        setResolvedClassId(data.classId || null);
+        setMatchedSectionInfo(matchedInfo);
         setExtractedRows(rows);
 
         const newForm = {
           name: detectedName,
           semester: detectedSem,
-          academicYear: data.metadata?.academicYear || '2026-27',
+          academicYear: detectedAcademicYear,
           departmentId: resolvedDept,
           classTeacherId: detectedTeacherId || '',
         };
         setSectionForm(newForm);
 
-        const classObj = {
-          _id: data.classId,
-          name: detectedName,
-          semester: detectedSem,
-          academicYear: data.metadata?.academicYear || '2026-27',
-          departmentId: resolvedDept,
-          classTeacher: data.classTeacher,
-          classTeacherId: data.classTeacher?._id || null,
-        };
+        const classObj = data.classId
+          ? {
+              _id: data.classId,
+              name: detectedName,
+              semester: detectedSem,
+              academicYear: detectedAcademicYear,
+              departmentId: resolvedDept,
+              classTeacher: data.classTeacher,
+              classTeacherId: data.classTeacher?._id || null,
+            }
+          : null;
         setResolvedClassData(classObj);
 
         setPageCache((prev) => ({
           ...prev,
           [pageNum]: {
             uploadId: data.uploadId,
-            classId: data.classId,
+            classId: data.classId || null,
+            matchedSectionInfo: matchedInfo,
             name: detectedName,
             semester: detectedSem,
-            academicYear: data.metadata?.academicYear || '2026-27',
+            academicYear: detectedAcademicYear,
             departmentId: resolvedDept,
             classTeacherId: detectedTeacherId,
             classData: classObj,
@@ -299,6 +327,7 @@ const Step1ClassSubjects = ({
 
         onDirtyChange?.(true);
       } catch (err) {
+        if (seq !== previewSeqRef.current) return;
         const msg =
           err?.message ||
           err?.response?.data?.error?.message ||
@@ -306,21 +335,27 @@ const Step1ClassSubjects = ({
         setParseError(msg);
         toast.error('Failed to parse timetable PDF');
       } finally {
-        setIsParsing(false);
+        if (seq === previewSeqRef.current) {
+          setIsParsing(false);
+        }
       }
     },
     [activeDepartmentId, pageCache, onDirtyChange]
   );
 
   const handleResetFile = () => {
+    ++previewSeqRef.current;
+    inspectInFlightRef.current = false;
     setPdfFile(null);
     setIsInspecting(false);
     setInspection(null);
     setSelectedPage(null);
     setExtractedRows([]);
     setPageCache({});
+    setUploadId(null);
     setResolvedClassId(null);
     setResolvedClassData(null);
+    setMatchedSectionInfo(null);
     setParseError(null);
     setBatchResult(null);
     setBatchModalOpen(false);
@@ -332,11 +367,14 @@ const Step1ClassSubjects = ({
       handleResetFile();
       return;
     }
+    if (inspectInFlightRef.current) return;
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       toast.error('Only PDF documents are supported for timetable parsing.');
       return;
     }
 
+    inspectInFlightRef.current = true;
+    ++previewSeqRef.current;
     setPdfFile(file);
     setIsInspecting(true);
     setInspection(null);
@@ -344,7 +382,10 @@ const Step1ClassSubjects = ({
     setSelectedPage(null);
     setExtractedRows([]);
     setPageCache({});
+    setUploadId(null);
     setResolvedClassId(null);
+    setResolvedClassData(null);
+    setMatchedSectionInfo(null);
     setBatchResult(null);
 
     try {
@@ -392,6 +433,7 @@ const Step1ClassSubjects = ({
       setParseError(msg);
       toast.error('Failed to read timetable PDF');
     } finally {
+      inspectInFlightRef.current = false;
       setIsInspecting(false);
     }
   };
@@ -403,7 +445,7 @@ const Step1ClassSubjects = ({
   };
 
   const handleBatchImport = async () => {
-    if (!pdfFile) return;
+    if (!pdfFile || isBatchImporting) return;
     setIsBatchImporting(true);
     try {
       const fd = new FormData();
@@ -413,6 +455,7 @@ const Step1ClassSubjects = ({
       const res = await batchImportTimetable(fd);
       const data = res?.data || res;
       setBatchResult(data);
+      onDirtyChange?.(false);
       queryClient.invalidateQueries({ queryKey: ['class'] });
       queryClient.invalidateQueries({ queryKey: ['wizard', 'all-classes'] });
       toast.success(`Provisioned ${data.provisionedCount || data.sections?.length || 0} sections!`);
@@ -498,8 +541,9 @@ const Step1ClassSubjects = ({
   }, [extractedRows, subjectFilter]);
 
   const handleCommitPdfFlow = async () => {
-    if (!resolvedClassId) {
-      toast.error('No class selected or resolved. Upload a timetable or use Manual Setup.');
+    if (isSubmitting) return;
+    if (!sectionForm.name.trim()) {
+      toast.error('Section name is required.');
       return;
     }
     if (extractedRows.filter((r) => r.status !== 'excluded').length === 0) {
@@ -507,32 +551,72 @@ const Step1ClassSubjects = ({
       return;
     }
 
+    const matchesAutoMatchedSection =
+      Boolean(resolvedClassId) &&
+      (!matchedSectionInfo ||
+        (matchedSectionInfo.matchedClassId === resolvedClassId &&
+          normalizeSectionKeyClient(sectionForm.name) ===
+            normalizeSectionKeyClient(matchedSectionInfo.matchedName) &&
+          Number(sectionForm.semester) === Number(matchedSectionInfo.matchedSemester)));
+    const effectiveClassId = matchesAutoMatchedSection ? resolvedClassId : undefined;
+
+    if (!effectiveClassId && !activeDepartmentId) {
+      toast.error('Please select a target department before confirming.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const res = await commitTimetable({
         uploadId,
-        classId: resolvedClassId,
+        classId: effectiveClassId,
+        className: sectionForm.name.trim(),
+        academicYear: sectionForm.academicYear?.trim() || '2026-27',
+        departmentId: activeDepartmentId || undefined,
         targetSemester: sectionForm.semester,
         classTeacherId: sectionForm.classTeacherId || null,
         confirmedRows: extractedRows,
       });
 
-      const updatedClass = res?.data?.classData || resolvedClassData;
-      const classDisplayName = formatSectionDisplayName(sectionForm.name, sectionForm.semester);
+      const payload = res?.data || res;
+      const committedClassId = payload?.classId || effectiveClassId;
+      const updatedClass = payload?.classData || resolvedClassData;
+      const classDisplayName = formatSectionDisplayName(
+        updatedClass?.name || sectionForm.name,
+        updatedClass?.semester || sectionForm.semester
+      );
+
+      setResolvedClassId(committedClassId);
+      setResolvedClassData(updatedClass);
+      if (selectedPage) {
+        updateActivePageCache({
+          classId: committedClassId,
+          classData: updatedClass,
+          matchedSectionInfo: {
+            ...(matchedSectionInfo || {}),
+            existingClassFound: true,
+            matchedClassId: committedClassId,
+            matchedName: updatedClass?.name || sectionForm.name.trim(),
+            matchedSemester: updatedClass?.semester || sectionForm.semester,
+          },
+        });
+      }
+
       toast.success(`Configured ${counts.matched + counts.flagged} active subjects for ${classDisplayName}!`);
       queryClient.invalidateQueries({ queryKey: ['class'] });
       queryClient.invalidateQueries({ queryKey: ['wizard', 'all-classes'] });
       onDirtyChange?.(false);
 
       onSave({
-        classId: resolvedClassId,
+        classId: committedClassId,
         classData: {
           ...updatedClass,
-          name: sectionForm.name,
-          semester: sectionForm.semester,
-          classTeacherId: sectionForm.classTeacherId,
+          name: updatedClass?.name || sectionForm.name.trim(),
+          semester: updatedClass?.semester || sectionForm.semester,
+          academicYear: updatedClass?.academicYear || sectionForm.academicYear,
+          classTeacherId: sectionForm.classTeacherId || updatedClass?.classTeacherId || null,
         },
-        summary: `${classDisplayName} · Sem ${sectionForm.semester} · ${counts.matched} subjects matched`,
+        summary: `${classDisplayName} · Sem ${sectionForm.semester} · ${counts.matched + counts.flagged} subjects`,
         completedTimetable: true,
       });
     } catch (err) {
@@ -543,6 +627,7 @@ const Step1ClassSubjects = ({
   };
 
   const handleManualSave = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     try {
       let targetClsId = manualSelectedClassId;
@@ -556,6 +641,19 @@ const Step1ClassSubjects = ({
         }
         if (!activeDepartmentId) {
           toast.error('Please select a target department.');
+          setIsSubmitting(false);
+          return;
+        }
+        const normalizedInputName = normalizeSectionKeyClient(sectionForm.name);
+        const duplicateExisting = operationalClasses.find(
+          (c) =>
+            normalizeSectionKeyClient(c.name) === normalizedInputName &&
+            Number(c.semester) === Number(sectionForm.semester)
+        );
+        if (duplicateExisting) {
+          toast.error(
+            `Section "${duplicateExisting.name}" already exists in Semester ${sectionForm.semester}. Switch to "Existing" to update it instead.`
+          );
           setIsSubmitting(false);
           return;
         }
@@ -691,42 +789,119 @@ const Step1ClassSubjects = ({
         )}
       </div>
 
-      {/* Main Content Area (Manages own internal layout & scroll) */}
+      {/* Main Content Area (Roomy 2-Column Workspace) */}
       {activeTab === 'pdf' ? (
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-4 sm:p-5">
+        <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-5">
           {/* State A: No PDF selected */}
           {!pdfFile && (
-            <div className="flex-1 min-h-0 flex items-center justify-center">
-              <div className="max-w-2xl w-full space-y-3">
-                <FileDropzone
-                  onFileSelect={handleFileDrop}
-                  onFileSelected={handleFileDrop}
-                  accept=".pdf,application/pdf"
-                  title="Drop Institutional Timetable PDF Here"
-                  subtitle="Automatically extracts section name, semester, class teacher, and curriculum subjects."
-                  loading={isInspecting}
-                  isProcessing={isInspecting}
-                  icon={FileText}
-                />
-                <p className="text-center text-xs text-zinc-500">
-                  Prefer creating a section manually or inheriting from the department master blueprint?{' '}
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('manual')}
-                    className="font-bold text-indigo-600 hover:text-indigo-800 underline"
-                  >
-                    Switch to Manual Setup
-                  </button>
-                </p>
+            resolvedClassId && extractedRows.length > 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                <div className="lg:col-span-5 space-y-3">
+                  <FileDropzone
+                    onFileSelect={handleFileDrop}
+                    accept=".pdf,application/pdf"
+                    title="Upload New Timetable PDF"
+                    subtitle="Replace or re-extract subjects & class teacher from an institutional PDF."
+                    loading={isInspecting}
+                    isProcessing={isInspecting}
+                    icon={FileText}
+                  />
+                  <div className="flex items-center justify-between gap-2 px-1 text-xs text-zinc-500">
+                    <span>Need to clone Master Syllabus?</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('manual')}
+                      className="font-bold text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      Manual / Master Setup
+                    </button>
+                  </div>
+                </div>
+
+                <div className="lg:col-span-7 flex flex-col rounded-2xl border border-zinc-200/90 bg-white overflow-hidden">
+                  <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/70 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
+                        Configured Section Curriculum
+                      </span>
+                      <h4 className="text-sm font-black text-navy">
+                        {formatSectionDisplayName(sectionForm.name, sectionForm.semester)} · Sem {sectionForm.semester}
+                      </h4>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={() =>
+                        onSave({
+                          classId: resolvedClassId,
+                          classData: resolvedClassData,
+                          summary: `${formatSectionDisplayName(sectionForm.name, sectionForm.semester)} · Sem ${sectionForm.semester} · ${counts.matched + counts.flagged} subjects`,
+                          completedTimetable: true,
+                        })
+                      }
+                    >
+                      <span>Continue to Students</span>
+                      <ArrowRight size={13} />
+                    </Button>
+                  </div>
+
+                  <div className="max-h-[340px] overflow-y-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="sticky top-0 bg-zinc-50 border-b border-zinc-200">
+                        <tr className="text-zinc-500 uppercase tracking-wider text-[10px] font-black">
+                          <th className="py-2 px-3">Code</th>
+                          <th className="py-2 px-3">Subject</th>
+                          <th className="py-2 px-3">Faculty</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100">
+                        {extractedRows.map((row, i) => (
+                          <tr key={`${row.subjectCode}-${i}`} className="hover:bg-zinc-50/60">
+                            <td className="py-2 px-3 font-mono font-bold text-navy whitespace-nowrap">
+                              {row.subjectCode}
+                            </td>
+                            <td className="py-2 px-3 font-semibold text-zinc-800">{row.subjectName}</td>
+                            <td className="py-2 px-3 text-zinc-600">{row.facultyName || 'Unassigned'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex-1 min-h-[340px] flex items-center justify-center">
+                <div className="max-w-2xl w-full space-y-3">
+                  <FileDropzone
+                    onFileSelect={handleFileDrop}
+                    accept=".pdf,application/pdf"
+                    title="Drop Institutional Timetable PDF Here"
+                    subtitle="Automatically extracts section name, semester, class teacher, and curriculum subjects."
+                    loading={isInspecting}
+                    isProcessing={isInspecting}
+                    icon={FileText}
+                  />
+                  <p className="text-center text-xs text-zinc-500">
+                    Prefer creating a section manually or inheriting from the department master blueprint?{' '}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('manual')}
+                      className="font-bold text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      Switch to Manual Setup
+                    </button>
+                  </p>
+                </div>
+              </div>
+            )
           )}
 
           {/* State B: Inspecting / Parsing Skeleton */}
           {pdfFile && (isInspecting || isParsing) && !parseError && (
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <StepTableSkeleton rows={5} />
-              <p className="text-center pt-2 text-xs font-semibold text-indigo-700 animate-pulse">
+            <div className="py-6">
+              <StepTableSkeleton rows={6} />
+              <p className="text-center pt-3 text-xs font-semibold text-indigo-700 animate-pulse">
                 Extracting timetable schedule, matching registered faculty & verifying subjects...
               </p>
             </div>
@@ -734,7 +909,7 @@ const Step1ClassSubjects = ({
 
           {/* State C: Extraction / Inspection Failure Recovery */}
           {pdfFile && !isInspecting && !isParsing && parseError && (
-            <div className="flex-1 min-h-0 flex items-center justify-center p-4">
+            <div className="flex-1 min-h-[300px] flex items-center justify-center p-4">
               <div className="max-w-lg w-full p-5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-3">
                 <div className="flex items-start gap-3">
                   <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
@@ -755,100 +930,175 @@ const Step1ClassSubjects = ({
             </div>
           )}
 
-          {/* State D: Split Multi-Section or Full Single-Section Workspace */}
+          {/* State D: Spacious 2-Column PDF Review Workspace */}
           {pdfFile && !isInspecting && !isParsing && !parseError && extractedRows.length > 0 && (
-            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4">
-              {/* Left Rail (Only for Multi-Page PDFs): Compact Searchable Section Switcher */}
-              {hasMultiPages && (
-                <aside className="lg:col-span-4 flex flex-col min-h-0 rounded-2xl border border-zinc-200/90 bg-zinc-50/50 p-3 space-y-2.5 max-h-60 lg:max-h-none">
-                  <div className="shrink-0 relative">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <input
-                      type="text"
-                      value={pageSearchQuery}
-                      onChange={(e) => setPageSearchQuery(e.target.value)}
-                      placeholder={`Filter ${inspection.pageCount} sections...`}
-                      className="w-full h-9 pl-8 pr-3 rounded-xl border border-zinc-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-navy/10"
-                    />
-                  </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+              {/* LEFT COLUMN: Detected Sections (multi-page) + Class Details for Review */}
+              <div className="lg:col-span-4 flex flex-col gap-3">
+                {hasMultiPages && (
+                  <aside className="flex flex-col rounded-2xl border border-zinc-200/90 bg-zinc-50/50 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2 px-0.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                        Detected Sections ({inspection.pageCount})
+                      </span>
+                      <span className="text-[10px] font-semibold text-zinc-400">
+                        Click to preview
+                      </span>
+                    </div>
 
-                  <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-0.5">
-                    {Object.entries(groupedPages).map(([sem, pages]) => {
-                      const filtered = pages.filter((p) => {
-                        if (!pageSearchQuery.trim()) return true;
-                        const q = pageSearchQuery.toLowerCase();
-                        const cls = (p.displayName || p.detectedClassName || '').toLowerCase();
-                        const teacher = (p.detectedTeacher || '').toLowerCase();
-                        return cls.includes(q) || teacher.includes(q);
-                      });
-                      if (filtered.length === 0) return null;
+                    <div className="relative">
+                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                      <input
+                        type="text"
+                        value={pageSearchQuery}
+                        onChange={(e) => setPageSearchQuery(e.target.value)}
+                        placeholder={`Filter ${inspection.pageCount} sections...`}
+                        className="w-full h-8 pl-8 pr-3 rounded-xl border border-zinc-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-navy/10"
+                      />
+                    </div>
 
+                    <div className="max-h-48 lg:max-h-56 overflow-y-auto space-y-2.5 pr-0.5">
+                      {Object.entries(groupedPages).map(([sem, pages]) => {
+                        const filtered = pages.filter((p) => {
+                          if (!pageSearchQuery.trim()) return true;
+                          const q = pageSearchQuery.toLowerCase();
+                          const cls = (p.displayName || p.detectedClassName || '').toLowerCase();
+                          const teacher = (p.detectedTeacher || '').toLowerCase();
+                          return cls.includes(q) || teacher.includes(q);
+                        });
+                        if (filtered.length === 0) return null;
+
+                        return (
+                          <div key={sem} className="space-y-1">
+                            <div className="flex items-center justify-between px-1">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                                Sem {sem} ({getAcademicYearRoman(Number(sem))} Yr)
+                              </span>
+                              <span className="text-[10px] font-bold text-zinc-400">{filtered.length}</span>
+                            </div>
+                            <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5">
+                              {filtered.map((page) => {
+                                const isCurrent = selectedPage === page.pageNumber;
+                                const displayName = page.displayName || page.detectedClassName || `Page ${page.pageNumber}`;
+                                const isCached = Boolean(pageCache[page.pageNumber]);
+                                return (
+                                  <button
+                                    key={page.pageNumber}
+                                    type="button"
+                                    onClick={() => handleSelectPage(page.pageNumber)}
+                                    className={`px-3 py-2 rounded-xl border text-left transition-all flex items-center justify-between gap-2 ${
+                                      isCurrent
+                                        ? 'bg-navy text-white border-navy shadow-xs'
+                                        : 'bg-white border-zinc-200/80 hover:border-indigo-300 text-navy'
+                                    }`}
+                                  >
+                                    <div className="min-w-0">
+                                      <p className={`text-xs font-black truncate ${isCurrent ? 'text-white' : 'text-navy'}`}>
+                                        {displayName}
+                                      </p>
+                                      <p
+                                        className={`text-[10px] truncate ${
+                                          isCurrent ? 'text-indigo-100' : 'text-zinc-500'
+                                        }`}
+                                      >
+                                        {page.detectedTeacher ? `CT: ${page.detectedTeacher}` : `Page ${page.pageNumber}`}
+                                      </p>
+                                    </div>
+                                    {isCurrent ? (
+                                      <Check size={13} className="shrink-0 stroke-[3]" />
+                                    ) : isCached ? (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Previewed" />
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </aside>
+                )}
+
+                {/* Section Details Card for Review */}
+                <div className="rounded-2xl border border-zinc-200/90 bg-zinc-50/50 p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-zinc-200/70">
+                    <h3 className="text-[11px] font-black uppercase tracking-wider text-navy">
+                      Section Review
+                    </h3>
+                    {(() => {
+                      const matchesExisting =
+                        Boolean(
+                          resolvedClassId &&
+                            (!matchedSectionInfo ||
+                              (normalizeSectionKeyClient(sectionForm.name) ===
+                                normalizeSectionKeyClient(matchedSectionInfo.matchedName) &&
+                                Number(sectionForm.semester) === Number(matchedSectionInfo.matchedSemester)))
+                        ) ||
+                        operationalClasses.some(
+                          (c) =>
+                            normalizeSectionKeyClient(c.name) === normalizeSectionKeyClient(sectionForm.name) &&
+                            Number(c.semester) === Number(sectionForm.semester)
+                        );
                       return (
-                        <div key={sem} className="space-y-1.5">
-                          <div className="flex items-center justify-between px-1">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">
-                              Sem {sem} ({getAcademicYearRoman(Number(sem))} Yr)
-                            </span>
-                            <span className="text-[10px] font-bold text-zinc-400">{filtered.length}</span>
-                          </div>
-                          <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5">
-                            {filtered.map((page) => {
-                              const isCurrent = selectedPage === page.pageNumber;
-                              const displayName = page.displayName || page.detectedClassName || `Page ${page.pageNumber}`;
-                              const isCached = Boolean(pageCache[page.pageNumber]);
-                              return (
-                                <button
-                                  key={page.pageNumber}
-                                  type="button"
-                                  onClick={() => handleSelectPage(page.pageNumber)}
-                                  className={`px-3 py-2 rounded-xl border text-left transition-all flex items-center justify-between gap-2 ${
-                                    isCurrent
-                                      ? 'bg-navy text-white border-navy shadow-xs'
-                                      : 'bg-white border-zinc-200/80 hover:border-indigo-300 text-navy'
-                                  }`}
-                                >
-                                  <div className="min-w-0">
-                                    <p className={`text-xs font-black truncate ${isCurrent ? 'text-white' : 'text-navy'}`}>
-                                      {displayName}
-                                    </p>
-                                    <p
-                                      className={`text-[10px] truncate ${
-                                        isCurrent ? 'text-indigo-100' : 'text-zinc-500'
-                                      }`}
-                                    >
-                                      {page.detectedTeacher ? `CT: ${page.detectedTeacher}` : `Page ${page.pageNumber}`}
-                                    </p>
-                                  </div>
-                                  {isCurrent ? (
-                                    <Check size={13} className="shrink-0 stroke-[3]" />
-                                  ) : isCached ? (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Cached" />
-                                  ) : null}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            matchesExisting
+                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/70'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200/70'
+                          }`}
+                        >
+                          {matchesExisting ? 'Updates Existing' : 'New Section'}
+                        </span>
                       );
-                    })}
+                    })()}
                   </div>
-                </aside>
-              )}
 
-              {/* Right Workspace: Compact Metadata + Internally Scrollable Subjects Table */}
-              <div className={`${hasMultiPages ? 'lg:col-span-8' : 'lg:col-span-12'} flex flex-col min-h-0 gap-3`}>
-                {/* Inline Section Metadata Row */}
-                <div className="shrink-0 grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl border border-zinc-200/80 bg-zinc-50/50">
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
-                      Section Name
-                    </label>
-                    <input
-                      type="text"
-                      value={sectionForm.name}
-                      onChange={(e) => handleSectionFieldChange('name', e.target.value)}
-                      className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-black text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
-                    />
+                  {!isHod && departments.length > 0 && (
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                        Department
+                      </label>
+                      <select
+                        value={activeDepartmentId}
+                        onChange={(e) => handleSectionFieldChange('departmentId', e.target.value)}
+                        className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                      >
+                        <option value="">-- Choose Department --</option>
+                        {departments.map((d) => (
+                          <option key={d._id} value={d._id}>
+                            {d.name} ({d.code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                        Section Name
+                      </label>
+                      <input
+                        type="text"
+                        value={sectionForm.name}
+                        onChange={(e) => handleSectionFieldChange('name', e.target.value)}
+                        className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-black text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                        Academic Batch
+                      </label>
+                      <input
+                        type="text"
+                        value={sectionForm.academicYear}
+                        onChange={(e) => handleSectionFieldChange('academicYear', e.target.value)}
+                        placeholder="2026-27"
+                        className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -871,19 +1121,21 @@ const Step1ClassSubjects = ({
                   <div>
                     <label className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
                       <span>Class Teacher</span>
-                      {sectionForm.classTeacherId && (
-                        <span className="text-emerald-700 font-bold flex items-center gap-0.5">
+                      {sectionForm.classTeacherId ? (
+                        <span className="text-emerald-700 font-bold flex items-center gap-0.5 normal-case">
                           <Check size={10} /> Matched
                         </span>
-                      )}
+                      ) : matchedSectionInfo?.detectedTeacher ? (
+                        <span className="text-amber-700 font-bold normal-case">Needs Selection</span>
+                      ) : null}
                     </label>
                     <select
                       value={sectionForm.classTeacherId}
                       onChange={(e) => handleSectionFieldChange('classTeacherId', e.target.value)}
                       className={`w-full h-9 px-3 rounded-xl border text-xs font-bold focus:outline-none focus:ring-2 ${
                         sectionForm.classTeacherId
-                          ? 'border-emerald-300 bg-emerald-50/30 text-emerald-950 focus:ring-emerald-500/20'
-                          : 'border-amber-300 bg-amber-50/30 text-amber-950 focus:ring-amber-500/20'
+                          ? 'border-emerald-300 bg-emerald-50/40 text-emerald-950 focus:ring-emerald-500/20'
+                          : 'border-amber-300 bg-amber-50/40 text-amber-950 focus:ring-amber-500/20'
                       }`}
                     >
                       <option value="">-- Choose Class Teacher --</option>
@@ -893,148 +1145,174 @@ const Step1ClassSubjects = ({
                         </option>
                       ))}
                     </select>
+                    {!sectionForm.classTeacherId && matchedSectionInfo?.detectedTeacher && (
+                      <p className="mt-1 text-[11px] text-amber-800 leading-snug">
+                        PDF detected <span className="font-bold">"{matchedSectionInfo.detectedTeacher}"</span> — pick manually or assign in the Review step.
+                      </p>
+                    )}
                   </div>
                 </div>
+              </div>
 
-                {/* Subjects Filter + Internally Scrollable Table */}
-                <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-zinc-200/90 bg-white overflow-hidden">
-                  <div className="shrink-0 px-3.5 py-2 border-b border-zinc-100 bg-zinc-50/60 flex flex-wrap items-center justify-between gap-2">
+              {/* RIGHT COLUMN: Dedicated Spacious Extracted Curriculum Review Table */}
+              <div className="lg:col-span-8 flex flex-col rounded-2xl border border-zinc-200/90 bg-white overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-zinc-100 bg-zinc-50/70 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-black text-navy">
                       Extracted Curriculum ({counts.matched + counts.flagged} active)
                     </span>
-
-                    <div className="inline-flex rounded-full bg-zinc-100 p-0.5 border border-zinc-200/70 text-[11px]">
-                      <button
-                        type="button"
-                        onClick={() => setSubjectFilter('all')}
-                        className={`px-2.5 py-1 rounded-full font-bold transition-all ${
-                          subjectFilter === 'all' ? 'bg-navy text-white' : 'text-zinc-600'
-                        }`}
-                      >
-                        All ({counts.total})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSubjectFilter('matched')}
-                        className={`px-2.5 py-1 rounded-full font-bold transition-all ${
-                          subjectFilter === 'matched' ? 'bg-navy text-white' : 'text-zinc-600'
-                        }`}
-                      >
-                        Matched ({counts.matched})
-                      </button>
-                      {counts.flagged > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setSubjectFilter('flagged')}
-                          className={`px-2.5 py-1 rounded-full font-bold transition-all ${
-                            subjectFilter === 'flagged' ? 'bg-amber-600 text-white' : 'text-amber-700'
-                          }`}
-                        >
-                          Review ({counts.flagged})
-                        </button>
-                      )}
-                      {counts.excluded > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setSubjectFilter('excluded')}
-                          className={`px-2.5 py-1 rounded-full font-bold transition-all ${
-                            subjectFilter === 'excluded' ? 'bg-zinc-700 text-white' : 'text-zinc-500'
-                          }`}
-                        >
-                          Excluded ({counts.excluded})
-                        </button>
-                      )}
-                    </div>
+                    {extractedRows.some((r) => r.status !== 'excluded' && r.isElective) && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                        {extractedRows.filter((r) => r.status !== 'excluded' && r.isElective).length} Electives
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex-1 min-h-0 overflow-y-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="sticky top-0 bg-zinc-50 border-b border-zinc-200 z-10">
-                        <tr className="text-zinc-500 uppercase tracking-wider text-[10px] font-black">
-                          <th className="py-2 px-3">Code</th>
-                          <th className="py-2 px-3">Subject Name</th>
-                          <th className="py-2 px-3">Handling Faculty</th>
-                          <th className="py-2 px-2 text-center">Status</th>
-                          <th className="py-2 px-3 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100">
-                        {displayedRows.map((row, idx) => {
-                          const originalIdx = extractedRows.indexOf(row);
-                          const isExcluded = row.status === 'excluded';
-                          return (
-                            <tr
-                              key={`${row.subjectCode}-${idx}`}
-                              className={
-                                isExcluded
-                                  ? 'bg-zinc-50/70 opacity-60'
-                                  : row.status === 'flagged'
-                                  ? 'bg-amber-50/30'
-                                  : 'hover:bg-zinc-50/50'
-                              }
-                            >
-                              <td className="py-2 px-3 font-mono font-black text-navy whitespace-nowrap">
+                  <div className="inline-flex rounded-full bg-zinc-100 p-0.5 border border-zinc-200/70 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setSubjectFilter('all')}
+                      className={`px-2.5 py-1 rounded-full font-bold transition-all ${
+                        subjectFilter === 'all' ? 'bg-navy text-white' : 'text-zinc-600'
+                      }`}
+                    >
+                      All ({counts.total})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubjectFilter('matched')}
+                      className={`px-2.5 py-1 rounded-full font-bold transition-all ${
+                        subjectFilter === 'matched' ? 'bg-navy text-white' : 'text-zinc-600'
+                      }`}
+                    >
+                      Matched ({counts.matched})
+                    </button>
+                    {counts.flagged > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSubjectFilter('flagged')}
+                        className={`px-2.5 py-1 rounded-full font-bold transition-all ${
+                          subjectFilter === 'flagged' ? 'bg-amber-600 text-white' : 'text-amber-700'
+                        }`}
+                      >
+                        Review ({counts.flagged})
+                      </button>
+                    )}
+                    {counts.excluded > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSubjectFilter('excluded')}
+                        className={`px-2.5 py-1 rounded-full font-bold transition-all ${
+                          subjectFilter === 'excluded' ? 'bg-zinc-700 text-white' : 'text-zinc-500'
+                        }`}
+                      >
+                        Excluded ({counts.excluded})
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="min-h-[340px] max-h-[500px] overflow-y-auto overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 bg-zinc-50 border-b border-zinc-200 z-10">
+                      <tr className="text-zinc-500 uppercase tracking-wider text-[10px] font-black">
+                        <th className="py-2.5 px-3 whitespace-nowrap">Code</th>
+                        <th className="py-2.5 px-3">Subject Name</th>
+                        <th className="py-2.5 px-3">Handling Faculty</th>
+                        <th className="py-2.5 px-2 text-center whitespace-nowrap">Status</th>
+                        <th className="py-2.5 px-3 text-right whitespace-nowrap">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {displayedRows.map((row, idx) => {
+                        const originalIdx = extractedRows.indexOf(row);
+                        const isExcluded = row.status === 'excluded';
+                        return (
+                          <tr
+                            key={`${row.subjectCode}-${idx}`}
+                            className={
+                              isExcluded
+                                ? 'bg-zinc-50/70 opacity-60'
+                                : row.status === 'flagged'
+                                ? 'bg-amber-50/30'
+                                : 'hover:bg-zinc-50/60'
+                            }
+                          >
+                            <td className="py-2.5 px-3 align-top whitespace-nowrap">
+                              <span className="font-mono font-black text-navy block">
                                 {row.subjectCode}
-                              </td>
-                              <td className="py-2 px-3 font-semibold text-zinc-800 max-w-[210px] truncate" title={row.subjectName}>
-                                {row.subjectName}
-                              </td>
-                              <td className="py-2 px-3">
-                                {isExcluded ? (
-                                  <span className="text-zinc-400 font-semibold italic">Excluded</span>
-                                ) : (
+                              </span>
+                              {row.isElective && (
+                                <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/70">
+                                  Elective
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 align-top font-semibold text-zinc-900 min-w-[200px] leading-snug">
+                              {row.subjectName}
+                            </td>
+                            <td className="py-2.5 px-3 align-top min-w-[195px]">
+                              {isExcluded ? (
+                                <span className="text-zinc-400 font-semibold italic">Excluded</span>
+                              ) : (
+                                <div className="space-y-1">
                                   <select
                                     value={row.facultyId || ''}
                                     onChange={(e) => handleFacultyChange(originalIdx, e.target.value)}
-                                    className={`h-8 w-full max-w-[230px] px-2 rounded-lg border text-xs font-semibold focus:outline-none focus:ring-1 ${
+                                    className={`h-8 w-full px-2 rounded-lg border text-xs font-semibold focus:outline-none focus:ring-1 ${
                                       row.facultyId
                                         ? 'border-zinc-200 bg-white text-zinc-900 focus:border-indigo-600'
                                         : 'border-amber-300 bg-amber-50 text-amber-950 font-bold focus:border-amber-600'
                                     }`}
                                   >
-                                    <option value="">-- Assign ({row.facultyName || 'None'}) --</option>
+                                    <option value="">-- Choose Registered Faculty --</option>
                                     {facultyList.map((f) => (
                                       <option key={f._id} value={f._id}>
                                         {f.name} {f.employeeId ? `(${f.employeeId})` : ''}
                                       </option>
                                     ))}
                                   </select>
-                                )}
-                              </td>
-                              <td className="py-2 px-2 text-center whitespace-nowrap">
-                                {isExcluded ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500">
-                                    <Ban size={11} /> Excluded
-                                  </span>
-                                ) : row.status === 'matched' ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700">
-                                    <CheckCircle size={11} /> Matched
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700">
-                                    <AlertTriangle size={11} /> Review
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-2 px-3 text-right whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleExclude(originalIdx)}
-                                  className={`text-[11px] font-bold px-2 py-1 rounded-lg transition-colors ${
-                                    isExcluded
-                                      ? 'text-indigo-600 hover:bg-indigo-50'
-                                      : 'text-zinc-500 hover:text-red-700 hover:bg-red-50'
-                                  }`}
-                                >
-                                  {isExcluded ? 'Include' : 'Exclude'}
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                                  {!row.facultyId && row.facultyName && row.facultyName !== 'Unassigned' && (
+                                    <p className="text-[10px] text-amber-800 font-medium leading-tight">
+                                      PDF: {row.facultyName}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2 align-top text-center whitespace-nowrap">
+                              {isExcluded ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500">
+                                  <Ban size={11} /> Excluded
+                                </span>
+                              ) : row.status === 'matched' ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700">
+                                  <CheckCircle size={11} /> Matched
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700">
+                                  <AlertTriangle size={11} /> Review
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 align-top text-right whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleExclude(originalIdx)}
+                                className={`text-[11px] font-bold px-2 py-1 rounded-lg transition-colors ${
+                                  isExcluded
+                                    ? 'text-indigo-600 hover:bg-indigo-50'
+                                    : 'text-zinc-500 hover:text-red-700 hover:bg-red-50'
+                                }`}
+                              >
+                                {isExcluded ? 'Include' : 'Exclude'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -1317,8 +1595,8 @@ const Step1ClassSubjects = ({
                 <span>Active subjects: </span>
                 <strong className="text-navy">{counts.matched + counts.flagged}</strong>
                 {counts.flagged > 0 && (
-                  <span className="text-amber-700 font-bold ml-2">
-                    ({counts.flagged} need faculty review)
+                  <span className="text-amber-700 font-semibold ml-2">
+                    ({counts.flagged} unmatched faculty — can assign now or later)
                   </span>
                 )}
               </div>

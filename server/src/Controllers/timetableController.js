@@ -7,9 +7,92 @@ import Admin from '../models/Admin.js';
 import { parseTimetablePdf, inspectPdfPages, normalizeFacultyName, extractClassMetadataFromText } from '../services/timetableParser.js';
 import { PDFParse } from 'pdf-parse';
 import logger from '../utils/logger.js';
+import {
+  findActiveMatchingClass,
+  withClassLock,
+  buildClassLockKey,
+} from '../utils/classIdentity.js';
 
 const ROMAN_YEARS = { 1: 'I', 2: 'I', 3: 'II', 4: 'II', 5: 'III', 6: 'III', 7: 'IV', 8: 'IV' };
 const getAcademicYearRoman = (sem) => ROMAN_YEARS[sem] || 'I';
+
+const computeBatchRange = (academicYear, resolvedSem) => {
+  const startYear = parseInt(String(academicYear || '2026-27').split(/[-/]/)[0], 10) || new Date().getFullYear();
+  const yearOffset = Math.floor(((Number(resolvedSem) || 1) - 1) / 2);
+  const entryYear = startYear - yearOffset;
+  return `${entryYear}-${String(entryYear + 4).slice(-2)}`;
+};
+
+async function matchFacultyByName(rawName, departmentId) {
+  if (!rawName) return null;
+  const normName = normalizeFacultyName(rawName);
+  if (!normName) return null;
+  const allFacs = await Faculty.find({ isActive: true }).select('_id name email employeeId departmentId').lean();
+  return (
+    allFacs.find((f) => departmentId && f.departmentId?.toString() === departmentId.toString() && normalizeFacultyName(f.name) === normName) ||
+    allFacs.find((f) => normalizeFacultyName(f.name) === normName) ||
+    null
+  );
+}
+
+async function resolveOrCreateActiveClassLocked({ name, semester, academicYear, departmentId, classTeacherId }) {
+  const lockKey = buildClassLockKey({ departmentId, semester, name });
+  return withClassLock(lockKey, async () => {
+    let cls = await findActiveMatchingClass({ name, semester, departmentId });
+    if (!cls) {
+      const yearStr = academicYear || '2026-27';
+      cls = await Class.create({
+        name: String(name).trim(),
+        semester: Number(semester) || 1,
+        academicYear: yearStr,
+        batch: computeBatchRange(yearStr, semester),
+        departmentId,
+        classTeacherId: classTeacherId || null,
+        isActive: true,
+        subjectAssignments: [],
+      });
+    }
+    return cls;
+  });
+}
+
+async function resolveSubjectsToCommit(rows, targetSem, departmentId) {
+  const subjectsToCommit = [];
+  for (const r of (rows || []).filter((row) => row.status !== 'excluded')) {
+    const cleanSubjectName = (r.subjectName || r.subjectCode || '').replace(/^[\s\-–—:]+/, '').trim();
+    const isElective = Boolean(r.isElective);
+    let resolvedSubjectId = r.subjectId;
+    if (!resolvedSubjectId && r.subjectCode) {
+      const upperCode = r.subjectCode.toUpperCase().trim();
+      let sub = await Subject.findOne({ code: upperCode });
+      if (!sub) {
+        sub = await Subject.create({
+          code: upperCode,
+          name: cleanSubjectName || upperCode,
+          semester: targetSem,
+          ...(departmentId ? { departmentId } : {}),
+          isElective,
+          isActive: true,
+        });
+      }
+      resolvedSubjectId = sub._id;
+    }
+
+    if (resolvedSubjectId) {
+      subjectsToCommit.push({
+        subjectId: resolvedSubjectId,
+        subjectName: cleanSubjectName || r.subjectCode,
+        subjectCode: r.subjectCode,
+        isElective,
+        facultyId: r.facultyId || null,
+        facultyName: r.facultyName || null,
+        coFacultyIds: r.coFacultyIds || [],
+        source: 'timetable_parse',
+      });
+    }
+  }
+  return subjectsToCommit;
+}
 
 /**
  * Inspects an uploaded timetable PDF document structure.
@@ -80,6 +163,7 @@ export async function previewTimetable(req, res, next) {
     }
 
     const { classId, targetSemester, page } = req.body;
+    const previewOnly = req.body.previewOnly === 'true' || req.body.previewOnly === true;
     const selectedPage = page ? parseInt(page, 10) : null;
     if (selectedPage && (isNaN(selectedPage) || selectedPage < 1)) {
       return res.status(400).json({
@@ -141,60 +225,64 @@ export async function previewTimetable(req, res, next) {
     const parsedData = result.data;
     const metadata = parsedData.metadata || {};
 
-    // Auto-resolve or provision Class if classId was not provided upfront
+    let resolvedSem = requestedSem || metadata.detectedSemester || 1;
+    let detectedClsName = metadata.detectedClassName || req.body.className || 'Section A';
+    let resolvedAcademicYear = metadata.academicYear || metadata.detectedAcademicYear || '2026-27';
+    let matchedTeacher = null;
+
     if (!targetClass) {
-      const resolvedSem = requestedSem || metadata.detectedSemester || 1;
-      const detectedClsName = metadata.detectedClassName || req.body.className || 'Section A';
-
-      // Check if class exists using canonical section normalization (matches e.g. CSD-A, III CSD-A, or III CSD-E)
-      const cleanSection = detectedClsName.replace(/^(I|II|III|IV)[\s\-_]+/i, '').trim();
-      const escapedClean = cleanSection.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const nameRegex = new RegExp(`^((I|II|III|IV)[\\s\\-_]+)?${escapedClean}$`, 'i');
-
-      const clsQuery = { 
-        name: nameRegex, 
-        semester: resolvedSem,
-        isMaster: { $ne: true },
-        isActive: true,
-      };
-      if (deptId) clsQuery.departmentId = deptId;
-      targetClass = await Class.findOne(clsQuery);
-
-      if (!targetClass) {
-        const academicYear = metadata.academicYear || metadata.detectedAcademicYear || '2025-26';
-        const startYear = parseInt(String(academicYear).split(/[-/]/)[0], 10) || new Date().getFullYear();
-        const yearOffset = Math.floor((resolvedSem - 1) / 2);
-        const entryYear = startYear - yearOffset;
-        const batch = `${entryYear}-${String(entryYear + 4).slice(-2)}`;
-
-        targetClass = await Class.create({
+      if (previewOnly) {
+        // Non-mutating lookup so browsing PDF sections never pollutes live Classes DB
+        targetClass = await findActiveMatchingClass({
           name: detectedClsName,
           semester: resolvedSem,
-          academicYear,
-          batch,
           departmentId: deptId,
-          isActive: true,
-          subjectAssignments: [],
+        });
+        if (!targetClass?.classTeacherId && metadata.classTeacher) {
+          matchedTeacher = await matchFacultyByName(metadata.classTeacher, deptId);
+        }
+      } else {
+        targetClass = await resolveOrCreateActiveClassLocked({
+          name: detectedClsName,
+          semester: resolvedSem,
+          academicYear: resolvedAcademicYear,
+          departmentId: deptId,
         });
       }
     }
 
-    // Auto-assign class teacher if detected in PDF and not yet set on class
-    if (targetClass && !targetClass.classTeacherId && metadata.classTeacher) {
-      const normName = normalizeFacultyName(metadata.classTeacher);
-      const allFacs = await Faculty.find({ isActive: true }).lean();
-      const matched = allFacs.find((f) => f.departmentId?.toString() === targetClass.departmentId?.toString() && normalizeFacultyName(f.name) === normName)
-        || allFacs.find((f) => normalizeFacultyName(f.name) === normName);
-      if (matched) {
-        targetClass.classTeacherId = matched._id;
-        await targetClass.save();
+    if (targetClass) {
+      resolvedSem = targetClass.semester || resolvedSem;
+      detectedClsName = targetClass.name || detectedClsName;
+      resolvedAcademicYear = targetClass.academicYear || resolvedAcademicYear;
+      deptId = targetClass.departmentId || deptId;
+
+      if (!previewOnly && !targetClass.classTeacherId && metadata.classTeacher) {
+        const matched = await matchFacultyByName(metadata.classTeacher, deptId);
+        if (matched) {
+          targetClass.classTeacherId = matched._id;
+          await targetClass.save();
+        }
+      }
+
+      if (targetClass.classTeacherId) {
+        await targetClass.populate('classTeacherId', 'name email employeeId');
       }
     }
 
-    // Populate classTeacher for rich client return
-    if (targetClass.classTeacherId) {
-      await targetClass.populate('classTeacherId', 'name email employeeId');
-    }
+    const teacherOutput = targetClass?.classTeacherId
+      ? {
+          _id: targetClass.classTeacherId._id || targetClass.classTeacherId,
+          name: targetClass.classTeacherId.name,
+          email: targetClass.classTeacherId.email,
+        }
+      : matchedTeacher
+      ? {
+          _id: matchedTeacher._id,
+          name: matchedTeacher.name,
+          email: matchedTeacher.email,
+        }
+      : null;
 
     // Resolve uploader defensively
     let uploaderId = req.user?._id || req.user?.userId || req.user?.id;
@@ -206,8 +294,8 @@ export async function previewTimetable(req, res, next) {
 
     // Create an audit record for this upload (MON-4)
     const uploadRecord = await TimetableUpload.create({
-      classId: targetClass._id,
-      targetSemester: targetClass.semester,
+      classId: targetClass?._id || null,
+      targetSemester: resolvedSem,
       uploadedBy: uploaderId,
       uploaderModel,
       originalFileName: req.file.originalname || 'timetable.pdf',
@@ -227,15 +315,13 @@ export async function previewTimetable(req, res, next) {
       success: true,
       data: {
         uploadId: uploadRecord._id,
-        classId: targetClass._id,
-        className: targetClass.name,
-        targetSemester: targetClass.semester,
-        departmentId: targetClass.departmentId,
-        classTeacher: targetClass.classTeacherId ? {
-          _id: targetClass.classTeacherId._id || targetClass.classTeacherId,
-          name: targetClass.classTeacherId.name,
-          email: targetClass.classTeacherId.email,
-        } : null,
+        classId: targetClass?._id || null,
+        existingClassFound: Boolean(targetClass),
+        className: detectedClsName,
+        targetSemester: resolvedSem,
+        academicYear: resolvedAcademicYear,
+        departmentId: deptId,
+        classTeacher: teacherOutput,
         detectedTeacher: metadata.classTeacher || null,
         selectedPage: parsedData.selectedPage,
         pageCount: parsedData.pageCount,
@@ -273,33 +359,79 @@ export async function previewTimetable(req, res, next) {
  */
 export async function commitTimetable(req, res, next) {
   try {
-    const { uploadId, classId, targetSemester, confirmedRows, classTeacherId } = req.body;
+    const {
+      uploadId,
+      classId,
+      className,
+      academicYear,
+      departmentId,
+      targetSemester,
+      confirmedRows,
+      classTeacherId,
+    } = req.body;
 
-    if (!classId || !targetSemester || !Array.isArray(confirmedRows)) {
+    if ((!classId && !className?.trim()) || !targetSemester || !Array.isArray(confirmedRows)) {
       return res.status(400).json({
         success: false,
         error: {
           code: 'VAL_001',
-          message: 'classId, targetSemester, and confirmedRows array are required.',
+          message: 'classId (or className), targetSemester, and confirmedRows array are required.',
         },
       });
     }
 
     const targetSem = parseInt(targetSemester, 10);
-    const targetClass = await Class.findById(classId);
-    if (!targetClass) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'DB_002', message: 'Class not found.' },
+    let deptId = departmentId || req.user?.departmentId || req.user?.department?._id || req.user?.department;
+    if (!deptId) {
+      const anyDept = await Department.findOne({ isActive: true }).select('_id').lean();
+      if (anyDept) deptId = anyDept._id;
+    }
+
+    let targetClass;
+    if (classId) {
+      targetClass = await Class.findById(classId);
+      if (!targetClass) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'DB_002', message: 'Class not found.' },
+        });
+      }
+      if (className && className.trim() !== targetClass.name) {
+        const collision = await findActiveMatchingClass({
+          name: className.trim(),
+          semester: targetSem,
+          departmentId: targetClass.departmentId,
+          excludeClassId: targetClass._id,
+        });
+        if (collision) {
+          return res.status(409).json({
+            success: false,
+            error: {
+              code: 'DB_003',
+              message: `Section "${collision.name}" for Semester ${targetSem} already exists in this department.`,
+            },
+          });
+        }
+        targetClass.name = className.trim();
+      }
+    } else {
+      targetClass = await resolveOrCreateActiveClassLocked({
+        name: className.trim(),
+        semester: targetSem,
+        academicYear: academicYear || '2026-27',
+        departmentId: deptId,
+        classTeacherId: classTeacherId || null,
       });
     }
 
     if (targetClass.isActive === false) {
       targetClass.isActive = true;
     }
-
-    if (classTeacherId) {
-      targetClass.classTeacherId = classTeacherId;
+    if (academicYear) {
+      targetClass.academicYear = academicYear;
+    }
+    if (classTeacherId !== undefined) {
+      targetClass.classTeacherId = classTeacherId || null;
     }
 
     // Verify upload audit record if provided
@@ -309,42 +441,18 @@ export async function commitTimetable(req, res, next) {
     }
 
     // Filter out excluded rows and ensure valid Subject IDs
-    const subjectsToCommit = [];
-    for (const r of confirmedRows.filter((row) => row.status !== 'excluded')) {
-      const cleanSubjectName = (r.subjectName || r.subjectCode || '').replace(/^[\s\-–—:]+/, '').trim();
-      let resolvedSubjectId = r.subjectId;
-      if (!resolvedSubjectId && r.subjectCode) {
-        let sub = await Subject.findOne({ code: r.subjectCode.toUpperCase() });
-        if (!sub) {
-          sub = await Subject.create({
-            code: r.subjectCode.toUpperCase(),
-            name: cleanSubjectName,
-            semester: targetSem,
-            isActive: true,
-          });
-        }
-        resolvedSubjectId = sub._id;
-      }
-
-      if (resolvedSubjectId) {
-        subjectsToCommit.push({
-          subjectId: resolvedSubjectId,
-          subjectName: cleanSubjectName,
-          subjectCode: r.subjectCode,
-          facultyId: r.facultyId || null,
-          facultyName: r.facultyName || null,
-          coFacultyIds: r.coFacultyIds || [],
-          source: 'timetable_parse',
-        });
-      }
-    }
+    const subjectsToCommit = await resolveSubjectsToCommit(
+      confirmedRows,
+      targetSem,
+      targetClass.departmentId || deptId
+    );
 
     // Archive previous semester entries if present (FR-B3)
     if (!targetClass.semesterSubjects) {
       targetClass.semesterSubjects = new Map();
     }
 
-    for (const [semKey, semEntry] of targetClass.semesterSubjects.entries()) {
+    for (const [, semEntry] of targetClass.semesterSubjects.entries()) {
       if (semEntry && semEntry.status === 'active') {
         semEntry.status = 'archived';
         semEntry.archivedAt = new Date();
@@ -360,10 +468,11 @@ export async function commitTimetable(req, res, next) {
     });
 
     // Also populate legacy subjectAssignments for backward compatibility (NC-5)
-    targetClass.subjectAssignments = subjectsToCommit.map(s => ({
+    targetClass.subjectAssignments = subjectsToCommit.map((s) => ({
       subjectId: s.subjectId,
       subjectName: s.subjectName,
       subjectCode: s.subjectCode,
+      isElective: s.isElective,
       facultyId: s.facultyId,
       facultyName: s.facultyName,
     }));
@@ -385,7 +494,7 @@ export async function commitTimetable(req, res, next) {
     }
 
     // Auto-propagate cohort syllabus: peer classes in the same department & semester with 0 subjects inherit the subject list
-    const inheritedForPeers = subjectsToCommit.map(s => ({
+    const inheritedForPeers = subjectsToCommit.map((s) => ({
       subjectId: s.subjectId,
       subjectName: s.subjectName,
       subjectCode: s.subjectCode,
@@ -448,8 +557,9 @@ export async function commitTimetable(req, res, next) {
       }
     }
 
-    // Mark upload record as committed
+    // Mark upload record as committed and link to finalized classId
     if (uploadDoc) {
+      uploadDoc.classId = targetClass._id;
       uploadDoc.committed = true;
       uploadDoc.committedAt = new Date();
       await uploadDoc.save();
@@ -580,37 +690,14 @@ export async function batchImportTimetable(req, res, next) {
         const metadata = parsedData.metadata || {};
         const resolvedSem = pageInfo.detectedSemester || metadata.detectedSemester || 1;
         const detectedClsName = pageInfo.detectedClassName || metadata.detectedClassName || `Section ${pageNum}`;
+        const academicYear = metadata.academicYear || metadata.detectedAcademicYear || '2026-27';
 
-        // Canonical normalization
-        const cleanSection = detectedClsName.replace(/^(I|II|III|IV)[\s\-_]+/i, '').trim();
-        const escapedClean = cleanSection.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const nameRegex = new RegExp(`^((I|II|III|IV)[\\s\\-_]+)?${escapedClean}$`, 'i');
-
-        let targetClass = await Class.findOne({
-          name: nameRegex,
+        const targetClass = await resolveOrCreateActiveClassLocked({
+          name: detectedClsName,
           semester: resolvedSem,
-          isMaster: { $ne: true },
-          isActive: true,
+          academicYear,
           departmentId: deptId,
         });
-
-        const academicYear = metadata.academicYear || metadata.detectedAcademicYear || '2026-27';
-        const startYear = parseInt(String(academicYear).split(/[-/]/)[0], 10) || new Date().getFullYear();
-        const yearOffset = Math.floor((resolvedSem - 1) / 2);
-        const entryYear = startYear - yearOffset;
-        const batch = `${entryYear}-${String(entryYear + 4).slice(-2)}`;
-
-        if (!targetClass) {
-          targetClass = await Class.create({
-            name: detectedClsName,
-            semester: resolvedSem,
-            academicYear,
-            batch,
-            departmentId: deptId,
-            isActive: true,
-            subjectAssignments: [],
-          });
-        }
 
         // Match Class Teacher
         const teacherName = metadata.classTeacher || pageInfo.detectedTeacher;
@@ -623,46 +710,33 @@ export async function batchImportTimetable(req, res, next) {
           }
         }
 
-        // Map and resolve subjects
-        const rows = parsedData.rows || [];
-        const subjectsToCommit = [];
-        for (const r of rows) {
-          const cleanSubjectName = (r.subjectName || r.subjectCode || '').replace(/^[\s\-–—:]+/, '').trim();
-          let resolvedSubjectId = r.subjectId;
-          if (!resolvedSubjectId && r.subjectCode) {
-            let sub = await Subject.findOne({ code: r.subjectCode.toUpperCase() });
-            if (!sub) {
-              sub = await Subject.create({
-                code: r.subjectCode.toUpperCase(),
-                name: cleanSubjectName,
-                semester: resolvedSem,
-                departmentId: deptId,
-                isActive: true,
-              });
-            }
-            resolvedSubjectId = sub._id;
-          }
-
-          subjectsToCommit.push({
-            subjectId: resolvedSubjectId,
-            subjectName: cleanSubjectName,
-            subjectCode: r.subjectCode,
-            facultyId: r.facultyId || null,
-            facultyName: r.facultyName || null,
-            coFacultyIds: r.coFacultyIds || [],
-            source: 'timetable_parse',
-          });
-        }
+        // Map and resolve subjects (preserving isElective and avoiding excluded rows)
+        const subjectsToCommit = await resolveSubjectsToCommit(
+          parsedData.rows || [],
+          resolvedSem,
+          deptId
+        );
 
         targetClass.subjectAssignments = subjectsToCommit.map(s => ({
           subjectId: s.subjectId,
           subjectName: s.subjectName,
           subjectCode: s.subjectCode,
+          isElective: s.isElective,
           facultyId: s.facultyId,
           facultyName: s.facultyName,
         }));
         targetClass.semester = resolvedSem;
         targetClass.academicYear = academicYear;
+
+        if (!targetClass.wizardProgress) {
+          targetClass.wizardProgress = { completedSteps: [], stepData: {} };
+        }
+        const batchCompleted = new Set(targetClass.wizardProgress.completedSteps || []);
+        batchCompleted.add('class_info');
+        batchCompleted.add('timetable_subjects');
+        targetClass.wizardProgress.completedSteps = Array.from(batchCompleted);
+        targetClass.wizardProgress.currentStep = 'students';
+
         await targetClass.save();
 
         hydratedSemesters.add(resolvedSem);
