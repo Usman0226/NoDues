@@ -39,6 +39,7 @@ const semesterSubjectItemSchema = new mongoose.Schema(
       set: (v) => (typeof v === 'string' ? v.replace(/^[\s\-–—:]+/, '').trim() : v),
     },
     subjectCode: { type: String, trim: true },
+    isElective: { type: Boolean, default: false },
     facultyId: {
       type: mongoose.Schema.ObjectId,
       ref: 'Faculty',

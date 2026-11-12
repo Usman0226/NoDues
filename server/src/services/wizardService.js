@@ -12,6 +12,7 @@
 import Class from '../models/Class.js';
 import Student from '../models/Student.js';
 import ErrorResponse from '../utils/errorResponse.js';
+import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 export const WIZARD_STEPS = [
   'class_info',
@@ -212,5 +213,100 @@ export async function saveWizardProgress(classId, { step, markCompleted = false,
     completedSteps: cls.wizardProgress.completedSteps,
     stepData: cls.wizardProgress.stepData,
     lastUpdated: cls.wizardProgress.lastUpdated,
+  };
+}
+
+/**
+ * Bulk-updates wizard progress across multiple provisioned classes in 1 bulkWrite.
+ */
+export async function saveBulkWizardProgress({ classIds, step, markCompleted = false, data = {} }) {
+  if (!Array.isArray(classIds) || classIds.length === 0) {
+    throw new ErrorResponse('classIds array is required', 400, 'VALIDATION_ERROR');
+  }
+  if (!WIZARD_STEPS.includes(step)) {
+    throw new ErrorResponse(
+      `Invalid wizard step '${step}'. Must be one of: ${WIZARD_STEPS.join(', ')}`,
+      400,
+      'VALIDATION_ERROR'
+    );
+  }
+
+  const classes = await Class.find({ _id: { $in: classIds }, isActive: true }).lean();
+  if (classes.length === 0) {
+    throw new ErrorResponse('No active classes found for bulk progress update', 404, 'NOT_FOUND');
+  }
+
+  const now = new Date();
+  const targetIndex = WIZARD_STEPS.indexOf(step);
+  const bulkOps = [];
+  const deptIds = new Set();
+
+  for (const cls of classes) {
+    const currentCompleted = cls.wizardProgress?.completedSteps || [];
+    const completedSet = new Set(currentCompleted);
+
+    // Ensure preceding requirements are respected per FR-E1
+    let sequenceValid = true;
+    for (let i = 0; i < targetIndex; i++) {
+      const requiredStep = WIZARD_STEPS[i];
+      if (requiredStep === 'electives') continue;
+      if (requiredStep === 'timetable_subjects' && completedSet.has('class_info')) continue;
+      if (!completedSet.has(requiredStep) && cls.wizardProgress?.currentStep !== requiredStep) {
+        sequenceValid = false;
+        break;
+      }
+    }
+    if (!sequenceValid) continue;
+
+    if (markCompleted && !completedSet.has(step)) {
+      completedSet.add(step);
+      if (step === 'class_info' && data.subjectsConfigured) {
+        completedSet.add('timetable_subjects');
+      }
+    }
+
+    const existingStepData = cls.wizardProgress?.stepData || {};
+    const mergedStepData = {
+      ...existingStepData,
+      [step]: {
+        ...(existingStepData[step] || {}),
+        ...data,
+        updatedAt: now,
+      },
+    };
+
+    bulkOps.push({
+      updateOne: {
+        filter: { _id: cls._id },
+        update: {
+          $set: {
+            wizardProgress: {
+              currentStep: step,
+              completedSteps: Array.from(completedSet),
+              stepData: mergedStepData,
+              lastUpdated: now,
+            },
+            updatedAt: now,
+          },
+        },
+      },
+    });
+    if (cls.departmentId) deptIds.add(cls.departmentId.toString());
+  }
+
+  if (bulkOps.length > 0) {
+    await Class.bulkWrite(bulkOps, { ordered: false });
+    for (const cls of classes) {
+      invalidateEntityCache('class', cls._id.toString(), cls.departmentId?.toString());
+    }
+    for (const dId of deptIds) {
+      invalidateEntityCache('class', 'all', dId);
+    }
+  }
+
+  return {
+    updatedCount: bulkOps.length,
+    step,
+    classIds: classes.map((c) => c._id),
   };
 }

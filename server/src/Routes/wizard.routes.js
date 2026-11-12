@@ -7,6 +7,7 @@ import { Router } from 'express';
 import {
   getProgress,
   updateProgress,
+  updateBulkProgress,
   getPreflight,
   initiateWizardBatch,
 } from '../Controllers/wizardController.js';
@@ -36,6 +37,7 @@ router.get('/status', async (_req, res) => {
 router.use(requireFeature('setup_wizard_enabled'));
 
 // Wizard step progress endpoints (FR-E1, FR-E3)
+router.put('/classes/bulk-progress', updateBulkProgress);
 router.get('/classes/:classId/progress', getProgress);
 router.put('/classes/:classId/progress', updateProgress);
 

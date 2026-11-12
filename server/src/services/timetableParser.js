@@ -93,12 +93,12 @@ export function extractClassMetadataFromText(text) {
     }
   }
 
-  // Fallback: Section name
+  // Fallback: Section name (e.g. "Section CSE-A", "Section A", "Sec: CSD-B")
   if (!detectedClassName) {
-    const secMatch = text.match(/\b(?:section|sec)[-:\s]+([A-Z0-9]+)\b/i);
+    const secMatch = text.match(/\b(?:section|sec)[-:\s]+([A-Z0-9]+(?:-[A-Z0-9]{1,4})?)\b/i);
     if (secMatch) {
       detectedClassName = secMatch[1].toUpperCase();
-      displayName = `Section ${secMatch[1].toUpperCase()}`;
+      displayName = detectedClassName.includes('-') ? detectedClassName : `Section ${detectedClassName}`;
     }
   }
 
@@ -585,24 +585,91 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
     throw error;
   }
 
-  // Pre-fetch reference lists for efficient in-memory matching
-  const facultyQuery = options.departmentId ? { departmentId: options.departmentId, isActive: true } : { isActive: true };
-  const allFaculties = await Faculty.find(facultyQuery).select('_id name email employeeId departmentId').lean();
+  // Pre-fetch reference lists for efficient in-memory matching (unless supplied by caller)
+  let allFaculties = options.allFaculties;
+  if (!allFaculties) {
+    const facultyQuery = options.departmentId ? { departmentId: options.departmentId, isActive: true } : { isActive: true };
+    allFaculties = await Faculty.find(facultyQuery).select('_id name email employeeId departmentId').lean();
+  }
 
-  const subjectQuery = options.departmentId ? { departmentId: options.departmentId, isActive: true } : { isActive: true };
-  const allSubjects = await Subject.find(subjectQuery).select('_id name code semester isElective').lean();
+  let allSubjects = options.allSubjects;
+  if (!allSubjects) {
+    allSubjects = await Subject.find({ isActive: true }).select('_id name code semester isElective').lean();
+  }
 
-  // Build index lookups
+  const parsedResult = parseTimetablePageFromText(extractedText, {
+    pageNumber: parsedPage,
+    pageCount,
+    isMultiPage: pageCount > 1,
+    rawRows,
+    allFaculties,
+    allSubjects,
+    departmentId: options.departmentId || null,
+  });
+
+  const durationMs = Date.now() - startTime;
+  logger.info('Timetable PDF parsed successfully', {
+    totalRows: rawRows.length,
+    matchedCount: parsedResult.matchedRowCount,
+    flaggedCount: parsedResult.flaggedRowCount,
+    selectedPage: parsedPage,
+    pageCount,
+    durationMs,
+  });
+
+  return {
+    success: true,
+    data: {
+      ...parsedResult,
+      durationMs,
+    },
+  };
+}
+
+/**
+ * Pure synchronous page parser operating on already-extracted text + pre-loaded lookup arrays.
+ * Enables single-pass multi-page bulk PDF parsing with zero N+1 DB queries.
+ */
+export function parseTimetablePageFromText(extractedText, {
+  pageNumber = 1,
+  pageCount = 1,
+  isMultiPage = false,
+  rawRows: preExtractedRows = null,
+  allFaculties = [],
+  allSubjects = [],
+  departmentId = null,
+} = {}) {
+  const cleanText = String(extractedText || '').trim();
+  if (!cleanText || cleanText.length < 25) {
+    const error = new Error(`The uploaded PDF does not contain an extractable text layer on page ${pageNumber}.`);
+    error.code = 'INVALID_PDF_TEXT_LAYER';
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const rawRows = preExtractedRows || extractTableRowsFromText(cleanText);
+  if (rawRows.length === 0) {
+    const error = new Error('No subject rows could be recognized in the PDF table. Ensure the PDF includes subject codes and faculty columns.');
+    error.code = 'NO_TABLE_ROWS_FOUND';
+    error.statusCode = 400;
+    throw error;
+  }
+
   const subjectByCode = new Map();
   for (const s of allSubjects) {
     if (s.code) subjectByCode.set(s.code.toUpperCase().replace(/\s+/g, ''), s);
   }
 
-  // Faculty normalized name map
   const facultyByNormalizedName = new Map();
+  // Seed with all faculties, then overwrite with target department matches for same-dept priority
   for (const f of allFaculties) {
-    if (f.name) {
-      facultyByNormalizedName.set(normalizeFacultyName(f.name), f);
+    if (f.name) facultyByNormalizedName.set(normalizeFacultyName(f.name), f);
+  }
+  if (departmentId) {
+    for (const f of allFaculties) {
+      if (f.name && f.departmentId?.toString() === departmentId.toString()) {
+        facultyByNormalizedName.set(normalizeFacultyName(f.name), f);
+      }
     }
   }
 
@@ -611,15 +678,31 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
   let flaggedRowCount = 0;
 
   for (const row of rawRows) {
-    const { subjectCode, subjectName, facultyField, hours } = row;
+    const { subjectCode, subjectName, facultyField, hours, isElective } = row;
+    const normalizedCode = (subjectCode || '').toUpperCase().replace(/\s+/g, '');
+    const matchedSubject = subjectByCode.get(normalizedCode);
+    const resolvedElective = Boolean(isElective || matchedSubject?.isElective);
+
+    // Repair stale truncated stored name if existing subject name starts with code (e.g. "23CSD4M01 Opera")
+    const storedName = matchedSubject?.name?.trim() || '';
+    const isStoredNameTruncated =
+      storedName &&
+      subjectName &&
+      subjectName.toLowerCase() !== normalizedCode.toLowerCase() &&
+      (storedName.toUpperCase() === normalizedCode ||
+        storedName.toUpperCase().startsWith(`${normalizedCode} `));
+    const cleanResolvedName =
+      matchedSubject && !isStoredNameTruncated ? matchedSubject.name : subjectName;
 
     // FR-C3: Exclude "without teacher" subjects entirely
     if (isWithoutTeacher(facultyField)) {
       processedRows.push({
         subjectCode,
-        subjectName,
+        subjectName: cleanResolvedName,
+        subjectId: matchedSubject ? matchedSubject._id : null,
         facultyField,
         hours,
+        isElective: resolvedElective,
         status: 'excluded',
         excludeReason: 'WITHOUT_TEACHER',
         message: 'Excluded per FR-C3: subject has no assigned teacher.',
@@ -627,13 +710,10 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
       continue;
     }
 
-    // FR-C4: Handle multiple faculty names (comma-separated)
-    // First name is primary approving faculty; remaining are coFaculty
-    const facultyNames = facultyField.split(',').map(n => n.trim()).filter(Boolean);
+    const facultyNames = facultyField.split(',').map((n) => n.trim()).filter(Boolean);
     const primaryName = facultyNames[0] || '';
     const coNames = facultyNames.slice(1);
 
-    // FR-C5: Normalize names and match against database
     const normalizedPrimary = normalizeFacultyName(primaryName);
     const matchedPrimaryFaculty = facultyByNormalizedName.get(normalizedPrimary);
 
@@ -648,16 +728,12 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
       }
     }
 
-    // FR-C6: Match Subject by exact subjectCode
-    const matchedSubject = subjectByCode.get(subjectCode.toUpperCase().replace(/\s+/g, ''));
-
-    // FR-C8: Flag row for manual review if subject or faculty cannot be matched
     const isSubjectMatched = Boolean(matchedSubject);
     const isFacultyMatched = Boolean(matchedPrimaryFaculty);
     const requiresReview = !isSubjectMatched || !isFacultyMatched || unmatchedCoFaculty.length > 0;
 
     let rowStatus = 'matched';
-    let reviewReasons = [];
+    const reviewReasons = [];
 
     if (!isSubjectMatched) {
       rowStatus = 'flagged';
@@ -680,12 +756,13 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
 
     processedRows.push({
       subjectCode,
-      subjectName: matchedSubject ? matchedSubject.name : subjectName,
+      subjectName: cleanResolvedName,
       subjectId: matchedSubject ? matchedSubject._id : null,
       facultyName: matchedPrimaryFaculty ? matchedPrimaryFaculty.name : primaryName,
       facultyId: matchedPrimaryFaculty ? matchedPrimaryFaculty._id : null,
       coFacultyIds,
       hours,
+      isElective: resolvedElective,
       status: rowStatus,
       requiresReview,
       reviewReasons,
@@ -693,17 +770,16 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
     });
   }
 
-  // Extract page metadata (FR-C1/FR-C7): Class, Class Teacher, Academic Year, w.e.f
   let metadata = null;
-  const textLines = extractedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const textLines = cleanText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (textLines.length > 0) {
     const title = textLines[0];
-    const ctMatch = extractedText.match(/Class Teacher:\s*([^\t\r\n]+)/i);
-    const ayMatch = extractedText.match(/Academic Year:\s*([^\t\r\n]+)/i);
-    const wefMatch = extractedText.match(/w\.e\.f\s*([^\t\r\n]+)/i);
-    const deptMatch = extractedText.match(/Department of ([^\t\r\n\(\)]+)/i);
+    const ctMatch = cleanText.match(/Class Teacher:\s*([^\t\r\n]+)/i);
+    const ayMatch = cleanText.match(/Academic Year:\s*([^\t\r\n]+)/i);
+    const wefMatch = cleanText.match(/w\.e\.f\s*([^\t\r\n]+)/i);
+    const deptMatch = cleanText.match(/Department of ([^\t\r\n\(\)]+)/i);
     const totalScheduledHours = rawRows.reduce((acc, r) => acc + (r.hours || 0), 0);
-    const classMeta = extractClassMetadataFromText(extractedText);
+    const classMeta = extractClassMetadataFromText(cleanText);
 
     metadata = {
       classTitle: title || null,
@@ -719,28 +795,14 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
     };
   }
 
-  const durationMs = Date.now() - startTime;
-  logger.info('Timetable PDF parsed successfully', {
-    totalRows: rawRows.length,
-    matchedCount: matchedRowCount,
-    flaggedCount: flaggedRowCount,
-    selectedPage: parsedPage,
-    pageCount,
-    durationMs,
-  });
-
   return {
-    success: true,
-    data: {
-      parsedRowCount: rawRows.length,
-      matchedRowCount,
-      flaggedRowCount,
-      selectedPage: parsedPage,
-      pageCount,
-      isMultiPage: pageCount > 1,
-      rows: processedRows,
-      metadata,
-      durationMs,
-    },
+    parsedRowCount: rawRows.length,
+    matchedRowCount,
+    flaggedRowCount,
+    selectedPage: pageNumber,
+    pageCount,
+    isMultiPage,
+    rows: processedRows,
+    metadata,
   };
 }

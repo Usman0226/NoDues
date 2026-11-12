@@ -4,6 +4,7 @@ import {
   inspectTimetablePdf,
   previewTimetable,
   commitTimetable,
+  bulkCommitTimetable,
   batchImportTimetable,
   getClassSubjectHistory,
 } from '../Controllers/timetableController.js';
@@ -34,6 +35,7 @@ router.use(RoleGuard(['admin', 'hod', 'ao']));
 router.post('/inspect', upload.single('file'), inspectTimetablePdf);
 router.post('/preview', upload.single('file'), previewTimetable);
 router.post('/commit', commitTimetable);
+router.post('/bulk-commit', upload.single('file'), bulkCommitTimetable);
 router.post('/batch-import', upload.single('file'), batchImportTimetable);
 
 // Class subject history across archived and active semesters (FR-B5)

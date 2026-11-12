@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getPreflightChecklist } from '../../api/wizard';
+import { getPreflightChecklist, bulkUpdateWizardProgress } from '../../api/wizard';
 import { getClass, updateClass } from '../../api/classes';
 import { getFaculty } from '../../api/faculty';
 import { ROLES } from '../../utils/constants';
@@ -21,13 +21,17 @@ import {
   AlertCircle,
   ExternalLink,
   Clock,
+  Layers,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const Step6Preflight = ({
   classId,
   targetClass,
+  provisionedClasses = [],
+  departmentId: propDepartmentId,
   user,
+  onSwitchClass,
   onSave,
   onBack,
   onNavigateToStep,
@@ -36,9 +40,10 @@ const Step6Preflight = ({
   const queryClient = useQueryClient();
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [isSavingTeacher, setIsSavingTeacher] = useState(false);
+  const [isSavingBatch, setIsSavingBatch] = useState(false);
 
   const isHod = user?.role === ROLES.HOD || user?.role === 'hod';
-  const classDetailPath = isHod ? `/hod/class/${classId}` : `/admin/class/${classId}`;
+  const classDetailPath = isHod ? '/hod/class/' + classId : '/admin/class/' + classId;
 
   const { data: classDetailRes } = useQuery({
     queryKey: ['wizard', 'class-summary', classId],
@@ -48,10 +53,15 @@ const Step6Preflight = ({
   });
 
   const liveClass = classDetailRes?.data || classDetailRes || targetClass;
-  const departmentId = liveClass?.departmentId?._id || liveClass?.departmentId;
+  const departmentId = liveClass?.departmentId?._id || liveClass?.departmentId || propDepartmentId;
   const subjectAssignments = Array.isArray(liveClass?.subjectAssignments)
     ? liveClass.subjectAssignments
     : [];
+  const deptClassesPath = isHod
+    ? '/hod/classes'
+    : departmentId
+    ? `/admin/departments/${departmentId}/classes`
+    : '/admin/departments';
 
   const {
     data: preflightRes,
@@ -121,6 +131,29 @@ const Step6Preflight = ({
     navigate(classDetailPath);
   };
 
+  const handleSaveAllAndOpenDept = async () => {
+    if (isSavingBatch) return;
+    setIsSavingBatch(true);
+    try {
+      const ids = provisionedClasses.map((c) => c.classId || c._id).filter(Boolean);
+      if (ids.length > 0) {
+        await bulkUpdateWizardProgress({
+          classIds: ids,
+          step: 'preflight',
+          markCompleted: true,
+          data: { savedForDeferredSetup: true },
+        }).catch(() => null);
+      }
+      queryClient.invalidateQueries({ queryKey: ['class'] });
+      toast.success(
+        `Saved all ${provisionedClasses.length} sections and their Master Syllabi! Add students on each class page when ready.`
+      );
+      navigate(deptClassesPath);
+    } finally {
+      setIsSavingBatch(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
@@ -159,6 +192,51 @@ const Step6Preflight = ({
   return (
     <>
       <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
+        {/* Provisioned Multi-Section Switcher (when >1 section was extracted from PDF) */}
+        {provisionedClasses.length > 1 && (
+          <div className="p-3.5 rounded-2xl border border-indigo-200/80 bg-indigo-50/40 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Layers size={15} className="text-indigo-600" />
+                <span className="text-xs font-black text-navy">
+                  All Sections Saved from PDF ({provisionedClasses.length} Sections)
+                </span>
+              </div>
+              <span className="text-[11px] font-semibold text-indigo-800">
+                Click any section below to inspect its readiness & extracted subjects
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {provisionedClasses.map((sec) => {
+                const secId = sec.classId || sec._id;
+                const isSelected = secId === classId;
+                const label = sec.displayName || formatSectionDisplayName(sec.name, sec.semester);
+                return (
+                  <button
+                    key={secId}
+                    type="button"
+                    onClick={() => onSwitchClass?.(secId)}
+                    className={`px-3 py-1.5 rounded-xl border text-left transition-all flex items-center gap-2 ${
+                      isSelected
+                        ? 'bg-navy text-white border-navy shadow-xs'
+                        : 'bg-white border-indigo-200/80 text-navy hover:border-indigo-400'
+                    }`}
+                  >
+                    <span className="text-xs font-black">{label}</span>
+                    <span
+                      className={`text-[10px] font-bold ${
+                        isSelected ? 'text-indigo-100' : 'text-zinc-500'
+                      }`}
+                    >
+                      Sem {sec.semester} · {sec.subjectCount ?? '—'} subj
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Top Readiness Banner */}
         <div
           className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
@@ -454,6 +532,19 @@ const Step6Preflight = ({
         </Button>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          {provisionedClasses.length > 1 && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              loading={isSavingBatch}
+              onClick={handleSaveAllAndOpenDept}
+              className="w-full sm:w-auto border-indigo-200 text-indigo-800 hover:bg-indigo-50"
+            >
+              <ExternalLink size={13} />
+              <span>Save All ({provisionedClasses.length}) & View Classes</span>
+            </Button>
+          )}
           {!readyForInitiation && classId && (
             <Button
               type="button"

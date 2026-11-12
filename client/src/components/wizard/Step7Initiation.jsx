@@ -13,13 +13,17 @@ import {
   RotateCcw,
   ExternalLink,
   Calendar,
+  Layers,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const Step7Initiation = ({
   classId,
   targetClass,
+  provisionedClasses = [],
+  departmentId: propDepartmentId,
   user,
+  onSwitchClass,
   onBack,
   onResetWizard,
 }) => {
@@ -42,6 +46,12 @@ const Step7Initiation = ({
 
   const isHod = user?.role === ROLES.HOD || user?.role === 'hod';
   const classDetailPath = isHod ? `/hod/class/${classId}` : `/admin/class/${classId}`;
+  const resolvedDeptId = liveClass?.departmentId?._id || liveClass?.departmentId || propDepartmentId;
+  const deptClassesPath = isHod
+    ? '/hod/classes'
+    : resolvedDeptId
+    ? `/admin/departments/${resolvedDeptId}/classes`
+    : '/admin/departments';
   const semester = liveClass?.semester || 1;
   const deptName = liveClass?.departmentId?.name || liveClass?.departmentName || 'Department';
   const classTeacherName =
@@ -127,6 +137,17 @@ const Step7Initiation = ({
               <ExternalLink size={13} />
               <span>View Class Details</span>
             </Button>
+            {provisionedClasses.length > 1 && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => navigate(deptClassesPath)}
+              >
+                <Layers size={13} />
+                <span>View All {provisionedClasses.length} Sections</span>
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -146,6 +167,47 @@ const Step7Initiation = ({
   return (
     <>
       <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
+        {provisionedClasses.length > 1 && (
+          <div className="p-3.5 rounded-2xl border border-emerald-200/80 bg-emerald-50/40 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Layers size={15} className="text-emerald-700" />
+                <span className="text-xs font-black text-navy">
+                  All {provisionedClasses.length} PDF Sections Saved — Review & Launch
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(deptClassesPath)}
+                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+              >
+                View All Classes in Department →
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {provisionedClasses.map((sec) => {
+                const secId = sec.classId || sec._id;
+                const isSelected = secId === classId;
+                const label = sec.displayName || formatSectionDisplayName(sec.name, sec.semester);
+                return (
+                  <button
+                    key={secId}
+                    type="button"
+                    onClick={() => onSwitchClass?.(secId)}
+                    className={`px-2.5 py-1 rounded-xl border text-xs font-bold transition-all ${
+                      isSelected
+                        ? 'bg-navy text-white border-navy'
+                        : 'bg-white border-emerald-200 text-navy hover:border-emerald-400'
+                    }`}
+                  >
+                    {label} · Sem {sec.semester}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Initiation Notice Banner */}
         <div className="p-4 rounded-2xl border border-indigo-200 bg-indigo-50/50 flex items-start gap-3">
           <div className="w-9 h-9 rounded-xl bg-white border border-indigo-200 text-indigo-600 flex items-center justify-center shrink-0">

@@ -12,6 +12,8 @@ const WizardProgressHeader = ({
   furthestUnlockedIndex = 0,
   onSelectStep,
   selectedClass,
+  provisionedClasses = [],
+  onSwitchClass,
   user,
   onReset,
 }) => {
@@ -61,9 +63,31 @@ const WizardProgressHeader = ({
           </div>
         </div>
 
-        {/* Right Context: Selected Class + Progress + Reset */}
+        {/* Right Context: Selected Class (or Provisioned Section Switcher) + Progress + Reset */}
         <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
-          {selectedClass && (
+          {provisionedClasses.length > 1 ? (
+            <div className="inline-flex items-center gap-2 h-9 px-2.5 rounded-full bg-white border border-indigo-200 shadow-xs">
+              <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-wider shrink-0">
+                {provisionedClasses.length} Sections
+              </span>
+              <select
+                aria-label="Switch active provisioned section"
+                value={selectedClass?._id || ''}
+                onChange={(e) => onSwitchClass?.(e.target.value)}
+                className="bg-transparent text-xs font-black text-navy focus:outline-none cursor-pointer pr-1"
+              >
+                {provisionedClasses.map((sec) => {
+                  const id = sec.classId || sec._id;
+                  const label = formatSectionDisplayName(sec.name, sec.semester);
+                  return (
+                    <option key={id} value={id}>
+                      {label} (Sem {sec.semester || 1})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          ) : selectedClass ? (
             <div className="h-9 inline-flex items-center gap-2 px-3 rounded-full bg-white border border-zinc-200 shadow-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden="true" />
               <span className="text-xs font-black text-navy leading-none">
@@ -73,7 +97,7 @@ const WizardProgressHeader = ({
                 Sem {selectedClass.semester || 1}
               </span>
             </div>
-          )}
+          ) : null}
 
           <span className="h-9 inline-flex items-center px-3 rounded-full bg-white border border-zinc-200/80 text-[11px] font-bold text-zinc-600 tabular-nums shadow-xs">
             {progressPercent}% ({completedCount}/{totalSteps})

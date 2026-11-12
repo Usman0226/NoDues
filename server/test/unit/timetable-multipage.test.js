@@ -28,7 +28,9 @@ import {
   extractTableRowsFromText,
   inspectPdfPages,
   parseTimetablePdf,
+  parseTimetablePageFromText,
 } from '../../src/services/timetableParser.js';
+import { setFeatureFlag } from '../../src/utils/featureFlags.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -483,6 +485,181 @@ describe('Timetable Multi-Page PDF Ingestion & Targeted Parsing', () => {
       assert.strictEqual(rows[1].subjectCode, '23CSD4M05');
       assert.strictEqual(rows[1].subjectName, 'Fundamentals of Machine Learning');
       assert.strictEqual(rows[1].isElective, true);
+
+      // Verify parseTimetablePageFromText preserves isElective and fixes truncated Subject name
+      const parsedPage = parseTimetablePageFromText(text, {
+        pageNumber: 1,
+        pageCount: 1,
+        allFaculties: [],
+        allSubjects: [
+          {
+            _id: new mongoose.Types.ObjectId(),
+            code: '23CSD4M01',
+            name: '23CSD4M01 Opera',
+            isElective: false,
+          },
+        ],
+      });
+      assert.strictEqual(parsedPage.rows[0].subjectName, 'Operating Systems');
+      assert.strictEqual(parsedPage.rows[0].isElective, true);
+    });
+  });
+
+  // ── 5. Bulk Multi-Page Provisioning & Wizard Bulk Progress ──────────────────
+  describe('POST /api/timetable/bulk-commit & PUT /api/wizard/classes/bulk-progress', () => {
+    it('provisions ALL reviewed + unvisited PDF sections, preserves isElective in Master Curriculum, repairs truncated Subject, and syncs bulk progress', async () => {
+      await Class.updateMany({ departmentId: testDepartment._id }, { $set: { isActive: false } });
+
+      // Seed a legacy truncated subject to verify automatic repair via bulkUpsertSubjects
+      await Subject.findOneAndUpdate(
+        { code: '23CSD4M01' },
+        { code: '23CSD4M01', name: '23CSD4M01 Opera', semester: 5, isElective: false, isActive: true },
+        { upsert: true, new: true }
+      );
+
+      // Mixed selection: Page 1 user-reviewed with custom edit (Sem 5) + Page 2 unvisited auto-parsed (CSE-B) + CSE-C (Sem 7) + Page 3 (General Instructions non-table) & Page 99 skipped safely
+      const sectionsSpec = [
+        {
+          pageNumber: 1,
+          className: 'CSE-A',
+          semester: 5,
+          academicYear: '2026-27',
+          departmentId: testDepartment._id.toString(),
+          confirmedRows: [
+            {
+              subjectCode: '23CSD4M01',
+              subjectName: 'Operating Systems',
+              facultyId: null,
+              facultyName: 'Dr. S. Kusuma',
+              isElective: true,
+              status: 'flagged',
+            },
+          ],
+        },
+        { pageNumber: 2 },
+        {
+          className: 'CSE-C',
+          semester: 7,
+          academicYear: '2026-27',
+          departmentId: testDepartment._id.toString(),
+          confirmedRows: [
+            {
+              subjectCode: '23CSD4M05',
+              subjectName: 'Fundamentals of Machine Learning',
+              facultyId: null,
+              facultyName: 'Prof. Bob',
+              isElective: true,
+              status: 'flagged',
+            },
+          ],
+        },
+        { pageNumber: 3 },
+        { pageNumber: 99 },
+      ];
+
+      const bulkRes = await request(app)
+        .post('/api/timetable/bulk-commit')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .field('defaultDepartmentId', testDepartment._id.toString())
+        .field('sections', JSON.stringify(sectionsSpec))
+        .attach('file', path.join(FIXTURES_DIR, 'timetable_multipage_sample.pdf'));
+
+      assert.strictEqual(bulkRes.statusCode, 200);
+      assert.strictEqual(bulkRes.body.data.provisionedCount, 3);
+      assert.strictEqual(bulkRes.body.data.sections.length, 3);
+      assert.strictEqual(bulkRes.body.data.skippedPages.length, 2);
+      assert.ok(bulkRes.body.data.skippedPages.some((p) => p.pageNumber === 3));
+      assert.ok(bulkRes.body.data.skippedPages.some((p) => p.pageNumber === 99));
+
+      // All 3 active operational classes must exist in MongoDB (no only-1-saved bug)
+      const activeClasses = await Class.find({
+        departmentId: testDepartment._id,
+        isActive: true,
+        isMaster: { $ne: true },
+      }).lean();
+      assert.strictEqual(activeClasses.length, 3);
+      assert.ok(activeClasses.some((c) => c.name === 'CSE-B'), 'Unvisited PDF Page 2 must auto-detect CSE-B cleanly');
+
+      // Verify Master Curricula hydrated across multiple semesters with isElective: true preserved
+      const masterSem5 = await Class.findOne({
+        departmentId: testDepartment._id,
+        semester: 5,
+        isMaster: true,
+        isActive: true,
+      }).lean();
+      assert.ok(masterSem5, 'Semester 5 Master Curriculum must be created');
+      const electiveMaster = masterSem5.subjectAssignments.find((s) => s.subjectCode === '23CSD4M01');
+      assert.ok(electiveMaster);
+      assert.strictEqual(electiveMaster.isElective, true);
+
+      const masterSem7 = await Class.findOne({
+        departmentId: testDepartment._id,
+        semester: 7,
+        isMaster: true,
+        isActive: true,
+      }).lean();
+      assert.ok(masterSem7, 'Semester 7 Master Curriculum must be created');
+      assert.strictEqual(masterSem7.subjectAssignments[0].subjectCode, '23CSD4M05');
+      assert.strictEqual(masterSem7.subjectAssignments[0].isElective, true);
+
+      // Verify Subject record repaired cleanly from '23CSD4M01 Opera' -> 'Operating Systems'
+      const repairedSub = await Subject.findOne({ code: '23CSD4M01' }).lean();
+      assert.strictEqual(repairedSub.name, 'Operating Systems');
+      assert.strictEqual(repairedSub.isElective, true);
+
+      // Verify bulk-commit idempotency with Roman prefixes doesn't create duplicate active classes
+      const repeatRes = await request(app)
+        .post('/api/timetable/bulk-commit')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          defaultDepartmentId: testDepartment._id.toString(),
+          sections: [
+            {
+              className: 'III CSE-A',
+              semester: 5,
+              academicYear: '2026-27',
+              departmentId: testDepartment._id.toString(),
+              confirmedRows: [
+                {
+                  subjectCode: '23CSD4M01',
+                  subjectName: 'Operating Systems',
+                  facultyId: null,
+                  facultyName: 'Dr. S. Kusuma',
+                  isElective: true,
+                  status: 'flagged',
+                },
+              ],
+            },
+          ],
+        });
+      assert.strictEqual(repeatRes.statusCode, 200);
+      const activeAfterRepeat = await Class.countDocuments({
+        departmentId: testDepartment._id,
+        isActive: true,
+        isMaster: { $ne: true },
+      });
+      assert.strictEqual(activeAfterRepeat, 3, 'Canonical Roman-prefix re-commit must not duplicate classes');
+
+      // Verify PUT /api/wizard/classes/bulk-progress advances all 3 classes together
+      await setFeatureFlag('setup_wizard_enabled', true, 'test bulk progress');
+      const allIds = activeClasses.map((c) => c._id.toString());
+      const bulkProgRes = await request(app)
+        .put('/api/wizard/classes/bulk-progress')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          classIds: allIds,
+          step: 'students',
+          markCompleted: true,
+          data: { skipped: true },
+        });
+      assert.strictEqual(bulkProgRes.statusCode, 200);
+      assert.strictEqual(bulkProgRes.body.data.updatedCount, 3);
+
+      const syncedClasses = await Class.find({ _id: { $in: allIds } }).lean();
+      for (const cls of syncedClasses) {
+        assert.ok(cls.wizardProgress.completedSteps.includes('students'));
+        assert.strictEqual(cls.wizardProgress.stepData?.students?.skipped, true);
+      }
     });
   });
 });

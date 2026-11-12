@@ -27,6 +27,13 @@ export const getWizardProgress = (classId) => api.get(`/wizard/classes/${classId
 export const updateWizardProgress = (classId, payload) => api.put(`/wizard/classes/${classId}/progress`, payload);
 
 /**
+ * Bulk-update wizard progress across multiple provisioned classes
+ * @param {{ classIds: string[], step: string, markCompleted?: boolean, data?: any }} payload
+ * @returns {Promise<{ success: boolean, data: any }>}
+ */
+export const bulkUpdateWizardProgress = (payload) => api.put('/wizard/classes/bulk-progress', payload);
+
+/**
  * Retrieve pre-flight validation checklist for a class
  * @param {string} classId
  * @returns {Promise<{ success: boolean, data: any }>}
@@ -76,6 +83,20 @@ export const batchImportTimetable = (formData) =>
  * @returns {Promise<{ success: boolean, data: any }>}
  */
 export const commitTimetable = (payload) => api.post('/timetable/commit', payload);
+
+/**
+ * Bulk-commit reviewed and unvisited sections from an institutional timetable PDF
+ * @param {FormData|Object} payload
+ * @returns {Promise<{ success: boolean, data: any }>}
+ */
+export const bulkCommitTimetable = (payload) =>
+  api.post(
+    '/timetable/bulk-commit',
+    payload,
+    payload instanceof FormData
+      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      : undefined
+  );
 
 /**
  * Clone subject structure from an existing class

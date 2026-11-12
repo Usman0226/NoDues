@@ -43,6 +43,10 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
       keys.push(...listFacultyKeys);
       break;
 
+    case 'subject':
+      keys.push(`subject:${entityId}`);
+      break;
+
     case 'department':
       keys.push(`dept:${entityId}`);
       keys.push(`dept:detail:${entityId}`);
@@ -60,9 +64,11 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
       const scopedKeys = allKeys.filter(k => k.startsWith(`class:${entityId}:`));
       keys.push(...scopedKeys);
 
-      // 2. Wildcard list invalidation for departments
+      // 2. Wildcard list invalidation for affected department + unfiltered admin ('dept_all') lists
       const listPrefix = additionalId ? `classes:list:dept_${additionalId}` : 'classes:list:';
-      const listKeys = allKeys.filter(k => k.startsWith(listPrefix));
+      const listKeys = allKeys.filter(
+        k => k.startsWith(listPrefix) || k.startsWith('classes:list:dept_all:')
+      );
       keys.push(...listKeys);
       break;
     }

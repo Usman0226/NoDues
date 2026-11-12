@@ -4,6 +4,7 @@ import {
   inspectTimetablePdf,
   previewTimetable,
   commitTimetable,
+  bulkCommitTimetable,
   batchImportTimetable,
   cloneClassSubjects,
 } from '../../api/wizard';
@@ -62,6 +63,7 @@ const Step1ClassSubjects = ({
   const [inspection, setInspection] = useState(null);
   const [pageSearchQuery, setPageSearchQuery] = useState('');
   const [selectedPage, setSelectedPage] = useState(null);
+  const [selectedPageNumbers, setSelectedPageNumbers] = useState([]);
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
   const [pageCache, setPageCache] = useState({});
@@ -350,6 +352,7 @@ const Step1ClassSubjects = ({
     setIsInspecting(false);
     setInspection(null);
     setSelectedPage(null);
+    setSelectedPageNumbers([]);
     setExtractedRows([]);
     setPageCache({});
     setUploadId(null);
@@ -380,6 +383,7 @@ const Step1ClassSubjects = ({
     setInspection(null);
     setParseError(null);
     setSelectedPage(null);
+    setSelectedPageNumbers([]);
     setExtractedRows([]);
     setPageCache({});
     setUploadId(null);
@@ -402,6 +406,12 @@ const Step1ClassSubjects = ({
           : res?.data || res;
       setInspection(inspData);
 
+      // Select all extractable curriculum pages by default so multi-page institutional PDFs provision cleanly together
+      const validPageNums = (inspData.pages || [])
+        .filter((p) => p.hasTextLayer !== false)
+        .map((p) => p.pageNumber);
+      setSelectedPageNumbers(validPageNums);
+
       let matchedDeptId = activeDepartmentId;
       if (!sectionForm.departmentId && inspData.pages?.[0]?.detectedDepartment && departments?.length > 0) {
         const code = inspData.pages[0].detectedDepartment.toUpperCase();
@@ -414,13 +424,13 @@ const Step1ClassSubjects = ({
         }
       }
 
-      const targetPage = inspData.recommendedPage || 1;
+      const targetPage = inspData.recommendedPage || validPageNums[0] || 1;
       setSelectedPage(targetPage);
       await runPreviewForPage(file, targetPage, matchedDeptId);
 
       if (inspData.pageCount > 1) {
         toast.success(
-          `Detected ${inspData.pageCount} section pages. Previewing ${
+          `Detected ${inspData.pageCount} sections (${validPageNums.length} ready to provision). Previewing ${
             inspData.pages?.[targetPage - 1]?.displayName || `Section ${targetPage}`
           }.`
         );
@@ -444,6 +454,68 @@ const Step1ClassSubjects = ({
     runPreviewForPage(pdfFile, pageNum);
   };
 
+  const toggleIncludePage = (pageNum) => {
+    setSelectedPageNumbers((prev) =>
+      prev.includes(pageNum)
+        ? prev.filter((n) => n !== pageNum)
+        : [...prev, pageNum].sort((a, b) => a - b)
+    );
+  };
+
+  const buildSectionSpecForPage = (pageNum) => {
+    if (Number(pageNum) === Number(selectedPage)) {
+      const matchesAutoMatched =
+        Boolean(resolvedClassId) &&
+        (!matchedSectionInfo ||
+          (matchedSectionInfo.matchedClassId === resolvedClassId &&
+            normalizeSectionKeyClient(sectionForm.name) ===
+              normalizeSectionKeyClient(matchedSectionInfo.matchedName) &&
+            Number(sectionForm.semester) === Number(matchedSectionInfo.matchedSemester)));
+      return {
+        pageNumber: pageNum,
+        classId: matchesAutoMatched ? resolvedClassId : undefined,
+        className: sectionForm.name.trim(),
+        academicYear: sectionForm.academicYear?.trim() || '2026-27',
+        departmentId: activeDepartmentId || undefined,
+        semester: sectionForm.semester,
+        targetSemester: sectionForm.semester,
+        classTeacherId: sectionForm.classTeacherId || null,
+        detectedTeacher: matchedSectionInfo?.detectedTeacher || null,
+        uploadId,
+        confirmedRows: extractedRows,
+      };
+    }
+
+    const cached = pageCache[pageNum];
+    if (cached && Array.isArray(cached.rows) && cached.rows.length > 0) {
+      const cachedMatch =
+        Boolean(cached.classId) &&
+        (!cached.matchedSectionInfo ||
+          (cached.matchedSectionInfo.matchedClassId === cached.classId &&
+            normalizeSectionKeyClient(cached.name) ===
+              normalizeSectionKeyClient(cached.matchedSectionInfo.matchedName) &&
+            Number(cached.semester) === Number(cached.matchedSectionInfo.matchedSemester)));
+      return {
+        pageNumber: pageNum,
+        classId: cachedMatch ? cached.classId : undefined,
+        className: String(cached.name || '').trim(),
+        academicYear: String(cached.academicYear || '2026-27').trim(),
+        departmentId: cached.departmentId || activeDepartmentId || undefined,
+        semester: cached.semester,
+        targetSemester: cached.semester,
+        classTeacherId: cached.classTeacherId || null,
+        detectedTeacher: cached.matchedSectionInfo?.detectedTeacher || null,
+        uploadId: cached.uploadId,
+        confirmedRows: cached.rows,
+      };
+    }
+
+    return {
+      pageNumber: pageNum,
+      departmentId: activeDepartmentId || undefined,
+    };
+  };
+
   const handleBatchImport = async () => {
     if (!pdfFile || isBatchImporting) return;
     setIsBatchImporting(true);
@@ -451,6 +523,14 @@ const Step1ClassSubjects = ({
       const fd = new FormData();
       fd.append('file', pdfFile);
       if (activeDepartmentId) fd.append('departmentId', activeDepartmentId);
+
+      // Preserve user edits from reviewed/cached pages
+      const visitedPages = Array.from(
+        new Set([...Object.keys(pageCache).map(Number), ...(selectedPage ? [selectedPage] : [])])
+      ).filter((n) => Number.isFinite(n));
+      if (visitedPages.length > 0) {
+        fd.append('overrides', JSON.stringify(visitedPages.map(buildSectionSpecForPage)));
+      }
 
       const res = await batchImportTimetable(fd);
       const data = res?.data || res;
@@ -469,6 +549,7 @@ const Step1ClassSubjects = ({
   const handleSelectBatchSection = (sec) => {
     setBatchModalOpen(false);
     const classDisplayName = formatSectionDisplayName(sec.name, sec.semester);
+    const allProvisioned = batchResult?.sections?.length ? batchResult.sections : [sec];
     onSave({
       classId: sec.classId,
       classData: {
@@ -476,9 +557,10 @@ const Step1ClassSubjects = ({
         name: sec.name,
         semester: sec.semester,
         academicYear: sec.academicYear,
-        departmentId: activeDepartmentId,
+        departmentId: sec.departmentId || activeDepartmentId,
         classTeacherId: sec.classTeacher?._id || null,
       },
+      provisionedClasses: allProvisioned,
       summary: `${classDisplayName} · Sem ${sec.semester} · ${sec.subjectCount} subjects provisioned`,
       completedTimetable: true,
     });
@@ -551,35 +633,128 @@ const Step1ClassSubjects = ({
       return;
     }
 
-    const matchesAutoMatchedSection =
-      Boolean(resolvedClassId) &&
-      (!matchedSectionInfo ||
-        (matchedSectionInfo.matchedClassId === resolvedClassId &&
-          normalizeSectionKeyClient(sectionForm.name) ===
-            normalizeSectionKeyClient(matchedSectionInfo.matchedName) &&
-          Number(sectionForm.semester) === Number(matchedSectionInfo.matchedSemester)));
-    const effectiveClassId = matchesAutoMatchedSection ? resolvedClassId : undefined;
+    const pagesToCommit =
+      hasMultiPages && selectedPageNumbers.length > 0
+        ? Array.from(new Set(selectedPageNumbers)).sort((a, b) => a - b)
+        : [selectedPage || 1];
 
-    if (!effectiveClassId && !activeDepartmentId) {
-      toast.error('Please select a target department before confirming.');
-      return;
+    // Ensure the currently viewed section uses live edited state
+    if (selectedPage && pagesToCommit.length === 1 && !selectedPageNumbers.includes(selectedPage)) {
+      pagesToCommit[0] = selectedPage;
     }
 
     setIsSubmitting(true);
     try {
+      if (hasMultiPages && pagesToCommit.length > 1) {
+        const specs = pagesToCommit.map(buildSectionSpecForPage);
+        const hasUnvisitedPages = specs.some(
+          (s) => !Array.isArray(s.confirmedRows) || s.confirmedRows.length === 0
+        );
+
+        let res;
+        if (hasUnvisitedPages && pdfFile) {
+          const fd = new FormData();
+          fd.append('file', pdfFile);
+          fd.append('sections', JSON.stringify(specs));
+          if (activeDepartmentId) fd.append('defaultDepartmentId', activeDepartmentId);
+          res = await bulkCommitTimetable(fd);
+        } else {
+          res = await bulkCommitTimetable({
+            sections: specs,
+            defaultDepartmentId: activeDepartmentId || undefined,
+          });
+        }
+
+        const data = res?.data || res;
+        const provisionedSections = data.sections || [];
+        const skippedPages = data.skippedPages || [];
+        if (provisionedSections.length === 0) {
+          toast.error('No valid sections could be provisioned from the selection.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Sync cached page classIds so returning to Step 1 reflects all created sections
+        setPageCache((prev) => {
+          const next = { ...prev };
+          for (const sec of provisionedSections) {
+            if (sec.pageNumber && next[sec.pageNumber]) {
+              next[sec.pageNumber] = {
+                ...next[sec.pageNumber],
+                classId: sec.classId,
+                matchedSectionInfo: {
+                  ...(next[sec.pageNumber].matchedSectionInfo || {}),
+                  existingClassFound: true,
+                  matchedClassId: sec.classId,
+                  matchedName: sec.name,
+                  matchedSemester: sec.semester,
+                },
+              };
+            }
+          }
+          return next;
+        });
+
+        const primarySec =
+          provisionedSections.find((s) => Number(s.pageNumber) === Number(selectedPage)) ||
+          provisionedSections[0];
+        const freshRes = await getClass(primarySec.classId).catch(() => null);
+        const primaryClassData = freshRes?.data || freshRes || {
+          _id: primarySec.classId,
+          name: primarySec.name,
+          semester: primarySec.semester,
+          academicYear: primarySec.academicYear,
+          departmentId: primarySec.departmentId || activeDepartmentId,
+          classTeacherId: primarySec.classTeacher?._id || null,
+        };
+
+        setResolvedClassId(primarySec.classId);
+        setResolvedClassData(primaryClassData);
+        queryClient.invalidateQueries({ queryKey: ['class'] });
+        queryClient.invalidateQueries({ queryKey: ['wizard', 'all-classes'] });
+        onDirtyChange?.(false);
+
+        if (skippedPages.length > 0) {
+          toast.success(
+            `Provisioned ${provisionedSections.length} sections cleanly (${skippedPages.length} non-table page skipped).`
+          );
+        } else {
+          toast.success(
+            `Provisioned all ${provisionedSections.length} sections with subjects & master syllabi!`
+          );
+        }
+
+        onSave({
+          classId: primarySec.classId,
+          classData: primaryClassData,
+          provisionedClasses: provisionedSections,
+          summary: `${provisionedSections.length} sections provisioned · Active: ${primarySec.displayName || primarySec.name}`,
+          completedTimetable: true,
+        });
+        return;
+      }
+
+      // Single-section commit flow
+      const singleSpec = buildSectionSpecForPage(pagesToCommit[0] || selectedPage || 1);
+      if (!singleSpec.classId && !activeDepartmentId) {
+        toast.error('Please select a target department before confirming.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const res = await commitTimetable({
-        uploadId,
-        classId: effectiveClassId,
-        className: sectionForm.name.trim(),
-        academicYear: sectionForm.academicYear?.trim() || '2026-27',
-        departmentId: activeDepartmentId || undefined,
-        targetSemester: sectionForm.semester,
-        classTeacherId: sectionForm.classTeacherId || null,
-        confirmedRows: extractedRows,
+        uploadId: singleSpec.uploadId,
+        classId: singleSpec.classId,
+        className: singleSpec.className || sectionForm.name.trim(),
+        academicYear: singleSpec.academicYear || sectionForm.academicYear?.trim() || '2026-27',
+        departmentId: singleSpec.departmentId || activeDepartmentId || undefined,
+        targetSemester: singleSpec.semester || sectionForm.semester,
+        classTeacherId: singleSpec.classTeacherId ?? (sectionForm.classTeacherId || null),
+        confirmedRows: singleSpec.confirmedRows || extractedRows,
       });
 
       const payload = res?.data || res;
-      const committedClassId = payload?.classId || effectiveClassId;
+      const committedClassId = payload?.classId || singleSpec.classId;
       const updatedClass = payload?.classData || resolvedClassData;
       const classDisplayName = formatSectionDisplayName(
         updatedClass?.name || sectionForm.name,
@@ -607,15 +782,33 @@ const Step1ClassSubjects = ({
       queryClient.invalidateQueries({ queryKey: ['wizard', 'all-classes'] });
       onDirtyChange?.(false);
 
+      const finalClassData = {
+        ...updatedClass,
+        _id: committedClassId,
+        name: updatedClass?.name || sectionForm.name.trim(),
+        semester: updatedClass?.semester || sectionForm.semester,
+        academicYear: updatedClass?.academicYear || sectionForm.academicYear,
+        classTeacherId: sectionForm.classTeacherId || updatedClass?.classTeacherId || null,
+      };
+
       onSave({
         classId: committedClassId,
-        classData: {
-          ...updatedClass,
-          name: updatedClass?.name || sectionForm.name.trim(),
-          semester: updatedClass?.semester || sectionForm.semester,
-          academicYear: updatedClass?.academicYear || sectionForm.academicYear,
-          classTeacherId: sectionForm.classTeacherId || updatedClass?.classTeacherId || null,
-        },
+        classData: finalClassData,
+        provisionedClasses: [
+          {
+            classId: committedClassId,
+            _id: committedClassId,
+            name: finalClassData.name,
+            displayName: classDisplayName,
+            semester: finalClassData.semester,
+            academicYear: finalClassData.academicYear,
+            departmentId: finalClassData.departmentId?._id || finalClassData.departmentId || activeDepartmentId,
+            subjectCount: counts.matched + counts.flagged,
+            classTeacher: finalClassData.classTeacherId && typeof finalClassData.classTeacherId === 'object'
+              ? finalClassData.classTeacherId
+              : null,
+          },
+        ],
         summary: `${classDisplayName} · Sem ${sectionForm.semester} · ${counts.matched + counts.flagged} subjects`,
         completedTimetable: true,
       });
@@ -939,11 +1132,25 @@ const Step1ClassSubjects = ({
                   <aside className="flex flex-col rounded-2xl border border-zinc-200/90 bg-zinc-50/50 p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2 px-0.5">
                       <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">
-                        Detected Sections ({inspection.pageCount})
+                        Detected Sections ({selectedPageNumbers.length}/{inspection.pageCount})
                       </span>
-                      <span className="text-[10px] font-semibold text-zinc-400">
-                        Click to preview
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const valid = (inspection.pages || [])
+                              .filter((p) => p.hasTextLayer !== false)
+                              .map((p) => p.pageNumber);
+                            const allSelected = selectedPageNumbers.length === valid.length;
+                            setSelectedPageNumbers(
+                              allSelected ? (selectedPage ? [selectedPage] : []) : valid
+                            );
+                          }}
+                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                        >
+                          {selectedPageNumbers.length > 1 ? 'Focus 1' : 'Select All'}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="relative">
@@ -979,37 +1186,55 @@ const Step1ClassSubjects = ({
                             <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5">
                               {filtered.map((page) => {
                                 const isCurrent = selectedPage === page.pageNumber;
+                                const isChecked = selectedPageNumbers.includes(page.pageNumber);
+                                const isDisabled = page.hasTextLayer === false;
                                 const displayName = page.displayName || page.detectedClassName || `Page ${page.pageNumber}`;
                                 const isCached = Boolean(pageCache[page.pageNumber]);
                                 return (
-                                  <button
+                                  <div
                                     key={page.pageNumber}
-                                    type="button"
-                                    onClick={() => handleSelectPage(page.pageNumber)}
-                                    className={`px-3 py-2 rounded-xl border text-left transition-all flex items-center justify-between gap-2 ${
+                                    className={`px-2.5 py-2 rounded-xl border text-left transition-all flex items-center gap-2 ${
                                       isCurrent
                                         ? 'bg-navy text-white border-navy shadow-xs'
                                         : 'bg-white border-zinc-200/80 hover:border-indigo-300 text-navy'
                                     }`}
                                   >
-                                    <div className="min-w-0">
-                                      <p className={`text-xs font-black truncate ${isCurrent ? 'text-white' : 'text-navy'}`}>
-                                        {displayName}
-                                      </p>
-                                      <p
-                                        className={`text-[10px] truncate ${
-                                          isCurrent ? 'text-indigo-100' : 'text-zinc-500'
-                                        }`}
-                                      >
-                                        {page.detectedTeacher ? `CT: ${page.detectedTeacher}` : `Page ${page.pageNumber}`}
-                                      </p>
-                                    </div>
-                                    {isCurrent ? (
-                                      <Check size={13} className="shrink-0 stroke-[3]" />
-                                    ) : isCached ? (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Previewed" />
-                                    ) : null}
-                                  </button>
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      disabled={isDisabled}
+                                      onChange={() => toggleIncludePage(page.pageNumber)}
+                                      aria-label={`Include ${displayName} in setup`}
+                                      className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 shrink-0 cursor-pointer"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectPage(page.pageNumber)}
+                                      className="min-w-0 flex-1 flex items-center justify-between gap-1.5 text-left"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className={`text-xs font-black truncate ${isCurrent ? 'text-white' : 'text-navy'}`}>
+                                          {displayName}
+                                        </p>
+                                        <p
+                                          className={`text-[10px] truncate ${
+                                            isCurrent ? 'text-indigo-100' : 'text-zinc-500'
+                                          }`}
+                                        >
+                                          {isDisabled
+                                            ? 'No extractable text'
+                                            : page.detectedTeacher
+                                            ? `CT: ${page.detectedTeacher}`
+                                            : `Page ${page.pageNumber}`}
+                                        </p>
+                                      </div>
+                                      {isCurrent ? (
+                                        <Check size={13} className="shrink-0 stroke-[3]" />
+                                      ) : isCached ? (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Reviewed" />
+                                      ) : null}
+                                    </button>
+                                  </div>
                                 );
                               })}
                             </div>
@@ -1594,6 +1819,11 @@ const Step1ClassSubjects = ({
               <div className="text-xs text-zinc-600 font-medium">
                 <span>Active subjects: </span>
                 <strong className="text-navy">{counts.matched + counts.flagged}</strong>
+                {hasMultiPages && selectedPageNumbers.length > 1 && (
+                  <span className="text-indigo-700 font-bold ml-2">
+                    · Provisioning {selectedPageNumbers.length} selected sections + Master Syllabi
+                  </span>
+                )}
                 {counts.flagged > 0 && (
                   <span className="text-amber-700 font-semibold ml-2">
                     ({counts.flagged} unmatched faculty — can assign now or later)
@@ -1609,7 +1839,11 @@ const Step1ClassSubjects = ({
                 disabled={isSubmitting}
                 className="w-full sm:w-auto"
               >
-                <span>Confirm & Continue to Students</span>
+                <span>
+                  {hasMultiPages && selectedPageNumbers.length > 1
+                    ? `Confirm All ${selectedPageNumbers.length} Sections & Continue`
+                    : 'Confirm & Continue to Students'}
+                </span>
                 <ArrowRight size={13} />
               </Button>
             </>

@@ -6,6 +6,7 @@
 import {
   getWizardProgress,
   saveWizardProgress,
+  saveBulkWizardProgress,
   validatePreflightChecklist,
 } from '../services/wizardService.js';
 import ErrorResponse from '../utils/errorResponse.js';
@@ -40,6 +41,33 @@ export async function updateProgress(req, res, next) {
     }
 
     const updated = await saveWizardProgress(classId, {
+      step,
+      markCompleted,
+      data,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: updated,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PUT /api/wizard/classes/bulk-progress
+ */
+export async function updateBulkProgress(req, res, next) {
+  try {
+    const { classIds, step, markCompleted, data } = req.body;
+
+    if (!Array.isArray(classIds) || classIds.length === 0 || !step) {
+      return next(new ErrorResponse('classIds array and step are required', 400, 'VALIDATION_ERROR'));
+    }
+
+    const updated = await saveBulkWizardProgress({
+      classIds,
       step,
       markCompleted,
       data,

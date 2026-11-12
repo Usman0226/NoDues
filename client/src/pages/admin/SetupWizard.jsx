@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
 import { useSetupWizardFlag } from '../../hooks/useFeatureFlag';
 import { ROLES } from '../../utils/constants';
-import { getWizardProgress, updateWizardProgress } from '../../api/wizard';
+import { getWizardProgress, updateWizardProgress, bulkUpdateWizardProgress } from '../../api/wizard';
 import { getClass } from '../../api/classes';
 import { useNavigationStack } from '../../hooks/useNavigationStack';
 import WizardProgressHeader from '../../components/wizard/WizardProgressHeader';
@@ -37,6 +37,7 @@ const SetupWizard = () => {
   const [skippedSteps, setSkippedSteps] = useState([]);
   const [classId, setClassId] = useState(queryClassId || null);
   const [selectedClass, setSelectedClass] = useState(null);
+  const [provisionedClasses, setProvisionedClasses] = useState([]);
   const [isDirty, setIsDirty] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
@@ -80,6 +81,21 @@ const SetupWizard = () => {
         if (classData) {
           setClassId(queryClassId);
           setSelectedClass(classData);
+          setProvisionedClasses((prev) =>
+            prev.length > 1
+              ? prev
+              : [
+                  {
+                    classId: queryClassId,
+                    _id: queryClassId,
+                    name: classData.name,
+                    semester: classData.semester,
+                    academicYear: classData.academicYear,
+                    departmentId: classData.departmentId?._id || classData.departmentId,
+                    subjectCount: classData.subjectAssignments?.length || 0,
+                  },
+                ]
+          );
         }
 
         const progress = progressRes?.data || progressRes;
@@ -148,34 +164,78 @@ const SetupWizard = () => {
   };
 
   // Step 1 Save Handler
-  const handleStep1Save = async ({ classId: newClassId, classData, completedTimetable }) => {
+  const handleStep1Save = async ({
+    classId: newClassId,
+    classData,
+    provisionedClasses: batchSections,
+    completedTimetable,
+  }) => {
     setClassId(newClassId);
     setSelectedClass(classData);
+    const resolvedBatch =
+      Array.isArray(batchSections) && batchSections.length > 0
+        ? batchSections
+        : newClassId
+        ? [
+            {
+              classId: newClassId,
+              _id: newClassId,
+              name: classData?.name,
+              semester: classData?.semester,
+              academicYear: classData?.academicYear,
+              departmentId: classData?.departmentId?._id || classData?.departmentId || queryDeptId,
+              subjectCount: classData?.subjectAssignments?.length || 0,
+            },
+          ]
+        : [];
+    setProvisionedClasses(resolvedBatch);
     setIsDirty(false);
 
     markStepComplete('class_info', 1);
 
-    try {
-      await updateWizardProgress(newClassId, {
-        step: 'class_info',
-        markCompleted: true,
-        data: { name: classData.name, semester: classData.semester, subjectsConfigured: true },
-      });
-      if (completedTimetable) {
+    // Multi-section bulk commits already persist class_info & timetable_subjects in one bulkWrite
+    if (resolvedBatch.length <= 1 && newClassId) {
+      try {
         await updateWizardProgress(newClassId, {
-          step: 'timetable_subjects',
+          step: 'class_info',
           markCompleted: true,
-          data: { subjectsConfigured: true },
+          data: { name: classData.name, semester: classData.semester, subjectsConfigured: true },
         });
+        if (completedTimetable) {
+          await updateWizardProgress(newClassId, {
+            step: 'timetable_subjects',
+            markCompleted: true,
+            data: { subjectsConfigured: true },
+          });
+        }
+      } catch (err) {
+        console.warn('Backend progress save failed:', err?.message);
       }
-    } catch (err) {
-      console.warn('Backend progress save failed:', err?.message);
     }
 
-    announce('Step 1 completed. Advanced to Step 2: Enrolled Students.');
+    announce(
+      resolvedBatch.length > 1
+        ? `Step 1 completed for ${resolvedBatch.length} sections. Advanced to Step 2: Enrolled Students.`
+        : 'Step 1 completed. Advanced to Step 2: Enrolled Students.'
+    );
   };
 
-  // Generic Step Save Handler (also handles skipped optional steps gracefully)
+  // Switch which provisioned class is focused when a multi-section PDF provisioned multiple classes
+  const handleSwitchActiveClass = async (targetClassId) => {
+    if (!targetClassId || targetClassId === classId) return;
+    setClassId(targetClassId);
+    try {
+      const clsRes = await getClass(targetClassId);
+      const clsData = clsRes?.data || clsRes;
+      if (clsData) setSelectedClass(clsData);
+    } catch (err) {
+      const fallback = provisionedClasses.find((c) => (c.classId || c._id) === targetClassId);
+      if (fallback) setSelectedClass(fallback);
+      console.warn('Could not refresh switched class:', err?.message);
+    }
+  };
+
+  // Generic Step Save Handler (also handles skipped optional steps & bulk cohort sync gracefully)
   const handleStepSave = async ({ step, data }) => {
     setIsDirty(false);
     const isSkipped = Boolean(data?.skipped);
@@ -185,7 +245,19 @@ const SetupWizard = () => {
 
     markStepComplete(step, nextIdx, { skipped: isSkipped });
 
-    if (classId) {
+    const allProvisionedIds = provisionedClasses.map((c) => c.classId || c._id).filter(Boolean);
+    if (allProvisionedIds.length > 1 && (isSkipped || step === 'preflight')) {
+      try {
+        await bulkUpdateWizardProgress({
+          classIds: allProvisionedIds,
+          step,
+          markCompleted: true,
+          data: data || {},
+        });
+      } catch (err) {
+        console.warn('Backend bulk progress save failed:', err?.message);
+      }
+    } else if (classId) {
       try {
         await updateWizardProgress(classId, {
           step,
@@ -216,6 +288,7 @@ const SetupWizard = () => {
   const handleResetWizard = () => {
     setClassId(null);
     setSelectedClass(null);
+    setProvisionedClasses([]);
     setCompletedSteps([]);
     setSkippedSteps([]);
     setActiveStepIndex(0);
@@ -321,7 +394,10 @@ const SetupWizard = () => {
             <Step6Preflight
               classId={classId}
               targetClass={selectedClass}
+              provisionedClasses={provisionedClasses}
+              departmentId={queryDeptId || selectedClass?.departmentId?._id || selectedClass?.departmentId || user?.departmentId}
               user={user}
+              onSwitchClass={handleSwitchActiveClass}
               onSave={handleStepSave}
               onBack={() => setActiveStepIndex(3)}
               onNavigateToStep={(stepIdx) => setActiveStepIndex(stepIdx)}
@@ -338,7 +414,10 @@ const SetupWizard = () => {
             <Step7Initiation
               classId={classId}
               targetClass={selectedClass}
+              provisionedClasses={provisionedClasses}
+              departmentId={queryDeptId || selectedClass?.departmentId?._id || selectedClass?.departmentId || user?.departmentId}
               user={user}
+              onSwitchClass={handleSwitchActiveClass}
               onBack={() => setActiveStepIndex(4)}
               onResetWizard={handleResetWizard}
             />
@@ -365,6 +444,8 @@ const SetupWizard = () => {
           furthestUnlockedIndex={furthestUnlockedIndex}
           onSelectStep={handleSelectStep}
           selectedClass={selectedClass}
+          provisionedClasses={provisionedClasses}
+          onSwitchClass={handleSwitchActiveClass}
           user={user}
           onReset={handleResetWizard}
         />
