@@ -18,9 +18,15 @@ const removeClient = (userId, res) => {
 };
 
 // De-duplication cache: Map<userId_eventName_payloadHash, lastSentTimestamp>
+// Bounded to MAX_DEDUP_ENTRIES to prevent unbounded growth during traffic spikes.
+// At 3,000 concurrent users each getting ~5 events, peak is ~15,000 entries.
+// 20,000 cap gives headroom; each entry is ~100-200 bytes → max ~4MB RAM.
 const recentEvents = new Map();
+const MAX_DEDUP_ENTRIES = 20_000;
 
-// Cleanup interval for the de-duplication cache (every 2 minutes)
+// Cleanup interval for the de-duplication cache (every 2 minutes).
+// Removes entries older than 5 seconds (the dedup window).
+// Pure in-memory — does NOT touch MongoDB.
 setInterval(() => {
   const now = Date.now();
   for (const [key, timestamp] of recentEvents.entries()) {
@@ -44,8 +50,12 @@ export const pushEvent = (userIds, eventName, payload) => {
     if (lastSent && eventId - lastSent < 1000) {
       continue;
     }
-    
-    recentEvents.set(fingerPrint, eventId);
+
+    // Only record dedup entry if the Map is under the cap.
+    // If over cap, skip recording (event still sends) — correctness > dedup.
+    if (recentEvents.size < MAX_DEDUP_ENTRIES) {
+      recentEvents.set(fingerPrint, eventId);
+    }
 
     const connections = clients.get(uid);
     if (!connections) continue;
