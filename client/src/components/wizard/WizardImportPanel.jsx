@@ -109,28 +109,28 @@ const WizardImportPanel = ({
   const errorRows = previewData?.errors || [];
 
   return (
-    <div className="rounded-2xl border border-zinc-200/90 bg-zinc-50/40 p-4 space-y-3">
+    <div className="rounded-2xl border border-slate-300 bg-slate-50/90 p-4 space-y-3">
       {/* Header + Authenticated .xlsx Template Download */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <FileSpreadsheet size={15} className="text-indigo-600 shrink-0" />
+            <FileSpreadsheet size={15} className="text-indigo-700 shrink-0" />
             <h3 className="text-xs font-black uppercase tracking-wider text-navy truncate">{title}</h3>
           </div>
           {columns.length > 0 && (
             <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mr-0.5">Columns:</span>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-600 mr-0.5">Columns:</span>
               {columns.map((col) => (
                 <span
                   key={col.name}
                   className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${
                     col.required
-                      ? 'bg-white text-navy border-zinc-200'
-                      : 'bg-zinc-100/80 text-zinc-600 border-zinc-200/70'
+                      ? 'bg-white text-navy border-slate-300 shadow-2xs'
+                      : 'bg-slate-200/70 text-slate-700 border-slate-300/80'
                   }`}
                 >
                   {col.name}
-                  {!col.required && <span className="ml-1 text-[9px] text-zinc-400">(opt)</span>}
+                  {!col.required && <span className="ml-1 text-[9px] text-slate-600">(opt)</span>}
                 </span>
               ))}
             </div>
@@ -143,7 +143,7 @@ const WizardImportPanel = ({
           size="xs"
           onClick={handleDownloadTemplate}
           disabled={downloading}
-          className="self-start sm:self-auto"
+          className="self-start sm:self-auto !border-slate-300 !bg-white !text-slate-800 hover:!bg-slate-100"
         >
           {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
           <span>{downloading ? 'Downloading...' : 'Excel Template'}</span>

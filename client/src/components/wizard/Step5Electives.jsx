@@ -124,8 +124,8 @@ const Step5Electives = ({
       </div>
 
       {/* Pinned Step Footer */}
-      <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-zinc-100 bg-zinc-50/60 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5">
-        <Button type="button" variant="secondary" size="sm" onClick={onBack} className="w-full sm:w-auto">
+      <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-slate-200 bg-slate-100/85 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5">
+        <Button type="button" variant="secondary" size="sm" onClick={onBack} className="w-full sm:w-auto !border-slate-300 !bg-white !text-slate-800 hover:!bg-slate-50">
           ← Back
         </Button>
 
@@ -133,10 +133,10 @@ const Step5Electives = ({
           {isHigherSem && !electivesSummary && (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={handleSkip}
-              className="text-zinc-600 hover:text-navy border border-zinc-200 bg-white"
+              className="!text-slate-800 !border-slate-300 !bg-white hover:!bg-slate-50"
             >
               Skip / No Electives
             </Button>

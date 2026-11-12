@@ -32,7 +32,7 @@ const StepContainer = ({
       className="flex-1 min-h-0 flex flex-col bg-white overflow-hidden"
     >
       {/* Clean Hairline Studio Step Header */}
-      <div className="shrink-0 px-5 py-3 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="shrink-0 px-5 py-3 border-b border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h2
@@ -43,13 +43,13 @@ const StepContainer = ({
               {title}
             </h2>
             {badge && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/70">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-900 border border-indigo-300/80">
                 {badge}
               </span>
             )}
           </div>
           {subtitle && (
-            <p className="text-xs text-zinc-500 mt-0.5 truncate">{subtitle}</p>
+            <p className="text-xs text-slate-600 font-medium mt-0.5 truncate">{subtitle}</p>
           )}
         </div>
         {headerRight && <div className="shrink-0">{headerRight}</div>}

@@ -22,7 +22,7 @@ export const WizardStepRail = ({
   return (
     <aside
       aria-label="Wizard Workflow Steps"
-      className="lg:w-[252px] xl:w-[268px] shrink-0 border-b lg:border-b-0 lg:border-r border-zinc-100 bg-zinc-50/50 flex flex-col justify-between"
+      className="lg:w-[252px] xl:w-[268px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-100/85 flex flex-col justify-between"
     >
       {/* Mobile Compact Horizontal Stepper */}
       <nav aria-label="Wizard Steps" className="lg:hidden flex items-center gap-1.5 overflow-x-auto px-3 py-2.5">
@@ -43,12 +43,12 @@ export const WizardStepRail = ({
                 isActive
                   ? 'bg-navy text-white border-navy shadow-xs'
                   : isSkipped
-                  ? 'bg-white text-amber-800 border-amber-200'
+                  ? 'bg-white text-amber-900 border-amber-300'
                   : isCompleted
-                  ? 'bg-white text-emerald-800 border-emerald-200'
+                  ? 'bg-white text-emerald-900 border-emerald-300'
                   : isUnlocked
-                  ? 'bg-white text-navy border-zinc-200'
-                  : 'bg-zinc-100/80 text-zinc-400 border-transparent cursor-not-allowed'
+                  ? 'bg-white text-slate-900 border-slate-300'
+                  : 'bg-slate-200/90 text-slate-600 border-slate-300/60 cursor-not-allowed'
               }`}
             >
               <span>{step.number}.</span>
@@ -61,15 +61,15 @@ export const WizardStepRail = ({
       {/* Desktop Calm Vertical Studio Step Rail */}
       <div className="hidden lg:flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between px-1">
-          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+          <span className="text-[11px] font-extrabold uppercase tracking-widest text-slate-700">
             Workflow
           </span>
-          <span className="text-[11px] font-bold text-zinc-500 tabular-nums">
+          <span className="text-[11px] font-bold text-slate-700 tabular-nums">
             {completedCount}/{STEPS_CONFIG.length}
           </span>
         </div>
 
-        <nav aria-label="Wizard Steps" className="space-y-1">
+        <nav aria-label="Wizard Steps" className="space-y-1.5">
           {STEPS_CONFIG.map((step, idx) => {
             const isCompleted = completedStepIds.includes(step.id);
             const isSkipped = skippedStepIds.includes(step.id);
@@ -96,23 +96,23 @@ export const WizardStepRail = ({
                 aria-label={`Step ${step.number}: ${step.label} (${statusLabel})`}
                 className={`w-full group flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border ${
                   isActive
-                    ? 'bg-white border-zinc-200/90 shadow-xs text-navy'
+                    ? 'bg-white border-navy/35 ring-1 ring-navy/15 shadow-sm text-navy'
                     : isUnlocked
-                    ? 'bg-transparent border-transparent hover:bg-white/80 hover:border-zinc-200/60 text-zinc-700 cursor-pointer'
-                    : 'bg-transparent border-transparent text-zinc-400 cursor-not-allowed'
+                    ? 'bg-white/60 border-slate-200/80 hover:bg-white hover:border-slate-300 text-slate-800 cursor-pointer'
+                    : 'bg-slate-200/45 border-transparent text-slate-600 cursor-not-allowed'
                 }`}
               >
                 <span
                   className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-black transition-colors ${
                     isActive
-                      ? 'bg-navy text-white'
+                      ? 'bg-navy text-white shadow-2xs'
                       : isSkipped
-                      ? 'bg-amber-100/80 text-amber-700'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300/70'
                       : isCompleted
-                      ? 'bg-emerald-100/80 text-emerald-700'
+                      ? 'bg-emerald-600 text-white'
                       : isUnlocked
-                      ? 'bg-zinc-200/70 text-zinc-700'
-                      : 'bg-zinc-100 text-zinc-400'
+                      ? 'bg-slate-200 text-slate-800'
+                      : 'bg-slate-200/90 text-slate-600'
                   }`}
                 >
                   {isSkipped && !isActive ? (
@@ -127,18 +127,18 @@ export const WizardStepRail = ({
                 </span>
 
                 <div className="min-w-0 flex-1">
-                  <p className={`text-xs truncate leading-tight ${isActive ? 'font-black text-navy' : 'font-semibold'}`}>
+                  <p className={`text-xs truncate leading-tight ${isActive ? 'font-black text-navy' : isUnlocked ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
                     {step.label}
                   </p>
                   <p
                     className={`text-[10px] mt-0.5 leading-none ${
                       isActive
-                        ? 'text-indigo-600 font-bold'
+                        ? 'text-indigo-700 font-bold'
                         : isSkipped
-                        ? 'text-amber-700 font-semibold'
+                        ? 'text-amber-800 font-semibold'
                         : isCompleted
                         ? 'text-emerald-700 font-semibold'
-                        : 'text-zinc-400'
+                        : 'text-slate-600 font-medium'
                     }`}
                   >
                     {statusLabel}
@@ -151,26 +151,26 @@ export const WizardStepRail = ({
       </div>
 
       {/* Calm Studio Context Footer */}
-      <div className="hidden lg:block p-4 border-t border-zinc-100">
+      <div className="hidden lg:block p-4 border-t border-slate-200 bg-slate-100/70">
         {selectedClass ? (
-          <div className="p-3 rounded-xl bg-white border border-zinc-200/80 space-y-1.5">
+          <div className="p-3 rounded-xl bg-white border border-slate-300/90 shadow-2xs space-y-1.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
                 Active Focus
               </span>
               {provisionedClasses.length > 1 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-800">
                   <Layers size={10} /> {provisionedClasses.length} saved
                 </span>
               )}
             </div>
             <p className="text-xs font-black text-navy truncate">{classDisplayName}</p>
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-[11px] font-medium text-slate-600">
               Semester {selectedClass.semester || 1} · {selectedClass.academicYear || '2026-27'}
             </p>
           </div>
         ) : (
-          <p className="text-[11px] text-zinc-500 leading-relaxed px-1">
+          <p className="text-[11px] font-medium text-slate-700 leading-relaxed px-1">
             Drop an institutional timetable PDF to auto-provision every section, subject, and master syllabus in one pass.
           </p>
         )}
@@ -210,16 +210,16 @@ const WizardProgressHeader = ({
           </h1>
           {isHod && (
             <span
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200/70 text-indigo-800 text-[10px] font-bold uppercase tracking-wider"
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-100 border border-indigo-300/80 text-indigo-900 text-[10px] font-bold uppercase tracking-wider"
               role="status"
               aria-label="Department Scope Indicator"
             >
-              <Building2 size={10} className="text-indigo-600 shrink-0" aria-hidden="true" />
+              <Building2 size={10} className="text-indigo-700 shrink-0" aria-hidden="true" />
               <span>{deptName}</span>
             </span>
           )}
-          <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
-            <span className="text-zinc-300">·</span>
+          <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+            <span className="text-slate-400">·</span>
             <span>
               Step {currentStep.number} of {totalSteps}: <strong className="text-navy">{currentStep.label}</strong>
             </span>
@@ -229,8 +229,8 @@ const WizardProgressHeader = ({
         {/* Right Controls: Section Switcher + Progress + New Setup */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
           {provisionedClasses.length > 1 ? (
-            <div className="inline-flex items-center gap-2 h-8 px-2.5 rounded-full bg-white border border-indigo-200/80 shadow-xs">
-              <span className="px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-wider shrink-0">
+            <div className="inline-flex items-center gap-2 h-8 px-2.5 rounded-full bg-white border border-indigo-300 shadow-2xs">
+              <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-900 text-[10px] font-black uppercase tracking-wider shrink-0">
                 {provisionedClasses.length} Sections
               </span>
               <select
@@ -251,26 +251,26 @@ const WizardProgressHeader = ({
               </select>
             </div>
           ) : selectedClass ? (
-            <div className="h-8 inline-flex items-center gap-2 px-3 rounded-full bg-white border border-zinc-200/90 shadow-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" aria-hidden="true" />
+            <div className="h-8 inline-flex items-center gap-2 px-3 rounded-full bg-white border border-slate-300 shadow-2xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" aria-hidden="true" />
               <span className="text-xs font-bold text-navy leading-none">{classDisplayName}</span>
-              <span className="text-[11px] font-medium text-zinc-500 leading-none">
+              <span className="text-[11px] font-semibold text-slate-600 leading-none">
                 Sem {selectedClass.semester || 1}
               </span>
             </div>
           ) : null}
 
-          <span className="h-8 inline-flex items-center px-2.5 rounded-full bg-white border border-zinc-200/80 text-[11px] font-bold text-zinc-600 tabular-nums">
+          <span className="h-8 inline-flex items-center px-3 rounded-full bg-white border border-slate-300 text-[11px] font-extrabold text-slate-800 tabular-nums shadow-2xs">
             {progressPercent}%
           </span>
 
           {selectedClass && onReset && (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="xs"
               onClick={onReset}
-              className="border border-zinc-200 bg-white text-zinc-600 hover:text-navy"
+              className="!border-slate-300 !bg-white !text-slate-800 hover:!bg-slate-100 hover:!border-slate-400"
               title="Start configuring a new class"
             >
               <RotateCcw size={11} />
@@ -280,14 +280,14 @@ const WizardProgressHeader = ({
         </div>
       </div>
 
-      {/* Hairline Continuous Progress Track */}
+      {/* Continuous Progress Track */}
       <div
         role="progressbar"
         aria-valuenow={currentStep.number}
         aria-valuemin={1}
         aria-valuemax={totalSteps}
         aria-label={`Wizard progress: step ${currentStep.number} of ${totalSteps}`}
-        className="h-0.5 w-full bg-zinc-200/80 rounded-full overflow-hidden"
+        className="h-1 w-full bg-slate-200 rounded-full overflow-hidden"
       >
         <div
           className="h-full bg-navy transition-all duration-300 ease-out rounded-full"

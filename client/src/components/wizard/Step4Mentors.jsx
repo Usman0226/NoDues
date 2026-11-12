@@ -288,10 +288,10 @@ const Step4Mentors = ({
 
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={() => setShowUploader((prev) => !prev)}
-              className="text-zinc-600 hover:text-navy border border-zinc-200 bg-white"
+              className="!text-slate-800 !border-slate-300 !bg-white hover:!bg-slate-100"
             >
               <Upload size={12} />
               <span>{showUploader ? 'Hide CSV/Excel' : 'CSV/Excel Upload'}</span>
@@ -314,7 +314,7 @@ const Step4Mentors = ({
 
         {/* Bulk Assignment Action Bar */}
         {selectedStudentIds.length > 0 && (
-          <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
             <span className="font-bold text-indigo-950 pl-1">
               {selectedStudentIds.length} student(s) selected
             </span>
@@ -322,7 +322,7 @@ const Step4Mentors = ({
               <select
                 value={bulkMentorId}
                 onChange={(e) => setBulkMentorId(e.target.value)}
-                className="h-9 px-3 rounded-xl border border-indigo-300 bg-white text-xs font-semibold text-navy"
+                className="h-9 px-3 rounded-xl border border-indigo-300 bg-white text-xs font-semibold text-slate-900"
               >
                 <option value="">-- Choose Mentor --</option>
                 {facultyList.map((f) => (
@@ -332,7 +332,7 @@ const Step4Mentors = ({
               <Button type="button" variant="primary" size="sm" onClick={handleBulkAssignSelected}>
                 Assign Selected
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedStudentIds([])}>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setSelectedStudentIds([])} className="!border-slate-300 !bg-white !text-slate-800">
                 Clear
               </Button>
             </div>
@@ -344,19 +344,19 @@ const Step4Mentors = ({
           <button
             type="button"
             onClick={handleToggleSelectAllUnassigned}
-            className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 underline self-start sm:self-auto"
+            className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 underline self-start sm:self-auto cursor-pointer"
           >
             {selectedStudentIds.length > 0 ? 'Deselect All' : 'Select All Unassigned'}
           </button>
 
           <div className="relative w-full sm:w-64">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               placeholder="Filter students..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-9 pl-8 pr-3 text-xs bg-white border border-zinc-200 rounded-xl text-navy placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-navy/10"
+              className="w-full h-9 pl-8 pr-3 text-xs bg-white border border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-500 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
             />
           </div>
         </div>
@@ -366,10 +366,10 @@ const Step4Mentors = ({
           tabIndex={0}
           role="region"
           aria-label="Student mentor mapping table"
-          className="border border-zinc-200 rounded-xl overflow-hidden bg-white max-h-[240px] overflow-y-auto"
+          className="border border-slate-300 rounded-xl overflow-hidden bg-white max-h-[240px] overflow-y-auto"
         >
           <table className="w-full text-left text-xs" aria-label="Student Mentor List">
-            <thead className="bg-zinc-50 border-b border-zinc-200 font-bold text-zinc-500 uppercase tracking-wider text-[10px] sticky top-0">
+            <thead className="bg-slate-100 border-b border-slate-300 font-extrabold text-slate-700 uppercase tracking-wider text-[10px] sticky top-0">
               <tr>
                 <th className="py-2 px-3 w-8">
                   <input
@@ -386,7 +386,7 @@ const Step4Mentors = ({
                         setSelectedStudentIds([]);
                       }
                     }}
-                    className="rounded border-zinc-300 text-indigo-600 focus:ring-navy"
+                    className="rounded border-slate-400 text-indigo-600 focus:ring-navy"
                   />
                 </th>
                 <th className="py-2 px-3">Student</th>
@@ -394,12 +394,12 @@ const Step4Mentors = ({
                 <th className="py-2 px-3 text-right">Assign Mentor</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100">
+            <tbody className="divide-y divide-slate-200/80">
               {filteredStudents.map((s) => {
                 const currentMentorName = s.mentorId?.name || s.mentor?.name || null;
                 const isChecked = selectedStudentIds.includes(s._id);
                 return (
-                  <tr key={s._id} className={isChecked ? 'bg-indigo-50/40' : 'hover:bg-zinc-50/60'}>
+                  <tr key={s._id} className={isChecked ? 'bg-indigo-50/70' : 'even:bg-slate-50/40 hover:bg-indigo-50/40'}>
                     <td className="py-2 px-3">
                       <input
                         type="checkbox"
@@ -412,12 +412,12 @@ const Step4Mentors = ({
                             setSelectedStudentIds((prev) => prev.filter((id) => id !== s._id));
                           }
                         }}
-                        className="rounded border-zinc-300 text-indigo-600 focus:ring-navy"
+                        className="rounded border-slate-400 text-indigo-600 focus:ring-navy"
                       />
                     </td>
                     <td className="py-2 px-3">
                       <span className="font-mono font-bold text-navy">{s.rollNo}</span>
-                      <span className="text-zinc-600 ml-2 font-medium">({s.name})</span>
+                      <span className="text-slate-700 ml-2 font-semibold">({s.name})</span>
                     </td>
                     <td className="py-2 px-3">
                       {currentMentorName ? (
@@ -425,7 +425,7 @@ const Step4Mentors = ({
                           <CheckCircle2 size={11} className="text-emerald-600" /> {currentMentorName}
                         </span>
                       ) : (
-                        <span className="text-zinc-400 italic">None assigned</span>
+                        <span className="text-slate-600 italic font-medium">None assigned</span>
                       )}
                     </td>
                     <td className="py-2 px-3 text-right">
@@ -433,7 +433,7 @@ const Step4Mentors = ({
                         aria-label={`Assign mentor for ${s.name}`}
                         value={s.mentorId?._id || s.mentorId || ''}
                         onChange={(e) => handleAssignSingle(s._id, e.target.value)}
-                        className="h-8 px-2.5 text-xs border border-zinc-300 rounded-lg text-navy bg-white focus:outline-none focus:ring-1 focus:ring-navy max-w-[180px]"
+                        className="h-8 px-2.5 text-xs border border-slate-300 rounded-lg text-slate-900 font-semibold bg-white hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-1 focus:ring-navy max-w-[180px]"
                       >
                         <option value="">-- Choose Mentor --</option>
                         {facultyList.map((f) => (
@@ -450,8 +450,8 @@ const Step4Mentors = ({
       </div>
 
       {/* Pinned Step Footer */}
-      <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-zinc-100 bg-zinc-50/60 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5">
-        <Button type="button" variant="secondary" size="sm" onClick={onBack} className="w-full sm:w-auto">
+      <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-slate-200 bg-slate-100/85 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5">
+        <Button type="button" variant="secondary" size="sm" onClick={onBack} className="w-full sm:w-auto !border-slate-300 !bg-white !text-slate-800 hover:!bg-slate-50">
           ← Back
         </Button>
 
@@ -459,10 +459,10 @@ const Step4Mentors = ({
           {unassignedCount > 0 && (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={() => handleContinue({ skipped: true })}
-              className="text-zinc-600 hover:text-navy border border-zinc-200 bg-white"
+              className="!text-slate-800 !border-slate-300 !bg-white hover:!bg-slate-50"
             >
               Skip Remaining
             </Button>

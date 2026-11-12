@@ -222,58 +222,58 @@ const Step7Initiation = ({
         </div>
 
         {/* Verified Summary Grid + Curriculum + Deadline Option */}
-        <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200/90 space-y-3">
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-300/90 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-xs font-black uppercase tracking-wider text-navy">
               Verified Section Summary
             </h3>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-900 border border-indigo-300/80">
               {subjectAssignments.length} Active Subjects
             </span>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
-            <div className="p-3 rounded-xl bg-white border border-zinc-200/80">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Class Section</span>
+            <div className="p-3 rounded-xl bg-white border border-slate-300/90">
+              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Class Section</span>
               <p className="font-black text-navy text-sm mt-0.5">{classTitle}</p>
             </div>
-            <div className="p-3 rounded-xl bg-white border border-zinc-200/80">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Semester & Batch</span>
+            <div className="p-3 rounded-xl bg-white border border-slate-300/90">
+              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Semester & Batch</span>
               <p className="font-black text-navy text-sm mt-0.5">
                 Sem {semester} · {liveClass?.academicYear || '2026-27'}
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-white border border-zinc-200/80">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Department</span>
+            <div className="p-3 rounded-xl bg-white border border-slate-300/90">
+              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Department</span>
               <p className="font-black text-navy text-sm mt-0.5 truncate">{deptName}</p>
             </div>
-            <div className="p-3 rounded-xl bg-white border border-zinc-200/80">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Class Teacher</span>
+            <div className="p-3 rounded-xl bg-white border border-slate-300/90">
+              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Class Teacher</span>
               <p className="font-black text-navy text-sm mt-0.5 truncate">{classTeacherName}</p>
             </div>
           </div>
 
           {subjectAssignments.length > 0 && (
-            <div className="rounded-xl border border-zinc-200/80 bg-white overflow-hidden">
+            <div className="rounded-xl border border-slate-300/90 bg-white overflow-hidden">
               <div className="max-h-44 overflow-y-auto overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="sticky top-0 bg-zinc-50 border-b border-zinc-200">
-                    <tr className="text-zinc-500 uppercase tracking-wider text-[10px] font-black">
+                  <thead className="sticky top-0 bg-slate-100 border-b border-slate-300">
+                    <tr className="text-slate-700 uppercase tracking-wider text-[10px] font-extrabold">
                       <th className="py-2 px-3">Code</th>
                       <th className="py-2 px-3">Subject</th>
                       <th className="py-2 px-3">Faculty</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100">
+                  <tbody className="divide-y divide-slate-200/80">
                     {subjectAssignments.map((subj, idx) => (
-                      <tr key={`${subj.subjectCode || idx}-${idx}`}>
+                      <tr key={`${subj.subjectCode || idx}-${idx}`} className="even:bg-slate-50/40">
                         <td className="py-1.5 px-3 font-mono font-bold text-navy whitespace-nowrap">
                           {subj.subjectCode || subj.code || subj.subjectId?.code || '—'}
                         </td>
-                        <td className="py-1.5 px-3 font-semibold text-zinc-800">
+                        <td className="py-1.5 px-3 font-semibold text-slate-900">
                           {subj.subjectName || subj.name || subj.subjectId?.name || 'Subject'}
                         </td>
-                        <td className="py-1.5 px-3 text-zinc-600 whitespace-nowrap">
+                        <td className="py-1.5 px-3 text-slate-700 font-medium whitespace-nowrap">
                           {subj.facultyId?.name || subj.facultyName || 'Unassigned'}
                         </td>
                       </tr>
@@ -284,9 +284,9 @@ const Step7Initiation = ({
             </div>
           )}
 
-          <div className="pt-2 border-t border-zinc-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="pt-2 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <label htmlFor="wizard-deadline" className="text-xs font-bold text-navy flex items-center gap-1.5">
-              <Calendar size={14} className="text-indigo-600" />
+              <Calendar size={14} className="text-indigo-700" />
               <span>Target Completion Deadline (Optional)</span>
             </label>
             <input
@@ -295,21 +295,21 @@ const Step7Initiation = ({
               min={new Date().toISOString().split('T')[0]}
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
-              className="h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10 w-full sm:w-52"
+              className="h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 w-full sm:w-52"
             />
           </div>
         </div>
       </div>
 
       {/* Pinned Step Footer */}
-      <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-zinc-100 bg-zinc-50/60 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5">
+      <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-slate-200 bg-slate-100/85 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5">
         <Button
           type="button"
           variant="secondary"
           size="sm"
           onClick={onBack}
           disabled={isInitiating}
-          className="w-full sm:w-auto"
+          className="w-full sm:w-auto !border-slate-300 !bg-white !text-slate-800 hover:!bg-slate-50"
         >
           ← Back
         </Button>

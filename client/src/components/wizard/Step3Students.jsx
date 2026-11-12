@@ -178,41 +178,41 @@ const Step3Students = ({
               />
             </div>
 
-            <div className="lg:col-span-5 rounded-2xl border border-indigo-200/70 bg-indigo-50/40 p-4 space-y-3">
+            <div className="lg:col-span-5 rounded-2xl border border-indigo-300/80 bg-indigo-50/70 p-4 space-y-3">
               <div className="flex items-start gap-2.5">
-                <Info size={16} className="text-indigo-600 shrink-0 mt-0.5" />
+                <Info size={16} className="text-indigo-700 shrink-0 mt-0.5" />
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-wider text-navy">
                     Excel Sheet Not Ready Yet?
                   </h3>
-                  <p className="text-xs text-indigo-900/80 mt-1 leading-relaxed">
+                  <p className="text-xs text-slate-700 mt-1 leading-relaxed">
                     You can safely <strong>skip this step</strong> now and finish configuring mentors, electives, and class details.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-2 pt-1">
-                <p className="text-[10px] font-black uppercase tracking-wider text-indigo-700">
+                <p className="text-[10px] font-black uppercase tracking-wider text-indigo-900">
                   Where to enroll students later:
                 </p>
-                <div className="p-2.5 rounded-xl bg-white border border-indigo-100 text-xs text-zinc-700 space-y-1">
+                <div className="p-2.5 rounded-xl bg-white border border-slate-300/90 text-xs text-slate-800 space-y-1">
                   <p className="font-bold text-navy flex items-center gap-1.5">
-                    <GraduationCap size={13} className="text-indigo-600 shrink-0" />
+                    <GraduationCap size={13} className="text-indigo-700 shrink-0" />
                     <span>{classLocationHint}</span>
                   </p>
-                  <p className="text-[11px] text-zinc-500">
+                  <p className="text-[11px] text-slate-600 font-medium">
                     Supports Excel/CSV import, individual <strong>Add Student</strong>, or <strong>Promote Section</strong> from a previous semester.
                   </p>
                 </div>
-                <div className="p-2.5 rounded-xl bg-white border border-indigo-100 text-xs text-zinc-700 space-y-0.5">
+                <div className="p-2.5 rounded-xl bg-white border border-slate-300/90 text-xs text-slate-800 space-y-0.5">
                   <p className="font-bold text-navy">Sidebar → Management → Students</p>
-                  <p className="text-[11px] text-zinc-500">
+                  <p className="text-[11px] text-slate-600 font-medium">
                     Bulk import students across any class once your sheet matches the template.
                   </p>
                 </div>
               </div>
 
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200/80 rounded-xl px-3 py-2 font-medium">
+              <p className="text-[11px] text-amber-950 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 font-semibold">
                 Note: Launching an active clearance batch requires at least 1 student enrolled in the class.
               </p>
             </div>
@@ -238,13 +238,13 @@ const Step3Students = ({
                   Enrolled Roster ({filteredStudents.length} of {enrolledCount})
                 </h3>
                 <div className="relative w-full sm:w-64">
-                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
                     type="text"
                     placeholder="Search roll no, name or email..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full h-9 pl-8 pr-3 text-xs bg-white border border-zinc-200 rounded-xl text-navy placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-navy/10"
+                    className="w-full h-9 pl-8 pr-3 text-xs bg-white border border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-500 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                   />
                 </div>
               </div>
@@ -253,22 +253,22 @@ const Step3Students = ({
                 tabIndex={0}
                 role="region"
                 aria-label="Enrolled students table scrollable region"
-                className="border border-zinc-200 rounded-xl overflow-hidden bg-white max-h-[260px] overflow-y-auto"
+                className="border border-slate-300 rounded-xl overflow-hidden bg-white max-h-[260px] overflow-y-auto"
               >
                 <table className="w-full text-left text-xs" aria-label="Students List">
-                  <thead className="bg-zinc-50 border-b border-zinc-200 font-bold text-zinc-500 uppercase tracking-wider text-[10px] sticky top-0">
+                  <thead className="bg-slate-100 border-b border-slate-300 font-extrabold text-slate-700 uppercase tracking-wider text-[10px] sticky top-0">
                     <tr>
                       <th className="py-2 px-3">Roll No</th>
                       <th className="py-2 px-3">Name</th>
                       <th className="py-2 px-3">Email</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100">
+                  <tbody className="divide-y divide-slate-200/80">
                     {filteredStudents.map((s) => (
-                      <tr key={s._id} className="hover:bg-zinc-50/60">
+                      <tr key={s._id} className="even:bg-slate-50/40 hover:bg-indigo-50/40">
                         <td className="py-2 px-3 font-mono font-bold text-navy whitespace-nowrap">{s.rollNo}</td>
-                        <td className="py-2 px-3 font-semibold text-zinc-800">{s.name}</td>
-                        <td className="py-2 px-3 text-zinc-500">{s.email || '—'}</td>
+                        <td className="py-2 px-3 font-semibold text-slate-900">{s.name}</td>
+                        <td className="py-2 px-3 text-slate-600 font-medium">{s.email || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -280,8 +280,8 @@ const Step3Students = ({
       </div>
 
       {/* Pinned Step Footer */}
-      <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-zinc-100 bg-zinc-50/60 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5">
-        <Button type="button" variant="secondary" size="sm" onClick={onBack} className="w-full sm:w-auto">
+      <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-slate-200 bg-slate-100/85 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5">
+        <Button type="button" variant="secondary" size="sm" onClick={onBack} className="w-full sm:w-auto !border-slate-300 !bg-white !text-slate-800 hover:!bg-slate-50">
           ← Back
         </Button>
 

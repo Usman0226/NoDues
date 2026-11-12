@@ -909,22 +909,22 @@ const Step1ClassSubjects = ({
   return (
     <>
       {/* Top Mode Switcher Strip (Flush Studio Chrome) */}
-      <div className="shrink-0 px-5 py-2 border-b border-zinc-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="inline-flex h-8 items-center rounded-xl bg-zinc-100/80 p-0.5 border border-zinc-200/70 self-start">
+      <div className="shrink-0 px-5 py-2.5 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="inline-flex h-9 items-center rounded-xl bg-slate-200/85 p-1 border border-slate-300/80 self-start gap-1">
           <button
             type="button"
             onClick={() => setActiveTab('pdf')}
-            className={`h-full inline-flex items-center gap-1.5 px-3 rounded-lg text-[11px] font-bold transition-all ${
+            className={`h-full inline-flex items-center gap-1.5 px-3 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
               activeTab === 'pdf'
-                ? 'bg-white text-navy shadow-xs'
-                : 'text-zinc-500 hover:text-navy'
+                ? 'bg-navy text-white shadow-xs'
+                : 'text-slate-700 hover:text-navy hover:bg-white/75'
             }`}
           >
             <FileText size={12} />
             <span>Timetable PDF</span>
             <span
               className={`hidden sm:inline-block px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
-                activeTab === 'pdf' ? 'bg-indigo-50 text-indigo-700' : 'bg-zinc-200/70 text-zinc-600'
+                activeTab === 'pdf' ? 'bg-white/20 text-white' : 'bg-slate-300/80 text-slate-700'
               }`}
             >
               Auto
@@ -934,10 +934,10 @@ const Step1ClassSubjects = ({
           <button
             type="button"
             onClick={() => setActiveTab('manual')}
-            className={`h-full inline-flex items-center gap-1.5 px-3 rounded-lg text-[11px] font-bold transition-all ${
+            className={`h-full inline-flex items-center gap-1.5 px-3 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
               activeTab === 'manual'
-                ? 'bg-white text-navy shadow-xs'
-                : 'text-zinc-500 hover:text-navy'
+                ? 'bg-navy text-white shadow-xs'
+                : 'text-slate-700 hover:text-navy hover:bg-white/75'
             }`}
           >
             <Layers size={12} />
@@ -948,11 +948,11 @@ const Step1ClassSubjects = ({
         {/* File Context Actions when a PDF is loaded */}
         {activeTab === 'pdf' && pdfFile && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-navy truncate max-w-[180px]" title={pdfFile.name}>
+            <span className="text-xs font-extrabold text-slate-900 truncate max-w-[180px]" title={pdfFile.name}>
               {pdfFile.name}
             </span>
             {inspection?.pageCount && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-700">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-200/80 border border-slate-300 text-slate-800">
                 {inspection.pageCount} {inspection.pageCount === 1 ? 'Section' : 'Sections'}
               </span>
             )}
@@ -962,18 +962,18 @@ const Step1ClassSubjects = ({
                 variant="secondary"
                 size="xs"
                 onClick={() => setBatchModalOpen(true)}
-                className="border-indigo-200 bg-indigo-50/70 text-indigo-700 hover:bg-indigo-100"
+                className="!border-indigo-400 !bg-indigo-50 !text-indigo-950 hover:!bg-indigo-100 shadow-2xs"
               >
-                <Sparkles size={11} />
+                <Sparkles size={11} className="text-indigo-700" />
                 <span>Batch Provision ({inspection.pageCount})</span>
               </Button>
             )}
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="xs"
               onClick={handleResetFile}
-              className="border border-zinc-200 text-zinc-600 hover:text-navy"
+              className="!border-slate-300 !bg-white !text-slate-800 hover:!bg-slate-100 hover:!border-slate-400 shadow-2xs"
             >
               <RotateCcw size={11} />
               <span>Change PDF</span>
@@ -1011,8 +1011,8 @@ const Step1ClassSubjects = ({
                   </div>
                 </div>
 
-                <div className="lg:col-span-7 flex flex-col rounded-xl border border-zinc-200/80 bg-white overflow-hidden">
-                  <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/40 flex flex-wrap items-center justify-between gap-2">
+                <div className="lg:col-span-7 flex flex-col rounded-xl border border-slate-300 bg-white overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
                         Configured Section Curriculum
@@ -1041,21 +1041,21 @@ const Step1ClassSubjects = ({
 
                   <div className="max-h-[340px] overflow-y-auto">
                     <table className="w-full text-left text-xs border-collapse">
-                      <thead className="sticky top-0 bg-white border-b border-zinc-200/80">
-                        <tr className="text-zinc-400 uppercase tracking-wider text-[10px] font-bold">
+                      <thead className="sticky top-0 bg-slate-100 border-b border-slate-300">
+                        <tr className="text-slate-700 uppercase tracking-wider text-[10px] font-extrabold">
                           <th className="py-2.5 px-4">Code</th>
                           <th className="py-2.5 px-4">Subject</th>
                           <th className="py-2.5 px-4">Faculty</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-100">
+                      <tbody className="divide-y divide-slate-200/80">
                         {extractedRows.map((row, i) => (
-                          <tr key={`${row.subjectCode}-${i}`} className="hover:bg-zinc-50/50">
+                          <tr key={`${row.subjectCode}-${i}`} className="even:bg-slate-50/40 hover:bg-indigo-50/40">
                             <td className="py-2.5 px-4 font-mono font-bold text-navy whitespace-nowrap">
                               {row.subjectCode}
                             </td>
-                            <td className="py-2.5 px-4 font-medium text-zinc-900">{row.subjectName}</td>
-                            <td className="py-2.5 px-4 text-zinc-500">{row.facultyName || 'Unassigned'}</td>
+                            <td className="py-2.5 px-4 font-semibold text-slate-900">{row.subjectName}</td>
+                            <td className="py-2.5 px-4 text-slate-600 font-medium">{row.facultyName || 'Unassigned'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1075,12 +1075,12 @@ const Step1ClassSubjects = ({
                     isProcessing={isInspecting}
                     icon={FileText}
                   />
-                  <p className="text-center text-xs text-zinc-500">
+                  <p className="text-center text-xs text-slate-600 font-medium">
                     Prefer configuring manually or inheriting from a master syllabus?{' '}
                     <button
                       type="button"
                       onClick={() => setActiveTab('manual')}
-                      className="font-bold text-indigo-600 hover:text-indigo-800 underline"
+                      className="font-bold text-indigo-700 hover:text-indigo-900 underline"
                     >
                       Switch to Manual Setup
                     </button>
@@ -1126,11 +1126,11 @@ const Step1ClassSubjects = ({
           {/* State D: Flush OneSchema Studio PDF Review Workspace */}
           {pdfFile && !isInspecting && !isParsing && !parseError && extractedRows.length > 0 && (
             <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
-              {/* LEFT RAIL (Multi-Page Only): Clean Flush Section Tree */}
+              {/* LEFT RAIL (Multi-Page Only): Clean Distinct Section Tree */}
               {hasMultiPages && (
-                <aside className="lg:w-[232px] xl:w-[248px] shrink-0 border-b lg:border-b-0 lg:border-r border-zinc-100 bg-zinc-50/30 p-3 flex flex-col gap-2.5">
+                <aside className="lg:w-[232px] xl:w-[248px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50/95 p-3 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between gap-2 px-0.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
                       Sections ({selectedPageNumbers.length}/{inspection.pageCount})
                     </span>
                     <button
@@ -1144,20 +1144,20 @@ const Step1ClassSubjects = ({
                           allSelected ? (selectedPage ? [selectedPage] : []) : valid
                         );
                       }}
-                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800"
+                      className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 underline-offset-2 hover:underline cursor-pointer"
                     >
                       {selectedPageNumbers.length > 1 ? 'Focus 1' : 'Select All'}
                     </button>
                   </div>
 
                   <div className="relative">
-                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
                       type="text"
                       value={pageSearchQuery}
                       onChange={(e) => setPageSearchQuery(e.target.value)}
                       placeholder={`Filter ${inspection.pageCount} sections...`}
-                      className="w-full h-8 pl-7 pr-2.5 rounded-lg border border-zinc-200/90 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-navy/10"
+                      className="w-full h-8 pl-7 pr-2.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                     />
                   </div>
 
@@ -1175,12 +1175,12 @@ const Step1ClassSubjects = ({
                       return (
                         <div key={sem} className="space-y-1">
                           <div className="flex items-center justify-between px-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-600">
                               Sem {sem} ({getAcademicYearRoman(Number(sem))} Yr)
                             </span>
-                            <span className="text-[10px] font-semibold text-zinc-400 tabular-nums">{filtered.length}</span>
+                            <span className="text-[10px] font-bold text-slate-600 tabular-nums">{filtered.length}</span>
                           </div>
-                          <div className="grid grid-cols-2 lg:grid-cols-1 gap-1">
+                          <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5">
                             {filtered.map((page) => {
                               const isCurrent = selectedPage === page.pageNumber;
                               const isChecked = selectedPageNumbers.includes(page.pageNumber);
@@ -1190,10 +1190,10 @@ const Step1ClassSubjects = ({
                               return (
                                 <div
                                   key={page.pageNumber}
-                                  className={`px-2 py-1.5 rounded-lg border transition-all flex items-center gap-2 ${
+                                  className={`px-2.5 py-2 rounded-lg border transition-all flex items-center gap-2 ${
                                     isCurrent
-                                      ? 'bg-white border-zinc-300 shadow-xs text-navy'
-                                      : 'bg-transparent border-transparent hover:bg-white/80 text-zinc-700'
+                                      ? 'bg-indigo-50 border-navy ring-1 ring-navy/20 shadow-xs text-navy'
+                                      : 'bg-white border-slate-200 hover:border-slate-300 text-slate-800'
                                   }`}
                                 >
                                   <input
@@ -1202,18 +1202,18 @@ const Step1ClassSubjects = ({
                                     disabled={isDisabled}
                                     onChange={() => toggleIncludePage(page.pageNumber)}
                                     aria-label={`Include ${displayName} in setup`}
-                                    className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 shrink-0 cursor-pointer"
+                                    className="h-3.5 w-3.5 rounded border-slate-400 text-indigo-600 focus:ring-indigo-500 shrink-0 cursor-pointer"
                                   />
                                   <button
                                     type="button"
                                     onClick={() => handleSelectPage(page.pageNumber)}
-                                    className="min-w-0 flex-1 flex items-center justify-between gap-1 text-left"
+                                    className="min-w-0 flex-1 flex items-center justify-between gap-1 text-left cursor-pointer"
                                   >
                                     <div className="min-w-0">
-                                      <p className={`text-xs truncate ${isCurrent ? 'font-black text-navy' : 'font-semibold text-zinc-800'}`}>
+                                      <p className={`text-xs truncate ${isCurrent ? 'font-black text-navy' : 'font-bold text-slate-900'}`}>
                                         {displayName}
                                       </p>
-                                      <p className="text-[10px] text-zinc-400 truncate">
+                                      <p className={`text-[10px] truncate ${isCurrent ? 'text-indigo-900/80 font-medium' : 'text-slate-600'}`}>
                                         {isDisabled
                                           ? 'No extractable text'
                                           : page.detectedTeacher
@@ -1222,9 +1222,9 @@ const Step1ClassSubjects = ({
                                       </p>
                                     </div>
                                     {isCurrent ? (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-navy shrink-0" />
+                                      <span className="w-2 h-2 rounded-full bg-navy shrink-0" />
                                     ) : isCached ? (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Reviewed" />
+                                      <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" title="Reviewed" />
                                     ) : null}
                                   </button>
                                 </div>
@@ -1238,10 +1238,10 @@ const Step1ClassSubjects = ({
                 </aside>
               )}
 
-              {/* RIGHT WORKSPACE: Calm Metadata Bar + OneSchema Hairline Curriculum Sheet */}
+              {/* RIGHT WORKSPACE: High-Contrast Metadata Bar + Hairline Curriculum Sheet */}
               <div className="flex-1 min-w-0 flex flex-col bg-white">
                 {/* Inline Section Metadata Bar */}
-                <div className="px-4 sm:px-5 py-3 border-b border-zinc-100 bg-zinc-50/30 space-y-2.5">
+                <div className="px-4 sm:px-5 py-3 border-b border-slate-200 bg-slate-50/90 space-y-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-black text-navy">
@@ -1263,10 +1263,10 @@ const Step1ClassSubjects = ({
                           );
                         return (
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                               matchesExisting
-                                ? 'bg-indigo-50 text-indigo-700'
-                                : 'bg-emerald-50 text-emerald-700'
+                                ? 'bg-indigo-100 text-indigo-900 border-indigo-300/80'
+                                : 'bg-emerald-100 text-emerald-900 border-emerald-300/80'
                             }`}
                           >
                             {matchesExisting ? 'Updates Existing' : 'New Section'}
@@ -1277,14 +1277,14 @@ const Step1ClassSubjects = ({
 
                     {!isHod && departments.length > 0 && (
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700">
                           Department
                         </span>
                         <select
                           aria-label="Target Department"
                           value={activeDepartmentId}
                           onChange={(e) => handleSectionFieldChange('departmentId', e.target.value)}
-                          className="h-7 px-2.5 rounded-lg border border-zinc-200 bg-white text-[11px] font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                          className="h-7 px-2.5 rounded-lg border border-slate-300 bg-white text-[11px] font-bold text-slate-900 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                         >
                           <option value="">-- Choose Dept --</option>
                           {departments.map((d) => (
@@ -1299,19 +1299,19 @@ const Step1ClassSubjects = ({
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
                         Section Name
                       </label>
                       <input
                         type="text"
                         value={sectionForm.name}
                         onChange={(e) => handleSectionFieldChange('name', e.target.value)}
-                        className="w-full h-8 px-2.5 rounded-lg border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
                         Batch Year
                       </label>
                       <input
@@ -1319,18 +1319,18 @@ const Step1ClassSubjects = ({
                         value={sectionForm.academicYear}
                         onChange={(e) => handleSectionFieldChange('academicYear', e.target.value)}
                         placeholder="2026-27"
-                        className="w-full h-8 px-2.5 rounded-lg border border-zinc-200 bg-white text-xs font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
                         Semester
                       </label>
                       <select
                         value={sectionForm.semester}
                         onChange={(e) => handleSectionFieldChange('semester', Number(e.target.value))}
-                        className="w-full h-8 px-2.5 rounded-lg border border-zinc-200 bg-white text-xs font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
                       >
                         {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                           <option key={s} value={s}>
@@ -1341,16 +1341,18 @@ const Step1ClassSubjects = ({
                     </div>
 
                     <div>
-                      <label className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                      <label className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
                         <span>Class Teacher</span>
                         <span
-                          className={`inline-flex items-center gap-1 normal-case font-semibold ${
-                            sectionForm.classTeacherId ? 'text-emerald-700' : 'text-amber-700'
+                          className={`inline-flex items-center gap-1 normal-case font-bold px-1.5 py-0.5 rounded-full border ${
+                            sectionForm.classTeacherId
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                              : 'bg-amber-50 text-amber-900 border-amber-300'
                           }`}
                         >
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
-                              sectionForm.classTeacherId ? 'bg-emerald-500' : 'bg-amber-500'
+                              sectionForm.classTeacherId ? 'bg-emerald-600' : 'bg-amber-600'
                             }`}
                           />
                           {sectionForm.classTeacherId ? 'Matched' : 'Pending'}
@@ -1359,7 +1361,7 @@ const Step1ClassSubjects = ({
                       <select
                         value={sectionForm.classTeacherId}
                         onChange={(e) => handleSectionFieldChange('classTeacherId', e.target.value)}
-                        className="w-full h-8 px-2.5 rounded-lg border border-zinc-200 bg-white text-xs font-semibold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                        className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
                       >
                         <option value="">-- Choose Class Teacher --</option>
                         {facultyList.map((f) => (
@@ -1369,7 +1371,7 @@ const Step1ClassSubjects = ({
                         ))}
                       </select>
                       {!sectionForm.classTeacherId && matchedSectionInfo?.detectedTeacher && (
-                        <p className="mt-1 text-[10px] text-zinc-500 truncate" title={`Detected in PDF: ${matchedSectionInfo.detectedTeacher}`}>
+                        <p className="mt-1 text-[10px] font-medium text-slate-600 truncate" title={`Detected in PDF: ${matchedSectionInfo.detectedTeacher}`}>
                           PDF: {matchedSectionInfo.detectedTeacher}
                         </p>
                       )}
@@ -1378,29 +1380,31 @@ const Step1ClassSubjects = ({
                 </div>
 
                 {/* OneSchema Filter Toolbar */}
-                <div className="px-4 sm:px-5 py-2 border-b border-zinc-100 bg-white flex flex-wrap items-center justify-between gap-2">
+                <div className="px-4 sm:px-5 py-2.5 border-b border-slate-200 bg-white flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-navy">
+                    <span className="text-xs font-extrabold text-navy">
                       Extracted Curriculum ({counts.matched + counts.flagged} active)
                     </span>
                     {extractedRows.some((r) => r.status !== 'excluded' && r.isElective) && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-200">
                         {extractedRows.filter((r) => r.status !== 'excluded' && r.isElective).length} Electives
                       </span>
                     )}
                     {counts.flagged > 0 && (
-                      <span className="text-[11px] text-zinc-500">
+                      <span className="text-[11px] font-medium text-slate-600">
                         · {counts.flagged} unmatched faculty (optional now)
                       </span>
                     )}
                   </div>
 
-                  <div className="inline-flex rounded-lg bg-zinc-100/80 p-0.5 border border-zinc-200/60 text-[11px]">
+                  <div className="inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-300/90 text-[11px] gap-0.5">
                     <button
                       type="button"
                       onClick={() => setSubjectFilter('all')}
-                      className={`px-2.5 py-0.5 rounded-md font-bold transition-all ${
-                        subjectFilter === 'all' ? 'bg-white text-navy shadow-xs' : 'text-zinc-500 hover:text-navy'
+                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        subjectFilter === 'all'
+                          ? 'bg-navy text-white shadow-xs'
+                          : 'text-slate-700 hover:text-slate-950 hover:bg-white'
                       }`}
                     >
                       All ({counts.total})
@@ -1408,8 +1412,10 @@ const Step1ClassSubjects = ({
                     <button
                       type="button"
                       onClick={() => setSubjectFilter('matched')}
-                      className={`px-2.5 py-0.5 rounded-md font-bold transition-all ${
-                        subjectFilter === 'matched' ? 'bg-white text-navy shadow-xs' : 'text-zinc-500 hover:text-navy'
+                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        subjectFilter === 'matched'
+                          ? 'bg-navy text-white shadow-xs'
+                          : 'text-slate-700 hover:text-slate-950 hover:bg-white'
                       }`}
                     >
                       Matched ({counts.matched})
@@ -1418,8 +1424,10 @@ const Step1ClassSubjects = ({
                       <button
                         type="button"
                         onClick={() => setSubjectFilter('flagged')}
-                        className={`px-2.5 py-0.5 rounded-md font-bold transition-all ${
-                          subjectFilter === 'flagged' ? 'bg-white text-amber-700 shadow-xs' : 'text-zinc-500 hover:text-navy'
+                        className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                          subjectFilter === 'flagged'
+                            ? 'bg-navy text-white shadow-xs'
+                            : 'text-slate-700 hover:text-slate-950 hover:bg-white'
                         }`}
                       >
                         Pending ({counts.flagged})
@@ -1429,8 +1437,10 @@ const Step1ClassSubjects = ({
                       <button
                         type="button"
                         onClick={() => setSubjectFilter('excluded')}
-                        className={`px-2.5 py-0.5 rounded-md font-bold transition-all ${
-                          subjectFilter === 'excluded' ? 'bg-white text-zinc-700 shadow-xs' : 'text-zinc-500 hover:text-navy'
+                        className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                          subjectFilter === 'excluded'
+                            ? 'bg-navy text-white shadow-xs'
+                            : 'text-slate-700 hover:text-slate-950 hover:bg-white'
                         }`}
                       >
                         Excluded ({counts.excluded})
@@ -1442,8 +1452,8 @@ const Step1ClassSubjects = ({
                 {/* Hairline Spreadsheet Review Table */}
                 <div className="min-h-[340px] max-h-[470px] overflow-y-auto overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
-                    <thead className="sticky top-0 bg-white/95 backdrop-blur-xs border-b border-zinc-200/80 z-10">
-                      <tr className="text-zinc-400 uppercase tracking-wider text-[10px] font-bold">
+                    <thead className="sticky top-0 bg-slate-100 border-b border-slate-300 z-10">
+                      <tr className="text-slate-700 uppercase tracking-wider text-[10px] font-extrabold">
                         <th className="py-2.5 px-4 whitespace-nowrap">Code</th>
                         <th className="py-2.5 px-3">Subject Name</th>
                         <th className="py-2.5 px-3">Handling Faculty</th>
@@ -1451,7 +1461,7 @@ const Step1ClassSubjects = ({
                         <th className="py-2.5 px-4 text-right whitespace-nowrap">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-100">
+                    <tbody className="divide-y divide-slate-200/80">
                       {displayedRows.map((row, idx) => {
                         const originalIdx = extractedRows.indexOf(row);
                         const isExcluded = row.status === 'excluded';
@@ -1460,32 +1470,32 @@ const Step1ClassSubjects = ({
                             key={`${row.subjectCode}-${idx}`}
                             className={
                               isExcluded
-                                ? 'bg-zinc-50/70 opacity-55'
-                                : 'hover:bg-zinc-50/60 transition-colors'
+                                ? 'bg-slate-100/80 opacity-65'
+                                : 'even:bg-slate-50/45 hover:bg-indigo-50/40 transition-colors'
                             }
                           >
                             <td className="py-2.5 px-4 align-top whitespace-nowrap">
-                              <span className="font-mono font-bold text-navy block">
+                              <span className="font-mono font-extrabold text-navy block">
                                 {row.subjectCode}
                               </span>
                               {row.isElective && (
-                                <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700">
+                                <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-900 border border-indigo-200">
                                   Elective
                                 </span>
                               )}
                             </td>
-                            <td className="py-2.5 px-3 align-top font-medium text-zinc-900 min-w-[200px] leading-snug">
+                            <td className="py-2.5 px-3 align-top font-semibold text-slate-900 min-w-[200px] leading-snug">
                               {row.subjectName}
                             </td>
                             <td className="py-2.5 px-3 align-top min-w-[195px]">
                               {isExcluded ? (
-                                <span className="text-zinc-400 italic">Excluded</span>
+                                <span className="text-slate-600 italic font-medium">Excluded</span>
                               ) : (
                                 <div className="space-y-1">
                                   <select
                                     value={row.facultyId || ''}
                                     onChange={(e) => handleFacultyChange(originalIdx, e.target.value)}
-                                    className="h-8 w-full px-2.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                                    className="h-8 w-full px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15 shadow-2xs"
                                   >
                                     <option value="">-- Assign Faculty (Optional) --</option>
                                     {facultyList.map((f) => (
@@ -1495,7 +1505,7 @@ const Step1ClassSubjects = ({
                                     ))}
                                   </select>
                                   {!row.facultyId && row.facultyName && row.facultyName !== 'Unassigned' && (
-                                    <p className="text-[10px] text-zinc-500 leading-tight pl-0.5">
+                                    <p className="text-[10px] font-medium text-slate-600 leading-tight pl-0.5">
                                       PDF: {row.facultyName}
                                     </p>
                                   )}
@@ -1504,17 +1514,17 @@ const Step1ClassSubjects = ({
                             </td>
                             <td className="py-2.5 px-2 align-top text-center whitespace-nowrap">
                               {isExcluded ? (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-400">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-300">
                                   <Ban size={11} /> Excluded
                                 </span>
                               ) : row.status === 'matched' ? (
-                                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300/80">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
                                   Matched
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-300/90">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
                                   Pending
                                 </span>
                               )}
@@ -1523,10 +1533,10 @@ const Step1ClassSubjects = ({
                               <button
                                 type="button"
                                 onClick={() => handleToggleExclude(originalIdx)}
-                                className={`text-[11px] font-semibold px-2 py-1 rounded-md transition-colors ${
+                                className={`text-[11px] font-bold px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
                                   isExcluded
-                                    ? 'text-indigo-600 hover:bg-indigo-50'
-                                    : 'text-zinc-400 hover:text-red-700 hover:bg-red-50'
+                                    ? 'border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+                                    : 'border-slate-300 bg-white text-slate-700 hover:border-rose-400 hover:bg-rose-50 hover:text-rose-700 shadow-2xs'
                                 }`}
                               >
                                 {isExcluded ? 'Include' : 'Exclude'}
@@ -1547,13 +1557,13 @@ const Step1ClassSubjects = ({
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* Left Column: Section Selection / Creation */}
-            <div className="lg:col-span-6 p-4 rounded-2xl border border-zinc-200/80 bg-zinc-50/40 space-y-3.5">
-              <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-zinc-200/70">
+            <div className="lg:col-span-6 p-4 rounded-2xl border border-slate-300/90 bg-slate-50/90 space-y-3.5">
+              <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-slate-200">
                 <h3 className="text-xs font-black uppercase tracking-wider text-navy">
                   1. Target Class Details
                 </h3>
                 <div className="flex items-center gap-3 text-xs">
-                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-navy">
+                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-900">
                     <input
                       type="radio"
                       name="manualMode"
@@ -1564,7 +1574,7 @@ const Step1ClassSubjects = ({
                     />
                     <span>Existing</span>
                   </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-navy">
+                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-900">
                     <input
                       type="radio"
                       name="manualMode"
@@ -1580,7 +1590,7 @@ const Step1ClassSubjects = ({
 
               {!isHod && departments.length > 0 && (
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                     Department
                   </label>
                   <select
@@ -1589,7 +1599,7 @@ const Step1ClassSubjects = ({
                       setSectionForm((p) => ({ ...p, departmentId: e.target.value, classTeacherId: '' }));
                       setManualSelectedClassId('');
                     }}
-                    className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                    className="w-full h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                   >
                     <option value="">-- All / Choose Department --</option>
                     {departments.map((d) => (
@@ -1603,7 +1613,7 @@ const Step1ClassSubjects = ({
 
               {manualMode === 'existing' ? (
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                     Operational Section *
                   </label>
                   <select
@@ -1621,7 +1631,7 @@ const Step1ClassSubjects = ({
                         });
                       }
                     }}
-                    className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                    className="w-full h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                   >
                     <option value="">-- Choose an existing section --</option>
                     {operationalClasses.map((cls) => (
@@ -1634,7 +1644,7 @@ const Step1ClassSubjects = ({
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                       Section Name *
                     </label>
                     <input
@@ -1642,17 +1652,17 @@ const Step1ClassSubjects = ({
                       placeholder="e.g. CSD-A"
                       value={sectionForm.name}
                       onChange={(e) => setSectionForm((p) => ({ ...p, name: e.target.value }))}
-                      className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                      className="w-full h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 placeholder:text-slate-500 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                       Semester *
                     </label>
                     <select
                       value={sectionForm.semester}
                       onChange={(e) => setSectionForm((p) => ({ ...p, semester: Number(e.target.value) }))}
-                      className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                      className="w-full h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                     >
                       {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                         <option key={s} value={s}>
@@ -1662,7 +1672,7 @@ const Step1ClassSubjects = ({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                       Academic Year
                     </label>
                     <input
@@ -1670,20 +1680,20 @@ const Step1ClassSubjects = ({
                       placeholder="2026-27"
                       value={sectionForm.academicYear}
                       onChange={(e) => setSectionForm((p) => ({ ...p, academicYear: e.target.value }))}
-                      className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                      className="w-full h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 placeholder:text-slate-500 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                     />
                   </div>
                 </div>
               )}
 
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                   Class Teacher (Can also assign in Review step)
                 </label>
                 <select
                   value={sectionForm.classTeacherId}
                   onChange={(e) => setSectionForm((p) => ({ ...p, classTeacherId: e.target.value }))}
-                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                  className="w-full h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                 >
                   <option value="">-- Choose Class Teacher --</option>
                   {facultyList.map((f) => (
@@ -1696,8 +1706,8 @@ const Step1ClassSubjects = ({
             </div>
 
             {/* Right Column: Curriculum Source */}
-            <div className="lg:col-span-6 p-4 rounded-2xl border border-zinc-200/80 bg-zinc-50/40 space-y-3">
-              <div className="pb-2.5 border-b border-zinc-200/70">
+            <div className="lg:col-span-6 p-4 rounded-2xl border border-slate-300/90 bg-slate-50/90 space-y-3">
+              <div className="pb-2.5 border-b border-slate-200">
                 <h3 className="text-xs font-black uppercase tracking-wider text-navy">
                   2. Curriculum Setup Source
                 </h3>
@@ -1707,8 +1717,8 @@ const Step1ClassSubjects = ({
                 <label
                   className={`block p-3 rounded-xl border cursor-pointer transition-all ${
                     manualSource === 'master'
-                      ? 'border-indigo-600 bg-indigo-50/50'
-                      : 'border-zinc-200 bg-white hover:border-zinc-300'
+                      ? 'border-navy bg-indigo-50/80 ring-1 ring-navy/20 shadow-2xs'
+                      : 'border-slate-300 bg-white hover:border-slate-400'
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
@@ -1724,7 +1734,7 @@ const Step1ClassSubjects = ({
                       <span className="text-xs font-black text-navy block">
                         Inherit Master Syllabus (Recommended)
                       </span>
-                      <span className="text-[11px] text-zinc-500 mt-0.5 block">
+                      <span className="text-[11px] text-slate-700 mt-0.5 block">
                         {masterClass
                           ? `Semester ${sectionForm.semester} Master Syllabus has ${masterClass.subjectAssignments?.length || 0} subjects.`
                           : `No master syllabus found for Semester ${sectionForm.semester} — you can add subjects on the Class page later.`}
@@ -1736,8 +1746,8 @@ const Step1ClassSubjects = ({
                 <label
                   className={`block p-3 rounded-xl border cursor-pointer transition-all ${
                     manualSource === 'clone'
-                      ? 'border-indigo-600 bg-indigo-50/50'
-                      : 'border-zinc-200 bg-white hover:border-zinc-300'
+                      ? 'border-navy bg-indigo-50/80 ring-1 ring-navy/20 shadow-2xs'
+                      : 'border-slate-300 bg-white hover:border-slate-400'
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
@@ -1751,7 +1761,7 @@ const Step1ClassSubjects = ({
                     />
                     <div>
                       <span className="text-xs font-black text-navy block">Copy from Existing Section</span>
-                      <span className="text-[11px] text-zinc-500 mt-0.5 block">
+                      <span className="text-[11px] text-slate-700 mt-0.5 block">
                         Replicate subjects from another section in Semester {sectionForm.semester}.
                       </span>
                     </div>
@@ -1761,8 +1771,8 @@ const Step1ClassSubjects = ({
                 <label
                   className={`block p-3 rounded-xl border cursor-pointer transition-all ${
                     manualSource === 'empty'
-                      ? 'border-indigo-600 bg-indigo-50/50'
-                      : 'border-zinc-200 bg-white hover:border-zinc-300'
+                      ? 'border-navy bg-indigo-50/80 ring-1 ring-navy/20 shadow-2xs'
+                      : 'border-slate-300 bg-white hover:border-slate-400'
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
@@ -1776,7 +1786,7 @@ const Step1ClassSubjects = ({
                     />
                     <div>
                       <span className="text-xs font-black text-navy block">Configure Subjects Later</span>
-                      <span className="text-[11px] text-zinc-500 mt-0.5 block">
+                      <span className="text-[11px] text-slate-700 mt-0.5 block">
                         Create/select section now and map subjects later from the Class Details page.
                       </span>
                     </div>
@@ -1785,13 +1795,13 @@ const Step1ClassSubjects = ({
 
                 {manualSource === 'clone' && (
                   <div className="pt-1">
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                       Source Section
                     </label>
                     <select
                       value={cloneSourceClassId}
                       onChange={(e) => setCloneSourceClassId(e.target.value)}
-                      className="w-full h-9 px-3 rounded-xl border border-zinc-200 bg-white text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-navy/10"
+                      className="w-full h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 hover:border-slate-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/15"
                     >
                       <option value="">-- Choose source section --</option>
                       {operationalClasses
@@ -1812,19 +1822,19 @@ const Step1ClassSubjects = ({
 
       {/* Pinned Footer for Active Flow */}
       {(canShowFooterPdf || activeTab === 'manual') && (
-        <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-zinc-100 bg-zinc-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="shrink-0 px-4 sm:px-5 py-3 border-t border-slate-200 bg-slate-100/85 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           {activeTab === 'pdf' ? (
             <>
-              <div className="text-xs text-zinc-600 font-medium">
+              <div className="text-xs text-slate-700 font-semibold">
                 <span>Active subjects: </span>
-                <strong className="text-navy">{counts.matched + counts.flagged}</strong>
+                <strong className="text-navy font-black">{counts.matched + counts.flagged}</strong>
                 {hasMultiPages && selectedPageNumbers.length > 1 && (
-                  <span className="text-indigo-700 font-bold ml-2">
+                  <span className="text-indigo-800 font-bold ml-2">
                     · Provisioning {selectedPageNumbers.length} selected sections + Master Syllabi
                   </span>
                 )}
                 {counts.flagged > 0 && (
-                  <span className="text-amber-700 font-semibold ml-2">
+                  <span className="text-amber-800 font-semibold ml-2">
                     ({counts.flagged} unmatched faculty — can assign now or later)
                   </span>
                 )}
@@ -1848,7 +1858,7 @@ const Step1ClassSubjects = ({
             </>
           ) : (
             <>
-              <span className="text-xs text-zinc-500 font-medium">
+              <span className="text-xs text-slate-700 font-medium">
                 Subjects and students can always be refined afterward on the Class page.
               </span>
               <Button

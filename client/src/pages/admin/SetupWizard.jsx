@@ -448,7 +448,7 @@ const SetupWizard = () => {
         />
 
         {/* Unified Studio Shell: Left Vertical Step Rail (Amie style) + Right Active Step Canvas */}
-        <div className="flex-1 min-h-[540px] rounded-2xl border border-zinc-200/90 bg-white shadow-sm overflow-hidden flex flex-col lg:flex-row">
+        <div className="flex-1 min-h-[540px] rounded-2xl border border-slate-300/90 bg-white shadow-sm overflow-hidden flex flex-col lg:flex-row">
           <WizardStepRail
             activeStepIndex={activeStepIndex}
             completedStepIds={completedSteps}
