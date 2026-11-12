@@ -26,7 +26,7 @@ import coCurricularRoutes from './Routes/coCurricular.routes.js';
 import notificationRoutes from './Routes/notification.routes.js';
 import feedbackRoutes     from './Routes/feedback.routes.js';
 import timetableRoutes    from './Routes/timetable.routes.js';
-import wizardRoutes       from './routes/wizard.routes.js';
+import wizardRoutes       from './Routes/wizard.routes.js';
 
 import { apiLimiter, healthLimiter } from './middlewares/rateLimiter.js';
 

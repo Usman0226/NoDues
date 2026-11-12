@@ -1,5 +1,4 @@
 import React from 'react';
-import Button from "./Button"
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -56,7 +55,7 @@ class ErrorBoundary extends React.Component {
               </button>
             </div>
 
-            {process.env.NODE_ENV === 'development' && (
+            {import.meta.env.DEV && (
               <div className="mt-12 p-4 bg-red-50 rounded-lg border border-red-100 text-left">
                 <p className="text-[10px] font-black text-red-900 uppercase tracking-widest mb-2">Debug Context</p>
                 <code className="text-[10px] text-red-800 break-all leading-tight block font-mono">

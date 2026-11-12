@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger.js';
 
@@ -55,7 +55,7 @@ export const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req, res) => {
-    return req.body?.rollNo || req.ip;
+    return req.body?.rollNo || ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown');
   },
   message: {
     success: false,
