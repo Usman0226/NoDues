@@ -514,35 +514,90 @@ const StudentStatus = () => {
   }
 
   if (clearanceData.status === 'no_batch') {
+    const containerVariants = {
+      hidden: { opacity: 0 },
+      show: {
+        opacity: 1,
+        transition: {
+          staggerChildren: 0.06,
+          delayChildren: 0.02,
+        },
+      },
+    };
+
+    const itemVariants = {
+      hidden: { opacity: 0, y: 10 },
+      show: {
+        opacity: 1,
+        y: 0,
+        transition: {
+          type: 'spring',
+          damping: 25,
+          stiffness: 300,
+        },
+      },
+    };
+
     return (
       <PageWrapper title="Approval Status">
-         <div className="flex flex-col items-center justify-center text-center py-24 px-6 min-h-[60vh]">
+         <motion.div 
+           variants={containerVariants}
+           initial="hidden"
+           animate="show"
+           className="flex-1 flex flex-col items-center justify-center text-center py-4 sm:py-8 px-4 max-w-md mx-auto"
+         >
             <motion.div 
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="h-20 w-20 sm:h-24 sm:w-24 bg-zinc-50 rounded-2xl flex items-center justify-center mb-8 border border-zinc-100 shadow-inner"
+              variants={itemVariants}
+              whileHover={{ scale: 1.04, y: -2 }}
+              whileTap={{ scale: 0.96 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 350 }}
+              className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-gradient-to-b from-zinc-50 to-zinc-100 flex items-center justify-center mb-5 border border-zinc-200/80 shadow-sm cursor-default"
             >
-              <Calendar size={32} className="text-zinc-300" />
+              <Calendar size={28} className="text-zinc-400" />
             </motion.div>
-            <h2 className="text-2xl sm:text-3xl font-black text-navy tracking-tight mb-3">No Active Cycle</h2>
-            <p className="max-w-[280px] sm:max-w-[320px] text-xs sm:text-sm font-medium text-muted-foreground mx-auto mb-10 leading-relaxed pb-4">
-              There is currently no active no-dues cycle initiated by your department. Please check back later or view your previous records.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto px-4 sm:px-0">
+
+            <motion.h2 
+              variants={itemVariants}
+              className="text-xl sm:text-2xl font-black text-navy tracking-tight mb-2"
+            >
+              No Active Cycle
+            </motion.h2>
+
+            <motion.p 
+              variants={itemVariants}
+              className="max-w-[320px] text-xs sm:text-sm font-medium text-muted-foreground mx-auto mb-8 leading-relaxed"
+            >
+              There is currently no active no-dues cycle initiated by your department. Please check back later or review your history.
+            </motion.p>
+
+            <motion.div 
+              variants={itemVariants}
+              className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto"
+            >
               <Link 
                 to="/student/history"
-                className="px-8 py-4 bg-navy text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-navy/90 hover:shadow-2xl hover:shadow-navy/20 transition-all flex items-center justify-center gap-3 active:scale-95"
+                className="w-full sm:w-auto"
               >
-                <HistoryIcon size={16} strokeWidth={3} /> View Previous Records
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', damping: 18, stiffness: 400 }}
+                  className="px-6 py-3.5 bg-navy text-white rounded-full text-xs font-black uppercase tracking-wider hover:bg-navy/90 hover:shadow-lg transition-colors flex items-center justify-center gap-2.5 shadow-sm"
+                >
+                  <HistoryIcon size={16} strokeWidth={2.5} /> View Archive
+                </motion.div>
               </Link>
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.02, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: 'spring', damping: 18, stiffness: 400 }}
                 onClick={() => handleRefresh('manual')}
-                className="px-8 py-4 bg-white border border-zinc-200 text-navy rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-zinc-50 transition-all flex items-center justify-center gap-3 active:scale-95 text-nowrap"
+                className="w-full sm:w-auto px-6 py-3.5 bg-white border border-zinc-200 text-navy rounded-full text-xs font-black uppercase tracking-wider hover:bg-zinc-50 transition-colors flex items-center justify-center gap-2.5 shadow-sm text-nowrap cursor-pointer"
               >
-                <RefreshCw size={16} /> Reload Dashboard
-              </button>
-            </div>
-         </div>
+                <RefreshCw size={16} /> Reload
+              </motion.button>
+            </motion.div>
+         </motion.div>
       </PageWrapper>
     );
   }
