@@ -515,31 +515,31 @@ const StudentStatus = () => {
 
   if (clearanceData.status === 'no_batch') {
     return (
-      <PageWrapper className="flex flex-col" contentClassName="flex-1 flex flex-col">
-         <div className="flex-1 flex flex-col items-center justify-center text-center py-6 sm:py-12 px-4 max-w-lg mx-auto">
+      <PageWrapper title="Approval Status">
+         <div className="flex flex-col items-center justify-center text-center py-24 px-6 min-h-[60vh]">
             <motion.div 
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="h-16 w-16 sm:h-20 sm:w-20 bg-zinc-50 rounded-2xl flex items-center justify-center mb-6 border border-zinc-100 shadow-inner shrink-0"
+              className="h-20 w-20 sm:h-24 sm:w-24 bg-zinc-50 rounded-2xl flex items-center justify-center mb-8 border border-zinc-100 shadow-inner"
             >
-              <Calendar size={28} className="text-zinc-300" />
+              <Calendar size={32} className="text-zinc-300" />
             </motion.div>
-            <h2 className="text-2xl sm:text-3xl font-black text-navy tracking-tight mb-2">No Active Cycle</h2>
-            <p className="max-w-[300px] sm:max-w-[340px] text-xs sm:text-sm font-medium text-muted-foreground mx-auto mb-8 leading-relaxed">
+            <h2 className="text-2xl sm:text-3xl font-black text-navy tracking-tight mb-3">No Active Cycle</h2>
+            <p className="max-w-[280px] sm:max-w-[320px] text-xs sm:text-sm font-medium text-muted-foreground mx-auto mb-10 leading-relaxed pb-4">
               There is currently no active no-dues cycle initiated by your department. Please check back later or view your previous records.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto px-4 sm:px-0">
               <Link 
                 to="/student/history"
-                className="w-full sm:w-auto px-6 py-3.5 bg-navy text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-navy/90 hover:shadow-2xl hover:shadow-navy/20 transition-all flex items-center justify-center gap-3 active:scale-95"
+                className="px-8 py-4 bg-navy text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-navy/90 hover:shadow-2xl hover:shadow-navy/20 transition-all flex items-center justify-center gap-3 active:scale-95"
               >
-                <HistoryIcon size={15} strokeWidth={3} /> View Previous Records
+                <HistoryIcon size={16} strokeWidth={3} /> View Previous Records
               </Link>
               <button 
                 onClick={() => handleRefresh('manual')}
-                className="w-full sm:w-auto px-6 py-3.5 bg-white border border-zinc-200 text-navy rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-zinc-50 transition-all flex items-center justify-center gap-3 active:scale-95 text-nowrap"
+                className="px-8 py-4 bg-white border border-zinc-200 text-navy rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:bg-zinc-50 transition-all flex items-center justify-center gap-3 active:scale-95 text-nowrap"
               >
-                <RefreshCw size={15} /> Reload Dashboard
+                <RefreshCw size={16} /> Reload Dashboard
               </button>
             </div>
          </div>

@@ -95,7 +95,7 @@ const AppLayout = () => {
 };
 
 const StudentLayout = () => (
-  <div className="h-screen h-[100dvh] overflow-hidden bg-offwhite flex flex-col relative">
+  <div className="h-screen overflow-hidden bg-offwhite flex flex-col relative">
     {/* Ambient Background Depth */}
     <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/5 blur-[120px] rounded-full" />
@@ -110,14 +110,14 @@ const StudentLayout = () => (
       </div>
       <StudentNavRight />
     </nav>
-    <main className="flex-1 overflow-y-auto overflow-x-hidden relative z-10 flex flex-col">
-      <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col">
-        <div className="flex-1 flex flex-col">
+    <main className="flex-1 overflow-y-auto overflow-x-hidden relative z-10">
+      <div className="max-w-7xl mx-auto min-h-full flex flex-col">
+        <div className="flex-1">
           <Outlet />
         </div>
         
-        <footer className="py-4 sm:py-6 px-4 border-t border-navy/5 mt-auto shrink-0">
-          <div className="flex flex-col items-center gap-1 opacity-70 hover:opacity-100 transition-opacity duration-500">
+        <footer className="py-8 px-4 border-t border-navy/5 mt-auto">
+          <div className="flex flex-col items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity duration-500">
             <p className="text-[8px] uppercase tracking-[0.3em] font-black text-navy/40">Built by</p>
             <p className="text-[10px] font-brand text-navy flex items-center justify-center gap-1.5">
               ARC Club <span className="h-0.5 w-0.5 rounded-full bg-gold" /> Community
