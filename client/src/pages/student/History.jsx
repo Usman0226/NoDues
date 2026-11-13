@@ -83,10 +83,10 @@ const History = () => {
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">SESSION {record.academicYear || 'N/A'}</span>
                         <div className="h-1 w-1 rounded-full bg-zinc-200" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">SEM {record.semester || 'N/A'}</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">{record.className || 'N/A'}</span>
                       </div>
                       <h3 className="text-lg sm:text-xl font-black text-navy tracking-tight truncate mb-1">
-                        {record.className || 'Academic Cycle'}
+                        {record.semester ? `Semester ${record.semester}` : (record.className || 'Academic Cycle')}
                       </h3>
                       <div className="flex items-center gap-2">
                         <Calendar size={12} className="text-zinc-300" />
