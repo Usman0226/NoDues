@@ -17,7 +17,7 @@ const Spinner = ({ size = 'md', className = '' }) => {
 
 export const PageSpinner = ({ message = "Syncing Academic Records..." }) => {
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/80 backdrop-blur-xl overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/80 backdrop-blur-xl overflow-hidden transform-gpu">
       {/* Background Texture */}
       <div className="absolute inset-0 grid-overlay opacity-[0.25] pointer-events-none" />
       
@@ -43,17 +43,21 @@ export const PageSpinner = ({ message = "Syncing Academic Records..." }) => {
         {/* Loading Indicator */}
         <div className="relative h-1 w-48 bg-zinc-100 rounded-full overflow-hidden shadow-inner">
           <motion.div
-            className="absolute top-0 bottom-0 left-0 bg-gold"
-            initial={{ width: "0%", left: "0%" }}
+            className="absolute top-0 bottom-0 left-0 w-full bg-gold rounded-full origin-left"
+            initial={{ transform: "translateX(0%) scaleX(0)" }}
             animate={{ 
-              width: ["0%", "40%", "0%"],
-              left: ["0%", "30%", "100%"]
+              transform: [
+                "translateX(0%) scaleX(0)",
+                "translateX(30%) scaleX(0.4)",
+                "translateX(100%) scaleX(0)"
+              ]
             }}
             transition={{ 
               duration: 2, 
               repeat: Infinity, 
               ease: "easeInOut" 
             }}
+            style={{ willChange: "transform" }}
           />
         </div>
 
