@@ -73,6 +73,10 @@ export const UIProvider = ({ children }) => {
     }
 
     return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
@@ -147,13 +151,17 @@ export const UIProvider = ({ children }) => {
   const showGlobalLoader = useCallback((message = 'Syncing Records...', minDuration = 1500) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     
+    const startTime = Date.now();
     setLoadingMessage(message);
     setIsGlobalLoading(true);
 
     return () => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, minDuration - elapsed);
+
       timeoutRef.current = setTimeout(() => {
         setIsGlobalLoading(false);
-      }, minDuration);
+      }, remaining);
     };
   }, []);
 
