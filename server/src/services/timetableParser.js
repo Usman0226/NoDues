@@ -15,7 +15,8 @@ export function normalizeFacultyName(rawName) {
   if (!rawName || typeof rawName !== 'string') return '';
 
   return rawName
-    .replace(/\b(dr|prof|professor|mr|mrs|ms|er)\b\.?/gi, '') // strip honorifics
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ') // strip parenthetical designations e.g. (HOD), (CSE), [Visiting]
+    .replace(/\b(dr|prof|professor|assoc\s*prof|asst\s*prof|mr|mrs|ms|er|sri|smt|kum|kumari|hod|dean|incharge|visiting|ph\.?d\.?|m\.?tech|m\.?sc)\b\.?/gi, '') // strip honorifics & titles
     .replace(/[^\w\s]/g, '') // remove punctuation/dots
     .replace(/\s+/g, ' ') // collapse whitespace
     .trim()
@@ -23,7 +24,17 @@ export function normalizeFacultyName(rawName) {
 }
 
 /**
- * Checks if faculty name represents an unassigned course ("without teacher").
+ * Returns alphabetically sorted word tokens of the normalized faculty name
+ * for order-independent fuzzy matching (e.g. 'Ramanathan P' matches 'P Ramanathan').
+ */
+export function getTokenSortedName(rawName) {
+  const norm = normalizeFacultyName(rawName);
+  if (!norm) return '';
+  return norm.split(' ').filter(Boolean).sort().join(' ');
+}
+
+/**
+ * Checks if faculty name represents an unassigned course ("without teacher", "TBD", "Vacant", etc.).
  * TRD Reference: FR-C3
  *
  * @param {string} facultyName
@@ -32,7 +43,23 @@ export function normalizeFacultyName(rawName) {
 export function isWithoutTeacher(facultyName) {
   if (!facultyName) return true;
   const normalized = facultyName.toLowerCase().replace(/[^a-z]/g, '');
-  return normalized === 'withoutteacher' || normalized === 'noteacher';
+  const unassignedKeys = [
+    'withoutteacher',
+    'noteacher',
+    'tbd',
+    'tba',
+    'nil',
+    'na',
+    'vacant',
+    'guestfaculty',
+    'unassigned',
+    'notappointed',
+    'none',
+    'staff',
+    'todecide',
+    'tobearranged',
+  ];
+  return unassignedKeys.includes(normalized);
 }
 
 /**
@@ -72,6 +99,24 @@ export function extractClassMetadataFromText(text) {
     detectedDepartment = deptCode;
   }
 
+  // Pattern 1B: "III B.Tech I Semester (CSD - A)" or "II B.Tech II Sem (CSE - B)"
+  if (!detectedClassName) {
+    const btechPattern = /\b(I|II|III|IV)\s*(?:B\.?Tech|B\.?E\.?)\s*(?:[-–—\s]*)(?:Year|Yr)?\s*(I|II)?\s*(?:Semester|Sem)?\s*[\(\[]?([A-Za-z]+)\s*[-_/\s]\s*([A-Za-z0-9]+)[\)\]]?/i;
+    const btechMatch = text.match(btechPattern);
+    if (btechMatch) {
+      const yearRoman = btechMatch[1].toUpperCase();
+      const semRoman = (btechMatch[2] || 'I').toUpperCase();
+      const deptCode = btechMatch[3].toUpperCase();
+      const sec = btechMatch[4].toUpperCase();
+      const yearNum = { I: 1, II: 2, III: 3, IV: 4 }[yearRoman] || 1;
+      const semInYear = semRoman === 'II' ? 2 : 1;
+      detectedSemester = (yearNum - 1) * 2 + semInYear;
+      detectedClassName = `${deptCode}-${sec}`;
+      displayName = `${yearRoman} ${deptCode}-${sec}`;
+      detectedDepartment = deptCode;
+    }
+  }
+
   // Pattern 2: "III CSD-A" or "III CSE B" without Sem on same line
   if (!detectedClassName) {
     const simpleClassMatch = header.match(/\b(I|II|III|IV)\s+([A-Za-z]+)[-\s]+([A-Za-z0-9]+)\b/i);
@@ -85,11 +130,13 @@ export function extractClassMetadataFromText(text) {
     }
   }
 
-  // Fallback: Detect Semester number
+  // Fallback: Detect Semester number or Roman numeral
   if (!detectedSemester) {
-    const semDigitMatch = text.match(/\b(?:semester|sem)[-:\s]+([1-8])\b/i);
+    const semDigitMatch = text.match(/\b(?:semester|sem)[-:\s]+([1-8]|I|II|III|IV|V|VI|VII|VIII)\b/i);
     if (semDigitMatch) {
-      detectedSemester = parseInt(semDigitMatch[1], 10);
+      const semVal = semDigitMatch[1].toUpperCase();
+      const romanSemMap = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8 };
+      detectedSemester = romanSemMap[semVal] || parseInt(semVal, 10) || null;
     }
   }
 
@@ -102,9 +149,9 @@ export function extractClassMetadataFromText(text) {
     }
   }
 
-  const ctMatch = text.match(/Class Teacher:\s*([^\t\r\n]+)/i);
-  const ayMatch = text.match(/Academic Year:\s*([^\t\r\n]+)/i);
-  const deptMatch = text.match(/Department of ([^\t\r\n\(\)]+)/i);
+  const ctMatch = text.match(/(?:Class Teacher|Class In-?charge|Class Mentor|In-?charge)\s*[:\-–—]\s*([^\t\r\n]+)/i);
+  const ayMatch = text.match(/(?:Academic Year|A\.?Y\.?)\s*[:\-–—]?\s*([0-9]{4}\s*[-–—/]\s*[0-9]{2,4})/i);
+  const deptMatch = text.match(/(?:Department of|Dept\.? of)\s*([^\t\r\n\(\)]+)/i);
 
   return {
     detectedClassName,
@@ -114,6 +161,22 @@ export function extractClassMetadataFromText(text) {
     detectedAcademicYear: ayMatch ? ayMatch[1].trim() : null,
     detectedDepartment: detectedDepartment || (deptMatch ? deptMatch[1].trim() : null),
   };
+}
+
+/**
+ * Parses hours or periods from timetable column.
+ * Supports integer values as well as L-T-P or L+T+P formats (e.g. 3-0-0 -> 3, 3-1-0 -> 4, 3+1 -> 4).
+ */
+export function parseTimetableHours(hoursCol) {
+  if (!hoursCol) return 0;
+  const s = String(hoursCol).trim();
+  // Support L-T-P, L-T-P-C, L+T+P, or slash patterns (e.g. 3-0-0, 3-1-0, 3+1, 3/0/0)
+  const parts = s.split(/[-+–—/]/).map(p => parseInt(p.trim(), 10)).filter(n => !isNaN(n));
+  if (parts.length > 1) {
+    return parts.reduce((sum, n) => sum + n, 0);
+  }
+  const single = parseInt(s, 10);
+  return !isNaN(single) ? single : 0;
 }
 
 /**
@@ -134,35 +197,61 @@ export function extractTableRowsFromText(text) {
     .map(line => line.trim())
     .filter(Boolean);
 
-  // 1. High-precision bounded table extraction (aSc Timetables structure)
-  const headerIdx = lines.findIndex(l => /Subject Name.*Faculty Name/i.test(l));
-  const footerIdx = lines.findIndex(l => /Time Table Incharge|Principal|Head of the Department/i.test(l));
+  // 1. High-precision bounded table extraction (aSc Timetables structure & variants)
+  const headerIdx = lines.findIndex(l =>
+    /(?:Subject|Course|Sub\.?)\s*(?:Name|Title|Code)?.*(?:Faculty|Teacher|Staff|Instructor)/i.test(l) ||
+    /(?:Faculty|Teacher|Staff|Instructor).*Course/i.test(l)
+  );
+  let footerIdx = lines.findIndex((l, idx) => {
+    if (idx <= headerIdx) return false;
+    // A table row starting with a serial number or containing a subject code is NOT a signature line
+    if (/^[0-9]+[\s\t]/.test(l) || /\b[0-9]{2}[A-Z]{2,}/i.test(l)) return false;
+    return /(?:Time\s*Table\s*In-?charge|Principal|Head\s+of\s+the\s+Department|\bHOD\b|Dean|Director|Academic\s*Coordinator|Coordinator)/i.test(l);
+  });
+
+  if (headerIdx !== -1 && footerIdx === -1) {
+    // If table starts but no standard footer signature is present, take lines until end
+    footerIdx = lines.length;
+  }
 
   if (headerIdx !== -1 && footerIdx !== -1 && footerIdx > headerIdx) {
     const tableLines = lines.slice(headerIdx + 1, footerIdx);
     const rawParsed = [];
 
     for (const line of tableLines) {
-      const parts = line.split('\t').map(s => s.trim());
+      let parts = line.split('\t').map(s => s.trim());
+      if (parts.length < 2 && line.includes('|')) {
+        parts = line.split('|').map(s => s.trim()).filter(Boolean);
+      }
+      if (parts.length < 2) {
+        parts = line.split(/\s{3,}/).map(s => s.trim()).filter(Boolean);
+      }
       if (parts.length < 2) continue;
 
-      const subjectCol = parts[0];
-      const facultyCol = parts[1] || 'Without teacher';
-      const hoursCol = parts[2] || '0';
-      const hours = parseInt(hoursCol, 10) || 0;
+      // Handle leading serial number column (e.g. S.No in parts[0])
+      let colIdx = 0;
+      if (/^[0-9]{1,3}$/.test(parts[0]) && parts.length >= 3 && !/[A-Za-z]{2}/.test(parts[0])) {
+        colIdx = 1;
+      }
+
+      const subjectCol = parts[colIdx] || '';
+      const facultyCol = parts[colIdx + 1] || 'Without teacher';
+      const hoursCol = parts[colIdx + 2] || parts[parts.length - 1] || '0';
+      const hours = parseTimetableHours(hoursCol);
 
       let subjectCode = '';
       let subjectName = '';
       let isElective = false;
 
-      // Extract standard code pattern (e.g. 23PHY102, 23CSD107, 23CSD4M01, 23CSD604)
-      const codeMatch = subjectCol.match(/\b([0-9]{2}[A-Z]{2,4}(?=[A-Z0-9]*[0-9])[A-Z0-9]{2,6})\b/i);
+      // Extract standard code pattern (e.g. 23PHY102, 23CSD107, 23CSD4M01, 23CSD604, 20CS501, 19A05501T, CS8591, PE-I, OE-1)
+      const codeMatch = subjectCol.match(/\b([0-9]{2}[A-Z]{2,5}(?=[A-Z0-9]*[0-9])[A-Z0-9]{2,8}|[A-Z]{2,5}[- ]?[0-9]{3,5}[A-Z]?|PE\s*[-–—]?[0-9IV]+|OE\s*[-–—]?[0-9IV]+)\b/i);
       if (codeMatch) {
-        subjectCode = codeMatch[1].toUpperCase();
+        subjectCode = codeMatch[1].toUpperCase().replace(/\s+/g, '');
         subjectName = subjectCol.replace(codeMatch[0], '').replace(/^[\s\-–—:]+/, '').trim();
         if (
-          /PE\s*[-I|IV|V0-9]|\bMOOC\b|\bElective\b/i.test(subjectCol) ||
-          /^[0-9]{2}[A-Z]{2,4}\d+[MEO]\d+[A-Z]?$/i.test(subjectCode)
+          /PE\s*[-I|IV|V0-9]|\bMOOC\b|\bElective\b|\bOE\s*[-I|IV|V0-9]/i.test(subjectCol) ||
+          /^[0-9]{2}[A-Z]{2,4}\d+[MEO]\d+[A-Z]?$/i.test(subjectCode) ||
+          /^(PE|OE)[-0-9IV]+$/i.test(subjectCode)
         ) {
           isElective = true;
         }
@@ -206,7 +295,7 @@ export function extractTableRowsFromText(text) {
     const mergeMap = new Map();
 
     for (const item of rawParsed) {
-      const primaryFaculty = (item.facultyField.split(',')[0] || '').trim().toLowerCase();
+      const primaryFaculty = (item.facultyField.split(/[,/&]|\band\b/i)[0] || '').trim().toLowerCase();
       const mergeKey = `${item.subjectCode}::${primaryFaculty}`;
 
       if (mergeMap.has(mergeKey)) {
@@ -214,8 +303,8 @@ export function extractTableRowsFromText(text) {
         existing.hours += item.hours;
 
         // Combine co-faculty names without duplicates
-        const existingFaculties = existing.facultyField.split(',').map(f => f.trim()).filter(Boolean);
-        const newFaculties = item.facultyField.split(',').map(f => f.trim()).filter(Boolean);
+        const existingFaculties = existing.facultyField.split(/[,/&]|\band\b/i).map(f => f.trim()).filter(Boolean);
+        const newFaculties = item.facultyField.split(/[,/&]|\band\b/i).map(f => f.trim()).filter(Boolean);
         const combined = Array.from(new Set([...existingFaculties, ...newFaculties]));
         existing.facultyField = combined.join(', ');
       } else {
@@ -230,7 +319,7 @@ export function extractTableRowsFromText(text) {
 
   // 2. Generic fallback for unstructured or synthetic fixture text
   const parsedRows = [];
-  const subjectCodePattern = /\b([0-9]{2}[A-Z]{2,4}(?=[A-Z0-9]*[0-9])[A-Z0-9]{2,6}|[A-Z]{2,5}[- ]?[0-9]{3,4}[A-Z]?)\b/i;
+  const subjectCodePattern = /\b([0-9]{2}[A-Z]{2,5}(?=[A-Z0-9]*[0-9])[A-Z0-9]{2,8}|[A-Z]{2,5}[- ]?[0-9]{3,5}[A-Z]?|PE\s*[-–—]?[0-9IV]+|OE\s*[-–—]?[0-9IV]+)\b/i;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -249,12 +338,12 @@ export function extractTableRowsFromText(text) {
     // Split line or inspect parts around the code
     const lineWithoutCode = line.replace(codeMatch[0], '').trim();
 
-    // Look for hours at the end (integer between 1 and 60)
-    let hours = null;
+    // Look for hours at the end (integer or L-T-P like 3-0-0)
+    let hours = 0;
     let nameAndFaculty = lineWithoutCode;
-    const hoursMatch = lineWithoutCode.match(/\b([1-9][0-9]?)\s*$/);
+    const hoursMatch = lineWithoutCode.match(/\b([0-9]+(?:\s*[-+–—/]\s*[0-9]+)?)\s*$/);
     if (hoursMatch) {
-      hours = parseInt(hoursMatch[1], 10);
+      hours = parseTimetableHours(hoursMatch[1]);
       nameAndFaculty = lineWithoutCode.slice(0, hoursMatch.index).trim();
     }
 
@@ -279,8 +368,9 @@ export function extractTableRowsFromText(text) {
 
     if (subjectCode && (subjectName || facultyField)) {
       const fallbackElective =
-        /PE\s*[-I|IV|V0-9]|\bMOOC\b|\bElective\b/i.test(line) ||
-        /^[0-9]{2}[A-Z]{2,4}\d+[MEO]\d+[A-Z]?$/i.test(subjectCode);
+        /PE\s*[-I|IV|V0-9]|\bMOOC\b|\bElective\b|\bOE\s*[-I|IV|V0-9]/i.test(line) ||
+        /^[0-9]{2}[A-Z]{2,4}\d+[MEO]\d+[A-Z]?$/i.test(subjectCode) ||
+        /^(PE|OE)[-0-9IV]+$/i.test(subjectCode);
       parsedRows.push({
         rawLine: line,
         subjectCode,
@@ -408,19 +498,28 @@ export async function inspectPdfPages(pdfBuffer, options = {}) {
     if (hasTextLayer) {
       score += 10;
 
+      // Penalize non-class administrative pages so they are never recommended over section timetables
+      if (/master\s*time\s*table|general\s*instruction|lab\s*protocol|bell\s*timing|allocation\s*matrix/i.test(lowerText)) {
+        score -= 60;
+      }
+
       // Exact class name in text
       if (targetName && lowerText.includes(targetName)) {
         score += 80;
       }
 
-      // Target section matching (e.g. "section a", "sec a", "-a")
+      // Target section matching (e.g. "section a", "sec a", "-a", "(csd - a)")
       if (targetSectionToken) {
         if (
           lowerText.includes(`section ${targetSectionToken}`) ||
           lowerText.includes(`sec ${targetSectionToken}`) ||
           lowerText.includes(`-${targetSectionToken}`) ||
           lowerText.includes(`(${targetSectionToken})`) ||
-          lowerText.includes(` ${targetSectionToken} `)
+          lowerText.includes(` ${targetSectionToken} `) ||
+          lowerText.includes(`-${targetSectionToken}-`) ||
+          lowerText.includes(`section -${targetSectionToken}`) ||
+          lowerText.includes(`- ${targetSectionToken}`) ||
+          new RegExp(`\\(\\s*[A-Z]{2,4}\\s*[-–—]\\s*${targetSectionToken}\\s*\\)`, 'i').test(lowerText)
         ) {
           score += 40;
         }
@@ -588,8 +687,7 @@ export async function parseTimetablePdf(pdfBuffer, options = {}) {
   // Pre-fetch reference lists for efficient in-memory matching (unless supplied by caller)
   let allFaculties = options.allFaculties;
   if (!allFaculties) {
-    const facultyQuery = options.departmentId ? { departmentId: options.departmentId, isActive: true } : { isActive: true };
-    allFaculties = await Faculty.find(facultyQuery).select('_id name email employeeId departmentId').lean();
+    allFaculties = await Faculty.find({ isActive: true }).select('_id name email employeeId departmentId').lean();
   }
 
   let allSubjects = options.allSubjects;
@@ -660,18 +758,40 @@ export function parseTimetablePageFromText(extractedText, {
     if (s.code) subjectByCode.set(s.code.toUpperCase().replace(/\s+/g, ''), s);
   }
 
+  // Pre-index faculties by normalized name and token-sorted name
+  const deptFacultyByNormalized = new Map();
+  const deptFacultyBySortedTokens = new Map();
   const facultyByNormalizedName = new Map();
-  // Seed with all faculties, then overwrite with target department matches for same-dept priority
+  const facultyBySortedTokens = new Map();
+
   for (const f of allFaculties) {
-    if (f.name) facultyByNormalizedName.set(normalizeFacultyName(f.name), f);
-  }
-  if (departmentId) {
-    for (const f of allFaculties) {
-      if (f.name && f.departmentId?.toString() === departmentId.toString()) {
-        facultyByNormalizedName.set(normalizeFacultyName(f.name), f);
-      }
+    if (!f.name) continue;
+    const norm = normalizeFacultyName(f.name);
+    const sorted = getTokenSortedName(f.name);
+    if (norm) facultyByNormalizedName.set(norm, f);
+    if (sorted) facultyBySortedTokens.set(sorted, f);
+
+    if (departmentId && f.departmentId?.toString() === departmentId.toString()) {
+      if (norm) deptFacultyByNormalized.set(norm, f);
+      if (sorted) deptFacultyBySortedTokens.set(sorted, f);
     }
   }
+
+  const lookupFacultyMatch = (name) => {
+    if (!name) return null;
+    const norm = normalizeFacultyName(name);
+    const sorted = getTokenSortedName(name);
+
+    // 1. Same-department match first (exact normalized then token-sorted)
+    if (deptFacultyByNormalized.has(norm)) return deptFacultyByNormalized.get(norm);
+    if (deptFacultyBySortedTokens.has(sorted)) return deptFacultyBySortedTokens.get(sorted);
+
+    // 2. Global match (exact normalized then token-sorted)
+    if (facultyByNormalizedName.has(norm)) return facultyByNormalizedName.get(norm);
+    if (facultyBySortedTokens.has(sorted)) return facultyBySortedTokens.get(sorted);
+
+    return null;
+  };
 
   const processedRows = [];
   let matchedRowCount = 0;
@@ -710,17 +830,16 @@ export function parseTimetablePageFromText(extractedText, {
       continue;
     }
 
-    const facultyNames = facultyField.split(',').map((n) => n.trim()).filter(Boolean);
+    const facultyNames = facultyField.split(/[,/&]|\band\b/i).map((n) => n.trim()).filter(Boolean);
     const primaryName = facultyNames[0] || '';
     const coNames = facultyNames.slice(1);
 
-    const normalizedPrimary = normalizeFacultyName(primaryName);
-    const matchedPrimaryFaculty = facultyByNormalizedName.get(normalizedPrimary);
+    const matchedPrimaryFaculty = lookupFacultyMatch(primaryName);
 
     const coFacultyIds = [];
     const unmatchedCoFaculty = [];
     for (const coName of coNames) {
-      const matchedCo = facultyByNormalizedName.get(normalizeFacultyName(coName));
+      const matchedCo = lookupFacultyMatch(coName);
       if (matchedCo) {
         coFacultyIds.push(matchedCo._id);
       } else {

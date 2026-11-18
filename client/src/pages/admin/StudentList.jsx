@@ -349,7 +349,7 @@ const StudentList = () => {
         />
       )}
 
-      <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Bulk Student Import">
+      <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Bulk Student Import" size="4xl" bodyClassName="overflow-hidden flex flex-col p-4 sm:p-5">
          <ImportStepper 
             type="students" 
             contextLabel="Student Directory Sync" 

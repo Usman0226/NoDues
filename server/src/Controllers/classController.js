@@ -107,12 +107,13 @@ export const getClasses = async (req, res, next) => {
     const { departmentId, semester, academicYear, page = 1, limit = 50, includeInactive } = req.query;
     const isPrivileged = ['admin', 'hod', 'ao'].includes(req.user.role);
 
-    const cacheKey = `classes:list:dept_${departmentId || 'all'}:${semester || 'all'}:${academicYear || 'all'}:${page}:${limit}:${includeInactive}`;
+    const isInactiveIncluded = includeInactive === 'true' || includeInactive === true;
+    const cacheKey = `classes:list:dept_${departmentId || 'all'}:${semester || 'all'}:${academicYear || 'all'}:${page}:${limit}:inactive_${isInactiveIncluded}`;
     const cachedData = cache.get(cacheKey);
     if (cachedData) return res.status(200).json({ success: true, ...cachedData });
 
     const query = {};
-    if (includeInactive !== 'true' || !isPrivileged) {
+    if (!isInactiveIncluded || !isPrivileged) {
       query.isActive = true;
     }
     const scopedDept = deptScope(req);
@@ -278,6 +279,7 @@ export const getClassById = async (req, res, next) => {
     const cls = await Class.findOne({ _id: id, isActive: true })
       .populate('departmentId', 'name')
       .populate('classTeacherId', 'name email employeeId')
+      .populate('subjectAssignments.facultyId', 'name email employeeId')
       .lean();
 
     if (!cls) {
@@ -346,16 +348,23 @@ export const getClassById = async (req, res, next) => {
             employeeId: cls.classTeacherId.employeeId 
           }
         : null,
-      subjectAssignments: (cls.subjectAssignments || []).map((a) => ({
-        _id:         a?._id,
-        subjectId:   a?.subjectId,
-        subjectName: a?.subjectName,
-        subjectCode: a?.subjectCode,
-        isElective:  a?.isElective,
-        faculty:     a?.facultyId
-          ? { _id: a.facultyId, name: a.facultyName }
-          : null,
-      })),
+      subjectAssignments: (cls.subjectAssignments || []).map((a) => {
+        const facObj = a?.facultyId && typeof a.facultyId === 'object' && a.facultyId._id ? a.facultyId : null;
+        const facId = facObj ? facObj._id : (a?.facultyId || null);
+        const facName = facObj?.name || a?.facultyName || null;
+        const facEmpId = facObj?.employeeId || null;
+
+        return {
+          _id:         a?._id,
+          subjectId:   a?.subjectId,
+          subjectName: a?.subjectName,
+          subjectCode: a?.subjectCode,
+          isElective:  a?.isElective,
+          faculty:     facId
+            ? { _id: facId, name: facName, employeeId: facEmpId }
+            : (facName ? { _id: null, name: facName } : null),
+        };
+      }),
       students: students.map(s => ({
         _id: s._id,
         rollNo: s.rollNo,
@@ -572,6 +581,7 @@ export const assignClassTeacher = async (req, res, next) => {
 
     // Invalidate faculty cache so their 'class count' updates
     if (classTeacherId) invalidateEntityCache('faculty', classTeacherId);
+    invalidateEntityCache('class', id, cls.departmentId?.toString());
 
     return res.status(200).json({
       success: true,
@@ -658,6 +668,7 @@ export const addSubjectAssignment = async (req, res, next) => {
 
     // Invalidate faculty cache so their 'subject assignment count' updates in faculty lists
     if (facultyId) invalidateEntityCache('faculty', facultyId);
+    invalidateEntityCache('class', id, cls.departmentId?.toString());
 
     const saved = cls.subjectAssignments[cls.subjectAssignments.length - 1];
 
@@ -737,6 +748,7 @@ export const updateSubjectAssignment = async (req, res, next) => {
 
     // Invalidate faculty cache for the newly assigned faculty
     if (facultyId) invalidateEntityCache('faculty', facultyId);
+    invalidateEntityCache('class', id, cls.departmentId?.toString());
 
     return res.status(200).json({
       success: true,

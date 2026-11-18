@@ -7,8 +7,20 @@ import Class from '../models/Class.js';
 import Department from '../models/Department.js';
 import { sendCredentialEmail } from '../services/emailService.js';
 import asyncHandler from '../utils/asyncHandler.js';
-import { parseBuffer, getRowValue } from '../utils/importUtils.js';
-import { expandRollNoRange, isRange } from '../utils/rollNoUtils.js';
+import {
+  parseBuffer,
+  getRowValue,
+  cleanPersonName,
+  isPlaceholderEmail,
+  extractValidEmail,
+  parseSemester,
+  parseElective,
+  normalizeHeader,
+  generateDepartmentAcronym,
+  KNOWN_DEPT_ALIASES,
+} from '../utils/importUtils.js';
+import { normalizeFacultyName } from '../services/timetableParser.js';
+import { expandRollNoRange, isRange, unpackRollList } from '../utils/rollNoUtils.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import logger from '../utils/logger.js';
 import crypto from 'crypto';
@@ -24,21 +36,91 @@ const ROLL_KEYS = [
   'Roll Number',
   'rollNo',
   'roll_no',
+  'RollNo',
+  'Roll.No',
+  'R.No',
+  'R No',
   'HT No',
+  'HT.No',
+  'HTNo',
   'Hall Ticket',
   'Hall Ticket No',
+  'Hall Ticket Number',
   'Reg No',
+  'Reg. No',
   'Registration No',
+  'Register No',
+  'Registered No',
   'USN',
+  'Student ID',
+  'StudentID',
+  'Student Id',
+  'Adm No',
+  'Adm. No',
+  'Admission No',
+  'Admission Number',
+  'Candidate ID',
+  'Candidate Roll No',
+  'Student Roll No',
+  'University Seat Number',
+  'Pin No',
+  'PIN',
+  'Roll',
 ];
-const NAME_KEYS = ['Name', 'Student Name', 'Full Name', 'Candidate Name', 'name'];
-const EMAIL_KEYS = ['Email', 'Email ID', 'Institutional Email', 'E-mail', 'Mail ID', 'email'];
-const SUBJECT_CODE_KEYS = ['Subject Code', 'Course Code', 'subjectCode', 'code'];
+const NAME_KEYS = [
+  'Name',
+  'Student Name',
+  'Candidate Name',
+  'Name of the Candidate',
+  'Name of the Student',
+  'Name of Candidate',
+  'Name of Student',
+  'Full Name',
+  "Student's Name",
+  "Candidate's Name",
+  'Name of the Pupil',
+  'Student Full Name',
+  'Candidate Full Name',
+  'Learner Name',
+  'Student',
+  'Candidate',
+  'name',
+];
+const EMAIL_KEYS = [
+  'Email',
+  'Email ID',
+  'Email Address',
+  'Institutional Email',
+  'E-mail',
+  'Mail ID',
+  'E-Mail ID',
+  'Student Email',
+  'College Email',
+  'Official Email',
+  'emailId',
+  'email_id',
+  'email',
+];
+const SUBJECT_CODE_KEYS = [
+  'Subject Code',
+  'Course Code',
+  'Sub Code',
+  'Paper Code',
+  'Subject ID',
+  'Course ID',
+  'Sub. Code',
+  'subjectCode',
+  'code',
+];
 const FACULTY_IDENTIFIER_KEYS = [
   'Faculty Employee ID',
   'Employee ID',
   'Faculty ID',
   'Mentor ID',
+  'Emp ID',
+  'Staff ID',
+  'Faculty Code',
+  'Teacher ID',
   'Faculty Email',
   'Mentor Email',
   'employeeId',
@@ -51,6 +133,11 @@ const buildFacultyLookup = (facultyList) => {
   for (const fac of facultyList) {
     if (fac.employeeId) map.set(fac.employeeId.toUpperCase(), fac);
     if (fac.email) map.set(fac.email.toLowerCase(), fac);
+    if (fac.name) {
+      map.set(fac.name.toUpperCase(), fac);
+      map.set(cleanPersonName(fac.name).toUpperCase(), fac);
+      map.set(normalizeFacultyName(fac.name), fac);
+    }
   }
   return map;
 };
@@ -58,7 +145,13 @@ const buildFacultyLookup = (facultyList) => {
 const lookupFaculty = (facultyMap, identifier) => {
   if (!identifier) return null;
   const trimmed = identifier.toString().trim();
-  return facultyMap.get(trimmed.toUpperCase()) || facultyMap.get(trimmed.toLowerCase()) || null;
+  return (
+    facultyMap.get(trimmed.toUpperCase()) ||
+    facultyMap.get(trimmed.toLowerCase()) ||
+    facultyMap.get(cleanPersonName(trimmed).toUpperCase()) ||
+    facultyMap.get(normalizeFacultyName(trimmed)) ||
+    null
+  );
 };
 
 const checkDeptScope = (user, deptId) => {
@@ -70,14 +163,18 @@ const checkDeptScope = (user, deptId) => {
 export const previewStudents = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
 
-  const { classId } = req.query;
+  const { classId, sheet } = req.query;
   if (!classId) return next(new ErrorResponse('classId is required', 400));
 
   const targetClass = await Class.findById(classId);
   if (!targetClass) return next(new ErrorResponse('Target class not found', 404));
   checkDeptScope(req.user, targetClass.departmentId);
 
-  const rows = parseBuffer(req.file.buffer);
+  const rows = parseBuffer(req.file.buffer, {
+    targetHint: targetClass.name,
+    preferredSheet: sheet,
+    type: 'students',
+  });
   if (!rows.length) {
     return next(
       new ErrorResponse(
@@ -92,11 +189,13 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
     valid: [],
     errors: [],
     summary: { total: rows.length, valid: 0, errors: 0 },
+    sheetName: rows.sheetName,
+    availableSheets: rows.availableSheets || [rows.sheetName].filter(Boolean),
   };
 
   // 1. Extract all roll numbers for bulk duplicate check
   const rollNos = rows
-    .map((r) => getRowValue(r, ROLL_KEYS)?.toString().toUpperCase())
+    .map((r) => getRowValue(r, ROLL_KEYS)?.toString().replace(/\s+/g, '').toUpperCase())
     .filter(Boolean);
   const existingStudents = await Student.find({ rollNo: { $in: rollNos } }).select('rollNo').lean();
   const existingRollSet = new Set(existingStudents.map((s) => s.rollNo));
@@ -105,8 +204,18 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     let rollNo = getRowValue(row, ROLL_KEYS);
-    const name = getRowValue(row, NAME_KEYS);
-    const email = getRowValue(row, EMAIL_KEYS);
+    let name = getRowValue(row, NAME_KEYS);
+    let email = getRowValue(row, EMAIL_KEYS);
+
+    if (rollNo) rollNo = rollNo.replace(/\s+/g, '').toUpperCase();
+    if (name) name = cleanPersonName(name);
+    if (email) {
+      if (isPlaceholderEmail(email)) {
+        email = null;
+      } else {
+        email = extractValidEmail(email) || email.trim();
+      }
+    }
 
     const errors = [];
     if (!rollNo) errors.push('Roll number missing (column: Roll No)');
@@ -119,7 +228,6 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    rollNo = rollNo.toString().toUpperCase();
     if (seenRolls.has(rollNo)) {
       results.errors.push({ row: i + 1, data: row, reason: `Duplicate roll number ${rollNo} in file` });
       results.summary.errors++;
@@ -243,8 +351,15 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
 export const previewFaculty = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
 
-  const rows = parseBuffer(req.file.buffer);
-  const results = { valid: [], errors: [], summary: { total: rows.length, valid: 0, errors: 0 } };
+  const { sheet } = req.query;
+  const rows = parseBuffer(req.file.buffer, { preferredSheet: sheet, type: 'faculty' });
+  const results = {
+    valid: [],
+    errors: [],
+    summary: { total: rows.length, valid: 0, errors: 0 },
+    sheetName: rows.sheetName,
+    availableSheets: rows.availableSheets || [rows.sheetName].filter(Boolean),
+  };
 
   // 1. Bulk lookup for IDs and Emails
   const empIds = rows.map(r => getRowValue(r, ['Employee ID', 'employeeId'])?.toString().toUpperCase()).filter(Boolean);
@@ -253,19 +368,51 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
   const [existingFacultyIds, existingFacultyEmails, allDepts] = await Promise.all([
     Faculty.find({ employeeId: { $in: empIds } }).select('employeeId').lean(),
     Faculty.find({ email: { $in: emails } }).select('email').lean(),
-    Department.find({ isActive: { $ne: false } }).select('_id name').lean()
+    Department.find({ isActive: { $ne: false } }).select('_id name code').lean()
   ]);
 
   const idSet = new Set(existingFacultyIds.map(f => f.employeeId));
   const emailSet = new Set(existingFacultyEmails.map(f => f.email));
-  const deptMap = new Map(allDepts.map(d => [d.name.toUpperCase(), d._id]));
+  const deptMap = new Map();
+  for (const d of allDepts) {
+    if (d.name) {
+      const upperName = d.name.toUpperCase();
+      const normName = normalizeHeader(d.name);
+      deptMap.set(upperName, d._id);
+      deptMap.set(normName, d._id);
+
+      const acronym = generateDepartmentAcronym(d.name);
+      if (acronym) {
+        deptMap.set(acronym.toUpperCase(), d._id);
+        deptMap.set(normalizeHeader(acronym), d._id);
+      }
+
+      // Map known aliases
+      for (const [codeKey, aliases] of Object.entries(KNOWN_DEPT_ALIASES)) {
+        if (aliases.some((a) => upperName.includes(a) || a.includes(upperName))) {
+          deptMap.set(codeKey.toUpperCase(), d._id);
+          deptMap.set(normalizeHeader(codeKey), d._id);
+        }
+      }
+    }
+    if (d.code) {
+      deptMap.set(d.code.toUpperCase(), d._id);
+      deptMap.set(normalizeHeader(d.code), d._id);
+    }
+  }
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     let employeeId = getRowValue(row, ['Employee ID', 'employeeId']);
-    const name = getRowValue(row, ['Name', 'name']);
+    let name = getRowValue(row, ['Name', 'name']);
     let email = getRowValue(row, ['Email', 'email']);
     const deptName = getRowValue(row, ['Department', 'department']);
+    let phone = getRowValue(row, ['Phone', 'phone', 'Mobile', 'mobile']);
+
+    if (employeeId) employeeId = employeeId.replace(/\s+/g, '').toUpperCase();
+    if (name) name = cleanPersonName(name);
+    if (email) email = extractValidEmail(email) || email.trim().toLowerCase();
+    if (phone) phone = String(phone).replace(/[^\d+]/g, '');
 
     const errors = [];
     if (!employeeId) errors.push('Employee ID is required');
@@ -280,7 +427,7 @@ export const previewFaculty = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const deptId = deptMap.get(deptName.toUpperCase());
+    const deptId = deptMap.get(deptName.toUpperCase()) || deptMap.get(normalizeHeader(deptName));
     if (!deptId) {
       results.errors.push({ row: i + 1, data: row, reason: `Department '${deptName}' not found` });
       results.summary.errors++;
@@ -416,7 +563,8 @@ export const commitFaculty = asyncHandler(async (req, res, next) => {
 
 export const previewElectives = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
-  const rows = parseBuffer(req.file.buffer);
+  const { sheet } = req.query;
+  const rows = parseBuffer(req.file.buffer, { preferredSheet: sheet, type: 'electives' });
   if (!rows.length) {
     return next(
       new ErrorResponse(
@@ -426,41 +574,37 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
       )
     );
   }
-  const results = { valid: [], errors: [], summary: { total: 0, valid: 0, errors: 0 } };
+  const results = {
+    valid: [],
+    errors: [],
+    summary: { total: 0, valid: 0, errors: 0 },
+    sheetName: rows.sheetName,
+    availableSheets: rows.availableSheets || [rows.sheetName].filter(Boolean),
+  };
 
   // 1. Pre-process all rows to collect IDs for bulk lookup
   const allRollNos = new Set();
   const allSubjectCodes = new Set();
-  const allEmpIds = new Set();
-  const allEmails = new Set();
 
   for (const row of rows) {
     const rawRoll = getRowValue(row, ROLL_KEYS);
     const subjectCode = getRowValue(row, SUBJECT_CODE_KEYS);
-    const empOrEmail = getRowValue(row, FACULTY_IDENTIFIER_KEYS);
 
     if (rawRoll) {
-      const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
+      const rolls = unpackRollList(rawRoll);
       if (rolls) rolls.forEach((r) => allRollNos.add(r.toUpperCase()));
     }
-    if (subjectCode) allSubjectCodes.add(subjectCode.toUpperCase());
-    if (empOrEmail) {
-      if (empOrEmail.includes('@')) allEmails.add(empOrEmail.toLowerCase());
-      else allEmpIds.add(empOrEmail.toUpperCase());
+    if (subjectCode) {
+      const cleanCode = subjectCode.replace(/\s+/g, '').toUpperCase();
+      allSubjectCodes.add(cleanCode);
     }
   }
 
   // 2. Bulk Database Queries
-  const facultyConditions = [];
-  if (allEmpIds.size > 0) facultyConditions.push({ employeeId: { $in: Array.from(allEmpIds) } });
-  if (allEmails.size > 0) facultyConditions.push({ email: { $in: Array.from(allEmails) } });
-
   const [students, subjects, faculty] = await Promise.all([
     Student.find({ rollNo: { $in: Array.from(allRollNos) }, isActive: true }).select('_id rollNo name departmentId').lean(),
     Subject.find({ code: { $in: Array.from(allSubjectCodes) }, isElective: true, isActive: true }).select('_id code name').lean(),
-    facultyConditions.length > 0
-      ? Faculty.find({ $or: facultyConditions, isActive: true }).select('_id employeeId email name').lean()
-      : Promise.resolve([]),
+    Faculty.find({ isActive: true }).select('_id employeeId email name').lean(),
   ]);
 
   const studentMap = new Map(students.map((s) => [s.rollNo, s]));
@@ -481,9 +625,9 @@ export const previewElectives = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
+    const rolls = unpackRollList(rawRoll);
     if (!rolls || rolls.length === 0) {
-      results.errors.push({ row: i + 1, data: row, reason: `Invalid range format: ${rawRoll}` });
+      results.errors.push({ row: i + 1, data: row, reason: `Invalid roll number format: ${rawRoll}` });
       results.summary.errors++;
       results.summary.total++;
       continue;
@@ -635,7 +779,8 @@ export const commitElectives = asyncHandler(async (req, res, next) => {
  */
 export const previewMentors = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
-  const rows = parseBuffer(req.file.buffer);
+  const { sheet } = req.query;
+  const rows = parseBuffer(req.file.buffer, { preferredSheet: sheet, type: 'mentors' });
   if (!rows.length) {
     return next(
       new ErrorResponse(
@@ -645,37 +790,30 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
       )
     );
   }
-  const results = { valid: [], errors: [], summary: { total: 0, valid: 0, errors: 0 } };
+  const results = {
+    valid: [],
+    errors: [],
+    summary: { total: 0, valid: 0, errors: 0 },
+    sheetName: rows.sheetName,
+    availableSheets: rows.availableSheets || [rows.sheetName].filter(Boolean),
+  };
 
   // 1. Pre-process to collect IDs
   const allRollNos = new Set();
-  const allEmpIds = new Set();
-  const allEmails = new Set();
   const seenRolls = new Set();
 
   for (const row of rows) {
     const rawRoll = getRowValue(row, ROLL_KEYS);
-    const empOrEmail = getRowValue(row, FACULTY_IDENTIFIER_KEYS);
     if (rawRoll) {
-      const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
+      const rolls = unpackRollList(rawRoll);
       if (rolls) rolls.forEach((r) => allRollNos.add(r.toUpperCase()));
-    }
-    if (empOrEmail) {
-      if (empOrEmail.includes('@')) allEmails.add(empOrEmail.toLowerCase());
-      else allEmpIds.add(empOrEmail.toUpperCase());
     }
   }
 
   // 2. Bulk Database Queries
-  const facultyConditions = [];
-  if (allEmpIds.size > 0) facultyConditions.push({ employeeId: { $in: Array.from(allEmpIds) } });
-  if (allEmails.size > 0) facultyConditions.push({ email: { $in: Array.from(allEmails) } });
-
   const [students, faculty] = await Promise.all([
     Student.find({ rollNo: { $in: Array.from(allRollNos) }, isActive: true }).select('_id rollNo name departmentId').lean(),
-    facultyConditions.length > 0
-      ? Faculty.find({ $or: facultyConditions, isActive: true }).select('_id employeeId email name departmentId roleTags').lean()
-      : Promise.resolve([]),
+    Faculty.find({ isActive: true }).select('_id employeeId email name departmentId roleTags').lean(),
   ]);
 
   const studentMap = new Map(students.map((s) => [s.rollNo, s]));
@@ -694,9 +832,9 @@ export const previewMentors = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const rolls = isRange(rawRoll) ? expandRollNoRange(rawRoll) : [rawRoll];
+    const rolls = unpackRollList(rawRoll);
     if (!rolls || rolls.length === 0) {
-      results.errors.push({ row: i + 1, data: row, reason: `Invalid range format: ${rawRoll}` });
+      results.errors.push({ row: i + 1, data: row, reason: `Invalid roll number format: ${rawRoll}` });
       results.summary.errors++;
       results.summary.total++;
       continue;
@@ -868,26 +1006,42 @@ export const commitMentors = asyncHandler(async (req, res, next) => {
 export const previewSubjects = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
 
-  const rows = parseBuffer(req.file.buffer);
-  const results = { valid: [], errors: [], summary: { total: rows.length, valid: 0, errors: 0 } };
+  const { sheet } = req.query;
+  const rows = parseBuffer(req.file.buffer, { preferredSheet: sheet, type: 'subjects' });
+  const results = {
+    valid: [],
+    errors: [],
+    summary: { total: rows.length, valid: 0, errors: 0 },
+    sheetName: rows.sheetName,
+    availableSheets: rows.availableSheets || [rows.sheetName].filter(Boolean),
+  };
 
   // 1. Bulk check for existing subjects
-  const codes = rows.map(r => getRowValue(r, ['Code', 'subjectCode', 'code'])?.toString().toUpperCase()).filter(Boolean);
+  const codes = rows
+    .map((r) => {
+      const c = r.code || r.subjectCode || getRowValue(r, ['Code', 'subjectCode', 'Subject Code', 'Course Code', 'code']);
+      return c ? c.toString().replace(/\s+/g, '').toUpperCase() : null;
+    })
+    .filter(Boolean);
   const existingSubjects = await Subject.find({ code: { $in: codes } }).select('code').lean();
-  const existingCodeSet = new Set(existingSubjects.map(s => s.code));
+  const existingCodeSet = new Set(existingSubjects.map((s) => s.code));
+  const seenCodes = new Set();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const name = getRowValue(row, ['Name', 'subjectName', 'name']);
-    const code = getRowValue(row, ['Code', 'subjectCode', 'code']);
-    const semester = getRowValue(row, ['Semester', 'semester', 'sem']);
-    const isElective = getRowValue(row, ['Is Elective', 'isElective', 'elective']);
+    let name = row.name || getRowValue(row, ['Name', 'subjectName', 'Subject Name', 'Course Title', 'Course Name', 'Paper Name', 'name']);
+    let code = row.code || row.subjectCode || getRowValue(row, ['Code', 'subjectCode', 'Subject Code', 'Course Code', 'Sub Code', 'code']);
+    const rawSemester = row.semester || getRowValue(row, ['Semester', 'semester', 'sem', 'Term', 'term']);
+    const rawIsElective = row.isElective !== undefined ? row.isElective : getRowValue(row, ['Is Elective', 'isElective', 'elective', 'Type', 'type', 'Course Type']);
+
+    const semester = rawSemester !== null && rawSemester !== undefined ? parseSemester(rawSemester) : undefined;
+    const isElective = parseElective(rawIsElective);
 
     const errors = [];
     if (!name) errors.push('Subject Name is required');
     if (!code) errors.push('Subject Code is required');
-    if (semester && (isNaN(semester) || semester < 1 || semester > 8)) {
-      errors.push('Semester must be between 1 and 8');
+    if (rawSemester !== null && rawSemester !== undefined && semester === undefined) {
+      errors.push(`Invalid semester "${rawSemester}". Expected 1-8 or I-VIII.`);
     }
 
     if (errors.length > 0) {
@@ -896,18 +1050,32 @@ export const previewSubjects = asyncHandler(async (req, res, next) => {
       continue;
     }
 
-    const upperCode = code.toString().toUpperCase();
+    const upperCode = code.toString().replace(/\s+/g, '').toUpperCase().trim();
+
+    if (seenCodes.has(upperCode)) {
+      results.errors.push({ row: i + 1, data: row, reason: `Duplicate subject code ${upperCode} in file` });
+      results.summary.errors++;
+      continue;
+    }
+    seenCodes.add(upperCode);
+
     if (existingCodeSet.has(upperCode)) {
-      results.errors.push({ row: i + 1, data: row, reason: `Subject code ${code} already exists` });
+      results.errors.push({ row: i + 1, data: row, reason: `Subject code ${upperCode} already exists` });
       results.summary.errors++;
       continue;
     }
 
+    // Clean name: strip leading code if present (e.g. "20CS501 - Operating Systems" -> "Operating Systems")
+    let cleanName = cleanPersonName(name);
+    if (cleanName.toUpperCase().startsWith(upperCode)) {
+      cleanName = cleanName.slice(upperCode.length).replace(/^[\s\-–—/:]+/, '').trim() || cleanName;
+    }
+
     results.valid.push({ 
-      name, 
-      code: code.toUpperCase(), 
-      semester: semester ? Number(semester) : undefined,
-      isElective: isElective?.toString().toLowerCase() === 'yes' || isElective === 'true' || isElective === '1' || isElective === true
+      name: cleanName, 
+      code: upperCode, 
+      semester,
+      isElective
     });
     results.summary.valid++;
   }

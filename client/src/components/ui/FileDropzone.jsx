@@ -13,6 +13,7 @@ const FileDropzone = ({
   isProcessing = false,
   file: controlledFile,
   icon = Upload,
+  className = '',
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [internalFile, setInternalFile] = useState(null);
@@ -67,9 +68,9 @@ const FileDropzone = ({
       onDragOver={handleDrag}
       onDrop={handleDrop}
       onClick={() => !file && !isLoading && inputRef.current?.click()}
-      className={`relative border-2 border-dashed rounded-2xl p-8 sm:p-10 text-center cursor-pointer transition-all duration-200
+      className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200
         ${dragActive ? 'border-indigo-500 bg-indigo-50/20 scale-[1.01]' : 'border-zinc-300 hover:border-indigo-400 hover:bg-zinc-50/50'}
-        ${file || isLoading ? 'cursor-default' : ''}`}
+        ${file || isLoading ? 'cursor-default' : ''} ${className}`}
     >
       <input ref={inputRef} type="file" accept={accept} onChange={handleChange} className="hidden" />
       {isLoading ? (

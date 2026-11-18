@@ -9,7 +9,7 @@
 #   deploy:
 #     runs-on: ubuntu-latest
 #     steps:
-#       - name: Check VM Reachability
+#       - name: Check VM Reachability   
 #         id: check_vm
 #         run: |
 #           # Try to connect to SSH port with a 5-second timeout

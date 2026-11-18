@@ -83,7 +83,7 @@ const DepartmentClasses = () => {
     try {
       const res = await syncMasterCurriculum({ departmentId: activeDeptId, semester: sem });
       toast.success(res?.data?.message || `Synchronized Semester ${sem} master curriculum to all sections!`);
-      fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+      fetchClasses();
     } catch (err) {
       toast.error(err?.message || err?.response?.data?.message || 'Failed to synchronize curriculum');
     } finally {
@@ -98,8 +98,9 @@ const DepartmentClasses = () => {
   const [includeInactive, setIncludeInactive] = useState(false);
   
   const classesOptions = useMemo(() => ({
-    queryKey: ['classes', { departmentId: deptId, page, limit, includeInactive }],
-    immediate: false
+    queryKey: ['classes', { departmentId: deptId, page, limit, includeInactive: !!includeInactive }],
+    params: { departmentId: deptId, page, limit, includeInactive: !!includeInactive },
+    immediate: Boolean(deptId)
   }), [deptId, page, limit, includeInactive]);
 
   const { data: response, loading, error, request: fetchClasses } = useApi(getClasses, classesOptions);
@@ -112,20 +113,13 @@ const DepartmentClasses = () => {
   }, [deptId, classes]);
 
   const facultyOptions = useMemo(() => ({
-    queryKey: ['faculty', { departmentId: deptId }],
-    immediate: false
+    queryKey: ['faculty', { departmentId: deptId, limit: 100, isActive: true }],
+    params: { departmentId: deptId, limit: 100, isActive: true },
+    immediate: Boolean(deptId)
   }), [deptId]);
 
-  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, facultyOptions);
+  const { data: facultyResponse } = useApi(getFaculty, facultyOptions);
   const facultyList = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
-
-  useEffect(() => {
-    const params = { departmentId: deptId, page, limit, includeInactive };
-    fetchClasses(params);
-    if (deptId) {
-      fetchFaculty({ departmentId: deptId, limit: 100, isActive: true });
-    }
-  }, [fetchClasses, fetchFaculty, deptId, page, limit, includeInactive]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -227,7 +221,7 @@ const DepartmentClasses = () => {
       await createClass(formData);
       toast.success('New academic group established');
       setShowCreate(false);
-      fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+      fetchClasses();
       setFormData({ name: '', semester: 1, academicYear: '2025-26', departmentId: deptId, classTeacherId: '' });
     } catch (err) {
       toast.error(err?.message || 'Failed to create group');
@@ -259,7 +253,7 @@ const DepartmentClasses = () => {
       await updateClass(selectedClass._id, formData);
       toast.success('Academic group updated');
       setShowEdit(false);
-      fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+      fetchClasses();
     } catch (err) {
       toast.error(err?.message || 'Failed to update group');
     } finally {
@@ -291,7 +285,7 @@ const DepartmentClasses = () => {
       await activateClass(selectedClass._id);
       toast.success('Academic group reactivated');
       setShowActivate(false);
-      fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+      fetchClasses();
     } catch (err) {
       toast.error(err?.message || 'Failed to reactivate group');
     } finally {
@@ -358,16 +352,20 @@ const DepartmentClasses = () => {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => fetchClasses({ departmentId: deptId, page, limit, includeInactive })}
+            onClick={() => fetchClasses()}
             title="Reload records"
           >
             <RefreshCw size={14} /> Reload
           </Button>
 
           {/* Show Inactivated Toggle */}
-          <div 
+          <button 
+            type="button"
+            role="switch"
+            aria-checked={includeInactive}
             className="h-9 inline-flex items-center gap-2.5 px-3.5 bg-white rounded-full border border-zinc-200 shadow-xs hover:border-zinc-300 transition-colors cursor-pointer select-none"
-            onClick={() => setIncludeInactive(!includeInactive)}
+            onClick={() => setIncludeInactive(prev => !prev)}
+            title={includeInactive ? "Showing inactive groups" : "Hiding inactive groups"}
           >
             <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground leading-none">
               Show Inactivated
@@ -375,7 +373,7 @@ const DepartmentClasses = () => {
             <div className={`w-8 h-4 rounded-full relative transition-colors ${includeInactive ? 'bg-navy' : 'bg-zinc-200'}`}>
               <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${includeInactive ? 'left-4.5' : 'left-0.5'}`} />
             </div>
-          </div>
+          </button>
         </div>
       }
     >
@@ -415,7 +413,7 @@ const DepartmentClasses = () => {
              <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
              <p className="text-muted-foreground font-medium">{error || 'Failed to initialize session'}</p>
           </motion.div>
-        ) : Object.keys(grouped).length === 0 ? (
+        ) : !loading && Object.keys(grouped).length === 0 ? (
           <motion.div 
             key="empty"
             initial={{ opacity: 0, y: 10 }}
@@ -457,7 +455,7 @@ const DepartmentClasses = () => {
                <Button
                  variant="outline"
                  size="md"
-                 onClick={() => fetchClasses({ departmentId: deptId, page, limit, includeInactive })}
+                 onClick={() => fetchClasses()}
                  className="flex items-center gap-1.5 text-xs text-muted-foreground"
                  title="Reload records"
                >
@@ -838,7 +836,7 @@ const DepartmentClasses = () => {
           onClose={() => setPromoteClassId(null)}
           classId={promoteClassId}
           onSuccess={() => {
-            fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+            fetchClasses();
             setPromoteClassId(null);
           }}
         />
@@ -851,7 +849,7 @@ const DepartmentClasses = () => {
           departmentId={activeDeptId}
           initialSemester={cohortPromoteSem}
           onSuccess={() => {
-            fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+            fetchClasses();
             setShowCohortPromote(false);
           }}
         />
@@ -864,7 +862,7 @@ const DepartmentClasses = () => {
           departmentId={activeDeptId}
           departmentName={classes[0]?.departmentName || 'Department'}
           onSuccess={() => {
-            fetchClasses({ departmentId: deptId, page, limit, includeInactive });
+            fetchClasses();
             setShowDepartmentRollover(false);
           }}
         />

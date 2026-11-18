@@ -399,7 +399,7 @@ const FacultyList = () => {
       )}
 
       {showImport && (
-        <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Batch Faculty Import">
+        <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Batch Faculty Import" size="4xl" bodyClassName="overflow-hidden flex flex-col p-4 sm:p-5">
            <ImportStepper type="faculty" contextLabel="Staff Ledger Integration" onComplete={() => { setShowImport(false); fetchFaculty(); }} />
         </Modal>
       )}

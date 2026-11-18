@@ -185,7 +185,7 @@ const Table = ({
             </div>
           )}
           
-          {showCount && !loading && (
+          {showCount && (
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-zinc-400">
                 {(filter || (onSearchChange && searchValue)) ? (
@@ -307,7 +307,7 @@ const Table = ({
                 >
                   <span className={`inline-flex items-center gap-1 ${col.align === 'center' ? 'justify-center w-full' : col.align === 'right' ? 'justify-end w-full' : ''}`}>
                     {col.label}
-                    {!loading && sortKey === col.key && (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                    {sortKey === col.key && (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                   </span>
                 </th>
               ))}

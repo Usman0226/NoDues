@@ -30,15 +30,36 @@ const matchFacultyFromList = (allFacs, rawName, departmentId) => {
   if (!rawName || !Array.isArray(allFacs)) return null;
   const normName = normalizeFacultyName(rawName);
   if (!normName) return null;
+  const sortedTokens = normName.split(' ').filter(Boolean).sort().join(' ');
+
+  // 1. Same-department exact normalized match
+  if (departmentId) {
+    const deptMatch = allFacs.find(
+      (f) =>
+        f.departmentId?.toString() === departmentId.toString() &&
+        normalizeFacultyName(f.name) === normName
+    );
+    if (deptMatch) return deptMatch;
+
+    // 2. Same-department sorted tokens match (e.g. "Ramanathan P" matches "P Ramanathan")
+    const deptTokenMatch = allFacs.find(
+      (f) =>
+        f.departmentId?.toString() === departmentId.toString() &&
+        normalizeFacultyName(f.name).split(' ').filter(Boolean).sort().join(' ') === sortedTokens
+    );
+    if (deptTokenMatch) return deptTokenMatch;
+  }
+
+  // 3. Global exact normalized match
+  const globalMatch = allFacs.find((f) => normalizeFacultyName(f.name) === normName);
+  if (globalMatch) return globalMatch;
+
+  // 4. Global sorted tokens match
   return (
     allFacs.find(
       (f) =>
-        departmentId &&
-        f.departmentId?.toString() === departmentId.toString() &&
-        normalizeFacultyName(f.name) === normName
-    ) ||
-    allFacs.find((f) => normalizeFacultyName(f.name) === normName) ||
-    null
+        normalizeFacultyName(f.name).split(' ').filter(Boolean).sort().join(' ') === sortedTokens
+    ) || null
   );
 };
 
@@ -90,7 +111,10 @@ async function bulkUpsertSubjects(sectionPayloads) {
     for (const row of (sec.rows || []).filter((r) => r.status !== 'excluded')) {
       const upperCode = (row.subjectCode || '').toUpperCase().trim();
       if (!upperCode) continue;
-      const cleanName = (row.subjectName || upperCode).replace(/^[\s\-–—:]+/, '').trim();
+      let cleanName = (row.subjectName || upperCode).replace(/^[\s\-–—:]+/, '').trim();
+      if (cleanName.toUpperCase().startsWith(upperCode)) {
+        cleanName = cleanName.slice(upperCode.length).replace(/^[\s\-–—/:]+/, '').trim() || cleanName;
+      }
       const prev = uniqueDefs.get(upperCode);
       uniqueDefs.set(upperCode, {
         code: upperCode,

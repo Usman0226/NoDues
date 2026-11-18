@@ -513,7 +513,7 @@ const Subjects = () => {
         loading={submitting}
       />
 
-      <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Bulk Subject Import">
+      <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Bulk Subject Import" size="4xl" bodyClassName="overflow-hidden flex flex-col p-4 sm:p-5">
          <ImportStepper 
             type="subjects" 
             contextLabel="Academic Component Catalog Sync" 

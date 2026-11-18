@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
@@ -75,7 +76,9 @@ const ClassDetail = () => {
   const [bulkMentorId, setBulkMentorId] = useState('');
   const [studentsList, setStudentsList] = useState([]);
   const [loadingStudentId, setLoadingStudentId] = useState(null);
+  const [updatingAssignmentId, setUpdatingAssignmentId] = useState(null);
 
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const isHod = user?.role === 'hod' || user?.role === 'ao';
   const basePath = isHod ? '/hod' : '/admin';
@@ -88,19 +91,24 @@ const ClassDetail = () => {
     },
   });
   const facultyOptions = useMemo(() => ({
-    immediate: false,
-    queryKey: ['faculty', isHod ? user?.departmentId : 'all']
-  }), [isHod, user?.departmentId]);
+    immediate: true,
+    params: { limit: 500, departmentId: 'all' },
+    queryKey: ['faculty', 'all', { limit: 500, departmentId: 'all' }]
+  }), []);
 
-  const { data: facultyResponse, request: fetchFaculty } = useApi(getFaculty, facultyOptions);
-
-  useEffect(() => {
-    fetchFaculty({ limit: 500, departmentId: 'all' }); 
-  }, [fetchFaculty]);
+  const { data: facultyResponse } = useApi(getFaculty, facultyOptions);
 
   const classData = useMemo(() => response?.data || {}, [response?.data]);
   const students = useMemo(() => classData?.students || [], [classData?.students]);
-  const subjects = useMemo(() => classData?.subjects || classData?.subjectAssignments || [], [classData?.subjects, classData?.subjectAssignments]);
+  const subjects = useMemo(() => {
+    if (Array.isArray(classData?.subjectAssignments) && classData.subjectAssignments.length > 0) {
+      return classData.subjectAssignments;
+    }
+    if (Array.isArray(classData?.subjects) && classData.subjects.length > 0) {
+      return classData.subjects;
+    }
+    return classData?.subjectAssignments || classData?.subjects || [];
+  }, [classData?.subjectAssignments, classData?.subjects]);
   const pastBatches = useMemo(() => classData?.batchHistory || [], [classData?.batchHistory]);
   const activeBatch = classData?.activeBatch;
   const tabs = useMemo(() => {
@@ -117,6 +125,14 @@ const ClassDetail = () => {
   }, [classData?.isMaster, tab]);
 
   const facultyList = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
+  
+  const allFacultyOptions = useMemo(() => {
+    return facultyList.map(f => ({
+      value: f._id,
+      label: f.name,
+      subLabel: `${f.employeeId || 'No ID'} · ${f.departmentId?.name || f.department || ''}`
+    }));
+  }, [facultyList]);
   
   useEffect(() => {
     if (response?.data?.students) {
@@ -156,29 +172,6 @@ const ClassDetail = () => {
       .then((res) => setOtherClasses((res?.data || []).filter((c) => c._id !== classId)))
       .catch(() => {}); // silent — non-critical
   }, [departmentId, classId]);
-  
-  const [facultySearchResults, setFacultySearchResults] = useState(null);
-  const [isSearchingFaculty, setIsSearchingFaculty] = useState(false);
-
-
-
-  const handleFacultySearch = async (query) => {
-    if (!query) {
-      setIsSearchingFaculty(false);
-      setFacultySearchResults(null);
-      return;
-    }
-    
-    setIsSearchingFaculty(true);
-    try {
-      const res = await getFaculty({ search: query, departmentId: 'all', limit: 100 });
-      setFacultySearchResults(res?.data || []);
-    } catch (err) {
-      console.error('Faculty search failed', err);
-    }
-  };
-
-  const activeFacultyList = isSearchingFaculty ? (facultySearchResults || []) : (facultyResponse?.data || []);
 
   const { data: deptSubjectsRes, request: fetchGlobalSubjects } = useApi(() => getSubjects({ limit: 100 }), { 
     immediate: true,
@@ -342,7 +335,7 @@ const ClassDetail = () => {
     }
   };
 
-  const handleEditSubjectClick = (assignment) => {
+  const handleEditSubjectClick = useCallback((assignment) => {
     setSelectedSubject(assignment);
     const faculty = assignment.faculty || {};
     setSubjectFormData({ 
@@ -351,7 +344,7 @@ const ClassDetail = () => {
       subjectCode: assignment.subjectCode || '' 
     });
     setShowEditSubject(true);
-  };
+  }, []);
 
   const handleEditSubjectSubmit = async () => {
     setSubmitting(true);
@@ -372,10 +365,10 @@ const ClassDetail = () => {
     }
   };
 
-  const handleDeleteSubjectClick = (assignment) => {
+  const handleDeleteSubjectClick = useCallback((assignment) => {
     setSelectedSubject(assignment);
     setShowDeleteSubject(true);
-  };
+  }, []);
 
   const handleDeleteSubjectConfirm = async () => {
     setSubmitting(true);
@@ -392,7 +385,90 @@ const ClassDetail = () => {
     }
   };
 
-  const handleMapElectiveClick = (assignment) => {
+  const handleAssignFaculty = useCallback(async (assignmentId, val) => {
+    const selectedFac = val && !val.startsWith('named:')
+      ? facultyList.find(f => f._id === val)
+      : null;
+    const namedFaculty = val?.startsWith('named:') ? val.replace('named:', '') : null;
+
+    const newFacultyObj = selectedFac
+      ? { _id: selectedFac._id, name: selectedFac.name, employeeId: selectedFac.employeeId }
+      : (namedFaculty ? { _id: null, name: namedFaculty } : null);
+
+    setUpdatingAssignmentId(assignmentId);
+
+    // 1. Snapshot previous cache for instant rollback on error
+    const previousCache = queryClient.getQueryData(['class', classId]);
+
+    // 2. Optimistic UI update: zero screen reload, zero flash, instant display
+    queryClient.setQueryData(['class', classId], (old) => {
+      if (!old?.data) return old;
+      const assignments = old.data.subjectAssignments || old.data.subjects || [];
+      const updated = assignments.map((item) => {
+        if ((item._id || item.assignmentId) === assignmentId) {
+          return {
+            ...item,
+            faculty: newFacultyObj,
+          };
+        }
+        return item;
+      });
+
+      return {
+        ...old,
+        data: {
+          ...old.data,
+          subjectAssignments: updated,
+          ...(old.data.subjects ? { subjects: updated } : {}),
+        },
+      };
+    });
+
+    // 3. Persist update to database without full-table reload
+    try {
+      const res = await updateClassSubject(classId, assignmentId, {
+        facultyId: selectedFac?._id || null,
+      });
+      toast.success('Faculty updated');
+
+      // 4. Sync confirmed server data into cache
+      const serverFaculty = res?.data?.faculty;
+      if (serverFaculty) {
+        queryClient.setQueryData(['class', classId], (old) => {
+          if (!old?.data) return old;
+          const assignments = old.data.subjectAssignments || old.data.subjects || [];
+          const confirmed = assignments.map((item) => {
+            if ((item._id || item.assignmentId) === assignmentId) {
+              return {
+                ...item,
+                faculty: serverFaculty,
+              };
+            }
+            return item;
+          });
+
+          return {
+            ...old,
+            data: {
+              ...old.data,
+              subjectAssignments: confirmed,
+              ...(old.data.subjects ? { subjects: confirmed } : {}),
+            },
+          };
+        });
+      }
+    } catch (err) {
+      // 5. Clean rollback if server rejects or network drops
+      if (previousCache) {
+        queryClient.setQueryData(['class', classId], previousCache);
+      }
+      toast.error(err?.response?.data?.error?.message || err?.message || 'Failed to update faculty');
+    } finally {
+      setUpdatingAssignmentId(null);
+    }
+  }, [classId, facultyList, queryClient]);
+
+  const handleMapElectiveClick = useCallback((assignment) => {
     if (!assignment.faculty) {
       toast.error('Assign a handling faculty to this elective first.');
       return;
@@ -405,7 +481,7 @@ const ClassDetail = () => {
     });
     setElectiveSelections(initialSelections);
     setShowMapElective(true);
-  };
+  }, [students]);
 
   const handleMentorChange = async (studentId, newMentorId) => {
     const oldStudent = studentsList.find(s => s._id === studentId);
@@ -419,10 +495,9 @@ const ClassDetail = () => {
     try {
       await assignMentor(studentId, newMentorId);
       toast.success(`Mentor assigned to ${oldStudent.name}`);
-      fetchClass(); // Reconcile UI with server — avoids stale state from cache
       setTimeout(() => {
         setStudentsList(prev => prev.map(s => s._id === studentId ? { ...s, _isUpdating: false } : s));
-      }, 1000);
+      }, 500);
     } catch (err) {
       setStudentsList(prev => prev.map(s => 
         s._id === studentId ? { ...s, mentorId: oldStudent.mentorId, mentorName: oldStudent.mentorName, _isUpdating: false } : s
@@ -536,29 +611,30 @@ const ClassDetail = () => {
       key: 'mentor', 
       label: 'Mentor Mapping', 
       width: '180px',
-      render: (_, row) => (
-        <div className="flex flex-col">
-          <SearchableSelect
-            size="sm"
-            variant="ghost"
-            options={activeFacultyList.map(f => ({
-              value: f._id,
-              label: f.name,
-              subLabel: `${f.employeeId || 'No ID'} | ${f.departmentId?.name || f.department || 'N/A'}`
-            }))}
-            value={row.mentorId}
-            onChange={(val) => handleMentorChange(row._id, val)}
-            onSearch={handleFacultySearch}
-            placeholder={row.mentorName || 'Unassigned'}
-            loading={loadingStudentId === row._id}
-          />
-          {!facultyList.some(f => f._id === row.mentorId) && row.mentorId && (
-            <span className="text-[10px] text-muted-foreground ml-2 italic">
-              {row.mentorName} (External)
-            </span>
-          )}
-        </div>
-      ) 
+      render: (_, row) => {
+        const mentorOptions = (row.mentorId && !allFacultyOptions.some(o => o.value === row.mentorId))
+          ? [{ value: row.mentorId, label: row.mentorName || 'Assigned Mentor', subLabel: 'External/Dept' }, ...allFacultyOptions]
+          : allFacultyOptions;
+
+        return (
+          <div className="flex flex-col">
+            <SearchableSelect
+              size="sm"
+              variant="ghost"
+              options={mentorOptions}
+              value={row.mentorId}
+              onChange={(val) => handleMentorChange(row._id, val)}
+              placeholder={row.mentorName || 'Unassigned'}
+              loading={loadingStudentId === row._id}
+            />
+            {!facultyList.some(f => f._id === row.mentorId) && row.mentorId && (
+              <span className="text-[10px] text-muted-foreground ml-2 italic">
+                {row.mentorName} (External)
+              </span>
+            )}
+          </div>
+        );
+      } 
     },
     { key: 'status', label: 'Last Cycle', width: '100px', align: 'center', render: (v) => <Badge status={v || 'pending'} /> },
     { key: 'actions', label: '', width: '50px', sortable: false, align: 'right', render: (_, row) => (
@@ -575,7 +651,7 @@ const ClassDetail = () => {
   }
 ];
 
-const SUBJECT_COLS = [
+  const SUBJECT_COLS = useMemo(() => [
     { key: 'subjectCode', label: 'Code', width: '90px', render: (v) => <span className="font-mono text-[10px] bg-offwhite px-1.5 py-0.5 rounded border border-muted/50">{v}</span> },
     { 
       key: 'subjectName', 
@@ -589,26 +665,39 @@ const SUBJECT_COLS = [
       key: 'faculty', 
       label: 'Handling Faculty', 
       width: '180px', 
-      render: (v, row) => (
-        <SearchableSelect
-          size="sm"
-          variant="ghost"
-          options={activeFacultyList.map(f => ({
-            value: f._id,
-            label: f.name,
-            subLabel: f.employeeId
-          }))}
-          value={v?._id}
-          onChange={(val) => {
-            const assignmentId = row._id || row.assignmentId;
-            updateClassSubject(classId, assignmentId, { facultyId: val })
-              .then(() => { toast.success('Faculty updated'); fetchClass(); })
-              .catch(err => toast.error(err.message));
-          }}
-          onSearch={handleFacultySearch}
-          placeholder="Unassigned"
-        />
-      )
+      render: (v, row) => {
+        const assignmentId = row._id || row.assignmentId;
+        const assignedId = v?._id ? String(v._id) : null;
+        const assignedName = v?.name || null;
+        const assignedValue = assignedId || (assignedName ? `named:${assignedName}` : undefined);
+
+        const hasMatch = assignedId
+          ? allFacultyOptions.some(o => String(o.value) === assignedId)
+          : (assignedName ? allFacultyOptions.some(o => o.label === assignedName) : true);
+
+        const rowOptions = (!hasMatch && (assignedId || assignedName))
+          ? [
+              {
+                value: assignedValue,
+                label: assignedName || 'Assigned Faculty',
+                subLabel: v?.employeeId || 'Assigned'
+              },
+              ...allFacultyOptions
+            ]
+          : allFacultyOptions;
+
+        return (
+          <SearchableSelect
+            size="sm"
+            variant="ghost"
+            options={rowOptions}
+            value={assignedValue}
+            onChange={(val) => handleAssignFaculty(assignmentId, val)}
+            placeholder="Unassigned"
+            loading={updatingAssignmentId === assignmentId}
+          />
+        );
+      }
     },
     { key: 'isElective', label: 'Type', width: '100px', align: 'center', render: (v) => (
       <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${!v ? 'bg-navy/5 text-navy/70' : 'bg-amber-50 text-amber-700'}`}>{!v ? 'Core' : 'Elective'}</span>
@@ -623,8 +712,8 @@ const SUBJECT_COLS = [
           ]}
         />
       </div>
-   )}
-    ];
+    )}
+  ], [allFacultyOptions, classData?.isMaster, updatingAssignmentId, handleAssignFaculty, handleMapElectiveClick, handleEditSubjectClick, handleDeleteSubjectClick]);
 
 
 
@@ -844,7 +933,7 @@ const SUBJECT_COLS = [
             <Table 
               columns={STUDENT_COLS} 
               data={studentsList} 
-              loading={loading}
+              loading={loading && !studentsList.length}
               rowClassName={(row) => `
                 transition-colors duration-200
                 ${!row.mentorId ? 'border-l-4 border-amber-400 bg-amber-50/20' : ''}
@@ -889,7 +978,7 @@ const SUBJECT_COLS = [
           <Table 
             columns={SUBJECT_COLS} 
             data={subjects} 
-            loading={loading}
+            loading={loading && !subjects.length}
             showCount={true} 
             selectable
             searchable
@@ -1046,7 +1135,13 @@ const SUBJECT_COLS = [
       )}
 
       {showImport && (
-        <Modal isOpen={!!showImport} title={`Bulk ${showImport} Import`} onClose={() => setShowImport(null)}>
+        <Modal 
+          isOpen={!!showImport} 
+          title={`Bulk ${showImport.charAt(0).toUpperCase() + showImport.slice(1)} Import`} 
+          onClose={() => setShowImport(null)}
+          size="4xl"
+          bodyClassName="overflow-hidden flex flex-col p-4 sm:p-5"
+        >
           <ImportStepper 
             type={showImport} 
             classId={classId}

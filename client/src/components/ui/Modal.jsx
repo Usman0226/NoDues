@@ -5,8 +5,16 @@ import { X } from 'lucide-react';
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-const Modal = ({ isOpen, onClose, title, children, footer, size = 'sm', preventClose = false }) => {
-  const sizes = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+const Modal = ({ isOpen, onClose, title, children, footer, size = 'sm', preventClose = false, bodyClassName = '' }) => {
+  const sizes = { 
+    sm: 'max-w-md', 
+    md: 'max-w-lg', 
+    lg: 'max-w-2xl', 
+    xl: 'max-w-4xl',
+    '2xl': 'max-w-5xl',
+    '3xl': 'max-w-6xl',
+    '4xl': 'max-w-7xl'
+  };
   const panelRef = React.useRef(null);
   const titleId = React.useId();
   const titleDomId = title ? `modal-title-${titleId}` : undefined;
@@ -108,7 +116,7 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'sm', preventC
       />
       <div
         ref={panelRef}
-        className={`relative w-full ${sizes[size]} max-h-[90vh] flex flex-col overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_24px_80px_rgba(30,41,59,0.22)] ${preventClose ? 'scale-100' : 'fade-up'}`}
+        className={`relative w-full ${sizes[size] || size} max-h-[92vh] flex flex-col overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_24px_80px_rgba(30,41,59,0.22)] ${preventClose ? 'scale-100' : 'fade-up'}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleDomId}
@@ -130,7 +138,7 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'sm', preventC
             )}
           </div>
         )}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <div className={`flex-1 min-h-0 ${bodyClassName.includes('overflow-') ? '' : 'overflow-y-auto'} ${bodyClassName.includes('p-') ? '' : 'p-4 sm:p-5 lg:p-6'} ${bodyClassName}`}>
           {children}
         </div>
         {footer && (

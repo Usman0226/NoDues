@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { 
   Check, 
   Upload, 
@@ -9,33 +9,99 @@ import {
   Download,
   AlertTriangle,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Search,
+  CheckCircle2,
+  X,
+  FileSpreadsheet,
+  Sparkles
 } from 'lucide-react';
 import Button from '../ui/Button';
 import FileDropzone from '../ui/FileDropzone';
 import Table from '../ui/Table';
-import Badge from '../ui/Badge';
 import { previewImport, commitImport, getTemplate } from '../../api/import';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
 
 const STEPS = [
-  { label: 'Upload', icon: Upload },
-  { label: 'Preview', icon: Eye },
-  { label: 'Confirm', icon: Check },
+  { label: 'Upload Spreadsheet', icon: Upload },
+  { label: 'Validate & Preview', icon: Eye },
+  { label: 'Confirm Import', icon: Check },
 ];
+
+const TYPE_CONFIG = {
+  students: {
+    title: 'Student Roster Ingestion',
+    badge: 'Student Cohort',
+    description: 'Bulk register or update candidate profiles with automatic roll number expansion and duplicate checks.',
+    columns: [
+      { name: 'Roll No', required: true, desc: 'Alphanumeric roll number (e.g. 25MRA07001 or range 25MRA01-25MRA60)' },
+      { name: 'Full Name', required: true, desc: 'Official candidate name as per academic records' },
+      { name: 'Email Address', required: false, desc: 'Student email (auto-derived if omitted)' },
+    ],
+    rangeHint: 'Entering roll ranges like 25MRA01-25MRA60 will automatically unpack all individual student rows.'
+  },
+  faculty: {
+    title: 'Faculty Ledger Ingestion',
+    badge: 'Faculty Directory',
+    description: 'Bulk register staff accounts and associate with department ledgers.',
+    columns: [
+      { name: 'Employee ID', required: true, desc: 'Unique staff identifier (e.g. EMP-2024-01)' },
+      { name: 'Full Name', required: true, desc: 'Faculty member title and full name' },
+      { name: 'Email Address', required: true, desc: 'Official institutional login email' },
+      { name: 'Department', required: false, desc: 'Department code or designation' },
+    ]
+  },
+  subjects: {
+    title: 'Curriculum Subjects Ingestion',
+    badge: 'Academic Curriculum',
+    description: 'Import curriculum subjects and map them to syllabus courses.',
+    columns: [
+      { name: 'Subject Code', required: true, desc: 'Course catalog code (e.g. 25BACOMTCO1)' },
+      { name: 'Subject Name', required: true, desc: 'Full course title' },
+      { name: 'Semester', required: true, desc: 'Semester number (1-8)' },
+      { name: 'Elective', required: false, desc: 'TRUE / FALSE or Core / Elective' },
+    ]
+  },
+  electives: {
+    title: 'Elective Selection Mapping',
+    badge: 'Student Electives',
+    description: 'Bulk assign students to specific elective subject offerings.',
+    columns: [
+      { name: 'Roll No', required: true, desc: 'Enrolled student roll number' },
+      { name: 'Subject Code', required: true, desc: 'Offered elective subject code' },
+    ]
+  },
+  mentors: {
+    title: 'Mentor Allocation Matrix',
+    badge: 'Mentorship Ledger',
+    description: 'Bulk allocate students to their designated faculty mentors.',
+    columns: [
+      { name: 'Roll No', required: true, desc: 'Student identifier' },
+      { name: 'Mentor Identifier', required: true, desc: 'Faculty mentor employee ID or name' },
+    ]
+  }
+};
 
 const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete }) => {
   const { addBackgroundTask, updateBackgroundTask } = useUI();
   const [currentStep, setCurrentStep] = useState(0);
+  const [currentFile, setCurrentFile] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Preview filtering state
+  const [filterTab, setFilterTab] = useState('all'); // 'all' | 'valid' | 'errors'
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const config = TYPE_CONFIG[type] || TYPE_CONFIG.students;
+
   const handleFileUpload = useCallback(async (uploadedFile) => {
     setLoading(true);
     setError(null);
+    setCurrentFile(uploadedFile);
 
     const formData = new FormData();
     formData.append('file', uploadedFile);
@@ -45,13 +111,35 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       const response = await previewImport(type, formData, params);
       setPreviewData(response.data);
       setCurrentStep(1);
+      setFilterTab('all');
+      setSearchQuery('');
     } catch (err) {
-      setError(err?.message || 'Failed to parse file. Please check the template.');
+      setError(err?.message || 'Failed to parse file. Please verify the template headers.');
       toast.error('File Analysis Failed');
     } finally {
       setLoading(false);
     }
   }, [type, classId]);
+
+  const handleSelectSheet = useCallback(async (selectedSheet) => {
+    if (!currentFile) return;
+    setLoading(true);
+    setError(null);
+    const formData = new FormData();
+    formData.append('file', currentFile);
+    try {
+      const params = { ...(type === 'students' ? { classId } : {}), sheet: selectedSheet };
+      const response = await previewImport(type, formData, params);
+      setPreviewData(response.data);
+      setFilterTab('all');
+      setSearchQuery('');
+    } catch (err) {
+      setError(err?.message || 'Failed to switch sheet');
+      toast.error('Sheet analysis failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentFile, type, classId]);
 
   const handleCommit = useCallback(async () => {
     const validCount = previewData?.valid?.length || 0;
@@ -66,7 +154,7 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       message: 'Initializing background sync...'
     });
 
-    // Close modal immediately as it's a background operation
+    // Close modal immediately as it's an asynchronous background operation
     onComplete?.();
     toast.success('Sync started in background');
 
@@ -79,7 +167,6 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       const serverTaskId = res.data?.taskId;
 
       if (serverTaskId) {
-        // Swap temp task for real backend-tracked task
         updateBackgroundTask(taskId, { 
           _id: serverTaskId,
           status: 'success', 
@@ -100,7 +187,6 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
         message: errorMsg 
       });
       toast.error(`${type} sync failed`);
-      // Don't close modal on error so user can see it
     } finally {
       setLoading(false);
     }
@@ -120,41 +206,100 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       window.URL.revokeObjectURL(url);
     } catch (err) {
       toast.error('Failed to download template.');
-      console.warn(err)
+      console.warn(err);
     } finally {
       setDownloading(false);
     }
   }, [type]);
 
-  const dataRows = React.useMemo(() => [
-    ...(previewData?.valid?.map(item => ({ ...item, isValid: true })) || []),
-    ...(previewData?.errors?.map(err => ({ ...err.data, isValid: false, errors: [err.reason] })) || [])
-  ], [previewData]);
-  const validCount = previewData?.summary?.valid || 0;
-  const errorCount = previewData?.summary?.errors || 0;
+  const validCount = previewData?.summary?.valid || previewData?.valid?.length || 0;
+  const errorCount = previewData?.summary?.errors || previewData?.errors?.length || 0;
+  const totalCount = previewData?.summary?.total || (validCount + errorCount);
 
-  const tableColumns = React.useMemo(() => {
+  // Flattened data rows with standard keys
+  const dataRows = useMemo(() => [
+    ...(previewData?.valid?.map((item, idx) => ({ 
+      ...item, 
+      isValid: true, 
+      displayIndex: idx + 1,
+      errors: [] 
+    })) || []),
+    ...(previewData?.errors?.map((err, idx) => ({ 
+      ...err.data, 
+      isValid: false, 
+      displayIndex: validCount + idx + 1,
+      rowNumber: err.row, 
+      errors: [err.reason] 
+    })) || [])
+  ], [previewData, validCount]);
+
+  // Filtered rows for the interactive data grid
+  const filteredRows = useMemo(() => {
+    let rows = dataRows;
+    if (filterTab === 'valid') {
+      rows = rows.filter(r => r.isValid);
+    } else if (filterTab === 'errors') {
+      rows = rows.filter(r => !r.isValid);
+    }
+
+    if (!searchQuery.trim()) return rows;
+    const query = searchQuery.toLowerCase().trim();
+    return rows.filter(r => {
+      const id = (r.rollNo || r.employeeId || r.code || r.identity || r['Roll No'] || '').toString().toLowerCase();
+      const name = (r.name || r.studentName || r.facultyName || r.Name || '').toString().toLowerCase();
+      const email = (r.email || r.Email || '').toString().toLowerCase();
+      const err = (r.errors?.[0] || '').toString().toLowerCase();
+      return id.includes(query) || name.includes(query) || email.includes(query) || err.includes(query);
+    });
+  }, [dataRows, filterTab, searchQuery]);
+
+  const tableColumns = useMemo(() => {
     const baseCols = [
-      { key: 'identity', label: 'Identity', render: (_, row) => (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <div className={`w-1 h-1 rounded-full ${row.isValid ? 'bg-emerald-500' : 'bg-red-500'}`} />
-            <span className={`font-mono text-xs font-bold tracking-tight ${row.isValid ? 'text-navy' : 'text-red-400 line-through'}`}>
-              {row.rollNo || row.employeeId || row.code || row.identity}
-            </span>
-            {row.isExpanded && (
-              <span className="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[8px] font-black uppercase tracking-wider border border-indigo-100">Range</span>
-            )}
-          </div>
-          {row.isExpanded && row.originalRange && (
-            <span className="text-[9px] text-muted-foreground/60 font-medium ml-4 italic">Source: {row.originalRange}</span>
-          )}
-        </div>
-      )},
+      { 
+        key: 'displayIndex', 
+        label: '#', 
+        width: '40px',
+        render: (_, row) => (
+          <span className="text-[10px] font-mono font-medium text-slate-400">
+            {row.displayIndex}
+          </span>
+        )
+      },
+      { 
+        key: 'identity', 
+        label: 'Identifier', 
+        render: (_, row) => {
+          const id = row.rollNo || row.employeeId || row.code || row.identity || row['Roll No'] || '—';
+          return (
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${row.isValid ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                <span className={`font-mono text-xs font-bold tracking-tight ${row.isValid ? 'text-navy' : 'text-rose-600 line-through'}`}>
+                  {id}
+                </span>
+                {row.isExpanded && (
+                  <span className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-600 text-[8px] font-black uppercase tracking-wider border border-indigo-100">Range</span>
+                )}
+              </div>
+              {row.isExpanded && row.originalRange && (
+                <span className="text-[8px] text-muted-foreground/60 font-medium ml-3 italic">Range: {row.originalRange}</span>
+              )}
+            </div>
+          );
+        }
+      },
     ];
 
     if (type === 'students' || type === 'faculty') {
-      baseCols.push({ key: 'name', label: 'Name' });
+      baseCols.push({ 
+        key: 'name', 
+        label: 'Full Name',
+        render: (_, row) => (
+          <span className="text-xs font-bold text-slate-800">
+            {row.name || row.studentName || row.facultyName || row.Name || '—'}
+          </span>
+        )
+      });
     } else if (type === 'electives') {
       baseCols.push({ key: 'studentName', label: 'Student' });
       baseCols.push({ key: 'subjectCode', label: 'Subject' });
@@ -168,192 +313,446 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
       baseCols.push({ key: 'semester', label: 'Semester' });
     }
 
-    baseCols.push({ key: 'status', label: 'Analysis', render: (_, row) => (
-      <div className="flex flex-col gap-0.5">
-        {row.isValid ? (
-          <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Compliant</span>
-        ) : (
-          <span className="text-[9px] font-black text-red-600 uppercase italic opacity-80">{row.errors?.[0] || 'Format Error'}</span>
-        )}
-        {row.isExpanded && row.isValid && (
-          <span className="text-[8px] font-bold text-indigo-400/80 uppercase">Derived from range</span>
-        )}
-      </div>
-    )});
+    baseCols.push({ 
+      key: 'status', 
+      label: 'Validation Status', 
+      render: (_, row) => (
+        <div className="flex flex-col gap-0.5">
+          {row.isValid ? (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100/80 text-emerald-700 text-[9px] font-bold w-fit">
+              <CheckCircle2 size={10} className="text-emerald-500" /> Compliant
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-50 border border-rose-100 text-rose-700 text-[9px] font-bold w-fit" title={row.errors?.[0]}>
+              <AlertTriangle size={10} className="text-rose-500 shrink-0" />
+              <span className="truncate max-w-[170px]">{row.errors?.[0] || 'Validation Error'}</span>
+            </span>
+          )}
+          {row.isExpanded && row.isValid && (
+            <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-wider ml-1">Range expansion</span>
+          )}
+        </div>
+      )
+    });
 
     return baseCols;
   }, [type]);
 
   return (
-    <div className="w-full">
-      {/* Steps Indicator - Pill Style */}
-      <div className="flex items-center justify-center mb-8">
-        {STEPS.map((step, i) => {
-          const Icon = step.icon;
-          const isActive = i === currentStep;
-          const isCompleted = i < currentStep;
-          return (
-            <React.Fragment key={i}>
-              {i > 0 && (
-                <div className={`h-px w-10 sm:w-16 mx-3 transition-colors duration-500 ${isCompleted ? 'bg-navy' : 'bg-muted'}`} />
-              )}
-              <div className="flex flex-col items-center gap-2.5">
-                <div className={`h-11 w-11 rounded-full flex items-center justify-center transition-all duration-300
-                  ${isActive ? 'bg-navy text-white shadow-md scale-110' : isCompleted ? 'bg-navy text-white' : 'bg-muted/50 text-muted-foreground/60'}`}>
-                  {isCompleted ? <Check size={18} strokeWidth={3} /> : <Icon size={18} />}
+    <div className="w-full flex-1 min-h-0 flex flex-col h-[82vh] max-h-[860px] min-h-[540px]">
+      {/* Sleek, Compact Stepper Progress Header */}
+      <div className="shrink-0 mb-3 pb-2 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {contextLabel && (
+            <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-100/80 text-indigo-700 text-xs font-black tracking-tight flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+              {contextLabel}
+            </span>
+          )}
+        </div>
+
+        {/* Compact Segmented Stepper */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {STEPS.map((step, i) => {
+            const isActive = i === currentStep;
+            const isCompleted = i < currentStep;
+
+            return (
+              <React.Fragment key={i}>
+                {i > 0 && (
+                  <div className={`h-0.5 w-3 sm:w-6 rounded-full transition-colors duration-300 ${isCompleted ? 'bg-indigo-600' : 'bg-zinc-200'}`} />
+                )}
+                <div 
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all duration-200 ${
+                    isActive 
+                      ? 'bg-navy text-white shadow-xs ring-2 ring-navy/20' 
+                      : isCompleted 
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                        : 'bg-zinc-100 text-zinc-400'
+                  }`}
+                >
+                  <span className="flex items-center justify-center w-3.5 h-3.5 rounded-full text-[10px] font-black">
+                    {isCompleted ? <Check size={11} strokeWidth={3} /> : i + 1}
+                  </span>
+                  <span className="hidden sm:inline tracking-tight text-[11px]">{step.label}</span>
                 </div>
-                <span className={`text-[9px] uppercase tracking-[0.2em] font-black ${isActive ? 'text-navy' : 'text-muted-foreground/50'}`}>
-                  {step.label}
-                </span>
-              </div>
-            </React.Fragment>
-          );
-        })}
+              </React.Fragment>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="min-h-[280px]">
+      <div className="flex-1 min-h-0 flex flex-col">
+        {/* STEP 0: Dual-Column Upload & Guidelines Workspace */}
         {currentStep === 0 && (
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="max-w-md mx-auto text-center mb-6">
-              <h3 className="text-xl font-black text-navy mb-2">{contextLabel || 'Upload Data Source'}</h3>
-              <p className="text-sm text-muted-foreground">Select a clean .xlsx or .csv file following the academic template.</p>
-            </div>
-            
-            <FileDropzone onFileSelect={handleFileUpload} loading={loading} />
-            
-            {error && (
-              <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-100 flex items-center gap-3 animate-pulse">
-                <AlertTriangle className="text-red-600" size={18} />
-                <p className="text-xs font-bold text-red-700">{error}</p>
-              </div>
-            )}
+          <div className="flex-1 min-h-0 flex flex-col animate-in fade-in duration-200">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch h-full">
+              
+              {/* LEFT COLUMN: Context, Schema & Download Card (5 cols on lg) */}
+              <div className="lg:col-span-5 flex flex-col gap-3 h-full">
+                
+                {/* Information & Schema Card */}
+                <div className="flex-1 min-h-0 p-4 rounded-xl bg-gradient-to-br from-slate-50/80 via-white to-indigo-50/20 border border-zinc-200/80 shadow-xs flex flex-col justify-between gap-3">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded-md bg-indigo-100/70 text-indigo-700 text-[9px] font-black uppercase tracking-wider">
+                        {config.badge}
+                      </span>
+                      <span className="text-[10px] font-semibold text-muted-foreground">Format: .xlsx, .csv</span>
+                    </div>
 
-            <div className="mt-8 flex items-center justify-between p-5 rounded-xl border border-muted/60 bg-white shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className="p-2.5 bg-offwhite rounded-xl">
-                  <FileText className="text-navy/60" size={20} />
+                    <div>
+                      <h3 className="text-sm font-black text-navy tracking-tight leading-tight">
+                        {config.title}
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                        {config.description}
+                      </p>
+                    </div>
+
+                    {/* Schema Requirements Checklist */}
+                    <div className="flex flex-col gap-1 pt-1.5 border-t border-zinc-100">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">
+                        Required Columns in Sheet
+                      </p>
+                      <div className="flex flex-col gap-1">
+                        {config.columns.map((col, idx) => (
+                          <div key={idx} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-white border border-zinc-100/80 text-left shadow-2xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${col.required ? 'bg-indigo-600' : 'bg-zinc-300'}`} />
+                              <span className="font-mono text-xs font-bold text-navy truncate">{col.name}</span>
+                            </div>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ml-2 ${col.required ? 'text-rose-600 bg-rose-50' : 'text-zinc-400 bg-zinc-50'}`}>
+                              {col.required ? 'Required' : 'Optional'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Smart Feature Callout (e.g. Range Expansion) */}
+                  {config.rangeHint && (
+                    <div className="p-2.5 rounded-lg bg-indigo-50/70 border border-indigo-100 flex items-center gap-2 mt-auto">
+                      <Sparkles size={14} className="text-indigo-600 shrink-0" />
+                      <p className="text-[10px] text-indigo-900 leading-tight">
+                        <span className="font-bold">Smart Range Parser:</span> Range formats like <code className="bg-white/80 px-1 py-0.2 rounded font-mono font-bold text-indigo-800">25MRA01-60</code> are auto-expanded.
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold text-navy leading-none">Import Template</p>
-                  <p className="text-[10px] text-muted-foreground font-medium mt-1">Includes proper headers for {type}</p>
+
+                {/* Download Template Bar */}
+                <div className="shrink-0 p-3 rounded-xl bg-white border border-zinc-200/80 shadow-xs flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 text-left">
+                    <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 shrink-0">
+                      <FileSpreadsheet size={18} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-navy leading-none">Official Excel Template</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Pre-configured with column headers</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 gap-1.5 shrink-0 bg-zinc-50 hover:bg-zinc-100 text-xs font-bold text-navy border border-zinc-200 px-3 py-1 cursor-pointer"
+                    onClick={handleDownloadTemplate}
+                    disabled={downloading}
+                  >
+                    {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                    {downloading ? 'Downloading...' : 'Download .xlsx'}
+                  </Button>
                 </div>
+
               </div>
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                className="gap-2"
-                onClick={handleDownloadTemplate}
-                disabled={downloading}
-              >
-                {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} 
-                {downloading ? 'Downloading...' : 'Download'}
-              </Button>
+
+              {/* RIGHT COLUMN: Interactive Drag & Drop Zone (7 cols on lg) */}
+              <div className="lg:col-span-7 flex flex-col h-full min-h-0">
+                <FileDropzone 
+                  onFileSelect={handleFileUpload} 
+                  loading={loading}
+                  className="flex-1 w-full h-full min-h-[320px] flex flex-col items-center justify-center p-6 bg-gradient-to-b from-white to-zinc-50/40"
+                  title="Upload Spreadsheet"
+                  subtitle="Drag & drop your .xlsx or .csv roster file here, or click to browse"
+                />
+                {error && (
+                  <div className="mt-2.5 p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-rose-800 shrink-0">
+                    <AlertTriangle className="text-rose-600 shrink-0" size={14} />
+                    <p className="text-xs font-bold">{error}</p>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
         )}
 
+        {/* STEP 1: Full-Width High-Density Workspace (Validation & Preview) */}
         {currentStep === 1 && (
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="flex -space-x-1">
-                  <span className="flex items-center justify-center h-6 px-3 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-100">{validCount} Ready</span>
-                  {errorCount > 0 && <span className="flex items-center justify-center h-6 px-3 rounded-full bg-red-50 text-red-700 text-[10px] font-black border border-red-100">{errorCount} Skipped</span>}
+          <div className="flex-1 min-h-0 flex flex-col justify-between gap-2.5 animate-in fade-in duration-200">
+            
+            {/* LEVEL 1: Compact Validation Health Banner */}
+            {errorCount > 0 ? (
+              <div className="px-3 py-2 rounded-xl bg-amber-50/90 border border-amber-200/90 flex items-center justify-between gap-2.5 shadow-xs shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                  <p className="text-xs font-semibold text-amber-900 truncate">
+                    <strong className="font-black text-amber-950">{errorCount} row{errorCount > 1 ? 's' : ''} skipped</strong> due to errors. <strong className="font-black text-emerald-900">{validCount} valid records</strong> ready to import.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setFilterTab('valid')}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                      filterTab === 'valid'
+                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
+                        : 'bg-white text-emerald-800 border-emerald-200 hover:bg-emerald-50'
+                    }`}
+                  >
+                    Ready ({validCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterTab('errors')}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                      filterTab === 'errors'
+                        ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
+                        : 'bg-white text-rose-800 border-rose-200 hover:bg-rose-50'
+                    }`}
+                  >
+                    Skipped ({errorCount})
+                  </button>
                 </div>
               </div>
-              {errorCount > 0 && (
-                <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 gap-1.5 font-black text-[10px]" onClick={() => setCurrentStep(0)}>
-                  <RefreshCw size={14} /> Re-upload File
-                </Button>
-              )}
-            </div>
-
-            {errorCount > 0 && validCount > 0 && (
-              <div className="mb-4 flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200">
-                <AlertTriangle size={15} className="text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-[11px] font-semibold text-amber-800 leading-relaxed">
-                  <span className="font-black">{errorCount} row{errorCount > 1 ? 's' : ''} will be skipped</span> due to validation errors.
-                  Only the <span className="font-black">{validCount} valid record{validCount > 1 ? 's' : ''}</span> will be imported.
-                </p>
+            ) : (
+              <div className="px-3 py-2 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex items-center justify-between gap-2.5 shadow-xs shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                  <p className="text-xs font-semibold text-emerald-900 truncate">
+                    <span className="font-black uppercase tracking-wider text-[9px] bg-emerald-200/70 text-emerald-950 px-1.5 py-0.2 rounded-md mr-1.5">100% Valid</span>
+                    All {validCount} records match the official academic schema with zero errors.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] font-bold text-emerald-800 bg-white/90 border border-emerald-200/90 px-2 py-0.5 rounded-md">
+                    {validCount} Ready
+                  </span>
+                  <span className="text-[10px] font-medium text-zinc-400 bg-white/50 border border-zinc-200/60 px-2 py-0.5 rounded-md">
+                    0 Skipped
+                  </span>
+                </div>
               </div>
             )}
 
-            {errorCount > 0 && validCount === 0 && (
-              <div className="mb-4 flex items-start gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200">
-                <AlertCircle size={15} className="text-red-600 mt-0.5 shrink-0" />
-                <p className="text-[11px] font-semibold text-red-800 leading-relaxed">
-                  All rows have errors. Please fix the file and re-upload.
-                </p>
-              </div>
-            )}
-
-            <div className="rounded-xl border border-muted/40 overflow-hidden mb-6 bg-white shadow-sm flex flex-col">
-              <div className="overflow-x-auto overflow-y-auto max-h-[450px] scrollbar-thin scrollbar-thumb-zinc-200">
-                <div className="min-w-max">
-                  <Table 
-                    columns={tableColumns} 
-                    data={dataRows}
-                    searchable={false}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-6 border-t border-muted/30">
-              <Button variant="ghost" onClick={() => setCurrentStep(0)} disabled={loading}>Abort</Button>
-              <Button 
-                variant="primary" 
-                disabled={validCount === 0} 
-                onClick={() => setCurrentStep(2)}
-                className="gap-2"
-                loading={loading}
-              >
-                {errorCount > 0 && validCount > 0
-                  ? `Proceed with ${validCount} Record${validCount > 1 ? 's' : ''}`
-                  : 'Proceed to Confirm'} <ArrowRight size={16} />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {currentStep === 2 && (
-          <div className="animate-in zoom-in-95 duration-300 text-center py-8">
-            {loading ? (
-              <div className="flex flex-col items-center py-10">
-                <div className="relative mb-6">
-                  <div className="h-20 w-20 rounded-full border-4 border-navy/10 border-t-navy animate-spin" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <RefreshCw size={24} className="text-navy/40 animate-pulse" />
+            {/* Multi-Sheet Workbook Switcher */}
+            {previewData?.availableSheets?.length > 1 && (
+              <div className="shrink-0 flex items-center justify-between px-3 py-1.5 rounded-xl bg-indigo-50/70 border border-indigo-100/90 text-xs shadow-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileSpreadsheet size={14} className="text-indigo-600 shrink-0" />
+                  <span className="text-[11px] font-bold text-indigo-950 shrink-0">Workbook Sheets:</span>
+                  <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 scrollbar-thin">
+                    {previewData.availableSheets.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => handleSelectSheet(s)}
+                        disabled={loading}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                          previewData.sheetName === s
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white text-zinc-600 border border-zinc-200/80 hover:bg-zinc-50'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <h3 className="text-xl font-black text-navy mb-2 uppercase tracking-tight">Syncing Records</h3>
-                <p className="text-muted-foreground text-sm max-w-[280px] mx-auto font-medium">
-                  Updating the directory with <span className="text-navy font-bold">{validCount}</span> new entries.
-                  This may take a moment.
+                <span className="text-[10px] font-semibold text-indigo-700/80 shrink-0 ml-2 hidden sm:inline">
+                  Viewing: <strong>{previewData.sheetName}</strong>
+                </span>
+              </div>
+            )}
+
+            {/* LEVEL 2: Data Grid Toolbar & Interactive Table (Expands to fill all remaining height) */}
+            <div className="flex-1 min-h-0 flex flex-col gap-1.5">
+              
+              {/* Toolbar: Filter Tabs + Search */}
+              <div className="shrink-0 flex items-center justify-between gap-2">
+                
+                {/* Segmented Filter Tabs */}
+                <div className="flex items-center gap-1 p-0.5 bg-zinc-100 rounded-lg w-fit border border-zinc-200/70">
+                  <button
+                    type="button"
+                    onClick={() => setFilterTab('all')}
+                    className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                      filterTab === 'all' 
+                        ? 'bg-white text-navy shadow-xs' 
+                        : 'text-zinc-500 hover:text-zinc-800'
+                    }`}
+                  >
+                    All Records ({totalCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterTab('valid')}
+                    className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      filterTab === 'valid' 
+                        ? 'bg-white text-emerald-800 shadow-xs' 
+                        : 'text-zinc-500 hover:text-zinc-800'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Ready ({validCount})
+                  </button>
+                  {errorCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterTab('errors')}
+                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        filterTab === 'errors' 
+                          ? 'bg-white text-rose-800 shadow-xs' 
+                          : 'text-zinc-500 hover:text-zinc-800'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      Skipped ({errorCount})
+                    </button>
+                  )}
+                </div>
+
+                {/* Inline Search Bar */}
+                <div className="relative w-48 sm:w-56">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search preview..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-7 pr-6 py-0.5 text-xs bg-white border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy transition-all h-7.5"
+                  />
+                  {searchQuery && (
+                    <button 
+                      type="button" 
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+
+              </div>
+
+              {/* High-Density Data Grid Container with Dynamic Flex Expansion & Scoped Internal Scroll */}
+              <div className="flex-1 min-h-0 rounded-xl border border-zinc-200/90 overflow-hidden bg-white shadow-xs flex flex-col">
+                <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-300">
+                  {filteredRows.length > 0 ? (
+                    <Table 
+                      columns={tableColumns} 
+                      data={filteredRows}
+                      searchable={false}
+                      showCount={false}
+                    />
+                  ) : (
+                    <div className="py-12 text-center text-muted-foreground flex flex-col items-center justify-center">
+                      <AlertCircle size={24} className="text-zinc-300 mb-1.5" />
+                      <p className="text-xs font-bold text-zinc-600">No records match the current filter</p>
+                      <p className="text-[10px] text-zinc-400 mt-0.5">Try clearing the search query or selecting a different tab</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Sub-Footer */}
+              <div className="shrink-0 flex items-center justify-between text-[10px] text-zinc-400 px-0.5 font-medium">
+                <span>Showing <strong className="text-zinc-600 font-bold">{filteredRows.length}</strong> of {totalCount} records</span>
+                <span><strong className="text-emerald-700 font-bold">{validCount}</strong> compliant records will be staged for commit</span>
+              </div>
+
+            </div>
+
+            {/* LEVEL 3: Dedicated Modal Action Footer (Permanently Visible, Non-Scrollable) */}
+            <div className="shrink-0 pt-2.5 border-t border-zinc-200 flex items-center justify-between gap-3">
+              <Button 
+                variant="secondary" 
+                size="sm"
+                className="h-8.5 px-3 text-xs font-bold text-navy gap-1.5 bg-zinc-50 border border-zinc-200 hover:bg-zinc-100"
+                onClick={() => setCurrentStep(0)}
+                disabled={loading}
+              >
+                <RefreshCw size={11} /> Choose Different File
+              </Button>
+
+              <div className="flex items-center justify-end gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={onComplete} 
+                  disabled={loading}
+                  className="h-8.5 px-3 text-xs font-bold text-zinc-500 hover:text-zinc-800"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="primary" 
+                  size="sm"
+                  disabled={validCount === 0 || loading} 
+                  onClick={() => setCurrentStep(2)}
+                  className="h-8.5 px-4 text-xs font-black uppercase tracking-wider gap-1.5 shadow-sm bg-navy hover:bg-navy/90 text-white"
+                  loading={loading}
+                >
+                  Proceed with {validCount} Record{validCount > 1 ? 's' : ''} <ArrowRight size={13} />
+                </Button>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* STEP 2: Final Confirmation */}
+        {currentStep === 2 && (
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center animate-in zoom-in-95 duration-200 text-center py-4 max-w-md mx-auto">
+            {loading ? (
+              <div className="flex flex-col items-center py-6">
+                <div className="relative mb-4">
+                  <div className="h-12 w-12 rounded-full border-3 border-navy/10 border-t-navy animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <RefreshCw size={16} className="text-navy/40 animate-pulse" />
+                  </div>
+                </div>
+                <h3 className="text-lg font-black text-navy mb-1 uppercase tracking-tight">Syncing Directory Records</h3>
+                <p className="text-muted-foreground text-xs leading-relaxed max-w-[260px]">
+                  Writing <span className="text-navy font-bold">{validCount}</span> validated entries to the database.
                 </p>
               </div>
             ) : (
-              <>
-                <div className="h-16 w-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-6 border border-emerald-100 shadow-sm shadow-emerald-100/50">
-                  <Check size={32} strokeWidth={2.5} />
+              <div className="p-5 sm:p-6 rounded-2xl bg-white border border-zinc-200/90 shadow-sm flex flex-col items-center">
+                <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3 border border-emerald-100 shadow-sm shadow-emerald-100/50">
+                  <Check size={24} strokeWidth={2.5} />
                 </div>
-                <h3 className="text-2xl font-black text-navy mb-2 tracking-tight">System Ready</h3>
-                <p className="text-muted-foreground text-sm max-w-[280px] mx-auto font-medium leading-relaxed">
-                  <span className="text-navy font-bold">{validCount}</span> compliant record{validCount > 1 ? 's' : ''} will be committed to the directory.
+                <h3 className="text-lg font-black text-navy mb-1 tracking-tight">Ready to Commit</h3>
+                <p className="text-muted-foreground text-xs max-w-[320px] mx-auto leading-relaxed mb-4">
+                  You are about to commit <span className="text-navy font-bold">{validCount} validated record{validCount > 1 ? 's' : ''}</span> into {contextLabel || 'the directory'}.
                 </p>
 
-                {errorCount > 0 && (
-                  <p className="text-[11px] text-amber-700 font-semibold mt-2 mb-6 max-w-[280px] mx-auto">
-                    <AlertTriangle size={11} className="inline mr-1 mb-0.5" />
-                    {errorCount} row{errorCount > 1 ? 's' : ''} with errors will be skipped.
-                  </p>
-                )}
-                {errorCount === 0 && <div className="mb-6" />}
-                
-                <div className="flex flex-col gap-3 max-w-[240px] mx-auto">
+                <div className="w-full grid grid-cols-2 gap-2.5 mb-5 p-2.5 rounded-xl bg-zinc-50 border border-zinc-100 text-left">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700">Valid Records</span>
+                    <span className="text-lg font-black text-emerald-800">{validCount}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Skipped Records</span>
+                    <span className="text-lg font-black text-zinc-600">{errorCount}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 w-full max-w-[240px]">
                   <Button 
                     variant="primary" 
-                    className="w-full h-12 text-sm gap-2" 
+                    className="w-full h-10 text-xs font-black uppercase tracking-wider gap-2 shadow-sm" 
                     onClick={handleCommit}
                     loading={loading}
                   >
@@ -361,14 +760,14 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
                   </Button>
                   <Button 
                     variant="ghost" 
-                    className="w-full text-[10px] font-black" 
+                    className="w-full h-8 text-xs font-bold text-zinc-500" 
                     onClick={() => setCurrentStep(1)}
                     disabled={loading}
                   >
-                    Review Data Again
+                    Back to Review
                   </Button>
                 </div>
-              </>
+              </div>
             )}
           </div>
         )}
