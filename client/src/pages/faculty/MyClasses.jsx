@@ -10,11 +10,9 @@ import {
   UserCheck, 
   ChevronRight, 
   AlertCircle, 
-  Lock, 
   CheckCircle2, 
   Clock, 
   Layers, 
-  Archive,
   RefreshCw
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
@@ -22,42 +20,47 @@ import { PageSpinner } from '../../components/ui/Spinner';
 
 const MyClasses = () => {
   const navigate = useNavigate();
-  const [filterTab, setFilterTab] = useState('all'); // 'all' | 'active' | 'archived'
+  const [filterTab, setFilterTab] = useState('all'); // 'all' | 'pending' | 'completed'
   const { data, loading, error, request: fetchClasses } = useApi(
-    () => getMyClasses({ includePast: 'true' }), 
+    () => getMyClasses(), 
     { immediate: true }
   );
 
   const classes = useMemo(() => data?.data || [], [data?.data]);
 
-  const filteredClasses = useMemo(() => {
-    if (filterTab === 'active') {
-      return classes.filter(c => c.batchStatus === 'active');
-    }
-    if (filterTab === 'archived') {
-      return classes.filter(c => c.batchStatus === 'closed' || !c.isActiveClass);
-    }
-    return classes;
-  }, [classes, filterTab]);
+  // Exclude closed/archived classes to keep faculty view focused on active duties
+  const activeClasses = useMemo(() => {
+    return classes.filter(c => c.batchStatus !== 'closed' && c.isActiveClass !== false);
+  }, [classes]);
 
-  const activeCount = useMemo(() => classes.filter(c => c.batchStatus === 'active').length, [classes]);
-  const archivedCount = useMemo(() => classes.filter(c => c.batchStatus === 'closed' || !c.isActiveClass).length, [classes]);
+  const filteredClasses = useMemo(() => {
+    if (filterTab === 'pending') {
+      return activeClasses.filter(c => (c.pendingCount || 0) > 0);
+    }
+    if (filterTab === 'completed') {
+      return activeClasses.filter(c => c.batchStatus === 'active' && (!c.pendingCount || c.pendingCount === 0));
+    }
+    return activeClasses;
+  }, [activeClasses, filterTab]);
+
+  const pendingCount = useMemo(() => activeClasses.filter(c => (c.pendingCount || 0) > 0).length, [activeClasses]);
+  const completedCount = useMemo(() => activeClasses.filter(c => c.batchStatus === 'active' && (!c.pendingCount || c.pendingCount === 0)).length, [activeClasses]);
 
   if (loading) {
-    return <PageSpinner message="Hydrating Academic Load & Clearance Protocols..." />;
+    return <PageSpinner message="Loading your classes..." />;
   }
 
   if (error) {
     return (
-      <PageWrapper title="My Academic Load" subtitle="System Notice">
+      <PageWrapper title="My Classes" subtitle="Unable to load">
         <div className="h-[60vh] flex flex-col items-center justify-center space-y-4 px-6 text-center">
           <div className="h-16 w-16 rounded-full bg-red-50 flex items-center justify-center">
             <AlertCircle className="text-red-500" size={32} />
           </div>
-          <h3 className="text-navy font-brand text-xl">Failed to load academic assignments</h3>
+          <h3 className="text-navy font-brand text-xl">Failed to load classes</h3>
           <p className="text-sm text-zinc-500 max-w-xs">{error}</p>
           <Button onClick={() => fetchClasses()} variant="outline" className="rounded-full px-8">
-            <RefreshCw size={14} className="mr-2" /> Retry Connection
+            <RefreshCw size={14} className="mr-2" /> Try again
           </Button>
         </div>
       </PageWrapper>
@@ -66,8 +69,8 @@ const MyClasses = () => {
 
   return (
     <PageWrapper 
-      title="My Academic Load" 
-      subtitle="Overview of assigned classes, teaching duties, and clearance status"
+      title="My Classes" 
+      subtitle="Your assigned classes, subjects, and clearance status"
       headerActions={
         <Button 
           variant="ghost" 
@@ -91,45 +94,47 @@ const MyClasses = () => {
             }`}
           >
             <Layers size={14} />
-            <span>All Duties</span>
+            <span>All Classes</span>
             <span className="px-1.5 py-0.2 rounded-full bg-zinc-200 text-zinc-700 text-[9px] font-bold">
-              {classes.length}
+              {activeClasses.length}
             </span>
           </button>
 
           <button
-            onClick={() => setFilterTab('active')}
+            onClick={() => setFilterTab('pending')}
             className={`h-9 px-4 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-              filterTab === 'active'
+              filterTab === 'pending'
+                ? 'bg-navy text-white shadow-sm'
+                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+            }`}
+          >
+            <Clock size={14} />
+            <span>Needs Review</span>
+            {pendingCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setFilterTab('completed')}
+            className={`h-9 px-4 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+              filterTab === 'completed'
                 ? 'bg-navy text-white shadow-sm'
                 : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
             }`}
           >
             <CheckCircle2 size={14} />
-            <span>Active Clearance Drives</span>
+            <span>All Clear</span>
             <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold">
-              {activeCount}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setFilterTab('archived')}
-            className={`h-9 px-4 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-              filterTab === 'archived'
-                ? 'bg-navy text-white shadow-sm'
-                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-            }`}
-          >
-            <Archive size={14} />
-            <span>Past / Archived</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-zinc-200 text-zinc-700 text-[9px] font-bold">
-              {archivedCount}
+              {completedCount}
             </span>
           </button>
         </div>
 
         <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">
-          Showing {filteredClasses.length} assignments
+          Showing {filteredClasses.length} {filteredClasses.length === 1 ? 'class' : 'classes'}
         </span>
       </div>
 
@@ -148,13 +153,13 @@ const MyClasses = () => {
             <div className="bg-zinc-50 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6 border border-zinc-100">
               <GraduationCap className="text-zinc-300" size={40} />
             </div>
-            <h3 className="text-navy font-black text-xl tracking-tight mb-2">No Matching Assignments</h3>
+            <h3 className="text-navy font-black text-xl tracking-tight mb-2">No Classes Found</h3>
             <p className="text-xs text-zinc-500 max-w-sm mx-auto font-medium leading-relaxed">
-              {filterTab === 'active' 
-                ? 'No active clearance drives are currently running for your assigned classes.' 
-                : filterTab === 'archived'
-                ? 'No past semester clearance archives found.'
-                : 'Your profile is currently clear of Class Teacher or Subject Faculty directives.'}
+              {filterTab === 'pending' 
+                ? 'No classes currently have pending clearance approvals.' 
+                : filterTab === 'completed'
+                ? 'No classes with all approvals completed yet.'
+                : 'No classes are currently assigned to you.'}
             </p>
             {filterTab !== 'all' && (
               <Button 
@@ -163,14 +168,13 @@ const MyClasses = () => {
                 className="mt-4 text-[10px] font-bold uppercase tracking-wider"
                 onClick={() => setFilterTab('all')}
               >
-                Show All Assignments
+                Show All Classes
               </Button>
             )}
           </motion.div>
         ) : (
           filteredClasses.map((c, idx) => {
             const isActiveDrive = c.batchStatus === 'active';
-            const isClosedDrive = c.batchStatus === 'closed';
             const isNotInitiated = c.batchStatus === 'not_initiated';
 
             return (
@@ -182,8 +186,6 @@ const MyClasses = () => {
                 className={`rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden border ${
                   isActiveDrive 
                     ? 'bg-white border-zinc-200/80 hover:border-indigo-200 hover:shadow-xl hover:shadow-navy/5' 
-                    : isClosedDrive
-                    ? 'bg-zinc-50/60 border-zinc-200/70 hover:border-zinc-300'
                     : 'bg-white border-dashed border-zinc-300 hover:border-zinc-400'
                 }`}
               >
@@ -214,11 +216,6 @@ const MyClasses = () => {
                         <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0">
                           <CheckCircle2 size={10} />
                           {c.pendingCount > 0 ? `${c.pendingCount} Pending` : 'All Clear'}
-                        </span>
-                      )}
-                      {isClosedDrive && (
-                        <span className="px-2.5 py-1 rounded-full bg-zinc-200/70 text-zinc-600 border border-zinc-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0">
-                          <Lock size={10} /> Archived
                         </span>
                       )}
                       {isNotInitiated && (
@@ -292,25 +289,12 @@ const MyClasses = () => {
                       })}
                       className="w-full py-3 rounded-xl bg-navy text-white text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:bg-navy/90 hover:shadow-lg hover:shadow-navy/15 active:scale-[0.98] flex items-center justify-center gap-1.5 group/btn"
                     >
-                      <span>Process Approvals</span>
+                      <span>{c.pendingCount > 0 ? 'Review Approvals' : 'View Student List'}</span>
                       <ChevronRight size={13} className="group-hover/btn:translate-x-1 transition-transform" />
-                    </button>
-                  ) : isClosedDrive ? (
-                    <button 
-                      onClick={() => navigate('/faculty/pending', { 
-                        state: { 
-                          classId: c.batchId,
-                          from: 'faculty-my-classes'
-                        } 
-                      })}
-                      className="w-full py-3 rounded-xl bg-white text-zinc-700 border border-zinc-200 text-[10px] font-black uppercase tracking-[0.15em] transition-all hover:bg-zinc-100 flex items-center justify-center gap-1.5"
-                    >
-                      <Lock size={12} />
-                      <span>Audit Archived Batch</span>
                     </button>
                   ) : (
                     <div className="w-full py-3 rounded-xl bg-zinc-100 text-zinc-400 text-[10px] font-bold uppercase tracking-wider text-center border border-zinc-200/50 cursor-not-allowed">
-                      Drive Not Initiated by HoD
+                      Clearance not started yet
                     </div>
                   )}
                 </div>

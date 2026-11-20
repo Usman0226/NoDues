@@ -336,7 +336,7 @@ const Mentoring = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Mentee_Clearance_Roster_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Mentee_Clearance_List_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -904,7 +904,7 @@ const Mentoring = () => {
           {clearanceLoading ? (
             <div className="p-12 flex flex-col items-center justify-center gap-3">
               <Spinner className="w-8 h-8 text-indigo-600" />
-              <p className="text-sm text-slate-500">Retrieving clearance card & audit details...</p>
+              <p className="text-sm text-slate-500">Loading clearance card details...</p>
             </div>
           ) : !clearanceData ? (
             <div className="p-8 text-center text-slate-500">No clearance records found for this student.</div>
@@ -1077,15 +1077,15 @@ const Mentoring = () => {
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 space-y-1">
               <p className="font-semibold flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                Deficiency Flagging Protocol
+                Notice: Flagging a Due
               </p>
               <p>
-                Marking a due blocks this student from obtaining final institutional clearance until the deficiency is resolved and cleared.
+                Marking a due holds this student's clearance until the requirement is resolved.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Due Classification</label>
+              <label className="text-xs font-semibold text-slate-700">Due Type</label>
               <select
                 value={dueType}
                 onChange={(e) => setDueType(e.target.value)}
@@ -1101,7 +1101,7 @@ const Mentoring = () => {
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700">
-                Reason / Deficiency Remarks <span className="text-rose-500">*</span>
+                Reason / Remarks <span className="text-rose-500">*</span>
               </label>
               <textarea
                 rows={3}

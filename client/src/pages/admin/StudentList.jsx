@@ -6,9 +6,9 @@ import Button from '../../components/ui/Button';
 import ActionMenu from '../../components/ui/ActionMenu';
 import Modal from '../../components/ui/Modal';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-import { Upload, UserPlus, RefreshCw, AlertCircle, Edit, Trash2,Users } from 'lucide-react';
+import { Upload, UserPlus, RefreshCw, AlertCircle, Edit, Trash2, Users, Wrench, ShieldAlert } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
-import { getStudents, createStudent, updateStudent, deleteStudent, bulkDeactivateStudents, bulkActivateStudents, bulkAssignMentor, activateStudent } from '../../api/students';
+import { getStudents, createStudent, updateStudent, deleteStudent, bulkDeactivateStudents, bulkActivateStudents, bulkAssignMentor, activateStudent, auditMasterContamination, repairMasterContamination } from '../../api/students';
 import { getFaculty } from '../../api/faculty';
 import { getClasses } from '../../api/classes';
 import ImportStepper from '../../components/import/ImportStepper';
@@ -38,6 +38,12 @@ const StudentList = () => {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Repair panel state
+  const [repairAudit, setRepairAudit] = useState(null);   // { total, affected[] } | null
+  const [repairLoading, setRepairLoading] = useState(false);
+  const [repairRunning, setRepairRunning] = useState(false);
+  const [showRepairConfirm, setShowRepairConfirm] = useState(false);
 
   // Debounce search term
   useEffect(() => {
@@ -89,6 +95,35 @@ const StudentList = () => {
     if (isHod) params.departmentId = user.departmentId;
     fetchClasses(params);
   }, [fetchClasses, isHod, user?.departmentId]);
+
+  // On mount, silently audit for master-contaminated students (admin only)
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+    setRepairLoading(true);
+    auditMasterContamination()
+      .then((res) => setRepairAudit(res.data?.data ?? null))
+      .catch(() => setRepairAudit(null))
+      .finally(() => setRepairLoading(false));
+  }, [user?.role]);
+
+  const handleRepairConfirm = async () => {
+    setRepairRunning(true);
+    try {
+      const res = await repairMasterContamination();
+      const { repaired, unresolvable } = res.data?.data ?? {};
+      const repairedCount = Array.isArray(repaired) ? repaired.length : 0;
+      const failCount = Array.isArray(unresolvable) ? unresolvable.length : 0;
+      if (repairedCount > 0) toast.success(`${repairedCount} student${repairedCount !== 1 ? 's' : ''} moved to the correct class.`);
+      if (failCount > 0) toast.error(`${failCount} student${failCount !== 1 ? 's' : ''} could not be auto-assigned — check the logs.`);
+      setRepairAudit(null);
+      setShowRepairConfirm(false);
+      fetchStudents(studentQueryParams);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Repair failed — check server logs.');
+    } finally {
+      setRepairRunning(false);
+    }
+  };
 
   const [formData, setFormData] = useState({
     rollNo: '',
@@ -286,6 +321,32 @@ const StudentList = () => {
 
   return (
     <PageWrapper title="Students" subtitle="List of all registered students">
+
+      {/* ── Data-Repair Banner ─────────────────────────────────────────────────
+          Shown only to admins when students are found assigned to Curriculum
+          Master blueprints. Guides them through a one-click auto-fix.        */}
+      {user?.role === 'admin' && !repairLoading && repairAudit?.total > 0 && (
+        <div className="mb-6 flex items-start gap-4 rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 shadow-sm">
+          <ShieldAlert size={20} className="mt-0.5 shrink-0 text-amber-600" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-amber-800 leading-snug">
+              {repairAudit.total} student{repairAudit.total !== 1 ? 's are' : ' is'} incorrectly assigned to a Curriculum Master blueprint
+            </p>
+            <p className="mt-0.5 text-xs text-amber-700 leading-snug">
+              These students should be in an operational class section. The auto-repair will move each student to the matching class (same department &amp; semester). Students with no matching class will be unassigned and flagged in the logs.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowRepairConfirm(true)}
+            className="shrink-0 text-amber-700 border border-amber-300 hover:bg-amber-100 font-black text-xs uppercase tracking-widest"
+          >
+            <Wrench size={13} className="mr-1.5" /> Fix Now
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div className="flex flex-wrap gap-3">
           <Button variant="primary" size="sm" onClick={() => {
@@ -526,6 +587,18 @@ const StudentList = () => {
           </div>
         </div>
       </Modal>
+
+      {/* ── Repair Confirm Modal ──────────────────────────────────────────── */}
+      <ConfirmModal
+        isOpen={showRepairConfirm}
+        onClose={() => setShowRepairConfirm(false)}
+        onConfirm={handleRepairConfirm}
+        title="Fix Incorrectly Assigned Students"
+        description={`This will automatically move ${repairAudit?.total ?? 0} student${(repairAudit?.total ?? 0) !== 1 ? 's' : ''} from Curriculum Master blueprints to their matching operational class (same department and semester). Students with no matching class will be unassigned and must be manually placed. This action cannot be undone.`}
+        confirmText="Run Repair"
+        isDestructive={false}
+        loading={repairRunning}
+      />
     </PageWrapper>
   );
 };

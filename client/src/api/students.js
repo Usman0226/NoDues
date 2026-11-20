@@ -13,4 +13,8 @@ export const removeElective = (id, subjectId) => api.delete(`/students/${id}/ele
 export const bulkDeactivateStudents = (ids) => api.post('/students/bulk-deactivate', { ids });
 export const bulkActivateStudents = (ids) => api.post('/students/bulk-activate', { ids });
 export const bulkAssignMentor = (ids, mentorId) => api.post('/students/bulk-assign-mentor', { ids, mentorId });
-export const activateStudent = (id) => api.post(`/students/${id}/activate`);
+export const activateStudent = (id) => api.post(`/students/${id}/activate`);
+
+// Data-repair: students mistakenly enrolled in Curriculum Master blueprints
+export const auditMasterContamination = () => api.get('/students/repair/master-contamination');
+export const repairMasterContamination = () => api.post('/students/repair/master-contamination', { confirm: true });

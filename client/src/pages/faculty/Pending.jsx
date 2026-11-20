@@ -34,8 +34,7 @@ import {
   ExternalLink,
   PlaneTakeoff,
   Filter,
-  Lock,
-  Archive
+  Lock
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
@@ -88,7 +87,7 @@ const DueModalContent = ({ item, onClose, onSubmit, loading }) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">Target Candidate</p>
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">Student</p>
         <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100">
            <p className="text-sm font-black text-zinc-900">{item.studentRollNo} · {item.studentName}</p>
            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mt-1">{getApprovalLabel(item)}</p>
@@ -97,7 +96,7 @@ const DueModalContent = ({ item, onClose, onSubmit, loading }) => {
 
       <div className="space-y-4">
         <div>
-          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-900 mb-2 block">Deficiency Category</label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-900 mb-2 block">Due Category</label>
           <SearchableSelect 
             options={DUE_TYPES.map(type => ({
               value: type.value,
@@ -558,7 +557,7 @@ const Pending = () => {
           return (
             <div className="flex items-center gap-1.5">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 text-zinc-400 text-[10px] font-bold uppercase tracking-wider border border-zinc-200/60">
-                <Lock size={10} /> Archived
+                <Lock size={10} /> Closed
               </span>
               {row.action === 'due_marked' && row.dueType && (
                 <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100">
@@ -643,29 +642,26 @@ const Pending = () => {
 
   const batchOptions = useMemo(() => {
     const active = [];
-    const closed = [];
     batchesList.forEach((b) => {
+      if (b.status !== 'active') return;
       const semStr = b.semester ? `Sem ${b.semester}` : '';
       const yrStr = b.academicYear ? `${b.academicYear}` : '';
       const tag = [semStr, yrStr].filter(Boolean).join(' · ');
       const label = `${b.name}${tag ? ` (${tag})` : ''}`;
-      const itemObj = {
+      active.push({
         id: b._id,
         classId: b.classId,
         name: label,
         status: b.status,
-        isClosed: b.status === 'closed',
-        subLabel: b.status === 'closed' ? 'Archived / Closed' : (b.pendingCount > 0 ? `${b.pendingCount} pending` : 'All clear'),
-        group: b.status === 'closed' ? 'Archived / Past Cycles' : 'Active Cycles'
-      };
-      if (b.status === 'closed') closed.push(itemObj);
-      else active.push(itemObj);
+        isClosed: false,
+        subLabel: b.pendingCount > 0 ? `${b.pendingCount} pending` : 'All clear',
+        group: 'Active Classes'
+      });
     });
 
     return [
       { id: 'all', name: 'All Active Batches', subLabel: 'Combined Queue' },
-      ...active,
-      ...closed
+      ...active
     ];
   }, [batchesList]);
 
@@ -833,13 +829,13 @@ const Pending = () => {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-black text-amber-950 uppercase tracking-wide">Archived Clearance Cycle</h4>
+                    <h4 className="text-sm font-black text-amber-950 uppercase tracking-wide">Batch Closed</h4>
                     <span className="px-2 py-0.5 rounded-full bg-amber-200/80 text-[9px] font-black uppercase tracking-wider text-amber-900 border border-amber-300/50">
-                      Read-Only Mode
+                      Read-Only
                     </span>
                   </div>
                   <p className="text-xs text-amber-800/80 mt-0.5 font-medium">
-                    This academic batch is closed and archived for institutional compliance. Approval actions and dues modifications are locked.
+                    This batch is closed. Approvals and dues can no longer be modified.
                   </p>
                 </div>
               </div>
@@ -957,7 +953,7 @@ const Pending = () => {
                    <UserCheck size={24} />
                 </div>
                 <div className="min-w-0">
-                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">Student Candidate</p>
+                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">Student</p>
                    <h3 className="text-lg font-black text-navy leading-none mb-1">{reviewModal.studentName}</h3>
                    <p className="text-xs font-bold text-zinc-500 font-mono tracking-tighter">{reviewModal.studentRollNo} · {reviewModal.className}</p>
                 </div>

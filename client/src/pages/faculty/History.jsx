@@ -100,7 +100,7 @@ const getColumns = (user, setReviewModal) => [
         <Badge status={v} />
         {v === 'due_marked' && (
           <span className="text-[9px] font-black uppercase tracking-widest text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200/80 w-fit">
-            {row.dueType || 'Deficiency'}
+            {row.dueType || 'Due'}
           </span>
         )}
         {row.remarks && (
@@ -181,15 +181,17 @@ const FacultyHistory = () => {
     ];
   }, [batches]);
 
+  const activeBatches = useMemo(() => batches.filter(b => b.status === 'active'), [batches]);
+
   const batchOptions = useMemo(() => {
     return [
       { id: 'all', name: 'All Batches / Classes' },
-      ...batches.map(b => ({
+      ...activeBatches.map(b => ({
         id: b._id,
-        name: `${b.name} ${b.semester ? `(Sem ${b.semester})` : ''} ${b.status === 'closed' ? '[Archived]' : '[Active]'}`
+        name: `${b.name}${b.semester ? ` (Sem ${b.semester})` : ''}`
       }))
     ];
-  }, [batches]);
+  }, [activeBatches]);
 
   // Sync navigation context with sessionStorage
   useEffect(() => {
@@ -269,18 +271,18 @@ const FacultyHistory = () => {
     a.download = `Clearance_Action_History_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('Clearance audit history exported successfully');
+    toast.success('Clearance history exported successfully');
   };
 
   if (error) {
     return (
-      <PageWrapper title="Action History" subtitle="Archive of all past clearance approvals and dues">
+      <PageWrapper title="Action History" subtitle="Unable to load">
         <div className="text-center py-20 bg-white rounded-xl border border-muted shadow-sm">
           <AlertTriangle className="mx-auto text-status-due mb-4" size={48} />
-          <h2 className="text-xl font-black text-navy mb-2">Sync Error</h2>
+          <h2 className="text-xl font-black text-navy mb-2">Couldn't load history</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto text-sm">{error}</p>
           <Button variant="primary" onClick={() => fetchHistory()}>
-            <RefreshCw size={14} className="mr-2" /> Retry Connection
+            <RefreshCw size={14} className="mr-2" /> Try again
           </Button>
         </div>
       </PageWrapper>
@@ -289,8 +291,8 @@ const FacultyHistory = () => {
 
   return (
     <PageWrapper 
-      title="Action History Archive" 
-      subtitle="Complete chronological audit trail of all approved clearances and flagged deficiencies"
+      title="Action History" 
+      subtitle="Record of student approvals and dues you have processed"
       headerActions={
         <div className="flex items-center gap-2">
           <Button 
@@ -306,7 +308,7 @@ const FacultyHistory = () => {
             variant="ghost" 
             size="sm" 
             onClick={async () => {
-              const hide = showGlobalLoader('Refreshing History Archive...');
+              const hide = showGlobalLoader('Refreshing history...');
               await fetchHistory({
                 semester: semesterFilter !== 'all' ? semesterFilter : undefined,
                 academicYear: academicYearFilter !== 'all' ? academicYearFilter : undefined,
@@ -444,7 +446,7 @@ const FacultyHistory = () => {
       <Modal
         isOpen={!!reviewModal}
         onClose={() => setReviewModal(null)}
-        title="Clearance Action Audit Record"
+        title="Approval Record Details"
         size="md"
       >
         {reviewModal && (
@@ -454,7 +456,7 @@ const FacultyHistory = () => {
                    <UserCheck size={24} />
                 </div>
                 <div className="min-w-0">
-                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">Student Candidate</p>
+                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-1">Student</p>
                    <h3 className="text-lg font-black text-navy leading-none mb-1">{reviewModal.studentName}</h3>
                    <p className="text-xs font-bold text-zinc-500 font-mono tracking-tighter">{reviewModal.studentRollNo} · {reviewModal.className}</p>
                 </div>
@@ -463,7 +465,7 @@ const FacultyHistory = () => {
              <div className="space-y-4">
                 <div className="flex items-center gap-2">
                    <FileText size={16} className="text-indigo-600" />
-                   <h4 className="text-[10px] font-black uppercase tracking-widest text-navy">Audit Details</h4>
+                   <h4 className="text-[10px] font-black uppercase tracking-widest text-navy">Approval Details</h4>
                 </div>
                 
                 <div className="p-4 rounded-xl bg-white border border-zinc-100 shadow-xs space-y-2 text-xs">

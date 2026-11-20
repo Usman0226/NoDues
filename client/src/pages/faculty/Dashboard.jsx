@@ -10,8 +10,6 @@ import {
   RefreshCw,
   AlertCircle,
   Sparkles,
-  Lock,
-  Archive,
   History,
   CheckCircle2,
   TrendingUp,
@@ -30,7 +28,6 @@ const FacultyDashboard = () => {
   const navigate = useNavigate();
   const { showGlobalLoader } = useUI();
   const [isTourActive, setIsTourActive] = useState(false);
-  const [activeTab, setActiveTab] = useState('active'); // 'active' | 'archived'
 
   const { data: response, loading: approvalsLoading, error: approvalsError, request: fetchApprovals } = useApi(getPendingApprovals, { immediate: true });
   const { data: batchesResponse, loading: batchesLoading, error: batchesError, request: fetchBatches } = useApi(getMyBatches, { immediate: true });
@@ -54,27 +51,27 @@ const FacultyDashboard = () => {
     {
       targetId: 'tour-header',
       title: 'Faculty Clearance Hub',
-      content: 'Welcome! This is your central hub for managing student clearance requests across current and past terms.'
+      content: 'Welcome! This is your central hub for reviewing and approving student clearance requests.'
     },
     {
       targetId: 'tour-queue-status',
       title: 'Queue Status & Metrics',
-      content: 'Instantly view pending clearance workloads and overall student completion rates.'
+      content: 'Quickly see pending approvals, approved students, and overall progress across your classes.'
     },
     {
       targetId: 'tour-cycle-tabs',
-      title: 'Active vs Archived Cycles',
-      content: 'Toggle between currently active clearance drives and historical archived semesters.'
+      title: 'Your Classes & Subjects',
+      content: 'See clearance progress and pending counts for each class and subject assigned to you.'
     },
     {
       targetId: 'tour-engagement-summary',
-      title: 'Duty Breakdown',
-      content: 'Manage approvals specifically for each class, role, and subject assigned to you.'
+      title: 'Approval Groups',
+      content: 'Review and approve students for each specific class or role.'
     },
     {
       targetId: 'tour-process-button',
-      title: 'Process Queue',
-      content: 'Click here to jump straight to the action portal to review and approve students in bulk.'
+      title: 'Review Pending',
+      content: 'Click here to jump straight to reviewing and approving student requests.'
     }
   ];
   
@@ -99,11 +96,7 @@ const FacultyDashboard = () => {
     return allBatches.filter(b => b.status === 'active');
   }, [allBatches]);
 
-  const closedBatches = useMemo(() => {
-    return allBatches.filter(b => b.status === 'closed');
-  }, [allBatches]);
-
-  // Aggregate stats across batches
+  // Aggregate stats across active batches
   const metrics = useMemo(() => {
     let pendingSum = 0;
     let approvedSum = 0;
@@ -117,11 +110,6 @@ const FacultyDashboard = () => {
       totalSum += b.totalCount || 0;
     });
 
-    let historicalCleared = 0;
-    closedBatches.forEach(b => {
-      historicalCleared += b.approvedCount || 0;
-    });
-
     const activeCompletionRate = totalSum > 0 ? Math.round((approvedSum / totalSum) * 100) : 100;
 
     return {
@@ -130,11 +118,9 @@ const FacultyDashboard = () => {
       dueSum,
       totalSum,
       activeCompletionRate,
-      historicalCleared,
-      activeBatchesCount: activeBatches.length,
-      closedBatchesCount: closedBatches.length
+      activeBatchesCount: activeBatches.length
     };
-  }, [activeBatches, closedBatches]);
+  }, [activeBatches]);
 
   // Active duty breakdown grouped by batchId + approvalType
   const baseSummary = useMemo(() => {
@@ -220,7 +206,7 @@ const FacultyDashboard = () => {
 
   if (loading && !response && !batchesResponse) {
     return (
-      <PageWrapper title="Candidate Approvals" subtitle="Hydrating Clearance Duties...">
+      <PageWrapper title="Faculty Approvals" subtitle="Loading your approvals...">
         <div className="animate-pulse space-y-8">
           <div className="h-44 w-full bg-zinc-100 rounded-2xl"></div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -240,20 +226,20 @@ const FacultyDashboard = () => {
 
   if (error && !response && !batchesResponse) {
     return (
-      <PageWrapper title="Candidate Approvals" subtitle="Sync Notice">
+      <PageWrapper title="Faculty Approvals" subtitle="Unable to load">
         <div className="text-center py-20 bg-white rounded-2xl border border-zinc-200 shadow-sm max-w-lg mx-auto">
           <AlertCircle className="mx-auto text-status-due mb-4" size={48} />
-          <h2 className="text-xl font-black text-navy mb-2">Sync Error</h2>
+          <h2 className="text-xl font-black text-navy mb-2">Couldn't load approvals</h2>
           <p className="text-zinc-500 mb-6 text-sm px-6">{error}</p>
           <Button 
             variant="primary" 
             onClick={async () => {
-              const hide = showGlobalLoader('Refreshing Dashboard...');
+              const hide = showGlobalLoader('Refreshing approvals...');
               await refreshAll();
               hide();
             }}
           >
-            <RefreshCw size={14} className="mr-2" /> Retry Connection
+            <RefreshCw size={14} className="mr-2" /> Try again
           </Button>
         </div>
       </PageWrapper>
@@ -263,7 +249,7 @@ const FacultyDashboard = () => {
   return (
     <PageWrapper 
       title="Faculty Clearance Hub" 
-      subtitle="Institutional clearance workflow & historical archive"
+      subtitle="Manage student clearance approvals for your classes"
       headerActions={
         <div className="flex items-center gap-2">
           <button 
@@ -326,7 +312,7 @@ const FacultyDashboard = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
-                      Clearance Protocol
+                      Approval Queue
                     </span>
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                     <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
@@ -335,15 +321,15 @@ const FacultyDashboard = () => {
                   </div>
                   <h2 className="text-xl sm:text-2xl font-black text-navy tracking-tight">
                     {totalPending > 0 ? (
-                      <>You have <span className="text-indigo-600 font-black">{totalPending} candidate requests</span> awaiting review</>
+                      <>You have <span className="text-indigo-600 font-black">{totalPending} student requests</span> awaiting review</>
                     ) : (
                       "Your approval queue is completely cleared"
                     )}
                   </h2>
                   <p className="text-zinc-500 text-xs sm:text-sm font-medium mt-0.5">
                     {totalPending > 0 
-                      ? 'Action pending clearance approvals to unblock student hall tickets.'
-                      : 'All assigned student clearance duties for active academic cycles have been verified.'}
+                      ? 'Review and approve pending student requests for your classes.'
+                      : 'All assigned student clearance approvals for your classes are complete.'}
                   </p>
                 </div>
               </div>
@@ -356,7 +342,7 @@ const FacultyDashboard = () => {
                     className="w-full md:w-auto px-8 h-12 font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-navy/20 hover:shadow-xl transition-all active:scale-95 flex items-center justify-center" 
                     onClick={() => navigate('/faculty/pending', { state: { from: 'faculty-dashboard' } })}
                   >
-                    PROCESS QUEUE <ArrowRight size={14} className="ml-2" />
+                    REVIEW PENDING <ArrowRight size={14} className="ml-2" />
                   </Button>
                 ) : (
                   <Button
@@ -364,7 +350,7 @@ const FacultyDashboard = () => {
                     className="w-full md:w-auto px-6 h-12 font-black text-[10px] uppercase tracking-[0.2em] border-zinc-200 text-navy hover:bg-zinc-50 transition-all"
                     onClick={() => navigate('/faculty/pending', { state: { from: 'faculty-dashboard' } })}
                   >
-                    VIEW CLEARANCE PORTAL
+                    VIEW APPROVALS
                   </Button>
                 )}
               </div>
@@ -385,33 +371,33 @@ const FacultyDashboard = () => {
               <span className="text-3xl font-black text-navy">{metrics.pendingSum}</span>
               <span className="text-xs font-bold text-zinc-400">students</span>
             </div>
-            <p className="text-[10px] text-zinc-500 font-medium mt-1">Pending approval in active cycles</p>
+            <p className="text-[10px] text-zinc-500 font-medium mt-1">Pending approval in active classes</p>
           </div>
 
           <div className="rounded-2xl bg-white border border-zinc-200/70 p-5 shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Active Clearances</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Approved</span>
               <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
                 <ClipboardCheck size={16} />
               </div>
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-black text-emerald-600">{metrics.approvedSum}</span>
-              <span className="text-xs font-bold text-zinc-400">approved</span>
+              <span className="text-xs font-bold text-zinc-400">students</span>
             </div>
             <p className="text-[10px] text-zinc-500 font-medium mt-1">Approved students this semester</p>
           </div>
 
           <div className="rounded-2xl bg-white border border-zinc-200/70 p-5 shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Cycle Completion</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Progress</span>
               <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
                 <TrendingUp size={16} />
               </div>
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-black text-navy">{metrics.activeCompletionRate}%</span>
-              <span className="text-xs font-bold text-zinc-400">progress</span>
+              <span className="text-xs font-bold text-zinc-400">completed</span>
             </div>
             <div className="w-full bg-zinc-100 h-1.5 rounded-full mt-2 overflow-hidden">
               <div 
@@ -423,242 +409,132 @@ const FacultyDashboard = () => {
 
           <div className="rounded-2xl bg-white border border-zinc-200/70 p-5 shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Historical Cleared</span>
-              <div className="h-8 w-8 rounded-lg bg-zinc-100 text-zinc-600 flex items-center justify-center">
-                <Archive size={16} />
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Flagged Dues</span>
+              <div className="h-8 w-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+                <AlertCircle size={16} />
               </div>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-navy">{metrics.historicalCleared}</span>
-              <span className="text-xs font-bold text-zinc-400">archived</span>
+              <span className="text-3xl font-black text-red-600">{metrics.dueSum}</span>
+              <span className="text-xs font-bold text-zinc-400">students</span>
             </div>
-            <p className="text-[10px] text-zinc-500 font-medium mt-1">Across {closedBatches.length} past academic cycles</p>
+            <p className="text-[10px] text-zinc-500 font-medium mt-1">Students with dues to resolve</p>
           </div>
         </motion.div>
 
-        {/* Section Tabs: Active Duties vs Past / Archived Cycles */}
+        {/* Assigned Classes & Subjects Section */}
         <motion.div id="tour-cycle-tabs" variants={itemVariants} className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200/60 pb-3">
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setActiveTab('active')}
-                className={`h-9 px-4 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-                  activeTab === 'active'
-                    ? 'bg-navy text-white shadow-sm'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                }`}
-              >
+              <div className="h-9 px-4 rounded-xl text-[11px] font-black uppercase tracking-wider bg-navy text-white shadow-sm flex items-center gap-2">
                 <Layers size={14} />
-                <span>Active Duties</span>
+                <span>Your Classes</span>
                 {metrics.pendingSum > 0 && (
-                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                    activeTab === 'active' ? 'bg-amber-400 text-navy' : 'bg-amber-100 text-amber-800'
-                  }`}>
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-400 text-navy">
                     {metrics.pendingSum}
                   </span>
                 )}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('archived')}
-                className={`h-9 px-4 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-                  activeTab === 'archived'
-                    ? 'bg-navy text-white shadow-sm'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                }`}
-              >
-                <Archive size={14} />
-                <span>Archived Semesters</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-zinc-200 text-zinc-700 text-[9px] font-bold">
-                  {closedBatches.length}
-                </span>
-              </button>
+              </div>
             </div>
 
             <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">
-              {activeTab === 'active' 
-                ? `${summary.length} active class responsibility units` 
-                : `${closedBatches.length} previous academic cycles archived`}
+              {summary.length} {summary.length === 1 ? 'class' : 'classes'} assigned
             </span>
           </div>
 
-          {/* Tab 1: Active Duties */}
-          {activeTab === 'active' && (
-            <div id="tour-engagement-summary">
-              {summary.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <AnimatePresence mode="popLayout">
-                    {summary.map((item) => (
-                      <motion.div 
-                        layout
-                        key={item.id} 
-                        variants={itemVariants}
-                      >
-                        <div className="rounded-2xl p-6 bg-white border border-zinc-200/70 hover:border-indigo-200 hover:shadow-xl hover:shadow-navy/5 transition-all duration-300 flex flex-col justify-between h-full group relative overflow-hidden">
-                          <div className="relative z-10">
-                            <div className="flex items-start justify-between mb-6">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-wider">
-                                    {item.role}
-                                  </span>
-                                  {item.semester && (
-                                    <span className="text-[9px] font-bold text-zinc-400">
-                                      Sem {item.semester}
-                                    </span>
-                                  )}
-                                </div>
-                                <h3 className="text-lg font-black text-navy tracking-tight group-hover:text-indigo-600 transition-colors truncate">
-                                  {item.class}
-                                </h3>
-                              </div>
-
-                              <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border ${
-                                item.pending > 0 
-                                  ? 'bg-amber-50 border-amber-200/60 text-amber-600' 
-                                  : 'bg-emerald-50 border-emerald-200/60 text-emerald-600'
-                              }`}>
-                                <Layers size={16} strokeWidth={2.5} />
-                              </div>
-                            </div>
-
-                            <div className="space-y-4">
-                              <div>
-                                <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest mb-2">
-                                  <span className="text-zinc-400">Review Progress</span>
-                                  <span className={item.pending > 0 ? 'text-amber-600' : 'text-emerald-600'}>
-                                    {item.pending > 0 ? `${item.pending} Awaiting` : '100% Cleared'}
-                                  </span>
-                                </div>
-                                <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                                  <div 
-                                    className={`h-full rounded-full transition-all duration-700 ${
-                                      item.pending > 0 ? 'bg-amber-500' : 'bg-emerald-500'
-                                    }`}
-                                    style={{ width: `${item.total > 0 ? ((item.total - item.pending) / item.total) * 100 : 100}%` }}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="pt-2">
-                                <button 
-                                  onClick={() => navigate('/faculty/pending', { 
-                                    state: { 
-                                      classId: item.batchId, 
-                                      approvalType: item.approvalType,
-                                      itemTypeId: item.itemTypeId,
-                                      from: 'faculty-dashboard' 
-                                    } 
-                                  })} 
-                                  className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
-                                    item.pending > 0 
-                                      ? 'bg-navy text-white border-navy shadow-md hover:bg-navy/90 active:scale-[0.98]' 
-                                      : 'bg-white text-navy border-zinc-200 hover:bg-zinc-50'
-                                  }`}
-                                >
-                                  <span>{item.pending > 0 ? 'Review Pending' : 'Audit Class Roster'}</span>
-                                  <ArrowRight size={13} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-zinc-200">
-                  <CheckCircle2 size={40} className="mx-auto text-emerald-500 mb-3" />
-                  <h3 className="text-navy font-bold text-base mb-1">All Clear in Ongoing Cycles</h3>
-                  <p className="text-zinc-500 text-xs max-w-sm mx-auto mb-4">
-                    There are no pending student clearance requests requiring your review in active batches.
-                  </p>
-                  <Button 
-                    variant="outline"
-                    size="sm"
-                    className="text-[10px] font-black uppercase tracking-wider"
-                    onClick={() => setActiveTab('archived')}
-                  >
-                    Browse Archived Batches
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Tab 2: Previous / Archived Batches */}
-          {activeTab === 'archived' && (
-            <div>
-              {closedBatches.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {closedBatches.map((batch) => (
-                    <div 
-                      key={batch._id}
-                      className="rounded-2xl p-6 bg-zinc-50/70 border border-zinc-200 hover:border-zinc-300 transition-all flex flex-col justify-between h-full group"
+          <div id="tour-engagement-summary">
+            {summary.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <AnimatePresence mode="popLayout">
+                  {summary.map((item) => (
+                    <motion.div 
+                      layout
+                      key={item.id} 
+                      variants={itemVariants}
                     >
-                      <div>
-                        <div className="flex items-start justify-between mb-4">
-                          <div>
-                            <span className="text-[9px] font-bold text-zinc-500 bg-zinc-200/60 px-2 py-0.5 rounded uppercase tracking-wider inline-flex items-center gap-1">
-                              <Lock size={10} /> Archived Cycle
-                            </span>
-                            <h3 className="text-base font-black text-navy mt-1.5 tracking-tight group-hover:text-indigo-600 transition-colors">
-                              {batch.name}
-                            </h3>
-                            <p className="text-xs text-zinc-500 font-medium">
-                              {batch.academicYear || 'Academic Year'} · Semester {batch.semester || '—'}
-                            </p>
-                          </div>
-                          <div className="h-9 w-9 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 shrink-0">
-                            <Archive size={16} />
-                          </div>
-                        </div>
+                      <div className="rounded-2xl p-6 bg-white border border-zinc-200/70 hover:border-indigo-200 hover:shadow-xl hover:shadow-navy/5 transition-all duration-300 flex flex-col justify-between h-full group relative overflow-hidden">
+                        <div className="relative z-10">
+                          <div className="flex items-start justify-between mb-6">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-wider">
+                                  {item.role}
+                                </span>
+                                {item.semester && (
+                                  <span className="text-[9px] font-bold text-zinc-400">
+                                    Sem {item.semester}
+                                  </span>
+                                )}
+                              </div>
+                              <h3 className="text-lg font-black text-navy tracking-tight group-hover:text-indigo-600 transition-colors truncate">
+                                {item.class}
+                              </h3>
+                            </div>
 
-                        <div className="grid grid-cols-3 gap-2 py-3 px-3.5 bg-white rounded-xl border border-zinc-100 text-center my-3">
-                          <div>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 block">Total</span>
-                            <span className="text-sm font-black text-navy">{batch.totalCount || 0}</span>
+                            <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                              item.pending > 0 
+                                ? 'bg-amber-50 border-amber-200/60 text-amber-600' 
+                                : 'bg-emerald-50 border-emerald-200/60 text-emerald-600'
+                            }`}>
+                              <Layers size={16} strokeWidth={2.5} />
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 block">Cleared</span>
-                            <span className="text-sm font-black text-emerald-600">{batch.approvedCount || 0}</span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-red-500 block">Dues</span>
-                            <span className="text-sm font-black text-red-500">{batch.dueCount || 0}</span>
+
+                          <div className="space-y-4">
+                            <div>
+                              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest mb-2">
+                                <span className="text-zinc-400">Review Progress</span>
+                                <span className={item.pending > 0 ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold'}>
+                                  {item.pending > 0 ? `${item.pending} Pending` : 'All Approved'}
+                                </span>
+                              </div>
+                              <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-700 ${
+                                    item.pending > 0 ? 'bg-amber-500' : 'bg-emerald-500'
+                                  }`}
+                                  style={{ width: `${item.total > 0 ? ((item.total - item.pending) / item.total) * 100 : 100}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="pt-2">
+                              <button 
+                                onClick={() => navigate('/faculty/pending', { 
+                                  state: { 
+                                    classId: item.batchId, 
+                                    approvalType: item.approvalType,
+                                    itemTypeId: item.itemTypeId,
+                                    from: 'faculty-dashboard' 
+                                  } 
+                                })} 
+                                className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
+                                  item.pending > 0 
+                                    ? 'bg-navy text-white border-navy shadow-md hover:bg-navy/90 active:scale-[0.98]' 
+                                    : 'bg-white text-navy border-zinc-200 hover:bg-zinc-50'
+                                }`}
+                              >
+                                <span>{item.pending > 0 ? 'Review Pending' : 'View Student List'}</span>
+                                <ArrowRight size={13} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
-
-                      <div className="pt-2">
-                        <button 
-                          onClick={() => navigate('/faculty/pending', { 
-                            state: { 
-                              classId: batch._id, 
-                              from: 'faculty-dashboard' 
-                            } 
-                          })} 
-                          className="w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 bg-white text-zinc-700 border border-zinc-200 hover:bg-zinc-100 hover:text-navy"
-                        >
-                          <Lock size={11} />
-                          <span>View Read-Only Records</span>
-                        </button>
-                      </div>
-                    </div>
+                    </motion.div>
                   ))}
-                </div>
-              ) : (
-                <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-zinc-200">
-                  <Archive size={40} className="mx-auto text-zinc-300 mb-3" />
-                  <h3 className="text-navy font-bold text-base mb-1">No Archived Batches</h3>
-                  <p className="text-zinc-500 text-xs max-w-sm mx-auto">
-                    Previous semester clearance batches will appear here once they are officially closed.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-zinc-200">
+                <CheckCircle2 size={40} className="mx-auto text-emerald-500 mb-3" />
+                <h3 className="text-navy font-bold text-base mb-1">No Pending Approvals</h3>
+                <p className="text-zinc-500 text-xs max-w-sm mx-auto">
+                  You have no pending student clearance approvals for your active classes.
+                </p>
+              </div>
+            )}
+          </div>
         </motion.div>
       </motion.div>
     </PageWrapper>
