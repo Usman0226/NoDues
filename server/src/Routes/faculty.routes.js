@@ -6,6 +6,9 @@ import {
   updateFaculty,
   deleteFaculty,
   getFacultyClasses,
+  getFacultyBatches,
+  getFacultyMentees,
+  getMenteeClearance,
   resendCredentials,
   bulkDeactivateFaculty,
   bulkResendCredentials,
@@ -24,6 +27,9 @@ router.get('/me/classes', (req, res, next) => {
   req.params.id = req.user.userId;
   next();
 }, asyncHandler(getFacultyClasses));
+router.get('/me/batches', asyncHandler(getFacultyBatches));
+router.get('/me/mentees', asyncHandler(getFacultyMentees));
+router.get('/me/mentees/:studentId/clearance', asyncHandler(getMenteeClearance));
 
 router.use(RoleGuard(['admin', 'hod', 'ao', 'faculty']));
 

@@ -6,7 +6,8 @@ import {
   parseTimetablePageFromText,
   normalizeFacultyName,
   getTokenSortedName,
-  isWithoutTeacher
+  isWithoutTeacher,
+  extractClassMetadataFromText
 } from '../../src/services/timetableParser.js';
 
 describe('Timetable Resilience & Real-World Edge Cases', () => {
@@ -139,5 +140,36 @@ Time Table Incharge\tPrincipal
     // Row 4: Without Teacher excluded
     assert.strictEqual(result.rows[3].status, 'excluded');
     assert.strictEqual(result.rows[3].excludeReason, 'WITHOUT_TEACHER');
+  });
+
+  it('resiliently extracts class metadata across variable institutional header formats', () => {
+    // 1. Format: B.Tech First before Year + Section in parentheses
+    const meta1 = extractClassMetadataFromText('B.TECH II YEAR I SEMESTER (CSD - A)\nACADEMIC YEAR: 2026-27');
+    assert.strictEqual(meta1.detectedClassName, 'CSD-A');
+    assert.strictEqual(meta1.detectedDepartment, 'CSD');
+    assert.strictEqual(meta1.detectedSemester, 3);
+    assert.strictEqual(meta1.detectedAcademicYear, '2026-27');
+
+    // 2. Format: Multi-line header with explicit SECTION: line & Year/Sem tokens
+    const meta2 = extractClassMetadataFromText(
+      'DEPARTMENT OF COMPUTER SCIENCE AND ENGINEERING\nTIME TABLE - II B.TECH I SEM (2026-27)\nSECTION: CSE-A\nClass Incharge: Dr. Turing'
+    );
+    assert.strictEqual(meta2.detectedClassName, 'CSE-A');
+    assert.strictEqual(meta2.detectedDepartment, 'CSE');
+    assert.strictEqual(meta2.detectedSemester, 3);
+    assert.strictEqual(meta2.detectedAcademicYear, '2026-27');
+    assert.strictEqual(meta2.detectedTeacher, 'Dr. Turing');
+
+    // 3. Format: Standard Roman numeral year + Dept + Section
+    const meta3 = extractClassMetadataFromText('III CSD A I SEM');
+    assert.strictEqual(meta3.detectedClassName, 'CSD-A');
+    assert.strictEqual(meta3.detectedDepartment, 'CSD');
+    assert.strictEqual(meta3.detectedSemester, 5);
+
+    // 4. Format: IV Year B.Tech with section in parentheses
+    const meta4 = extractClassMetadataFromText('IV B.Tech I Semester (CSM - B)');
+    assert.strictEqual(meta4.detectedClassName, 'CSM-B');
+    assert.strictEqual(meta4.detectedDepartment, 'CSM');
+    assert.strictEqual(meta4.detectedSemester, 7);
   });
 });

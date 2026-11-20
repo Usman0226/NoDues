@@ -83,31 +83,21 @@ export function extractClassMetadataFromText(text) {
   let detectedSemester = null;
   let detectedDepartment = null;
 
+  const RESERVED_WORDS = new Set([
+    'YEAR', 'YR', 'BTECH', 'BE', 'MTECH', 'MBA', 'MCA',
+    'SEMESTER', 'SEM', 'TIME', 'TABLE', 'TIMETABLE',
+    'SECTION', 'SEC', 'ROOM', 'DEPT', 'DEPARTMENT', 'CLASS', 'BATCH'
+  ]);
+
   // Pattern 1: Roman Year + Dept + Section + Roman Sem (e.g. "III CSD A I SEM")
-  const romanPattern = /\b(I|II|III|IV)\s+([A-Za-z]+)\s+([A-Za-z0-9]+)\s+(I|II)\s+SEM\b/i;
+  const romanPattern = /\b(IV|III|II|I)\b\s+([A-Za-z]+)\s+([A-Za-z0-9]+)\s+\b(II|I)\b\s+SEM\b/i;
   const romanMatch = header.match(romanPattern) || text.match(romanPattern);
   if (romanMatch) {
     const yearRoman = romanMatch[1].toUpperCase();
     const deptCode = romanMatch[2].toUpperCase();
     const sec = romanMatch[3].toUpperCase();
     const semRoman = romanMatch[4].toUpperCase();
-    const yearNum = { I: 1, II: 2, III: 3, IV: 4 }[yearRoman] || 1;
-    const semInYear = semRoman === 'II' ? 2 : 1;
-    detectedSemester = (yearNum - 1) * 2 + semInYear;
-    detectedClassName = `${deptCode}-${sec}`;
-    displayName = `${yearRoman} ${deptCode}-${sec}`;
-    detectedDepartment = deptCode;
-  }
-
-  // Pattern 1B: "III B.Tech I Semester (CSD - A)" or "II B.Tech II Sem (CSE - B)"
-  if (!detectedClassName) {
-    const btechPattern = /\b(I|II|III|IV)\s*(?:B\.?Tech|B\.?E\.?)\s*(?:[-–—\s]*)(?:Year|Yr)?\s*(I|II)?\s*(?:Semester|Sem)?\s*[\(\[]?([A-Za-z]+)\s*[-_/\s]\s*([A-Za-z0-9]+)[\)\]]?/i;
-    const btechMatch = text.match(btechPattern);
-    if (btechMatch) {
-      const yearRoman = btechMatch[1].toUpperCase();
-      const semRoman = (btechMatch[2] || 'I').toUpperCase();
-      const deptCode = btechMatch[3].toUpperCase();
-      const sec = btechMatch[4].toUpperCase();
+    if (!RESERVED_WORDS.has(deptCode) && !RESERVED_WORDS.has(sec)) {
       const yearNum = { I: 1, II: 2, III: 3, IV: 4 }[yearRoman] || 1;
       const semInYear = semRoman === 'II' ? 2 : 1;
       detectedSemester = (yearNum - 1) * 2 + semInYear;
@@ -117,40 +107,113 @@ export function extractClassMetadataFromText(text) {
     }
   }
 
-  // Pattern 2: "III CSD-A" or "III CSE B" without Sem on same line
+  // Pattern 1B: "III B.Tech I Semester (CSD - A)" or "II B.Tech II Sem (CSE - B)"
   if (!detectedClassName) {
-    const simpleClassMatch = header.match(/\b(I|II|III|IV)\s+([A-Za-z]+)[-\s]+([A-Za-z0-9]+)\b/i);
+    const btechPattern = /\b(IV|III|II|I)\b\s*(?:B\.?Tech|B\.?E\.?)\s*(?:[-–—\s]*)(?:Year|Yr)?\s*\b(II|I)?\b\s*(?:Semester|Sem)?\s*[\(\[]?\s*([A-Za-z]+)\s*[-_/\s]\s*([A-Za-z0-9]+)\s*[\)\]]?/i;
+    const btechMatch = text.match(btechPattern);
+    if (btechMatch) {
+      const yearRoman = btechMatch[1].toUpperCase();
+      const semRoman = (btechMatch[2] || 'I').toUpperCase();
+      const deptCode = btechMatch[3].toUpperCase();
+      const sec = btechMatch[4].toUpperCase();
+      if (!RESERVED_WORDS.has(deptCode) && !RESERVED_WORDS.has(sec)) {
+        const yearNum = { I: 1, II: 2, III: 3, IV: 4 }[yearRoman] || 1;
+        const semInYear = semRoman === 'II' ? 2 : 1;
+        detectedSemester = (yearNum - 1) * 2 + semInYear;
+        detectedClassName = `${deptCode}-${sec}`;
+        displayName = `${yearRoman} ${deptCode}-${sec}`;
+        detectedDepartment = deptCode;
+      }
+    }
+  }
+
+  // Pattern 1C: "B.Tech II Year I Semester (CSD - A)" or "B.Tech III Year II Sem (AIML - B)"
+  if (!detectedClassName) {
+    const btechFirstPattern = /(?:B\.?Tech|B\.?E\.?|M\.?Tech)\s*[-–—\s]*\b(IV|III|II|I)\b\s*(?:Year|Yr)?\s*\b(II|I)?\b\s*(?:Semester|Sem)?\s*[\(\[]?\s*([A-Za-z]+)\s*[-_/\s]\s*([A-Za-z0-9]+)\s*[\)\]]?/i;
+    const btechFirstMatch = text.match(btechFirstPattern);
+    if (btechFirstMatch) {
+      const yearRoman = btechFirstMatch[1].toUpperCase();
+      const semRoman = (btechFirstMatch[2] || 'I').toUpperCase();
+      const deptCode = btechFirstMatch[3].toUpperCase();
+      const sec = btechFirstMatch[4].toUpperCase();
+      if (!RESERVED_WORDS.has(deptCode) && !RESERVED_WORDS.has(sec)) {
+        const yearNum = { I: 1, II: 2, III: 3, IV: 4 }[yearRoman] || 1;
+        const semInYear = semRoman === 'II' ? 2 : 1;
+        detectedSemester = (yearNum - 1) * 2 + semInYear;
+        detectedClassName = `${deptCode}-${sec}`;
+        displayName = `${yearRoman} ${deptCode}-${sec}`;
+        detectedDepartment = deptCode;
+      }
+    }
+  }
+
+  // Pattern 1D: Explicit "SECTION: CSE-A" or "SECTION : CSD - B"
+  const explicitSecMatch = text.match(/\b(?:section|sec)\s*[:\-–—]\s*([A-Za-z0-9]+(?:[-_/\s][A-Za-z0-9]+)?)\b/i);
+  if (explicitSecMatch) {
+    const rawSec = explicitSecMatch[1].replace(/\s+/g, '').toUpperCase();
+    if (rawSec.includes('-')) {
+      const [secDept, secCode] = rawSec.split('-');
+      if (!RESERVED_WORDS.has(secDept) && !RESERVED_WORDS.has(secCode)) {
+        detectedClassName = `${secDept}-${secCode}`;
+        detectedDepartment = detectedDepartment || secDept;
+      }
+    } else if (!RESERVED_WORDS.has(rawSec)) {
+      if (!detectedClassName) {
+        detectedClassName = rawSec;
+      }
+    }
+  }
+
+  // Pattern 2: "III CSD-A" or "III CSE B" without Sem on same line (guarded by RESERVED_WORDS)
+  if (!detectedClassName) {
+    const simpleClassMatch = header.match(/\b(IV|III|II|I)\b\s+([A-Za-z]+)[-\s]+([A-Za-z0-9]+)\b/i);
     if (simpleClassMatch) {
       const yearRoman = simpleClassMatch[1].toUpperCase();
       const deptCode = simpleClassMatch[2].toUpperCase();
       const sec = simpleClassMatch[3].toUpperCase();
-      detectedClassName = `${deptCode}-${sec}`;
-      displayName = `${yearRoman} ${deptCode}-${sec}`;
-      detectedDepartment = deptCode;
+      if (!RESERVED_WORDS.has(deptCode) && !RESERVED_WORDS.has(sec)) {
+        detectedClassName = `${deptCode}-${sec}`;
+        displayName = `${yearRoman} ${deptCode}-${sec}`;
+        detectedDepartment = deptCode;
+      }
     }
   }
 
   // Fallback: Detect Semester number or Roman numeral
   if (!detectedSemester) {
-    const semDigitMatch = text.match(/\b(?:semester|sem)[-:\s]+([1-8]|I|II|III|IV|V|VI|VII|VIII)\b/i);
-    if (semDigitMatch) {
-      const semVal = semDigitMatch[1].toUpperCase();
-      const romanSemMap = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8 };
-      detectedSemester = romanSemMap[semVal] || parseInt(semVal, 10) || null;
+    const yearSemMatch = text.match(/\b(IV|III|II|I)\b\s*(?:B\.?Tech|B\.?E\.?|M\.?Tech|Year|Yr)?\s*(?:[-–—\s]*)\b(II|I)\b\s*(?:Semester|Sem)\b/i);
+    if (yearSemMatch) {
+      const yearRoman = yearSemMatch[1].toUpperCase();
+      const semRoman = yearSemMatch[2].toUpperCase();
+      const yearNum = { I: 1, II: 2, III: 3, IV: 4 }[yearRoman] || 1;
+      const semInYear = semRoman === 'II' ? 2 : 1;
+      detectedSemester = (yearNum - 1) * 2 + semInYear;
+    } else {
+      const semDigitMatch = text.match(/\b(?:semester|sem)[-:\s]+([1-8]|I|II|III|IV|V|VI|VII|VIII)\b/i)
+        || text.match(/\b(VIII|VII|VI|V|IV|III|II|I)\s+(?:semester|sem)\b/i);
+      if (semDigitMatch) {
+        const semVal = semDigitMatch[1].toUpperCase();
+        const romanSemMap = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8 };
+        detectedSemester = romanSemMap[semVal] || parseInt(semVal, 10) || null;
+      }
     }
   }
 
-  // Fallback: Section name (e.g. "Section CSE-A", "Section A", "Sec: CSD-B")
+  // Fallback: Section name if still not resolved
   if (!detectedClassName) {
     const secMatch = text.match(/\b(?:section|sec)[-:\s]+([A-Z0-9]+(?:-[A-Z0-9]{1,4})?)\b/i);
     if (secMatch) {
-      detectedClassName = secMatch[1].toUpperCase();
-      displayName = detectedClassName.includes('-') ? detectedClassName : `Section ${detectedClassName}`;
+      const candidate = secMatch[1].toUpperCase();
+      if (!RESERVED_WORDS.has(candidate)) {
+        detectedClassName = candidate;
+        displayName = detectedClassName.includes('-') ? detectedClassName : `Section ${detectedClassName}`;
+      }
     }
   }
 
   const ctMatch = text.match(/(?:Class Teacher|Class In-?charge|Class Mentor|In-?charge)\s*[:\-–—]\s*([^\t\r\n]+)/i);
-  const ayMatch = text.match(/(?:Academic Year|A\.?Y\.?)\s*[:\-–—]?\s*([0-9]{4}\s*[-–—/]\s*[0-9]{2,4})/i);
+  const ayMatch = text.match(/(?:Academic Year|A\.?Y\.?)\s*[:\-–—]?\s*([0-9]{4}\s*[-–—/]\s*[0-9]{2,4})/i)
+    || text.match(/\b(20\d{2}\s*[-–—/]\s*(?:20\d{2}|\d{2}))\b/);
   const deptMatch = text.match(/(?:Department of|Dept\.? of)\s*([^\t\r\n\(\)]+)/i);
 
   return {

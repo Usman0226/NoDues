@@ -2,25 +2,50 @@ import xlsx from 'xlsx';
 import ErrorResponse from './errorResponse.js';
 
 /**
+ * Known Excel formula evaluation error tokens and placeholder nulls.
+ */
+export const EXCEL_FORMULA_ERRORS = new Set([
+  '#VALUE!',
+  '#REF!',
+  '#N/A',
+  '#DIV/0!',
+  '#NAME?',
+  '#NULL!',
+  '#NUM!',
+  '#GETTING_DATA',
+  'NAN',
+  'UNDEFINED',
+  'NULL',
+]);
+
+/**
  * Normalizes header string by stripping zero-width characters, non-alphanumeric chars,
  * and converting to lowercase.
  */
 export const normalizeHeader = (header) =>
   String(header || '')
     .toLowerCase()
+    .replace(/\u00A0/g, ' ')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/[^a-z0-9]/g, '');
 
 /**
- * Strips zero-width chars, surrounding quotes, and extraneous whitespace.
+ * Strips zero-width chars, non-breaking spaces, surrounding quotes, and extraneous whitespace.
  * Expands scientific notation if numeric float from Excel.
+ * Rejects Excel formula errors (#VALUE!, #REF!, etc.).
  */
 export const sanitizeValue = (val) => {
   if (val === undefined || val === null) return '';
   let str = String(val)
+    .replace(/\u00A0/g, ' ')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/^["']+|["']+$/g, '')
     .trim();
+
+  // If value evaluates to an Excel formula error or null placeholder, return empty
+  if (EXCEL_FORMULA_ERRORS.has(str.toUpperCase())) {
+    return '';
+  }
 
   // If formatted in Excel as scientific notation (e.g. 2.3691E+09), expand
   if (/^[0-9]+(\.[0-9]+)?e\+[0-9]+$/i.test(str)) {
@@ -212,7 +237,9 @@ function inferColumnsFromValues(grid, startRow = 0) {
  */
 export const cleanPersonName = (rawName) => {
   if (!rawName) return '';
-  let name = sanitizeValue(rawName).replace(/\s+/g, ' ');
+  const sanitized = sanitizeValue(rawName);
+  if (!sanitized || EXCEL_FORMULA_ERRORS.has(sanitized.toUpperCase())) return '';
+  let name = sanitized.replace(/\s+/g, ' ');
 
   // Handle 'Lastname, Firstname' format
   if (name.includes(',')) {
@@ -237,7 +264,10 @@ export const cleanPersonName = (rawName) => {
 export const isPlaceholderEmail = (email) => {
   if (!email) return true;
   const s = String(email).trim().toLowerCase();
-  return ['na', 'n/a', 'nil', 'null', 'none', '-', '--', 'no email', 'not available', '0', 'undefined'].includes(s);
+  return (
+    ['na', 'n/a', 'nil', 'null', 'none', '-', '--', 'no email', 'not available', '0', 'undefined'].includes(s) ||
+    EXCEL_FORMULA_ERRORS.has(s.toUpperCase())
+  );
 };
 
 /**
@@ -393,6 +423,282 @@ function selectBestSheet(workbook, targetHint = '') {
   }
 
   return bestSheet || sheetNames[0];
+}
+
+/**
+ * Classifies a worksheet into 'roster', 'auxiliary', 'summary', or 'empty'.
+ */
+export function classifySheet(sheetName, grid) {
+  const clean = String(sheetName || '').trim();
+  if (!grid || grid.length < 2) return 'empty';
+
+  // 1. Check administrative / summary sheet names
+  if (/^(?:strength|summary|statistics|counts?)$/i.test(clean) || /strength/i.test(clean)) {
+    return 'summary';
+  }
+  if (/^(?:detain|detained|drop\s*outs?|withdrawn|readmission|unregistered)$/i.test(clean)) {
+    return 'auxiliary';
+  }
+
+  // 2. Inspect data rows in sheet
+  const headerInfo = findHeaderRow(grid);
+  const dataStart = headerInfo.rowIndex >= 0 ? headerInfo.rowIndex + 1 : 0;
+  let studentCount = 0;
+
+  for (let r = dataStart; r < Math.min(grid.length, dataStart + 30); r++) {
+    const row = grid[r];
+    if (!Array.isArray(row)) continue;
+    const hasRoll = row.some((c) => isProbablyRoll(sanitizeValue(c)));
+    const hasName = row.some((c) => isProbablyName(sanitizeValue(c)));
+    if (hasRoll && hasName) studentCount++;
+  }
+
+  if (studentCount >= 2) {
+    if (/detain|drop\s*out/i.test(clean)) return 'auxiliary';
+    return 'roster';
+  }
+
+  if (studentCount === 0) {
+    const hasCounts = grid.some((r) => Array.isArray(r) && r.some((c) => typeof c === 'number' || /^\d+\+\d+$/.test(String(c))));
+    return hasCounts ? 'summary' : 'empty';
+  }
+
+  return 'roster';
+}
+
+/**
+ * Extracts cohort metadata (section, department, semester, academicYear)
+ * from sheet name, preamble rows, and filename.
+ */
+export function extractSheetCohortMetadata(sheetName, grid = [], filename = '') {
+  let section = null;
+  let department = null;
+  let semester = null;
+  let academicYear = null;
+
+  const cleanSheet = String(sheetName || '').trim();
+  const secMatch = cleanSheet.match(/(?:^|[-_\s])([A-Z0-9])\s*$/i);
+  if (secMatch) section = secMatch[1].toUpperCase();
+
+  const deptAcronymMatch = cleanSheet.match(/^([A-Z]{2,5})[-_\s]/i);
+  if (deptAcronymMatch) {
+    const rawAcronym = deptAcronymMatch[1].toUpperCase();
+    for (const [code, aliases] of Object.entries(KNOWN_DEPT_ALIASES)) {
+      if (code === rawAcronym || aliases.map((a) => a.toUpperCase()).includes(rawAcronym)) {
+        department = code;
+        break;
+      }
+    }
+  }
+
+  for (let r = 0; r < Math.min(10, grid.length); r++) {
+    const row = grid[r];
+    if (!Array.isArray(row)) continue;
+    const rowStr = row.filter((c) => c !== null && c !== undefined && c !== '').join(' ');
+    if (!rowStr) continue;
+
+    // Academic Year: '2026 - 27' or '2026-2027'
+    const yrMatch = rowStr.match(/(\d{4})\s*[-–—]\s*(\d{2,4})/);
+    if (yrMatch && !academicYear) {
+      academicYear = yrMatch[1] + '-' + yrMatch[2].slice(-2);
+    }
+
+    // Section in preamble: 'Section -A-' or 'Section A' or 'Sec: B'
+    const pSecMatch = rowStr.match(/(?:Section|Sec)[\s\-–—:]*([A-Z0-9]+)/i);
+    if (pSecMatch) {
+      section = pSecMatch[1].toUpperCase();
+    }
+
+    // Roman Year & Semester: 'II Year I Semester' -> Sem 3
+    const romYrSem = rowStr.match(/\b(IV|III|II|I)\s*(?:Year|Yr)\s*(IV|III|II|I)\s*(?:Semester|Sem)\b/i);
+    if (romYrSem) {
+      const romMap = { I: 1, II: 2, III: 3, IV: 4 };
+      const y = romMap[romYrSem[1].toUpperCase()];
+      const s = romMap[romYrSem[2].toUpperCase()];
+      if (y && s) semester = (y - 1) * 2 + s;
+    }
+
+    // Arabic Year & Semester: '2 Year 1 Semester' -> Sem 3
+    const arabYrSem = rowStr.match(/\b([1-4])(?:st|nd|rd|th)?\s*(?:Year|Yr)\s*([1-2])(?:st|nd)?\s*(?:Semester|Sem)\b/i);
+    if (arabYrSem && !semester) {
+      const y = parseInt(arabYrSem[1], 10);
+      const s = parseInt(arabYrSem[2], 10);
+      semester = (y - 1) * 2 + s;
+    }
+
+    // Direct Semester: 'Semester 3'
+    const directSem = rowStr.match(/\b(?:Semester|Sem)[\s\-–—:]*([1-8])\b/i);
+    if (directSem && !semester) {
+      semester = parseInt(directSem[1], 10);
+    }
+
+    // Department name in preamble
+    if (/data\s*science/i.test(rowStr)) department = 'CSD';
+    else if (/artificial\s*intelligence|ai\s*(&|and)?\s*ml/i.test(rowStr)) department = 'CSM';
+    else if (/computer\s*science/i.test(rowStr) && !department) department = 'CSE';
+    else if (/electronics(\s*and|\s*&)?\s*comm/i.test(rowStr)) department = 'ECE';
+    else if (/electrical(\s*and|\s*&)?\s*electronics/i.test(rowStr)) department = 'EEE';
+    else if (/mechanical/i.test(rowStr)) department = 'ME';
+    else if (/civil/i.test(rowStr)) department = 'CE';
+  }
+
+  // Filename fallback for semester & academic year
+  if ((!semester || !academicYear) && filename) {
+    if (!semester) {
+      const fnRom = filename.match(/\b(IV|III|II|I)\s*(?:Year|Yr)\s*(IV|III|II|I)\s*(?:Semester|Sem)\b/i);
+      if (fnRom) {
+        const romMap = { I: 1, II: 2, III: 3, IV: 4 };
+        semester = (romMap[fnRom[1].toUpperCase()] - 1) * 2 + romMap[fnRom[2].toUpperCase()];
+      }
+    }
+    if (!academicYear) {
+      const fnYr = filename.match(/(\d{4})\s*[-–—]\s*(\d{2,4})/);
+      if (fnYr) academicYear = fnYr[1] + '-' + fnYr[2].slice(-2);
+    }
+  }
+
+  return { section, department, semester, academicYear };
+}
+
+/**
+ * Discriminatory scoring algorithm to accurately bind a spreadsheet sheet
+ * to its exact database Class model without cross-section or cross-semester contamination.
+ */
+export function scoreClassMatch(c, meta = {}, sheetName = '') {
+  // Curriculum Master blueprints must NEVER be matched to student cohorts
+  if (c.isMaster) return -999999;
+
+  // Auxiliary or administrative summary sheets must NEVER be auto-bound to an active class
+  if (/^(?:detain|detained|drop\s*outs?|withdrawn|readmission|unregistered|strength|summary|statistics|counts?)$/i.test(String(sheetName).trim())) {
+    return -999999;
+  }
+
+  let score = 0;
+  const cName = String(c.name || '').toUpperCase();
+  const cSecMatch = cName.match(/(?:^|[-_\s])([A-Z0-9])\s*$/i);
+  const cSec = cSecMatch ? cSecMatch[1].toUpperCase() : null;
+
+  // 1. Section match: +120 on exact match, -500 if contradictory
+  if (meta.section) {
+    const targetSec = String(meta.section).toUpperCase();
+    if (cSec === targetSec) {
+      score += 120;
+    } else if (cSec && cSec !== targetSec) {
+      score -= 500;
+    }
+  }
+
+  // 2. Semester match: +100 on exact match, -300 if contradictory
+  if (meta.semester !== undefined && meta.semester !== null) {
+    if (Number(c.semester) === Number(meta.semester)) {
+      score += 100;
+    } else {
+      score -= 300;
+    }
+  }
+
+  // 3. Department match: +100 if matched, -150 if completely different
+  if (meta.department) {
+    const deptKey = String(meta.department).toUpperCase();
+    const allAliases = [deptKey, ...(KNOWN_DEPT_ALIASES[deptKey] || [])];
+    const deptCode = String(c.departmentId?.code || '').toUpperCase();
+    const deptName = String(c.departmentId?.name || '').toUpperCase();
+    const matchesDept = allAliases.some((a) => {
+      const aUpper = a.toUpperCase();
+      return (
+        cName.includes(aUpper) ||
+        (deptCode && (deptCode === aUpper || deptCode.includes(aUpper))) ||
+        (deptName && deptName.includes(aUpper))
+      );
+    });
+    if (matchesDept) {
+      score += 100;
+    } else {
+      score -= 150;
+    }
+  }
+
+  // 4. Academic year match: +40
+  if (meta.academicYear && c.academicYear) {
+    const normMetaYear = String(meta.academicYear).replace(/\s+/g, '');
+    const normCYear = String(c.academicYear).replace(/\s+/g, '');
+    if (normMetaYear === normCYear) {
+      score += 40;
+    }
+  }
+
+  // 5. Normalized name match: +150 on exact, +120 on common acronym match
+  const normSheet = String(sheetName || '').replace(/[\s\-_]/g, '').toUpperCase();
+  const normCName = cName.replace(/[\s\-_]/g, '').toUpperCase();
+  if (normSheet && normCName) {
+    if (normSheet === normCName) {
+      score += 150;
+    } else if (
+      (normSheet.startsWith('DS') && normCName.startsWith('CSD') && normSheet.slice(2) === normCName.slice(3)) ||
+      (normSheet.startsWith('AI') && normCName.startsWith('CSM') && normSheet.slice(2) === normCName.slice(3))
+    ) {
+      score += 120;
+    }
+  }
+
+  return score;
+}
+
+/**
+ * Scans all worksheets in a workbook and extracts their metadata, classification,
+ * and data rows for comprehensive multi-sheet ingestion.
+ */
+export function parseWorkbookSheets(buffer, options = {}) {
+  if (!buffer?.length) return [];
+  let workbook;
+  try {
+    const isZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4B && buffer[2] === 0x03 && buffer[3] === 0x04;
+    const isXls = buffer.length >= 4 && buffer[0] === 0xD0 && buffer[1] === 0xCF && buffer[2] === 0x11 && buffer[3] === 0xE0;
+    if (!isZip && !isXls) {
+      let text = buffer.toString('utf8').replace(/^\uFEFF/, '');
+      text = text.replace(/,[ \t]+"/g, ',"').replace(/"[ \t]+,/g, '",');
+      workbook = xlsx.read(Buffer.from(text), { type: 'buffer' });
+    } else {
+      workbook = xlsx.read(buffer, { type: 'buffer' });
+    }
+  } catch {
+    throw new ErrorResponse(
+      'Unable to read file. Please upload a valid .xlsx, .xls, or .csv spreadsheet.',
+      400,
+      'VAL_001'
+    );
+  }
+
+  const sheetNames = workbook.SheetNames || [];
+  const results = [];
+
+  for (const sheetName of sheetNames) {
+    const ws = workbook.Sheets[sheetName];
+    if (!ws) continue;
+    const grid = xlsx.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const sheetType = classifySheet(sheetName, grid);
+    const meta = extractSheetCohortMetadata(sheetName, grid, options.filename || '');
+
+    let rows = [];
+    if (sheetType === 'roster' || sheetType === 'auxiliary') {
+      try {
+        rows = parseBuffer(buffer, { preferredSheet: sheetName, type: options.type || 'students' });
+      } catch {
+        rows = [];
+      }
+    }
+
+    results.push({
+      sheetName: sheetName.trim(),
+      originalSheetName: sheetName,
+      sheetType,
+      meta,
+      rows,
+      rowCount: rows.length
+    });
+  }
+
+  return results;
 }
 
 /**

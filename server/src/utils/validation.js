@@ -74,3 +74,14 @@ export const Schemas = {
     }),
   }
 };
+
+/**
+ * Safely escapes regular expression special characters to prevent regex injection
+ * and SyntaxError crashes in MongoDB queries and RegExp constructors.
+ * @param {string} str
+ * @returns {string}
+ */
+export const escapeRegExp = (str) => {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};

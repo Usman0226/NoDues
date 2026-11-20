@@ -166,8 +166,9 @@ studentSchema.index({ classId: 1, isActive: 1 });
 // Department student list
 studentSchema.index({ departmentId: 1, isActive: 1 });
 
-// Mentor's student list
+// Mentor's student list & mentee clearance query
 studentSchema.index({ mentorId: 1 });
+studentSchema.index({ mentorId: 1, isActive: 1, rollNo: 1 });
 
 // Batch student list
 studentSchema.index({ batchId: 1, isActive: 1 });

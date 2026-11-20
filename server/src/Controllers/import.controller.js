@@ -9,6 +9,10 @@ import { sendCredentialEmail } from '../services/emailService.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import {
   parseBuffer,
+  parseWorkbookSheets,
+  scoreClassMatch,
+  classifySheet,
+  extractSheetCohortMetadata,
   getRowValue,
   cleanPersonName,
   isPlaceholderEmail,
@@ -18,6 +22,7 @@ import {
   normalizeHeader,
   generateDepartmentAcronym,
   KNOWN_DEPT_ALIASES,
+  EXCEL_FORMULA_ERRORS,
 } from '../utils/importUtils.js';
 import { normalizeFacultyName } from '../services/timetableParser.js';
 import { expandRollNoRange, isRange, unpackRollList } from '../utils/rollNoUtils.js';
@@ -163,19 +168,176 @@ const checkDeptScope = (user, deptId) => {
 export const previewStudents = asyncHandler(async (req, res, next) => {
   if (!req.file) return next(new ErrorResponse('Please upload a file', 400));
 
-  const { classId, sheet } = req.query;
-  if (!classId) return next(new ErrorResponse('classId is required', 400));
+  let { classId, sheet } = req.query;
 
-  const targetClass = await Class.findById(classId);
-  if (!targetClass) return next(new ErrorResponse('Target class not found', 404));
-  checkDeptScope(req.user, targetClass.departmentId);
+  // Retrieve user-scoped active classes (Curriculum Master blueprints excluded)
+  const userDeptId = ['hod', 'ao'].includes(req.user?.role) ? req.user.departmentId : null;
+  const classQuery = { isActive: true, isMaster: { $ne: true } };
+  if (userDeptId) classQuery.departmentId = userDeptId;
+  const allClasses = await Class.find(classQuery).select('_id name semester academicYear departmentId isMaster').lean();
 
-  const rows = parseBuffer(req.file.buffer, {
-    targetHint: targetClass.name,
-    preferredSheet: sheet,
+  let explicitClass = null;
+  if (classId) {
+    explicitClass = await Class.findById(classId);
+    if (!explicitClass) return next(new ErrorResponse('Target class not found', 404));
+    checkDeptScope(req.user, explicitClass.departmentId);
+  }
+
+  // Parse all worksheets in the uploaded workbook
+  const parsedSheets = parseWorkbookSheets(req.file.buffer, {
+    filename: req.file.originalname,
     type: 'students',
   });
-  if (!rows.length) {
+
+  if (!parsedSheets.length) {
+    return next(new ErrorResponse('Unable to read workbook sheets. Please check the file.', 400, 'VAL_001'));
+  }
+
+  // Pre-fetch all roll numbers across all sheets for duplicate checking and roster reconciliation
+  const allRolls = [];
+  for (const s of parsedSheets) {
+    for (const row of s.rows || []) {
+      const roll = getRowValue(row, ROLL_KEYS)?.toString().replace(/\s+/g, '').toUpperCase();
+      if (roll) allRolls.push(roll);
+    }
+  }
+
+  const existingStudents = await Student.find({ rollNo: { $in: allRolls } })
+    .select('_id rollNo name email classId')
+    .lean();
+  const existingStudentMap = new Map(existingStudents.map((s) => [(s.rollNo || '').toUpperCase(), s]));
+
+  // Process and validate each sheet
+  const globalSeenRolls = new Map();
+  const sheetResults = [];
+
+  for (const s of parsedSheets) {
+    let sheetTargetClass = null;
+
+    // Only active student cohort roster sheets are candidate for class binding
+    if (s.sheetType === 'roster') {
+      if (explicitClass) {
+        const explicitScore = scoreClassMatch(explicitClass, s.meta, s.sheetName);
+        if (explicitScore >= 50) {
+          sheetTargetClass = explicitClass;
+        }
+      }
+
+      if (!sheetTargetClass && allClasses.length > 0) {
+        const scored = allClasses
+          .map((c) => ({ c, score: scoreClassMatch(c, s.meta, s.sheetName) }))
+          .sort((a, b) => b.score - a.score);
+
+        if (scored.length > 0 && scored[0].score >= 50) {
+          sheetTargetClass = scored[0].c;
+        } else if (explicitClass) {
+          // Fallback to explicitClass if no better match exists
+          sheetTargetClass = explicitClass;
+        } else if (allClasses.length === 1) {
+          sheetTargetClass = allClasses[0];
+        }
+      }
+    }
+
+    const valid = [];
+    const errors = [];
+    const localSeenRolls = new Set();
+
+    for (let i = 0; i < (s.rows || []).length; i++) {
+      const row = s.rows[i];
+      let rollNo = getRowValue(row, ROLL_KEYS);
+      let name = getRowValue(row, NAME_KEYS);
+      let email = getRowValue(row, EMAIL_KEYS);
+
+      if (rollNo) rollNo = rollNo.replace(/\s+/g, '').toUpperCase();
+      if (name) name = cleanPersonName(name);
+      if (email) {
+        if (isPlaceholderEmail(email)) {
+          email = null;
+        } else {
+          email = extractValidEmail(email) || email.trim();
+        }
+      }
+
+      const rowErrors = [];
+      if (!rollNo || EXCEL_FORMULA_ERRORS?.has(rollNo)) {
+        rowErrors.push('Valid roll number required (column: Roll No)');
+      }
+      if (!name || EXCEL_FORMULA_ERRORS?.has(name.toUpperCase())) {
+        rowErrors.push('Valid student name required (column: Name)');
+      }
+      if (email && !validateEmail(email)) {
+        rowErrors.push(`Invalid email format "${email}"`);
+      }
+
+      if (rowErrors.length > 0) {
+        errors.push({ row: i + 1, data: row, reason: rowErrors.join(', ') });
+        continue;
+      }
+
+      if (localSeenRolls.has(rollNo)) {
+        errors.push({ row: i + 1, data: row, reason: `Duplicate roll number ${rollNo} within sheet "${s.sheetName}"` });
+        continue;
+      }
+      localSeenRolls.add(rollNo);
+
+      if (globalSeenRolls.has(rollNo) && globalSeenRolls.get(rollNo) !== s.sheetName) {
+        errors.push({
+          row: i + 1,
+          data: row,
+          reason: `Duplicate roll number ${rollNo} already found in sheet "${globalSeenRolls.get(rollNo)}"`,
+        });
+        continue;
+      }
+      globalSeenRolls.set(rollNo, s.sheetName);
+
+      const existing = existingStudentMap.get(rollNo);
+      const isExisting = !!existing;
+      const isUpdate = isExisting && (
+        existing.name !== name ||
+        (email && existing.email !== email.toLowerCase()) ||
+        (sheetTargetClass && existing.classId?.toString() !== sheetTargetClass._id?.toString())
+      );
+
+      valid.push({
+        rollNo,
+        name,
+        ...(email ? { email: email.toLowerCase() } : {}),
+        isExisting,
+        isUpdate,
+      });
+    }
+
+    sheetResults.push({
+      sheetName: s.sheetName,
+      originalSheetName: s.originalSheetName,
+      sheetType: s.sheetType,
+      meta: s.meta,
+      targetClass: sheetTargetClass
+        ? {
+            _id: sheetTargetClass._id,
+            name: sheetTargetClass.name,
+            semester: sheetTargetClass.semester,
+            academicYear: sheetTargetClass.academicYear,
+          }
+        : null,
+      summary: { total: (s.rows || []).length, valid: valid.length, errors: errors.length },
+      valid,
+      errors,
+      reason:
+        s.sheetType === 'summary'
+          ? 'Summary statistics table (no student roll numbers)'
+          : s.sheetType === 'auxiliary'
+          ? 'Administrative/mixed list (e.g. detained or dropouts)'
+          : s.sheetType === 'empty'
+          ? 'Empty sheet (no data rows)'
+          : null,
+    });
+  }
+
+  const rosterSheets = sheetResults.filter((s) => s.sheetType === 'roster' && s.summary.total > 0);
+
+  if (rosterSheets.length === 0 && sheetResults.every((s) => s.summary.total === 0)) {
     return next(
       new ErrorResponse(
         'Uploaded spreadsheet has no data rows. Download the template to check expected columns (Roll No, Name, Email).',
@@ -185,132 +347,410 @@ export const previewStudents = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const results = {
-    valid: [],
-    errors: [],
-    summary: { total: rows.length, valid: 0, errors: 0 },
-    sheetName: rows.sheetName,
-    availableSheets: rows.availableSheets || [rows.sheetName].filter(Boolean),
-  };
-
-  // 1. Extract all roll numbers for bulk duplicate check
-  const rollNos = rows
-    .map((r) => getRowValue(r, ROLL_KEYS)?.toString().replace(/\s+/g, '').toUpperCase())
-    .filter(Boolean);
-  const existingStudents = await Student.find({ rollNo: { $in: rollNos } }).select('rollNo').lean();
-  const existingRollSet = new Set(existingStudents.map((s) => s.rollNo));
-  const seenRolls = new Set();
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    let rollNo = getRowValue(row, ROLL_KEYS);
-    let name = getRowValue(row, NAME_KEYS);
-    let email = getRowValue(row, EMAIL_KEYS);
-
-    if (rollNo) rollNo = rollNo.replace(/\s+/g, '').toUpperCase();
-    if (name) name = cleanPersonName(name);
-    if (email) {
-      if (isPlaceholderEmail(email)) {
-        email = null;
-      } else {
-        email = extractValidEmail(email) || email.trim();
-      }
-    }
-
-    const errors = [];
-    if (!rollNo) errors.push('Roll number missing (column: Roll No)');
-    if (!name) errors.push('Name missing (column: Name)');
-    if (email && !validateEmail(email)) errors.push(`Invalid email format "${email}"`);
-
-    if (errors.length > 0) {
-      results.errors.push({ row: i + 1, data: row, reason: errors.join(', ') });
-      results.summary.errors++;
-      continue;
-    }
-
-    if (seenRolls.has(rollNo)) {
-      results.errors.push({ row: i + 1, data: row, reason: `Duplicate roll number ${rollNo} in file` });
-      results.summary.errors++;
-      continue;
-    }
-    seenRolls.add(rollNo);
-
-    if (existingRollSet.has(rollNo)) {
-      results.errors.push({ row: i + 1, data: row, reason: `Roll number ${rollNo} already exists` });
-      results.summary.errors++;
-      continue;
-    }
-
-    results.valid.push({
-      rollNo,
-      name,
-      ...(email ? { email: email.toLowerCase() } : {}),
-    });
-    results.summary.valid++;
+  let activeSheetObj = null;
+  if (sheet) {
+    activeSheetObj = sheetResults.find((s) => s.sheetName.toLowerCase() === sheet.toLowerCase().trim());
+  }
+  if (!activeSheetObj) {
+    activeSheetObj = rosterSheets[0] || sheetResults[0];
   }
 
-  res.status(200).json({ success: true, data: results });
+  if (rosterSheets.length <= 1 && !activeSheetObj.targetClass && !explicitClass && allClasses.length > 1) {
+    return next(
+      new ErrorResponse(
+        'Please select a target class/section to import students into.',
+        400,
+        'VAL_001'
+      )
+    );
+  }
+
+  const totalRosterRecords = rosterSheets.reduce((sum, s) => sum + s.summary.valid, 0);
+  const totalRosterErrors = rosterSheets.reduce((sum, s) => sum + s.summary.errors, 0);
+  const matchedRosterClassesCount = rosterSheets.filter((s) => s.targetClass?._id).length;
+
+  res.status(200).json({
+    success: true,
+    data: {
+      isMultiSheet: rosterSheets.length > 1,
+      totalRosterRecords,
+      totalRosterErrors,
+      totalRosterClasses: matchedRosterClassesCount,
+      rosterSheetsCount: rosterSheets.length,
+      activeSheet: activeSheetObj.sheetName,
+      sheets: sheetResults,
+      sheetName: activeSheetObj.sheetName,
+      availableSheets: sheetResults.map((s) => s.sheetName),
+      targetClass: activeSheetObj.targetClass,
+      valid: activeSheetObj.valid,
+      errors: activeSheetObj.errors,
+      summary: activeSheetObj.summary,
+    },
+  });
 });
 
 export const commitStudents = asyncHandler(async (req, res, next) => {
-  const { students, classId } = req.body;
-  if (!students?.length) return next(new ErrorResponse('No valid student data provided', 400));
+  const { students, classId, batch } = req.body;
+
+  // 1. One-shot multi-class batch commit
+  if (Array.isArray(batch) && batch.length > 0) {
+    for (const item of batch) {
+      if (!item.classId) {
+        return next(new ErrorResponse(`Missing target class for sheet "${item.sheetName || 'section'}"`, 400, 'VAL_001'));
+      }
+      if (!Array.isArray(item.students) || item.students.length === 0) {
+        return next(new ErrorResponse(`No valid student data provided for sheet "${item.sheetName || 'section'}"`, 400));
+      }
+    }
+
+    const session = await mongoose.startSession();
+    try {
+      await startSafeTransaction(session);
+
+      const targetClasses = [];
+      for (const item of batch) {
+        const cls = await Class.findById(item.classId).session(session);
+        if (!cls) {
+          await abortSafeTransaction(session);
+          return next(new ErrorResponse(`Target class not found for sheet "${item.sheetName || item.classId}"`, 404));
+        }
+        if (cls.isMaster) {
+          await abortSafeTransaction(session);
+          return next(new ErrorResponse(`Cannot import students into Curriculum Master blueprint "${cls.name}". Please select an active student section.`, 400, 'VAL_002'));
+        }
+        checkDeptScope(req.user, cls.departmentId);
+        targetClasses.push({ cls, item });
+      }
+
+      const totalStudentsCount = batch.reduce((sum, b) => sum + b.students.length, 0);
+      const classNames = targetClasses.map((tc) => tc.cls.name).join(', ');
+
+      const task = await Task.create(
+        [
+          {
+            type: 'import_students',
+            label: `Importing ${totalStudentsCount} students across ${batch.length} classes (${classNames})`,
+            status: 'processing',
+            actor: req.user.userId,
+            meta: { requested: totalStudentsCount, classesCount: batch.length },
+          },
+        ],
+        { session }
+      );
+
+      const taskId = task[0]._id;
+      const allProcessedIds = [];
+      const oldClassesToPrune = new Map();
+
+      // Collect all roll numbers across the batch to query existing in 1 round trip
+      const allRolls = [];
+      for (const { item } of targetClasses) {
+        for (const s of item.students) {
+          if (s.rollNo) allRolls.push(s.rollNo);
+        }
+      }
+
+      const existingStudents = await Student.find({ rollNo: { $in: allRolls } })
+        .select('_id rollNo name email classId departmentId semester academicYear')
+        .session(session);
+      const existingMap = new Map(existingStudents.map((e) => [(e.rollNo || '').toUpperCase(), e]));
+      const seenInBatch = new Set();
+
+      for (const { cls, item } of targetClasses) {
+        const toInsert = [];
+        const classTargetIds = [];
+
+        for (const stud of item.students) {
+          const normRoll = (stud.rollNo || '').toUpperCase();
+          if (!normRoll || seenInBatch.has(normRoll)) {
+            logger.warn(`Duplicate student ${stud.rollNo} skipped during batch commit`, {
+              rollNo: stud.rollNo,
+              classId: cls._id,
+            });
+            continue;
+          }
+          seenInBatch.add(normRoll);
+
+          if (existingMap.has(normRoll)) {
+            // Reconcile and update existing student record (Nominal roll update)
+            const existing = existingMap.get(normRoll);
+            let modified = false;
+            const oldCid = existing.classId ? existing.classId.toString() : null;
+            const newCid = cls._id.toString();
+
+            if (stud.name && stud.name !== existing.name) {
+              existing.name = stud.name;
+              modified = true;
+            }
+            if (stud.email && stud.email !== existing.email) {
+              existing.email = stud.email;
+              modified = true;
+            }
+            if (oldCid !== newCid) {
+              existing.classId = cls._id;
+              existing.departmentId = cls.departmentId;
+              existing.semester = cls.semester;
+              existing.academicYear = cls.academicYear;
+              modified = true;
+
+              if (oldCid) {
+                if (!oldClassesToPrune.has(oldCid)) oldClassesToPrune.set(oldCid, []);
+                oldClassesToPrune.get(oldCid).push(existing._id);
+              }
+            }
+
+            if (modified) {
+              await existing.save({ session });
+            }
+            classTargetIds.push(existing._id);
+            allProcessedIds.push(existing._id);
+          } else {
+            toInsert.push({
+              rollNo: stud.rollNo,
+              name: stud.name,
+              email: stud.email || `${stud.rollNo.toLowerCase()}@mits.ac.in`,
+              departmentId: cls.departmentId,
+              classId: cls._id,
+              semester: cls.semester,
+              academicYear: cls.academicYear,
+              isActive: true,
+              isProfileComplete: false,
+            });
+          }
+        }
+
+        if (toInsert.length > 0) {
+          try {
+            const insertedDocs = await Student.insertMany(toInsert, { session, ordered: false });
+            const insertedIds = insertedDocs.map((doc) => doc._id);
+            classTargetIds.push(...insertedIds);
+            allProcessedIds.push(...insertedIds);
+          } catch (insertErr) {
+            if (insertErr.code === 11000 || insertErr.writeErrors?.length > 0) {
+              const insertedIds = (insertErr.insertedDocs || []).map((d) => d._id);
+              if (insertedIds.length > 0) {
+                classTargetIds.push(...insertedIds);
+                allProcessedIds.push(...insertedIds);
+              }
+            } else {
+              throw insertErr;
+            }
+          }
+        }
+
+        if (classTargetIds.length > 0) {
+          await Class.findByIdAndUpdate(
+            cls._id,
+            { $addToSet: { studentIds: { $each: classTargetIds } } },
+            { session }
+          );
+        }
+      }
+
+      // Prune students from previous classes if they were transferred to a new section
+      for (const [oldCid, studentIds] of oldClassesToPrune.entries()) {
+        await Class.findByIdAndUpdate(
+          oldCid,
+          { $pull: { studentIds: { $in: studentIds } } },
+          { session }
+        );
+        invalidateEntityCache('class', oldCid);
+      }
+
+      await Task.findByIdAndUpdate(
+        taskId,
+        {
+          status: 'success',
+          message: `Completed: ${allProcessedIds.length} succeeded across ${batch.length} classes (${classNames}).`,
+          meta: {
+            requested: totalStudentsCount,
+            success: allProcessedIds.length,
+            classesCount: batch.length,
+          },
+        },
+        { session }
+      );
+
+      await commitSafeTransaction(session);
+
+      invalidateEntityCache('student', 'all');
+      for (const { cls } of targetClasses) {
+        invalidateEntityCache('class', cls._id.toString());
+      }
+
+      logger.audit('STUDENT_IMPORT_BATCH_COMMIT', {
+        actor: req.user.userId,
+        meta: {
+          taskId,
+          classesCount: batch.length,
+          requested: totalStudentsCount,
+          success: allProcessedIds.length,
+          classNames,
+        },
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          message: `Successfully processed ${allProcessedIds.length} students across ${batch.length} classes (${classNames}) in one shot.`,
+          taskId,
+          classesCount: batch.length,
+          count: allProcessedIds.length,
+        },
+      });
+    } catch (err) {
+      if (session.inTransaction()) await abortSafeTransaction(session);
+      logger.error({
+        action: 'import_students_batch_commit',
+        actor: req.user.userId,
+        error_code: 'DB_001',
+        message: err.message,
+      });
+      return next(new ErrorResponse(err.message || 'Batch student import failed', 500, 'DB_001'));
+    } finally {
+      session.endSession();
+    }
+  }
+
+  // 2. Single-class commit
+  const { students: singleStudents, classId: singleClassId } = req.body;
+  if (!singleStudents?.length) return next(new ErrorResponse('No valid student data provided', 400));
+  if (!singleClassId) return next(new ErrorResponse('Please select a target class/section before committing students.', 400, 'VAL_001'));
 
   const session = await mongoose.startSession();
   let task;
   try {
     await startSafeTransaction(session);
 
-    const targetClass = await Class.findById(classId).session(session);
+    const targetClass = await Class.findById(singleClassId).session(session);
     if (!targetClass) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Target class not found', 404));
+    }
+    if (targetClass.isMaster) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Cannot import students into Curriculum Master blueprint.', 400, 'VAL_002'));
     }
     checkDeptScope(req.user, targetClass.departmentId);
 
     // Initialize persistent background task
     task = await Task.create([{
       type: 'import_students',
-      label: `Importing ${students.length} students to ${targetClass.name}`,
+      label: `Importing ${singleStudents.length} students to ${targetClass.name}`,
       status: 'processing',
       actor: req.user.userId,
-      meta: { requested: students.length }
+      meta: { requested: singleStudents.length }
     }], { session });
 
     const taskId = task[0]._id;
 
-    // Execute processing sequentially within transaction for guaranteed atomicity
-    const createdIds = [];
-    const errors = [];
+    const allRolls = singleStudents.map((s) => s.rollNo).filter(Boolean);
+    const existingStudents = await Student.find({ rollNo: { $in: allRolls } })
+      .select('_id rollNo name email classId departmentId semester academicYear')
+      .session(session);
+    const existingMap = new Map(existingStudents.map((e) => [(e.rollNo || '').toUpperCase(), e]));
+    const seenInBatch = new Set();
+    const oldClassesToPrune = new Map();
+    const classTargetIds = [];
+    const allProcessedIds = [];
 
-    for (const stud of students) {
-      try {
-        const studentArray = await Student.create([{
+    const toInsert = [];
+    for (const stud of singleStudents) {
+      const normRoll = (stud.rollNo || '').toUpperCase();
+      if (!normRoll || seenInBatch.has(normRoll)) {
+        logger.warn(`Duplicate student ${stud.rollNo} skipped during single commit`, { rollNo: stud.rollNo });
+        continue;
+      }
+      seenInBatch.add(normRoll);
+
+      if (existingMap.has(normRoll)) {
+        // Reconcile and update existing student record (Nominal roll update)
+        const existing = existingMap.get(normRoll);
+        let modified = false;
+        const oldCid = existing.classId ? existing.classId.toString() : null;
+        const newCid = targetClass._id.toString();
+
+        if (stud.name && stud.name !== existing.name) {
+          existing.name = stud.name;
+          modified = true;
+        }
+        if (stud.email && stud.email !== existing.email) {
+          existing.email = stud.email;
+          modified = true;
+        }
+        if (oldCid !== newCid) {
+          existing.classId = targetClass._id;
+          existing.departmentId = targetClass.departmentId;
+          existing.semester = targetClass.semester;
+          existing.academicYear = targetClass.academicYear;
+          modified = true;
+
+          if (oldCid) {
+            if (!oldClassesToPrune.has(oldCid)) oldClassesToPrune.set(oldCid, []);
+            oldClassesToPrune.get(oldCid).push(existing._id);
+          }
+        }
+
+        if (modified) {
+          await existing.save({ session });
+        }
+        classTargetIds.push(existing._id);
+        allProcessedIds.push(existing._id);
+      } else {
+        toInsert.push({
           ...stud,
+          email: stud.email || `${stud.rollNo.toLowerCase()}@mits.ac.in`,
           classId: targetClass._id,
           departmentId: targetClass.departmentId,
           semester: targetClass.semester,
-          academicYear: targetClass.academicYear
-        }], { session });
-        createdIds.push(studentArray[0]._id);
-      } catch (err) {
-        throw new Error(`${stud.rollNo}: ${err.message}`);
+          academicYear: targetClass.academicYear,
+          isActive: true,
+          isProfileComplete: false,
+        });
       }
     }
 
-    if (createdIds.length > 0) {
-      await Class.findByIdAndUpdate(classId, { $addToSet: { studentIds: { $each: createdIds } } }, { session });
-      invalidateEntityCache('student', 'all');
-      invalidateEntityCache('class', classId.toString());
+    if (toInsert.length > 0) {
+      try {
+        const insertedDocs = await Student.insertMany(toInsert, { session, ordered: false });
+        const insertedIds = insertedDocs.map((d) => d._id);
+        classTargetIds.push(...insertedIds);
+        allProcessedIds.push(...insertedIds);
+      } catch (insertErr) {
+        if (insertErr.code === 11000 || insertErr.writeErrors?.length > 0) {
+          const insertedIds = (insertErr.insertedDocs || []).map((d) => d._id);
+          classTargetIds.push(...insertedIds);
+          allProcessedIds.push(...insertedIds);
+        } else {
+          throw insertErr;
+        }
+      }
     }
+
+    if (classTargetIds.length > 0) {
+      await Class.findByIdAndUpdate(singleClassId, { $addToSet: { studentIds: { $each: classTargetIds } } }, { session });
+    }
+
+    // Prune transferred students from old classes
+    for (const [oldCid, studentIds] of oldClassesToPrune.entries()) {
+      await Class.findByIdAndUpdate(
+        oldCid,
+        { $pull: { studentIds: { $in: studentIds } } },
+        { session }
+      );
+      invalidateEntityCache('class', oldCid);
+    }
+
+    invalidateEntityCache('student', 'all');
+    invalidateEntityCache('class', singleClassId.toString());
 
     const finalStatus = 'success';
     await Task.findByIdAndUpdate(taskId, {
       status: finalStatus,
-      message: `Completed: ${createdIds.length} succeeded.`,
+      message: `Completed: ${allProcessedIds.length} succeeded.`,
       meta: { 
-        requested: students.length, 
-        success: createdIds.length, 
+        requested: singleStudents.length, 
+        success: allProcessedIds.length, 
         failed: 0
       }
     }, { session });
@@ -319,10 +759,10 @@ export const commitStudents = asyncHandler(async (req, res, next) => {
 
     logger.audit('STUDENT_IMPORT_COMMIT', {
       actor: req.user.userId,
-      resource_id: classId,
+      resource_id: singleClassId,
       meta: { 
         taskId,
-        requested: students.length, 
+        requested: singleStudents.length, 
         success: createdIds.length,
         failed: 0
       }

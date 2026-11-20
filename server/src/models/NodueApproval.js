@@ -50,6 +50,10 @@ const nodueApprovalSchema = new mongoose.Schema({
     enum: ['library', 'lab', 'fees', 'attendance', 'other', null]
   },
   remarks: String,
+  amount: {
+    type: Number,
+    default: 0
+  },
   actionedAt: Date,
   actionedByRole: {
     type: String,
@@ -71,6 +75,9 @@ nodueApprovalSchema.index(
 // Faculty pending list: "all pending approvals for Dr. X in batch Y"
 nodueApprovalSchema.index({ batchId: 1, facultyId: 1, action: 1 });
 
+// Optimization: Index covering batch pending queue sorted by roll number
+nodueApprovalSchema.index({ batchId: 1, action: 1, studentRollNo: 1 });
+
 // Admin batch grid: count by action across a batch
 nodueApprovalSchema.index({ batchId: 1, action: 1 });
 
@@ -81,6 +88,12 @@ import { invalidateEntityCache } from '../utils/cacheHooks.js';
 
 // Faculty dashboard: total pending count across all batches
 nodueApprovalSchema.index({ facultyId: 1, action: 1 });
+
+// Optimization: Eliminates in-memory RAM sort in getPendingApprovals (Stage: SORT -> LIMIT/IXSCAN)
+nodueApprovalSchema.index({ facultyId: 1, action: 1, studentRollNo: 1 });
+
+// Optimization: Eliminates in-memory RAM sort in getApprovalHistory (ESR ordering: equality, sort, range)
+nodueApprovalSchema.index({ facultyId: 1, actionedAt: -1, action: 1 });
 
 // requestId lookup (recalcRequestStatus) — kept minimal for write speed
 nodueApprovalSchema.index({ requestId: 1, action: 1 });

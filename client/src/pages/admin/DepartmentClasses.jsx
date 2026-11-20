@@ -98,8 +98,8 @@ const DepartmentClasses = () => {
   const [includeInactive, setIncludeInactive] = useState(false);
   
   const classesOptions = useMemo(() => ({
-    queryKey: ['classes', { departmentId: deptId, page, limit, includeInactive: !!includeInactive }],
-    params: { departmentId: deptId, page, limit, includeInactive: !!includeInactive },
+    queryKey: ['classes', { departmentId: deptId, page, limit, includeInactive: !!includeInactive, includeMaster: true }],
+    params: { departmentId: deptId, page, limit, includeInactive: !!includeInactive, includeMaster: true },
     immediate: Boolean(deptId)
   }), [deptId, page, limit, includeInactive]);
 

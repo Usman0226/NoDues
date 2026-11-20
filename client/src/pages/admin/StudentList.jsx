@@ -64,13 +64,24 @@ const StudentList = () => {
   const total = response?.pagination?.total || 0;
 
   const { data: classResponse, request: fetchClasses } = useApi(getClasses);
-  const classes = useMemo(() => classResponse?.data || [], [classResponse?.data]);
+  const classes = useMemo(() => (classResponse?.data || []).filter(c => !c.isMaster), [classResponse?.data]);
 
   const { data: facultyResponse } = useApi(getFaculty, { immediate: true });
   const faculty = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
 
   useEffect(() => {
     fetchStudents(studentQueryParams);
+  }, [fetchStudents, studentQueryParams]);
+
+  // Auto-refresh student directory when background import tasks finish
+  useEffect(() => {
+    const handleImportComplete = (e) => {
+      if (!e.detail?.type || e.detail.type === 'students') {
+        fetchStudents(studentQueryParams);
+      }
+    };
+    window.addEventListener('import-complete', handleImportComplete);
+    return () => window.removeEventListener('import-complete', handleImportComplete);
   }, [fetchStudents, studentQueryParams]);
 
   useEffect(() => {
@@ -224,7 +235,24 @@ const StudentList = () => {
     },
     { key: 'name', label: 'Full Name', render: (v) => <span className="font-bold text-navy/80">{v}</span> },
     { key: 'departmentName', label: 'Department', width: '120px' },
-    { key: 'className', label: 'Class', width: '100px', render: (v, row) => <span>{v || row.class}</span> },
+    {
+      key: 'className',
+      label: 'Class',
+      width: '140px',
+      render: (v, row) => {
+        if (row.classIsMaster) {
+          return (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-200"
+              title="This student is incorrectly assigned to a Curriculum Master blueprint. Use Admin → Repair to fix."
+            >
+              ⚠ Needs Repair
+            </span>
+          );
+        }
+        return <span>{v || '—'}</span>;
+      },
+    },
     {
       key: 'mentor',
       label: 'Mentor',
@@ -352,6 +380,7 @@ const StudentList = () => {
       <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Bulk Student Import" size="4xl" bodyClassName="overflow-hidden flex flex-col p-4 sm:p-5">
          <ImportStepper 
             type="students" 
+            classes={classes}
             contextLabel="Student Directory Sync" 
             onComplete={() => {
               setShowImport(false);

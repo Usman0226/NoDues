@@ -13,6 +13,8 @@ import {
   bulkActivateStudents,
   bulkAssignMentor,
   activateStudent,
+  auditStudentsInMaster,
+  repairStudentsInMaster,
 } from '../Controllers/studentController.js';
 
 import { protect } from '../middlewares/auth.js';
@@ -30,6 +32,7 @@ router.route('/')
 router.route('/:id')
   .get(getStudentById)
   .patch(updateStudent)
+  .put(updateStudent)
   .delete(deleteStudent);
 
 router.patch('/:id/mentor', assignMentor);
@@ -46,6 +49,10 @@ router.post('/:id/activate', activateStudent);
 router.post('/bulk-deactivate', bulkDeactivateStudents);
 router.post('/bulk-activate', bulkActivateStudents);
 router.post('/bulk-assign-mentor', bulkAssignMentor);
+
+// Admin data-repair: audit and fix students mistakenly enrolled in Curriculum Master blueprints
+router.get('/repair/master-contamination', RoleGuard(['admin']), auditStudentsInMaster);
+router.post('/repair/master-contamination', RoleGuard(['admin']), repairStudentsInMaster);
 
 export default router;
 

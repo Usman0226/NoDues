@@ -352,5 +352,326 @@ describe('Flexible Spreadsheet Import Preview & Validation', () => {
     const validRolls = res.body.data.valid.map((v) => v.rollNo);
     assert.deepEqual(validRolls, ['25MRA07050', '25MRA07051', '25MRA07052', '25MRA07055']);
   });
+
+  it('auto-resolves target class by matching sheet name when classId query param is omitted', async () => {
+    // Single active class in db is testClass ('CSE-A')
+    const buffer = buildGridXlsxBuffer([
+      ['Roll No', 'Full Name'],
+      ['25MRA07001', 'John Doe']
+    ], 'CSE-A');
+
+    const res = await request(app)
+      .post('/api/import/students/preview')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .attach('file', buffer, 'student_roster.xlsx');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.valid.length, 1);
+    assert.equal(res.body.data.targetClass.name, 'CSE-A');
+  });
+
+  it('returns a user-friendly error message when classId is omitted and ambiguous across multiple classes', async () => {
+    // Add a second class so auto-resolution requires an explicit match
+    await Class.create({
+      name: 'CSE-B',
+      departmentId: testDept._id,
+      semester: 5,
+      academicYear: '2026-27',
+    });
+
+    const buffer = buildGridXlsxBuffer([
+      ['Roll No', 'Full Name'],
+      ['25MRA07001', 'John Doe']
+    ], 'RandomSheetName');
+
+    const res = await request(app)
+      .post('/api/import/students/preview')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .attach('file', buffer, 'students.xlsx');
+
+    assert.equal(res.status, 400);
+    assert.match(res.body.error.message, /Please select a target class\/section/i);
+  });
+
+  it('parses multi-sheet workbook with DS-A and DS-B, accurately matches target classes, and excludes summary sheets', async () => {
+    // Set up CSD department and sections A and B (Semester 3) plus an unrelated CSD-C (Sem 7)
+    const csdDept = await Department.create({
+      name: 'Computer Science and Engineering (Data Science)',
+      code: 'CSD',
+      isActive: true,
+    });
+
+    const classCsdA = await Class.create({
+      name: 'CSD-A',
+      departmentId: csdDept._id,
+      semester: 3,
+      academicYear: '2026-27',
+      isActive: true,
+    });
+
+    const classCsdB = await Class.create({
+      name: 'CSD-B',
+      departmentId: csdDept._id,
+      semester: 3,
+      academicYear: '2026-27',
+      isActive: true,
+    });
+
+    // Unrelated class that should NEVER be matched
+    await Class.create({
+      name: 'CSD-C',
+      departmentId: csdDept._id,
+      semester: 7,
+      academicYear: '2026-27',
+      isActive: true,
+    });
+
+    const wb = xlsx.utils.book_new();
+    
+    // Sheet 1: DS-A with preamble
+    const dsAGrid = [
+      [],
+      [],
+      ['Computer Science Engineering - (Data Science) - Section -A- 2026 - 27'],
+      ['B.Tech - II Year I Semester Regular Nominal Rolls'],
+      ['S.No', 'Roll No', 'Name of the Candidate'],
+      [1, '25MRA07001', 'ALICE SMITH'],
+      [2, '25MRA07002', 'BOB JONES']
+    ];
+    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(dsAGrid), 'DS-A ');
+
+    // Sheet 2: DS-B with preamble
+    const dsBGrid = [
+      [],
+      [],
+      ['Computer Science Engineering - (Data Science) - Section -B- 2026 - 27'],
+      ['B.Tech - II Year I Semester Regular Nominal Rolls'],
+      ['S.No', 'Roll No', 'Name of the Candidate'],
+      [1, '25MRA07063', 'CHARLIE BROWN'],
+      [2, '25MRA07064', 'DIANA PRINCE']
+    ];
+    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(dsBGrid), 'DS-B ');
+
+    // Sheet 3: STRENGTH summary sheet (no student rolls)
+    const strengthGrid = [
+      ['BRANCH', 'SECTION', 'TOTAL'],
+      ['CE', null, 6],
+      ['EEE', null, 10]
+    ];
+    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(strengthGrid), 'STRENGTH');
+
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    const res = await request(app)
+      .post('/api/import/students/preview')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .attach('file', buffer, 'II_Year_I_Semester_Updated_Rolls.xlsx');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.isMultiSheet, true);
+    assert.equal(res.body.data.rosterSheetsCount, 2);
+    assert.equal(res.body.data.totalRosterRecords, 4);
+
+    const sheets = res.body.data.sheets;
+    const sheetA = sheets.find(s => s.sheetName === 'DS-A');
+    const sheetB = sheets.find(s => s.sheetName === 'DS-B');
+    const sheetStrength = sheets.find(s => s.sheetName === 'STRENGTH');
+
+    assert.ok(sheetA, 'Sheet DS-A must be present');
+    assert.equal(sheetA.sheetType, 'roster');
+    assert.equal(sheetA.valid.length, 2);
+    assert.equal(sheetA.targetClass.name, 'CSD-A');
+    assert.equal(sheetA.targetClass.semester, 3);
+
+    assert.ok(sheetB, 'Sheet DS-B must be present');
+    assert.equal(sheetB.sheetType, 'roster');
+    assert.equal(sheetB.valid.length, 2);
+    assert.equal(sheetB.targetClass.name, 'CSD-B');
+    assert.equal(sheetB.targetClass.semester, 3);
+
+    assert.ok(sheetStrength, 'STRENGTH sheet must be classified as summary');
+    assert.equal(sheetStrength.sheetType, 'summary');
+  });
+
+  it('commits multiple classes in one shot via batch payload in an atomic transaction', async () => {
+    const csdDept = await Department.create({
+      name: 'Computer Science and Engineering (Data Science)',
+      code: 'CSD',
+      isActive: true,
+    });
+
+    const classA = await Class.create({
+      name: 'CSD-A',
+      departmentId: csdDept._id,
+      semester: 3,
+      academicYear: '2026-27',
+      isActive: true,
+    });
+
+    const classB = await Class.create({
+      name: 'CSD-B',
+      departmentId: csdDept._id,
+      semester: 3,
+      academicYear: '2026-27',
+      isActive: true,
+    });
+
+    const batchPayload = {
+      batch: [
+        {
+          classId: classA._id.toString(),
+          sheetName: 'DS-A',
+          students: [
+            { rollNo: '25MRA07001', name: 'ALICE SMITH', email: 'alice@mits.ac.in' },
+            { rollNo: '25MRA07002', name: 'BOB JONES', email: 'bob@mits.ac.in' }
+          ]
+        },
+        {
+          classId: classB._id.toString(),
+          sheetName: 'DS-B',
+          students: [
+            { rollNo: '25MRA07063', name: 'CHARLIE BROWN', email: 'charlie@mits.ac.in' },
+            { rollNo: '25MRA07064', name: 'DIANA PRINCE', email: 'diana@mits.ac.in' }
+          ]
+        }
+      ]
+    };
+
+    const res = await request(app)
+      .post('/api/import/students/commit')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(batchPayload);
+
+    assert.equal(res.status, 201);
+    assert.equal(res.body.data.count, 4);
+    assert.equal(res.body.data.classesCount, 2);
+
+    // Verify students exist in DB and linked to their respective classes
+    const student1 = await Student.findOne({ rollNo: '25MRA07001' });
+    assert.ok(student1);
+    assert.equal(student1.classId.toString(), classA._id.toString());
+
+    const student3 = await Student.findOne({ rollNo: '25MRA07063' });
+    assert.ok(student3);
+    assert.equal(student3.classId.toString(), classB._id.toString());
+
+    // Verify class studentIds were updated
+    const updatedClassA = await Class.findById(classA._id);
+    assert.equal(updatedClassA.studentIds.length, 2);
+    const updatedClassB = await Class.findById(classB._id);
+    assert.equal(updatedClassB.studentIds.length, 2);
+  });
+
+  it('detects cross-sheet duplicate roll numbers and flags them in preview', async () => {
+    const csdDept = await Department.create({
+      name: 'Computer Science and Engineering (Data Science)',
+      code: 'CSD',
+      isActive: true,
+    });
+
+    await Class.create({
+      name: 'CSD-A',
+      departmentId: csdDept._id,
+      semester: 3,
+      academicYear: '2026-27',
+      isActive: true,
+    });
+
+    await Class.create({
+      name: 'CSD-B',
+      departmentId: csdDept._id,
+      semester: 3,
+      academicYear: '2026-27',
+      isActive: true,
+    });
+
+    const wb = xlsx.utils.book_new();
+
+    // Sheet 1: DS-A with roll 25MRA07001
+    const dsAGrid = [
+      ['Roll No', 'Name of the Candidate'],
+      ['25MRA07001', 'ALICE SMITH']
+    ];
+    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(dsAGrid), 'DS-A');
+
+    // Sheet 2: DS-B has 25MRA07001 (duplicate across sheets) and 25MRA07064
+    const dsBGrid = [
+      ['Roll No', 'Name of the Candidate'],
+      ['25MRA07001', 'ALICE CLONE'],
+      ['25MRA07064', 'DIANA PRINCE']
+    ];
+    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(dsBGrid), 'DS-B');
+
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    const res = await request(app)
+      .post('/api/import/students/preview')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .attach('file', buffer, 'students.xlsx');
+
+    assert.equal(res.status, 200);
+    const sheetB = res.body.data.sheets.find(s => s.sheetName === 'DS-B');
+    assert.ok(sheetB);
+    assert.equal(sheetB.valid.length, 1);
+    assert.equal(sheetB.errors.length, 1);
+    assert.match(sheetB.errors[0].reason, /Duplicate roll number 25MRA07001 already found in sheet "DS-A"/i);
+  });
+
+  it('resolves DS-B to CSD-B even when preview is called with query classId for CSD-A', async () => {
+    const csdDept = await Department.create({
+      name: 'Computer Science and Engineering (Data Science)',
+      code: 'CSD',
+      isActive: true,
+    });
+
+    const classA = await Class.create({
+      name: 'CSD-A',
+      departmentId: csdDept._id,
+      semester: 3,
+      academicYear: '2026-27',
+      isActive: true,
+    });
+
+    const classB = await Class.create({
+      name: 'CSD-B',
+      departmentId: csdDept._id,
+      semester: 3,
+      academicYear: '2026-27',
+      isActive: true,
+    });
+
+    const wb = xlsx.utils.book_new();
+
+    const dsAGrid = [
+      ['Computer Science Engineering - (Data Science) - Section -A- 2026 - 27'],
+      ['B.Tech - II Year I Semester Regular Nominal Rolls'],
+      ['Roll No', 'Name of the Candidate'],
+      ['25MRA07001', 'ALICE SMITH']
+    ];
+    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(dsAGrid), 'DS-A');
+
+    const dsBGrid = [
+      ['Computer Science Engineering - (Data Science) - Section -B- 2026 - 27'],
+      ['B.Tech - II Year I Semester Regular Nominal Rolls'],
+      ['Roll No', 'Name of the Candidate'],
+      ['25MRA07063', 'CHARLIE BROWN']
+    ];
+    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(dsBGrid), 'DS-B');
+
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    // Call with classId=classA._id
+    const res = await request(app)
+      .post(`/api/import/students/preview?classId=${classA._id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .attach('file', buffer, 'students.xlsx');
+
+    assert.equal(res.status, 200);
+    const sheetA = res.body.data.sheets.find(s => s.sheetName === 'DS-A');
+    const sheetB = res.body.data.sheets.find(s => s.sheetName === 'DS-B');
+
+    assert.equal(sheetA.targetClass.name, 'CSD-A');
+    assert.equal(sheetB.targetClass.name, 'CSD-B');
+  });
 });
 

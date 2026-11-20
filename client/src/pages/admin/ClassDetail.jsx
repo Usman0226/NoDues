@@ -124,6 +124,15 @@ const ClassDetail = () => {
     }
   }, [classData?.isMaster, tab]);
 
+  // Auto-refresh class details when background import tasks finish
+  useEffect(() => {
+    const handleImportComplete = () => {
+      fetchClass();
+    };
+    window.addEventListener('import-complete', handleImportComplete);
+    return () => window.removeEventListener('import-complete', handleImportComplete);
+  }, [fetchClass]);
+
   const facultyList = useMemo(() => facultyResponse?.data || [], [facultyResponse?.data]);
   
   const allFacultyOptions = useMemo(() => {

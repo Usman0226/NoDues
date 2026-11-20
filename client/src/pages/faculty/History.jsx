@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import PageWrapper from '../../components/layout/PageWrapper';
 import Table from '../../components/ui/Table';
@@ -10,6 +10,7 @@ import { useUI } from '../../hooks/useUI';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { getApprovalHistory } from '../../api/approvals';
+import { getMyBatches } from '../../api/faculty';
 import {
   History,
   Filter,
@@ -17,20 +18,21 @@ import {
   Layers,
   RefreshCw,
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
   Eye,
   UserCheck,
   FileText,
   Clock,
   ExternalLink,
+  Download,
+  Lock,
+  CheckCircle2
 } from 'lucide-react';
-
-const PAGE_SIZE = 20;
+import { toast } from 'react-hot-toast';
 
 const getApprovalLabel = (item) => {
   if (item.approvalType === 'classTeacher') return 'Class Teacher';
   if (item.approvalType === 'mentor') return 'Mentor';
+  if (item.approvalType === 'coCurricular') return item.itemTypeName || 'Co-Curricular';
   return item.subjectName || '—';
 };
 
@@ -38,22 +40,31 @@ const getColumns = (user, setReviewModal) => [
   {
     key: 'studentRollNo',
     label: 'Roll No',
-    render: (v) => <span className="font-mono text-xs font-black text-navy">{v || '—'}</span>,
+    sortable: true,
+    render: (v) => (
+      <span className="font-mono text-xs sm:text-sm font-black text-navy px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200/60">
+        {v || '—'}
+      </span>
+    ),
   },
   {
     key: 'studentName',
     label: 'Student Name',
-    render: (v) => <span className="font-bold">{v || '—'}</span>,
+    sortable: true,
+    render: (v) => <span className="font-bold text-zinc-900">{v || '—'}</span>,
   },
   {
     key: 'subjectName',
     label: 'Subject / Type',
     render: (_, row) => (
       <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-muted-foreground">{getApprovalLabel(row)}</span>
+        <span className="text-xs font-semibold text-zinc-700">{getApprovalLabel(row)}</span>
+        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
+          {row.roleTag || row.approvalType}
+        </span>
         {user?.userId !== row.facultyId && row.facultyName && (
            <span className="text-[9px] font-bold text-zinc-400 whitespace-nowrap">
-             Assigned to: {row.facultyName}
+             By: {row.facultyName}
            </span>
         )}
       </div>
@@ -61,11 +72,24 @@ const getColumns = (user, setReviewModal) => [
   },
   {
     key: 'className',
-    label: 'Batch',
+    label: 'Batch & Term',
     render: (v, row) => (
-      <span className="text-xs text-muted-foreground">
-        {v || '—'}{row.semester ? ` · S${row.semester}` : ''}{row.academicYear ? ` (${row.academicYear})` : ''}
-      </span>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-xs font-bold text-zinc-800">{v || '—'}</span>
+        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
+          {row.semester && <span>Sem {row.semester}</span>}
+          {row.academicYear && <span>· {row.academicYear}</span>}
+          {row.isBatchClosed ? (
+            <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+              <Lock size={8} /> Closed
+            </span>
+          ) : (
+            <span className="text-[8px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+              Active
+            </span>
+          )}
+        </div>
+      </div>
     ),
   },
   {
@@ -74,9 +98,14 @@ const getColumns = (user, setReviewModal) => [
     render: (v, row) => (
       <div className="flex flex-col gap-1">
         <Badge status={v} />
-        {v === 'due_marked' && row.dueType && (
-          <span className="text-[9px] font-black uppercase tracking-widest text-red-500">
-            {row.dueType}
+        {v === 'due_marked' && (
+          <span className="text-[9px] font-black uppercase tracking-widest text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200/80 w-fit">
+            {row.dueType || 'Deficiency'}
+          </span>
+        )}
+        {row.remarks && (
+          <span className="text-[10px] text-zinc-500 italic truncate max-w-[140px]" title={row.remarks}>
+            "{row.remarks}"
           </span>
         )}
       </div>
@@ -86,9 +115,9 @@ const getColumns = (user, setReviewModal) => [
     key: 'actionedAt',
     label: 'Timestamp',
     render: (v) => (
-      <div className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
-        <Calendar size={12} />
-        {v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+      <div className="flex items-center gap-1.5 text-zinc-500 text-[11px] font-medium whitespace-nowrap">
+        <Calendar size={12} className="text-zinc-400" />
+        {v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
       </div>
     ),
   },
@@ -121,6 +150,9 @@ const FacultyHistory = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [semesterFilter, setSemesterFilter] = useState('all');
+  const [academicYearFilter, setAcademicYearFilter] = useState('all');
+  const [batchFilter, setBatchFilter] = useState('all');
+  const [actionFilter, setActionFilter] = useState('all');
   const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [reviewModal, setReviewModal] = useState(null);
@@ -137,6 +169,27 @@ const FacultyHistory = () => {
   const { showGlobalLoader } = useUI();
   const { user } = useAuth();
   const { data: response, loading, error, request: fetchHistory } = useApi(getApprovalHistory);
+  const { data: batchesRes } = useApi(getMyBatches, { immediate: true });
+
+  const batches = useMemo(() => batchesRes?.data || [], [batchesRes?.data]);
+
+  const academicYearOptions = useMemo(() => {
+    const years = [...new Set(batches.map(b => b.academicYear).filter(Boolean))];
+    return [
+      { id: 'all', name: 'All Academic Years' },
+      ...years.map(y => ({ id: y, name: y }))
+    ];
+  }, [batches]);
+
+  const batchOptions = useMemo(() => {
+    return [
+      { id: 'all', name: 'All Batches / Classes' },
+      ...batches.map(b => ({
+        id: b._id,
+        name: `${b.name} ${b.semester ? `(Sem ${b.semester})` : ''} ${b.status === 'closed' ? '[Archived]' : '[Active]'}`
+      }))
+    ];
+  }, [batches]);
 
   // Sync navigation context with sessionStorage
   useEffect(() => {
@@ -159,19 +212,64 @@ const FacultyHistory = () => {
   useEffect(() => {
     fetchHistory({
       semester: semesterFilter !== 'all' ? semesterFilter : undefined,
+      academicYear: academicYearFilter !== 'all' ? academicYearFilter : undefined,
+      batchId: batchFilter !== 'all' ? batchFilter : undefined,
+      action: actionFilter !== 'all' ? actionFilter : undefined,
       page,
       limit,
       search: debouncedSearch,
       facultyId: facultyId || undefined
     });
-  }, [fetchHistory, semesterFilter, page, limit, debouncedSearch, facultyId]);
+  }, [fetchHistory, semesterFilter, academicYearFilter, batchFilter, actionFilter, page, limit, debouncedSearch, facultyId]);
 
-  const rows = React.useMemo(() => response?.data || [], [response?.data]);
+  const rows = useMemo(() => response?.data || [], [response?.data]);
   const total = response?.pagination?.total || 0;
 
-  const handleSemesterChange = (val) => {
-    setSemesterFilter(val);
-    setPage(1);
+  const handleExportCSV = () => {
+    if (!rows.length) {
+      toast.error('No clearance records available to export');
+      return;
+    }
+    const headers = [
+      'Roll No',
+      'Student Name',
+      'Class / Batch',
+      'Semester',
+      'Academic Year',
+      'Batch Status',
+      'Requirement',
+      'Role Tag',
+      'Action Taken',
+      'Deficiency Category',
+      'Remarks',
+      'Actioned Timestamp'
+    ];
+    const csvLines = [headers.join(',')];
+    rows.forEach(r => {
+      const line = [
+        `"${r.studentRollNo || ''}"`,
+        `"${(r.studentName || '').replace(/"/g, '""')}"`,
+        `"${(r.className || '').replace(/"/g, '""')}"`,
+        `"${r.semester || ''}"`,
+        `"${r.academicYear || ''}"`,
+        `"${r.batchStatus || ''}"`,
+        `"${(getApprovalLabel(r) || '').replace(/"/g, '""')}"`,
+        `"${r.roleTag || ''}"`,
+        `"${r.action || ''}"`,
+        `"${r.dueType || ''}"`,
+        `"${(r.remarks || '').replace(/"/g, '""')}"`,
+        `"${r.actionedAt ? new Date(r.actionedAt).toLocaleString('en-IN') : ''}"`
+      ];
+      csvLines.push(line.join(','));
+    });
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Clearance_Action_History_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Clearance audit history exported successfully');
   };
 
   if (error) {
@@ -182,7 +280,7 @@ const FacultyHistory = () => {
           <h2 className="text-xl font-black text-navy mb-2">Sync Error</h2>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto text-sm">{error}</p>
           <Button variant="primary" onClick={() => fetchHistory()}>
-            <RefreshCw size={14} className="mr-2" /> Retry
+            <RefreshCw size={14} className="mr-2" /> Retry Connection
           </Button>
         </div>
       </PageWrapper>
@@ -190,50 +288,113 @@ const FacultyHistory = () => {
   }
 
   return (
-    <PageWrapper title="Action History" subtitle="Your archive of all past clearance approvals and dues">
-      {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-4 mb-6">
-        <div className="h-9 flex items-center gap-2 bg-white pl-3 pr-1 rounded-xl border border-muted shadow-sm">
-          <Filter size={14} className="text-muted-foreground shrink-0" />
-          <span className="text-xs font-medium text-muted-foreground shrink-0">Semester</span>
+    <PageWrapper 
+      title="Action History Archive" 
+      subtitle="Complete chronological audit trail of all approved clearances and flagged deficiencies"
+      headerActions={
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 text-xs font-bold text-navy"
+            disabled={!rows.length}
+          >
+            <Download size={13} /> Export CSV
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={async () => {
+              const hide = showGlobalLoader('Refreshing History Archive...');
+              await fetchHistory({
+                semester: semesterFilter !== 'all' ? semesterFilter : undefined,
+                academicYear: academicYearFilter !== 'all' ? academicYearFilter : undefined,
+                batchId: batchFilter !== 'all' ? batchFilter : undefined,
+                action: actionFilter !== 'all' ? actionFilter : undefined,
+                page,
+                limit,
+                search: debouncedSearch
+              });
+              hide();
+            }} 
+            disabled={loading}
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          </Button>
+        </div>
+      }
+    >
+      {/* Multi-Dimensional Filter Bar */}
+      <div className="flex flex-wrap items-center gap-3 mb-6 bg-white p-3 rounded-2xl border border-zinc-200/70 shadow-xs">
+        {/* Academic Year Filter */}
+        <div className="flex-1 sm:flex-initial min-w-[160px]">
           <SearchableSelect 
-            options={[
-              { value: 'all', label: 'All Semesters', subLabel: 'Entire History' },
-              ...[8, 7, 6, 5, 4, 3, 2, 1].map((s) => ({
-                value: s,
-                label: `Semester ${s}`,
-                subLabel: 'Academic Term'
-              }))
-            ]}
-            value={semesterFilter}
-            onChange={(val) => handleSemesterChange(val)}
-            placeholder="Select Sem"
-            variant="ghost"
+            options={academicYearOptions}
+            value={academicYearFilter}
+            onChange={(val) => { setAcademicYearFilter(val || 'all'); setPage(1); }}
+            placeholder="Academic Year"
+            labelKey="name"
+            idKey="id"
             size="sm"
-            className="w-[155px] !h-8"
+            clearable={academicYearFilter !== 'all'}
           />
         </div>
 
-        <div className="h-9 flex items-center gap-2 bg-white px-3.5 rounded-xl border border-muted shadow-sm">
-          <Layers size={14} className="text-muted-foreground shrink-0" />
-          <span className="text-xs font-medium text-muted-foreground shrink-0">
-            {total != null ? `${total} total records` : 'Loading…'}
-          </span>
+        {/* Batch / Class Filter */}
+        <div className="flex-1 sm:flex-initial min-w-[200px]">
+          <SearchableSelect 
+            options={batchOptions}
+            value={batchFilter}
+            onChange={(val) => { setBatchFilter(val || 'all'); setPage(1); }}
+            placeholder="Filter Batch"
+            labelKey="name"
+            idKey="id"
+            size="sm"
+            clearable={batchFilter !== 'all'}
+          />
         </div>
 
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={async () => {
-             const hide = showGlobalLoader('Refreshing History Archive...');
-             await fetchHistory({ semester: semesterFilter !== 'all' ? semesterFilter : undefined, page, limit, search: debouncedSearch });
-             hide();
-          }} 
-          disabled={loading} 
-          className="ml-auto"
-        >
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-        </Button>
+        {/* Semester Filter */}
+        <div className="flex-1 sm:flex-initial min-w-[140px]">
+          <SearchableSelect 
+            options={[
+              { id: 'all', name: 'All Semesters' },
+              ...[8, 7, 6, 5, 4, 3, 2, 1].map((s) => ({ id: s.toString(), name: `Semester ${s}` }))
+            ]}
+            value={semesterFilter}
+            onChange={(val) => { setSemesterFilter(val || 'all'); setPage(1); }}
+            placeholder="Semester"
+            labelKey="name"
+            idKey="id"
+            size="sm"
+            clearable={semesterFilter !== 'all'}
+          />
+        </div>
+
+        {/* Action Type Filter */}
+        <div className="flex-1 sm:flex-initial min-w-[140px]">
+          <SearchableSelect 
+            options={[
+              { id: 'all', name: 'All Actions' },
+              { id: 'approved', name: 'Approved Only' },
+              { id: 'due_marked', name: 'Dues Flagged Only' }
+            ]}
+            value={actionFilter}
+            onChange={(val) => { setActionFilter(val || 'all'); setPage(1); }}
+            placeholder="Action Type"
+            labelKey="name"
+            idKey="id"
+            size="sm"
+            clearable={actionFilter !== 'all'}
+          />
+        </div>
+
+        {/* Total Count Pill */}
+        <div className="h-9 flex items-center gap-1.5 px-3 rounded-xl bg-zinc-50 border border-zinc-200/60 text-xs font-bold text-zinc-600 ml-auto shrink-0">
+          <Layers size={13} className="text-zinc-400" />
+          <span>{total} records</span>
+        </div>
       </div>
 
       {/* Main Table */}
@@ -251,30 +412,39 @@ const FacultyHistory = () => {
         searchable
         searchValue={searchValue}
         onSearchChange={setSearchValue}
-        searchPlaceholder="Search by student or roll no..."
+        searchPlaceholder="Search by student roll number or name..."
       />
 
-      {/* Empty state when no records at all */}
+      {/* Empty State */}
       {!loading && rows.length === 0 && !error && (
-        <div className="text-center py-20 bg-white rounded-xl border border-dashed border-muted mt-4">
-          <History size={40} className="text-muted-foreground mx-auto mb-3 opacity-20" />
-          <p className="text-muted-foreground text-sm font-medium">No past actions recorded.</p>
-          {semesterFilter !== 'all' && (
+        <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-zinc-200 mt-4">
+          <History size={40} className="text-zinc-300 mx-auto mb-3" />
+          <h4 className="text-base font-bold text-navy mb-1">No Historical Records Found</h4>
+          <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+            No clearance actions match your current filter selection. Try selecting a different semester, academic year, or clearing the search.
+          </p>
+          {(semesterFilter !== 'all' || academicYearFilter !== 'all' || batchFilter !== 'all' || actionFilter !== 'all' || searchValue) && (
             <button
-              className="mt-2 text-[10px] uppercase tracking-widest font-black text-navy/40 hover:text-navy"
-              onClick={() => handleSemesterChange('all')}
+              className="mt-4 px-4 py-2 rounded-xl bg-zinc-100 text-[10px] uppercase tracking-wider font-black text-navy hover:bg-zinc-200 transition-all"
+              onClick={() => {
+                setSemesterFilter('all');
+                setAcademicYearFilter('all');
+                setBatchFilter('all');
+                setActionFilter('all');
+                setSearchValue('');
+              }}
             >
-              Clear semester filter
+              Clear All Filters
             </button>
           )}
         </div>
       )}
 
-      {/* Review Modal */}
+      {/* Review Modal for Co-Curricular */}
       <Modal
         isOpen={!!reviewModal}
         onClose={() => setReviewModal(null)}
-        title="Review Clearance Submission"
+        title="Clearance Action Audit Record"
         size="md"
       >
         {reviewModal && (
@@ -293,33 +463,36 @@ const FacultyHistory = () => {
              <div className="space-y-4">
                 <div className="flex items-center gap-2">
                    <FileText size={16} className="text-indigo-600" />
-                   <h4 className="text-[10px] font-black uppercase tracking-widest text-navy">Submission Details</h4>
+                   <h4 className="text-[10px] font-black uppercase tracking-widest text-navy">Audit Details</h4>
                 </div>
                 
-                <div className="grid grid-cols-1 gap-3">
-                   {!reviewModal.submission ? (
-                      <div className="p-8 text-center bg-offwhite rounded-2xl border border-dashed border-muted/50">
-                         <Clock className="mx-auto text-muted-foreground/30 mb-2" size={32} />
-                         <p className="text-sm font-bold text-muted-foreground">No documentation submitted yet.</p>
-                      </div>
-                   ) : (
-                      Object.entries(reviewModal.submission.data || {}).map(([key, value]) => (
-                        <div key={key} className="p-4 rounded-xl bg-white border border-zinc-100 shadow-sm">
-                           <p className="text-[9px] font-black uppercase tracking-wider text-zinc-400 mb-1">{key.replace(/_/g, ' ')}</p>
-                           <p className="text-sm font-bold text-navy break-all">
-                              {value?.toString().match(/^https?:\/\//) ? (
-                                <a href={value} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-1">
-                                   View Document <ExternalLink size={12} />
-                                </a>
-                              ) : value || '—'}
-                           </p>
-                        </div>
-                      ))
-                   )}
+                <div className="p-4 rounded-xl bg-white border border-zinc-100 shadow-xs space-y-2 text-xs">
+                  <div className="flex justify-between py-1 border-b border-zinc-100">
+                    <span className="text-zinc-400">Action:</span>
+                    <span className="font-bold uppercase text-navy">{reviewModal.action}</span>
+                  </div>
+                  {reviewModal.dueType && (
+                    <div className="flex justify-between py-1 border-b border-zinc-100">
+                      <span className="text-zinc-400">Deficiency Category:</span>
+                      <span className="font-bold text-red-600 uppercase">{reviewModal.dueType}</span>
+                    </div>
+                  )}
+                  {reviewModal.remarks && (
+                    <div className="flex justify-between py-1 border-b border-zinc-100">
+                      <span className="text-zinc-400">Remarks:</span>
+                      <span className="font-medium text-zinc-800">{reviewModal.remarks}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-1">
+                    <span className="text-zinc-400">Actioned Date:</span>
+                    <span className="font-medium text-zinc-800">
+                      {reviewModal.actionedAt ? new Date(reviewModal.actionedAt).toLocaleString('en-IN') : '—'}
+                    </span>
+                  </div>
                 </div>
              </div>
 
-             <div className="flex items-center gap-3 pt-6 border-t border-zinc-100">
+             <div className="flex items-center gap-3 pt-4 border-t border-zinc-100">
                 <Button 
                    variant="ghost" 
                    className="flex-1" 
@@ -331,7 +504,6 @@ const FacultyHistory = () => {
           </div>
         )}
       </Modal>
-
     </PageWrapper>
   );
 };

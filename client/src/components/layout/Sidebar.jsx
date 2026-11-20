@@ -6,7 +6,7 @@ import { useUI } from '../../hooks/useUI';
 import { ROLES } from '../../utils/constants';
 import {
   LayoutDashboard, Users, BookOpen, ClipboardCheck,
-  Shield, History, ChevronRight,
+  Shield, History, ChevronRight, UserCheck,
   Building2, AlertTriangle, Layers, X, GraduationCap, Inbox, MessageSquarePlus, MessageSquare, Wand2
 } from 'lucide-react';
 import { useFeedback } from '../../hooks/useFeedback';
@@ -46,6 +46,7 @@ const NAV_CONFIG = {
     { label: 'Management', icon: Users, items: [
       { label: 'Students', path: '/hod/students', icon: Users },
       { label: 'Faculty', path: '/hod/faculty', icon: Users },
+      { label: 'Mentoring', path: '/faculty/mentoring', icon: UserCheck },
     ]},
     { label: 'No Dues', icon: ClipboardCheck, items: [
       { label: 'Dues', path: '/hod/dues', icon: AlertTriangle },
@@ -57,7 +58,9 @@ const NAV_CONFIG = {
     ]},
   ],
   [ROLES.FACULTY]: [
+    { label: 'Dashboard', path: '/faculty', icon: LayoutDashboard },
     { label: 'Pending', path: '/faculty/pending', icon: ClipboardCheck },
+    { label: 'Mentoring', path: '/faculty/mentoring', icon: UserCheck },
     { label: 'My Classes', path: '/faculty/classes', icon: GraduationCap },
     { label: 'History', path: '/faculty/history', icon: History },
   ],

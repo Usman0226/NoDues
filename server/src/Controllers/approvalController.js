@@ -12,6 +12,7 @@ import { invalidateEntityCache } from '../utils/cacheHooks.js';
 import { invalidateKeys } from '../utils/withCache.js';
 import { invalidateStudentStatusCache } from './studentPortalController.js';
 import { createNotification } from './notification.controller.js';
+import { escapeRegExp } from '../utils/validation.js';
 
 // ── GET /api/approvals/pending ────────────────────────────────────────────────
 export const getPendingApprovals = async (req, res, next) => {
@@ -25,24 +26,73 @@ export const getPendingApprovals = async (req, res, next) => {
       action = 'pending',
       approvalType,
       itemTypeId,
-      facultyId
+      facultyId,
+      batchStatus = 'active'
     } = req.query;
     
-    const activeBatches = await NodueBatch.find(
-      { status: 'active' },
-      '_id departmentId className classId'
-    ).lean();
+    let targetBatchIds = [];
+    let isSpecificBatch = false;
+    let requestedBatch = null;
+    let matchingBatches = [];
 
-    if (!activeBatches.length) {
-      return res.status(200).json({ success: true, data: [] });
+    if (batchId) {
+      // Find the specific batch directly by ID or classId, regardless of status (active or closed)
+      if (mongoose.Types.ObjectId.isValid(batchId)) {
+        requestedBatch = await NodueBatch.findById(batchId)
+          .select('_id departmentId className classId status semester academicYear')
+          .lean();
+      }
+      if (!requestedBatch) {
+        requestedBatch = await NodueBatch.findOne({ classId: batchId })
+          .sort({ createdAt: -1 })
+          .select('_id departmentId className classId status semester academicYear')
+          .lean();
+      }
+      if (requestedBatch) {
+        targetBatchIds = [requestedBatch._id];
+        isSpecificBatch = true;
+      }
     }
 
-    const batchIdSet = activeBatches.map((b) => b._id);
+    if (!isSpecificBatch) {
+      const batchQuery = {};
+      if (batchStatus === 'closed') {
+        batchQuery.status = 'closed';
+      } else if (batchStatus === 'all') {
+        // all statuses
+      } else {
+        batchQuery.status = 'active';
+      }
+
+      matchingBatches = await NodueBatch.find(
+        batchQuery,
+        '_id departmentId className classId status semester academicYear'
+      ).lean();
+
+      if (!matchingBatches.length) {
+        return res.status(200).json({ 
+          success: true, 
+          data: [],
+          pagination: { page: Number(page), limit: Number(limit), total: 0, pages: 0 },
+          meta: { hasActiveBatches: false }
+        });
+      }
+      targetBatchIds = matchingBatches.map(b => b._id);
+    }
+
     let myDeptBatchIds = [];
     if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId) {
-        myDeptBatchIds = activeBatches
-           .filter(b => b.departmentId && b.departmentId.toString() === req.user.departmentId.toString())
-           .map(b => b._id);
+      if (!isSpecificBatch && matchingBatches && matchingBatches.length > 0) {
+        myDeptBatchIds = matchingBatches
+          .filter(b => b.departmentId?.toString() === req.user.departmentId.toString())
+          .map(b => b._id);
+      } else {
+        const deptBatches = await NodueBatch.find({ 
+          departmentId: req.user.departmentId,
+          _id: { $in: targetBatchIds }
+        }, '_id').lean();
+        myDeptBatchIds = deptBatches.map(b => b._id);
+      }
     }
 
     const andConditions = [];
@@ -54,17 +104,6 @@ export const getPendingApprovals = async (req, res, next) => {
       andConditions.push({ action: statusFilter });
     }
 
-    // Batch filter: support both explicit batchId OR classId (sent from client filters)
-    let targetBatchIds = batchIdSet;
-    if (batchId) {
-      const match = activeBatches.find(b => 
-        b._id.toString() === batchId.toString() || 
-        b.classId?.toString() === batchId.toString()
-      );
-      if (match) {
-        targetBatchIds = [match._id];
-      }
-    }
     // Ensure all batchIds are ObjectIds
     const targetBatchObjectIds = targetBatchIds.map(id => 
         id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(id)
@@ -105,11 +144,12 @@ export const getPendingApprovals = async (req, res, next) => {
         andConditions.push({ facultyId: new mongoose.Types.ObjectId(userId) });
     }
 
-    if (search) {
+    if (search && search.trim()) {
+      const escaped = escapeRegExp(search.trim());
       andConditions.push({
           $or: [
-            { studentName: { $regex: search, $options: 'i' } },
-            { studentRollNo: { $regex: search, $options: 'i' } },
+            { studentName: { $regex: escaped, $options: 'i' } },
+            { studentRollNo: { $regex: escaped, $options: 'i' } },
           ]
       });
     }
@@ -124,7 +164,6 @@ export const getPendingApprovals = async (req, res, next) => {
     }
 
     const query = andConditions.length > 0 ? { $and: andConditions } : {};
-    console.log('[DEBUG] getPendingApprovals query:', JSON.stringify(query, null, 2));
     
     const skip = (Number(page) - 1) * Number(limit);
     const [approvals, total] = await Promise.all([
@@ -138,38 +177,55 @@ export const getPendingApprovals = async (req, res, next) => {
       NodueApproval.countDocuments(query),
     ]);
 
-    logger.info('Results found:', { count: approvals.length });
-    if (approvals.length > 0) {
-      logger.info('Sample approval types:', { types: [...new Set(approvals.map(a => a.approvalType))] });
-    }
-    logger.info('---------------------------------');
-
-    // Build className map directly from the single activeBatches query above — no second DB call needed
-    // Map the nodues roleTa
+    // Build batchMap for all batches present in approvals
+    const uniqueBatchIds = [...new Set(approvals.map(a => a.batchId?.toString()).filter(Boolean))];
     const batchMap = {};
-    activeBatches.forEach((b) => { batchMap[b._id.toString()] = b.className || null; });
+    if (requestedBatch) {
+      batchMap[requestedBatch._id.toString()] = requestedBatch;
+    }
+    if (matchingBatches && matchingBatches.length > 0) {
+      matchingBatches.forEach((b) => { batchMap[b._id.toString()] = b; });
+    }
 
-    // NEW: Fetch submission data for Co-Curricular items
+    const missingBatchIds = uniqueBatchIds.filter(id => !batchMap[id]);
     const ccApprovals = approvals.filter(a => a.approvalType === 'coCurricular');
     const studentIds = [...new Set(ccApprovals.map(a => a.studentId))];
-    const students = studentIds.length > 0 
-      ? await Student.find({ _id: { $in: studentIds } }).select('coCurricular').lean()
-      : [];
+
+    // Parallelize batch resolution and co-curricular student fetching
+    const [fetchedBatches, students] = await Promise.all([
+      missingBatchIds.length > 0
+        ? NodueBatch.find({ _id: { $in: missingBatchIds } }, '_id className status semester academicYear').lean()
+        : Promise.resolve([]),
+      studentIds.length > 0 
+        ? Student.find({ _id: { $in: studentIds } }).select('coCurricular').lean()
+        : Promise.resolve([]),
+    ]);
+
+    fetchedBatches.forEach((b) => { batchMap[b._id.toString()] = b; });
     const studentMap = new Map(students.map(s => [s._id.toString(), s]));
 
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({
       success: true,
+      meta: {
+        isBatchClosed: requestedBatch ? requestedBatch.status === 'closed' : false,
+        selectedBatchStatus: requestedBatch ? requestedBatch.status : (batchStatus || 'active'),
+      },
       data: approvals.map((a) => {
-        const student = studentMap.get(a.studentId.toString());
+        const student = a.studentId ? studentMap.get(a.studentId.toString()) : null;
         const submission = a.approvalType === 'coCurricular' 
           ? student?.coCurricular?.find(cc => cc.itemTypeId?.toString() === a.itemTypeId?.toString())
           : null;
+        const bMeta = batchMap[a.batchId?.toString()];
 
         return {
           _id:           a._id,
           batchId:       a.batchId,
-          className:     batchMap[a.batchId?.toString()] ?? null,
+          className:     bMeta?.className ?? null,
+          batchStatus:   bMeta?.status ?? 'active',
+          isBatchClosed: bMeta?.status === 'closed',
+          semester:      bMeta?.semester ?? null,
+          academicYear:  bMeta?.academicYear ?? null,
           studentId:     a.studentId,
           studentRollNo: a.studentRollNo,
           studentName:   a.studentName,
@@ -206,7 +262,17 @@ export const getPendingApprovals = async (req, res, next) => {
 export const getApprovalHistory = async (req, res, next) => {
   try {
     const { userId } = req.user;
-    const { semester, page = 1, limit = 20, search = '', facultyId } = req.query;
+    const { 
+      semester, 
+      academicYear,
+      batchId,
+      action = 'all',
+      approvalType,
+      page = 1, 
+      limit = 20, 
+      search = '', 
+      facultyId 
+    } = req.query;
 
     let myDeptBatchIds = [];
     if ((req.user.role === 'hod' || req.user.role === 'ao') && req.user.departmentId) {
@@ -214,9 +280,27 @@ export const getApprovalHistory = async (req, res, next) => {
        myDeptBatchIds = deptBatches.map(b => b._id);
     }
 
-    const andConditions = [
-      { action: { $nin: ['pending', 'not_submitted'] } }
-    ];
+    const andConditions = [];
+
+    // Action filter: all vs approved vs due_marked
+    if (action && action !== 'all') {
+      andConditions.push({ action });
+    } else {
+      andConditions.push({ action: { $nin: ['pending', 'not_submitted'] } });
+    }
+
+    // Approval type filter
+    if (approvalType && approvalType !== 'all') {
+      const types = approvalType.split(',');
+      andConditions.push({ approvalType: { $in: types } });
+    }
+
+    // Batch ID filter
+    if (batchId && batchId !== 'all') {
+      if (mongoose.Types.ObjectId.isValid(batchId)) {
+        andConditions.push({ batchId: new mongoose.Types.ObjectId(batchId) });
+      }
+    }
 
     // ── Faculty vs HOD-Department Filter ────────────────────────────────────
     if (facultyId) {
@@ -243,25 +327,27 @@ export const getApprovalHistory = async (req, res, next) => {
        andConditions.push({ facultyId: new mongoose.Types.ObjectId(userId) });
     }
 
-    if (search) {
+    if (search && search.trim()) {
+      const escaped = escapeRegExp(search.trim());
       andConditions.push({
           $or: [
-            { studentName: { $regex: search, $options: 'i' } },
-            { studentRollNo: { $regex: search, $options: 'i' } },
+            { studentName: { $regex: escaped, $options: 'i' } },
+            { studentRollNo: { $regex: escaped, $options: 'i' } },
           ]
       });
     }
 
-    const query = { $and: andConditions };
-
-    if (semester) {
-      // Filter by semester via batch — two queries but both indexed
-      const batchIds = await NodueBatch.find(
-        { semester: Number(semester) },
-        '_id'
-      ).lean();
-      query.batchId = { $in: batchIds.map((b) => b._id) };
+    // Semester and Academic Year filters via batch
+    const batchFilter = {};
+    if (semester && semester !== 'all') batchFilter.semester = Number(semester);
+    if (academicYear && academicYear !== 'all') batchFilter.academicYear = academicYear;
+    
+    if (Object.keys(batchFilter).length > 0 && (!batchId || batchId === 'all')) {
+      matchingBatches = await NodueBatch.find(batchFilter, '_id').lean();
+      andConditions.push({ batchId: { $in: matchingBatches.map(b => b._id) } });
     }
+
+    const query = { $and: andConditions };
 
     const skip = (Number(page) - 1) * Number(limit);
     const [approvals, total] = await Promise.all([
@@ -276,9 +362,9 @@ export const getApprovalHistory = async (req, res, next) => {
     ]);
 
     // Fetch className for each unique batchId — single aggregation
-    const batchIds = [...new Set(approvals.map((a) => a.batchId?.toString()).filter(Boolean))];
-    const batches  = batchIds.length
-      ? await NodueBatch.find({ _id: { $in: batchIds } }, '_id className semester academicYear').lean()
+    const uniqueBatchIds = [...new Set(approvals.map((a) => a.batchId?.toString()).filter(Boolean))];
+    const batches = uniqueBatchIds.length
+      ? await NodueBatch.find({ _id: { $in: uniqueBatchIds } }, '_id className semester academicYear status').lean()
       : [];
     const batchMap = {};
     batches.forEach((b) => { batchMap[b._id.toString()] = b; });
@@ -292,6 +378,8 @@ export const getApprovalHistory = async (req, res, next) => {
           _id:           a._id,
           batchId:       a.batchId,
           className:     batch?.className ?? null,
+          batchStatus:   batch?.status ?? 'active',
+          isBatchClosed: batch?.status === 'closed',
           semester:      batch?.semester  ?? null,
           academicYear:  batch?.academicYear ?? null,
           studentRollNo: a.studentRollNo,
@@ -345,7 +433,15 @@ export const approveRequest = async (req, res, next) => {
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
 
-    if (approval.facultyId.toString() !== req.user.userId.toString()) {
+    let isAuthorized = approval.facultyId && approval.facultyId.toString() === req.user.userId.toString();
+    if (!isAuthorized && (approval.approvalType === 'mentor' || approval.roleTag === 'mentor')) {
+      const studentDoc = await Student.findById(approval.studentId).session(session).select('mentorId').lean();
+      if (studentDoc?.mentorId && studentDoc.mentorId.toString() === req.user.userId.toString()) {
+        isAuthorized = true;
+        approval.facultyId = req.user.userId;
+      }
+    }
+    if (!isAuthorized) {
         if ((req.user.role === 'hod' || req.user.role === 'ao') && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
             if (!['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'].includes(approval.approvalType)) {
                  await abortSafeTransaction(session);
@@ -460,7 +556,8 @@ export const bulkApproveRequests = async (req, res, next) => {
         const batch = activeBatchMap.get(a.batchId.toString());
         if (!batch) return false;
 
-        if (a.facultyId.toString() !== req.user.userId.toString()) {
+        const isDirect = a.facultyId && a.facultyId.toString() === req.user.userId.toString();
+        if (!isDirect) {
             if ((req.user.role === 'hod' || req.user.role === 'ao') && batch.departmentId?.toString() === req.user.departmentId?.toString()) {
                 if (!['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'].includes(a.approvalType)) return false;
             } else {
@@ -563,7 +660,7 @@ export const markDue = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
     await startSafeTransaction(session);
-    const { approvalId, dueType, remarks } = req.body;
+    const { approvalId, dueType, remarks, amount } = req.body;
     if (!approvalId || !dueType) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('approvalId and dueType are required', 400, 'VALIDATION_ERROR'));
@@ -592,7 +689,15 @@ export const markDue = async (req, res, next) => {
       return next(new ErrorResponse('Batch is closed', 400, 'BATCH_CLOSED'));
     }
 
-    if (approval.facultyId.toString() !== req.user.userId.toString()) {
+    let isAuthorized = approval.facultyId && approval.facultyId.toString() === req.user.userId.toString();
+    if (!isAuthorized && (approval.approvalType === 'mentor' || approval.roleTag === 'mentor')) {
+      const studentDoc = await Student.findById(approval.studentId).session(session).select('mentorId').lean();
+      if (studentDoc?.mentorId && studentDoc.mentorId.toString() === req.user.userId.toString()) {
+        isAuthorized = true;
+        approval.facultyId = req.user.userId;
+      }
+    }
+    if (!isAuthorized) {
         if ((req.user.role === 'hod' || req.user.role === 'ao') && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
             if (!['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'].includes(approval.approvalType)) {
                  await abortSafeTransaction(session);
@@ -607,6 +712,7 @@ export const markDue = async (req, res, next) => {
     approval.action     = 'due_marked';
     approval.dueType    = dueType;
     approval.remarks    = remarks ?? null;
+    approval.amount     = amount ? Number(amount) : 0;
     approval.actionedAt = new Date();
 
     // Track who actioned this without mutating roleTag
@@ -688,7 +794,7 @@ export const updateApproval = async (req, res, next) => {
   try {
     await startSafeTransaction(session);
     const { approvalId } = req.params;
-    const { action, dueType, remarks } = req.body;
+    const { action, dueType, remarks, amount } = req.body;
 
     const approval = await NodueApproval.findOne({ _id: approvalId }).session(session);
     if (!approval) {
@@ -702,7 +808,15 @@ export const updateApproval = async (req, res, next) => {
       return next(new ErrorResponse('Cannot update approval — batch is closed', 400, 'BATCH_CLOSED'));
     }
 
-    if (approval.facultyId.toString() !== req.user.userId.toString()) {
+    let isAuthorized = approval.facultyId && approval.facultyId.toString() === req.user.userId.toString();
+    if (!isAuthorized && (approval.approvalType === 'mentor' || approval.roleTag === 'mentor')) {
+      const studentDoc = await Student.findById(approval.studentId).session(session).select('mentorId').lean();
+      if (studentDoc?.mentorId && studentDoc.mentorId.toString() === req.user.userId.toString()) {
+        isAuthorized = true;
+        approval.facultyId = req.user.userId;
+      }
+    }
+    if (!isAuthorized) {
         if ((req.user.role === 'hod' || req.user.role === 'ao') && batch?.departmentId?.toString() === req.user.departmentId?.toString()) {
             if (!['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'].includes(approval.approvalType)) {
                  await abortSafeTransaction(session);
@@ -729,11 +843,13 @@ export const updateApproval = async (req, res, next) => {
       if (action === 'pending' || action === 'approved') {
         approval.dueType = null;
         approval.remarks = null;
+        approval.amount  = 0;
       }
     }
     
     if (dueType !== undefined) approval.dueType = dueType;
     if (remarks !== undefined) approval.remarks = remarks;
+    if (amount !== undefined) approval.amount = Number(amount);
     approval.actionedAt = new Date();
 
     // Track actor role

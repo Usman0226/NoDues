@@ -116,7 +116,7 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'sm', preventC
       />
       <div
         ref={panelRef}
-        className={`relative w-full ${sizes[size] || size} max-h-[92vh] flex flex-col overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_24px_80px_rgba(30,41,59,0.22)] ${preventClose ? 'scale-100' : 'fade-up'}`}
+        className={`relative w-full ${sizes[size] || size} ${size === '4xl' ? 'h-[88vh] max-h-[860px] min-h-[520px]' : 'max-h-[92vh]'} flex flex-col overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_24px_80px_rgba(30,41,59,0.22)] ${preventClose ? 'scale-100' : 'fade-up'}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleDomId}

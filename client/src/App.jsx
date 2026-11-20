@@ -59,6 +59,7 @@ import MyClasses from './pages/faculty/MyClasses';
 import HodMyClasses from './pages/hod/MyClasses';
 import Pending from './pages/faculty/Pending';
 import FacultyHistory from './pages/faculty/History';
+import Mentoring from './pages/faculty/Mentoring';
 
 import StudentStatus from './pages/student/Status';
 import StudentHistory from './pages/student/History';
@@ -294,6 +295,7 @@ const AppContent = () => {
             <Route path="/faculty" element={<FacultyDashboard />} />
             <Route path="/faculty/classes" element={<MyClasses />} />
             <Route path="/faculty/pending" element={<Pending />} />
+            <Route path="/faculty/mentoring" element={<Mentoring />} />
             <Route path="/faculty/history" element={<FacultyHistory />} />
           </Route>
 

@@ -68,7 +68,7 @@ export const getStudents = async (req, res, next) => {
       Student.countDocuments(query),
       Student.find(query)
         .select('_id rollNo name email classId departmentId semester mentorId isActive')
-        .populate('classId', 'name semester')
+        .populate('classId', 'name semester isMaster')
         .populate('departmentId', 'name')
         .populate('mentorId', 'name employeeId')
         .sort({ rollNo: 1 })
@@ -78,21 +78,27 @@ export const getStudents = async (req, res, next) => {
     ]);
 
     const payload = {
-      data: students.map((s) => ({
-        _id:            s._id,
-        rollNo:         s.rollNo,
-        name:           s.name,
-        email:          s.email,
-        classId:        s.classId?._id,
-        className:      s.classId?.name ?? null,
-        departmentName: s.departmentId?.name ?? null,
-        semester:       s.classId?.semester ?? s.semester,
-        mentor:         s.mentorId
-          ? { _id: s.mentorId._id, name: s.mentorId.name }
-          : null,
-        mentorName:     s.mentorId?.name ?? null,
-        isActive:       s.isActive,
-      })),
+      data: students.map((s) => {
+        const classIsMaster = s.classId?.isMaster === true;
+        return {
+          _id:            s._id,
+          rollNo:         s.rollNo,
+          name:           s.name,
+          email:          s.email,
+          classId:        s.classId?._id,
+          // Guard: if student's classId points to a Curriculum Master blueprint,
+          // surface a clear flag instead of the misleading master class name.
+          className:      classIsMaster ? null : (s.classId?.name ?? null),
+          classIsMaster,            // ← new: frontend can render a repair badge
+          departmentName: s.departmentId?.name ?? null,
+          semester:       s.classId?.semester ?? s.semester,
+          mentor:         s.mentorId
+            ? { _id: s.mentorId._id, name: s.mentorId.name }
+            : null,
+          mentorName:     s.mentorId?.name ?? null,
+          isActive:       s.isActive,
+        };
+      }),
       pagination: {
         page: Number(page), limit: Number(limit), total,
         pages: Math.ceil(total / Number(limit)),
@@ -121,6 +127,10 @@ export const createStudent = async (req, res, next) => {
     if (!cls) {
       await abortSafeTransaction(session);
       return next(new ErrorResponse('Class not found', 404, 'NOT_FOUND'));
+    }
+    if (cls.isMaster) {
+      await abortSafeTransaction(session);
+      return next(new ErrorResponse('Students cannot be enrolled into a Curriculum Master blueprint.', 400, 'VAL_002'));
     }
 
     if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
@@ -308,6 +318,10 @@ export const updateStudent = async (req, res, next) => {
       if (!cls) {
         await abortSafeTransaction(session);
         return next(new ErrorResponse('New Class not found', 404, 'NOT_FOUND'));
+      }
+      if (cls.isMaster) {
+        await abortSafeTransaction(session);
+        return next(new ErrorResponse('Students cannot be moved to a Curriculum Master blueprint.', 400, 'VAL_002'));
       }
       if ((req.user.role === 'hod' || req.user.role === 'ao') && cls.departmentId?.toString() !== req.user.departmentId) {
         await abortSafeTransaction(session);
@@ -791,6 +805,162 @@ export const bulkDeactivateStudents = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (err) {
+    await abortSafeTransaction(session);
+    next(err);
+  } finally {
+    session.endSession();
+  }
+};
+
+// ── GET /api/students/repair/master-contamination ──────────────────────────────
+// Audit: find all students whose classId points to a Curriculum Master blueprint.
+// Admin-only. Read-only — no mutations.
+export const auditStudentsInMaster = async (req, res, next) => {
+  try {
+    // 1. Find all master classes
+    const masterClasses = await Class.find({ isMaster: true }).select('_id name semester departmentId').lean();
+    if (masterClasses.length === 0) {
+      return res.status(200).json({ success: true, data: { affected: [], total: 0 } });
+    }
+    const masterIds = masterClasses.map((c) => c._id);
+    const masterMap = new Map(masterClasses.map((c) => [c._id.toString(), c]));
+
+    // 2. Find students enrolled in those master classes
+    const affected = await Student.find({ classId: { $in: masterIds } })
+      .select('_id rollNo name classId departmentId semester')
+      .lean();
+
+    logger.warn('repair_audit_students_in_master', {
+      actor: req.user.userId,
+      action: 'audit_students_in_master',
+      resource_id: 'system',
+      error_code: null,
+      duration_ms: 0,
+      message: `Audit found ${affected.length} students enrolled in Curriculum Master blueprints`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        total: affected.length,
+        affected: affected.map((s) => ({
+          _id: s._id,
+          rollNo: s.rollNo,
+          name: s.name,
+          masterClass: masterMap.get(s.classId?.toString()) ?? null,
+        })),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /api/students/repair/master-contamination ─────────────────────────────
+// Repair: for each student stuck in a master class, attempt to find the matching
+// operational class (same dept + semester, isMaster:false) and re-assign them.
+// If no match found, classId is set to null (unassigned) and flagged in the log.
+// Admin-only. DESTRUCTIVE — only proceeds if admin explicitly sends { confirm: true }.
+export const repairStudentsInMaster = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  try {
+    const { confirm } = req.body;
+    if (!confirm) {
+      return next(new ErrorResponse(
+        'Send { "confirm": true } in the request body to execute this repair.',
+        400,
+        'VAL_001'
+      ));
+    }
+
+    await startSafeTransaction(session);
+
+    const masterClasses = await Class.find({ isMaster: true }).select('_id departmentId semester').lean();
+    if (masterClasses.length === 0) {
+      await abortSafeTransaction(session);
+      return res.status(200).json({ success: true, data: { repaired: 0, unresolvable: [] } });
+    }
+    const masterIds = masterClasses.map((c) => c._id);
+
+    const affected = await Student.find({ classId: { $in: masterIds } })
+      .select('_id rollNo name classId departmentId semester')
+      .session(session)
+      .lean();
+
+    if (affected.length === 0) {
+      await abortSafeTransaction(session);
+      return res.status(200).json({ success: true, data: { repaired: 0, unresolvable: [] } });
+    }
+
+    const masterMap = new Map(masterClasses.map((c) => [c._id.toString(), c]));
+    const unresolvable = [];
+    let repaired = 0;
+
+    for (const student of affected) {
+      const master = masterMap.get(student.classId?.toString());
+      if (!master) continue;
+
+      // Find the best operational class in the same dept + semester
+      const operationalClass = await Class.findOne({
+        departmentId: master.departmentId,
+        semester: master.semester,
+        isMaster: { $ne: true },
+        isActive: true,
+      }).session(session).lean();
+
+      if (operationalClass) {
+        await Student.updateOne(
+          { _id: student._id },
+          {
+            $set: {
+              classId: operationalClass._id,
+              departmentId: operationalClass.departmentId,
+              semester: operationalClass.semester,
+            },
+          },
+          { session }
+        );
+        repaired++;
+
+        logger.warn('repair_student_master_contamination', {
+          actor: req.user.userId,
+          action: 'repair_student_master_class',
+          resource_id: student._id,
+          error_code: null,
+          duration_ms: 0,
+          message: `Re-assigned student ${student.rollNo} from master class to ${operationalClass.name}`,
+        });
+      } else {
+        // No operational class found — null out the classId and flag for manual review
+        await Student.updateOne(
+          { _id: student._id },
+          { $set: { classId: null } },
+          { session }
+        );
+        unresolvable.push({ rollNo: student.rollNo, name: student.name, reason: 'No operational class found for dept/sem' });
+
+        logger.error({
+          actor: req.user.userId,
+          action: 'repair_student_master_unresolvable',
+          resource_id: student._id,
+          error_code: 'DB_002',
+          duration_ms: 0,
+          message: `Could not resolve operational class for student ${student.rollNo} — classId set to null`,
+        });
+      }
+    }
+
+    await commitSafeTransaction(session);
+
+    // Invalidate all student + class caches
+    invalidateEntityCache('student', 'all');
+    masterIds.forEach((id) => invalidateEntityCache('class', id.toString()));
+
+    return res.status(200).json({
+      success: true,
+      data: { repaired, unresolvable },
     });
   } catch (err) {
     await abortSafeTransaction(session);

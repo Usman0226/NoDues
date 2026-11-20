@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { 
   Check, 
   Upload, 
@@ -14,12 +14,17 @@ import {
   CheckCircle2,
   X,
   FileSpreadsheet,
-  Sparkles
+  Sparkles,
+  Users,
+  ChevronDown
 } from 'lucide-react';
 import Button from '../ui/Button';
 import FileDropzone from '../ui/FileDropzone';
 import Table from '../ui/Table';
+import SearchableSelect from '../ui/SearchableSelect';
+import ClassPickerCombobox from './ClassPickerCombobox';
 import { previewImport, commitImport, getTemplate } from '../../api/import';
+import { getClasses, createClass } from '../../api/classes';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
 
@@ -83,7 +88,71 @@ const TYPE_CONFIG = {
   }
 };
 
-const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete }) => {
+const AuxiliarySheetsDropdown = ({ sheets = [], activeSheetName, onSelect }) => {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const clickOutside = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', clickOutside);
+    return () => document.removeEventListener('mousedown', clickOutside);
+  }, [open]);
+
+  if (!sheets.length) return null;
+
+  const activeAux = sheets.find((s) => s.sheetName === activeSheetName);
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`h-7 px-2.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+          activeAux
+            ? 'bg-zinc-800 text-white border-zinc-900 shadow-2xs'
+            : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300 hover:text-zinc-900 shadow-2xs'
+        }`}
+      >
+        <span>{activeAux ? `Sheet: ${activeAux.sheetName}` : `Other Sheets (${sheets.length})`}</span>
+        <ChevronDown size={11} className={`text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 mt-1 w-52 rounded-xl bg-white border border-zinc-200/90 shadow-xl z-[1200] overflow-hidden p-1 text-left animate-in fade-in zoom-in-95 duration-100">
+          <div className="px-2 py-1 text-[9px] font-black uppercase tracking-wider text-zinc-400">
+            Non-Roster Worksheets
+          </div>
+          {sheets.map((s) => {
+            const count = s.rows?.length || s.valid?.length || s.summary?.total || 0;
+            return (
+              <button
+                key={s.sheetName}
+                type="button"
+                onClick={() => {
+                  onSelect(s.sheetName);
+                  setOpen(false);
+                }}
+                className={`w-full px-2 py-1.5 rounded-md text-xs flex items-center justify-between text-left transition-colors cursor-pointer ${
+                  s.sheetName === activeSheetName
+                    ? 'bg-indigo-50 text-indigo-950 font-bold'
+                    : 'hover:bg-zinc-50 text-zinc-700'
+                }`}
+              >
+                <span className="truncate">{s.sheetName}</span>
+                <span className="text-[10px] text-zinc-400 font-mono">{count} rows</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ImportStepper = ({ type = 'students', classId: propClassId, classes: propClasses = [], contextLabel, onComplete }) => {
   const { addBackgroundTask, updateBackgroundTask } = useUI();
   const [currentStep, setCurrentStep] = useState(0);
   const [currentFile, setCurrentFile] = useState(null);
@@ -92,13 +161,106 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Target class state for student roster ingestion
+  const [selectedClassId, setSelectedClassId] = useState(propClassId || null);
+  const [availableClasses, setAvailableClasses] = useState(propClasses);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+
+  // Multi-sheet and batch state
+  const [activeSheetName, setActiveSheetName] = useState(null);
+  const [sheetClassOverrides, setSheetClassOverrides] = useState({});
+  const [selectedSheetNames, setSelectedSheetNames] = useState(new Set());
+  const [isBatchMode, setIsBatchMode] = useState(false);
+
   // Preview filtering state
   const [filterTab, setFilterTab] = useState('all'); // 'all' | 'valid' | 'errors'
   const [searchQuery, setSearchQuery] = useState('');
 
   const config = TYPE_CONFIG[type] || TYPE_CONFIG.students;
 
+  // Auto-fetch active classes if importing students and availableClasses is empty
+  useEffect(() => {
+    if (type === 'students' && (!availableClasses || availableClasses.length === 0)) {
+      setLoadingClasses(true);
+      getClasses({ limit: 150 })
+        .then((res) => {
+          const cls = (res?.data || []).filter((c) => !c.isMaster);
+          setAvailableClasses(cls);
+          if (cls.length === 1 && !selectedClassId) {
+            setSelectedClassId(cls[0]._id);
+          }
+        })
+        .catch((err) => {
+          console.warn('Failed to fetch classes for import stepper', err);
+        })
+        .finally(() => setLoadingClasses(false));
+    }
+  }, [type, availableClasses, selectedClassId]);
+
+  useEffect(() => {
+    if (propClasses && propClasses.length > 0) {
+      const filtered = propClasses.filter((c) => !c.isMaster);
+      setAvailableClasses(filtered);
+      if (filtered.length === 1 && !selectedClassId) {
+        setSelectedClassId(filtered[0]._id);
+      }
+    }
+  }, [propClasses, selectedClassId]);
+
+  useEffect(() => {
+    if (propClassId) {
+      setSelectedClassId(propClassId);
+    }
+  }, [propClassId]);
+
+  const effectiveClassId = propClassId || selectedClassId;
+
+  const currentClassObj = useMemo(() => {
+    return (
+      availableClasses.find((c) => c._id === effectiveClassId) ||
+      (previewData?.targetClass?._id === effectiveClassId ? previewData.targetClass : null)
+    );
+  }, [availableClasses, effectiveClassId, previewData]);
+
+  // Multi-sheet resolution: resolve current active sheet object
+  const activeSheetObj = useMemo(() => {
+    if (!previewData?.sheets || previewData.sheets.length === 0) {
+      return previewData;
+    }
+    const found = previewData.sheets.find(
+      (s) => s.sheetName.toLowerCase() === (activeSheetName || previewData.activeSheet || '').toLowerCase()
+    );
+    return found || previewData.sheets[0] || previewData;
+  }, [previewData, activeSheetName]);
+
+  const rosterSheets = useMemo(() => {
+    return (previewData?.sheets || []).filter((s) => s.sheetType === 'roster');
+  }, [previewData]);
+
+  const auxiliarySheetsWithRows = useMemo(() => {
+    return (previewData?.sheets || []).filter(
+      (s) =>
+        s.sheetType !== 'roster' &&
+        ((s.rows && s.rows.length > 0) || (s.valid && s.valid.length > 0) || (s.summary && s.summary.total > 0))
+    );
+  }, [previewData]);
+
+  const selectedRosterSheets = useMemo(() => {
+    return rosterSheets.filter((s) => selectedSheetNames.has(s.sheetName));
+  }, [rosterSheets, selectedSheetNames]);
+
+  const totalBatchValidCount = useMemo(() => {
+    return selectedRosterSheets.reduce((sum, s) => sum + (s.valid?.length || s.summary?.valid || 0), 0);
+  }, [selectedRosterSheets]);
+
   const handleFileUpload = useCallback(async (uploadedFile) => {
+    if (!uploadedFile) {
+      setCurrentFile(null);
+      setPreviewData(null);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setCurrentFile(uploadedFile);
@@ -107,9 +269,50 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
     formData.append('file', uploadedFile);
 
     try {
-      const params = type === 'students' ? { classId } : {};
+      const params = {
+        ...(type === 'students' && effectiveClassId ? { classId: effectiveClassId } : {}),
+      };
       const response = await previewImport(type, formData, params);
       setPreviewData(response.data);
+
+      if (response.data?.sheets) {
+        const initialActive = response.data.activeSheet || response.data.sheets[0]?.sheetName;
+        setActiveSheetName(initialActive);
+
+        // Select all valid roster sheets by default
+        const initialSelected = new Set(
+          response.data.sheets
+            .filter((s) => s.sheetType === 'roster' && (s.summary?.valid > 0 || s.valid?.length > 0))
+            .map((s) => s.sheetName)
+        );
+        setSelectedSheetNames(initialSelected);
+
+        // Pre-populate sheet class overrides from detected classes
+        const initialOverrides = {};
+        for (const s of response.data.sheets) {
+          if (s.targetClass?._id) {
+            initialOverrides[s.sheetName] = s.targetClass._id;
+          }
+        }
+        setSheetClassOverrides(initialOverrides);
+
+        // Merge any detected target classes into availableClasses if not yet present
+        setAvailableClasses((prev) => {
+          const existingIds = new Set(prev.map((c) => c._id));
+          const newClasses = [];
+          for (const s of response.data.sheets) {
+            if (s.targetClass?._id && !existingIds.has(s.targetClass._id)) {
+              existingIds.add(s.targetClass._id);
+              newClasses.push(s.targetClass);
+            }
+          }
+          return newClasses.length > 0 ? [...prev, ...newClasses] : prev;
+        });
+      }
+
+      if (response.data?.targetClass?._id) {
+        setSelectedClassId(response.data.targetClass._id);
+      }
       setCurrentStep(1);
       setFilterTab('all');
       setSearchQuery('');
@@ -119,78 +322,182 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
     } finally {
       setLoading(false);
     }
-  }, [type, classId]);
+  }, [type, effectiveClassId]);
 
-  const handleSelectSheet = useCallback(async (selectedSheet) => {
-    if (!currentFile) return;
-    setLoading(true);
+  const handleSelectSheet = useCallback((selectedSheet) => {
+    setActiveSheetName(selectedSheet);
+    setFilterTab('all');
+    setSearchQuery('');
     setError(null);
-    const formData = new FormData();
-    formData.append('file', currentFile);
-    try {
-      const params = { ...(type === 'students' ? { classId } : {}), sheet: selectedSheet };
-      const response = await previewImport(type, formData, params);
-      setPreviewData(response.data);
-      setFilterTab('all');
-      setSearchQuery('');
-    } catch (err) {
-      setError(err?.message || 'Failed to switch sheet');
-      toast.error('Sheet analysis failed');
-    } finally {
-      setLoading(false);
+  }, []);
+
+  const handleQuickCreateClass = useCallback(
+    async ({ name, semester, departmentCode }) => {
+      try {
+        const matchingDeptClass =
+          availableClasses.find((c) => {
+            const cDeptCode = String(c.departmentId?.code || '').toUpperCase();
+            const cDeptName = String(c.departmentId?.name || '').toUpperCase();
+            const cName = String(c.name || '').toUpperCase();
+            const dCode = String(departmentCode || '').toUpperCase();
+            return dCode && (cDeptCode === dCode || cDeptName.includes(dCode) || cName.includes(dCode));
+          }) || availableClasses[0];
+
+        const departmentId = matchingDeptClass?.departmentId?._id || matchingDeptClass?.departmentId;
+        const academicYear = matchingDeptClass?.academicYear || '2026-27';
+
+        if (!departmentId) {
+          toast.error('Unable to auto-detect department for section creation.');
+          return null;
+        }
+
+        const res = await createClass({
+          name,
+          semester: Number(semester) || 1,
+          departmentId,
+          academicYear,
+        });
+
+        const newCls = res?.data || res;
+        if (newCls?._id) {
+          setAvailableClasses((prev) => {
+            const exists = prev.some((c) => c._id === newCls._id);
+            return exists ? prev : [...prev, newCls];
+          });
+          toast.success(`Created section "${newCls.name}" (Sem ${newCls.semester})`);
+          return newCls._id;
+        }
+      } catch (err) {
+        toast.error(err?.message || 'Failed to create section');
+      }
+      return null;
+    },
+    [availableClasses]
+  );
+
+  const handleCommit = useCallback(async (isBatch = false) => {
+    if (type === 'students' && isBatch && selectedRosterSheets.length > 0) {
+      // Validate all selected roster sheets have target classes
+      for (const s of selectedRosterSheets) {
+        const cId = sheetClassOverrides[s.sheetName] || s.targetClass?._id || (rosterSheets.length === 1 ? effectiveClassId : null);
+        if (!cId) {
+          setError(`Please select a target class for sheet "${s.sheetName}" before committing.`);
+          toast.error(`Target class required for ${s.sheetName}`);
+          return;
+        }
+      }
+
+      const batch = selectedRosterSheets.map((s) => {
+        const cId = sheetClassOverrides[s.sheetName] || s.targetClass?._id || effectiveClassId;
+        const cObj = availableClasses.find((c) => c._id === cId) || s.targetClass;
+        return {
+          classId: cId,
+          sheetName: s.sheetName,
+          students: s.valid,
+          targetClassName: cObj?.name || 'Class'
+        };
+      });
+
+      const taskLabel = `Importing ${totalBatchValidCount} students across ${batch.length} classes`;
+      const taskId = addBackgroundTask({
+        label: taskLabel,
+        type: `import_${type}`,
+        message: `Initializing batch sync for ${batch.length} classes...`
+      });
+
+      // Dismiss modal immediately and notify user to inspect progress in Activity Center
+      onComplete?.();
+      toast.success(`Batch sync started in background for ${totalBatchValidCount} students (${batch.length} classes)`);
+
+      // Run network commit asynchronously in the background
+      (async () => {
+        try {
+          const res = await commitImport('students', { batch });
+          const serverTaskId = res.data?.taskId;
+
+          if (serverTaskId) {
+            updateBackgroundTask(taskId, {
+              _id: serverTaskId,
+              status: 'success',
+              message: res.data?.message || `Imported ${totalBatchValidCount} students across ${batch.length} classes.`
+            });
+          } else {
+            updateBackgroundTask(taskId, {
+              status: 'success',
+              message: res.data?.message || `Batch import completed successfully (${batch.length} classes).`
+            });
+          }
+
+          toast.success(`Successfully imported ${totalBatchValidCount} students across ${batch.length} classes!`);
+          window.dispatchEvent(new CustomEvent('import-complete', { detail: { type: 'students', batch: true } }));
+        } catch (err) {
+          const errorMsg = err?.message || 'Batch import failed';
+          updateBackgroundTask(taskId, {
+            status: 'error',
+            message: errorMsg
+          });
+          toast.error(`Batch import failed: ${errorMsg}`);
+        }
+      })();
+      return;
     }
-  }, [currentFile, type, classId]);
 
-  const handleCommit = useCallback(async () => {
-    const validCount = previewData?.valid?.length || 0;
-    const taskLabel = `Importing ${validCount} ${type}`;
-    
-    setLoading(true);
+    // Single class commit
+    const singleCId = sheetClassOverrides[activeSheetObj?.sheetName] || activeSheetObj?.targetClass?._id || effectiveClassId;
+    if (type === 'students' && !singleCId) {
+      setError('Please select a target class/section before committing.');
+      toast.error('Class selection required');
+      return;
+    }
 
-    // Create background task
+    const singleStudents = activeSheetObj?.valid || previewData?.valid || [];
+    const taskLabel = `Importing ${singleStudents.length} ${type}`;
+
     const taskId = addBackgroundTask({
       label: taskLabel,
       type: `import_${type}`,
       message: 'Initializing background sync...'
     });
 
-    // Close modal immediately as it's an asynchronous background operation
+    // Dismiss modal immediately and notify user
     onComplete?.();
-    toast.success('Sync started in background');
+    toast.success(`Sync started in background for ${singleStudents.length} ${type}`);
 
-    try {
-      const payload = type === 'students' 
-        ? { students: previewData.valid, classId }
-        : { [type]: previewData.valid };
+    // Run commit asynchronously in background
+    (async () => {
+      try {
+        const payload = type === 'students'
+          ? { students: singleStudents, classId: singleCId }
+          : { [type]: singleStudents };
 
-      const res = await commitImport(type, payload);
-      const serverTaskId = res.data?.taskId;
+        const res = await commitImport(type, payload);
+        const serverTaskId = res.data?.taskId;
 
-      if (serverTaskId) {
-        updateBackgroundTask(taskId, { 
-          _id: serverTaskId,
-          status: 'success', 
-          message: res.data?.message || 'Started on server' 
+        if (serverTaskId) {
+          updateBackgroundTask(taskId, {
+            _id: serverTaskId,
+            status: 'success',
+            message: res.data?.message || 'Started on server'
+          });
+        } else {
+          updateBackgroundTask(taskId, {
+            status: 'success',
+            message: res.data?.message || 'Import completed successfully'
+          });
+        }
+
+        toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} import completed successfully`);
+        window.dispatchEvent(new CustomEvent('import-complete', { detail: { type, classId: singleCId } }));
+      } catch (err) {
+        const errorMsg = err?.message || 'Connection lost during sync';
+        updateBackgroundTask(taskId, {
+          status: 'error',
+          message: errorMsg
         });
-      } else {
-        updateBackgroundTask(taskId, { 
-          status: 'success', 
-          message: res.data?.message || 'Import completed successfully' 
-        });
+        toast.error(`${type} sync failed: ${errorMsg}`);
       }
-      
-      toast.success(`${type} sync finished`);
-    } catch (err) {
-      const errorMsg = err?.message || 'Connection lost during sync';
-      updateBackgroundTask(taskId, { 
-        status: 'error', 
-        message: errorMsg 
-      });
-      toast.error(`${type} sync failed`);
-    } finally {
-      setLoading(false);
-    }
-  }, [type, previewData, classId, onComplete, addBackgroundTask, updateBackgroundTask]);
+    })();
+  }, [type, selectedRosterSheets, sheetClassOverrides, effectiveClassId, availableClasses, totalBatchValidCount, activeSheetObj, previewData, onComplete, addBackgroundTask, updateBackgroundTask, rosterSheets.length]);
 
   const handleDownloadTemplate = useCallback(async () => {
     setDownloading(true);
@@ -212,26 +519,51 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
     }
   }, [type]);
 
-  const validCount = previewData?.summary?.valid || previewData?.valid?.length || 0;
-  const errorCount = previewData?.summary?.errors || previewData?.errors?.length || 0;
-  const totalCount = previewData?.summary?.total || (validCount + errorCount);
+  const validCount = activeSheetObj?.summary?.valid !== undefined 
+    ? activeSheetObj.summary.valid 
+    : (activeSheetObj?.valid?.length || previewData?.summary?.valid || 0);
+  const errorCount = activeSheetObj?.summary?.errors !== undefined 
+    ? activeSheetObj.summary.errors 
+    : (activeSheetObj?.errors?.length || previewData?.summary?.errors || 0);
+  const totalCount = activeSheetObj?.summary?.total || (validCount + errorCount);
 
-  // Flattened data rows with standard keys
-  const dataRows = useMemo(() => [
-    ...(previewData?.valid?.map((item, idx) => ({ 
-      ...item, 
-      isValid: true, 
-      displayIndex: idx + 1,
-      errors: [] 
-    })) || []),
-    ...(previewData?.errors?.map((err, idx) => ({ 
-      ...err.data, 
-      isValid: false, 
-      displayIndex: validCount + idx + 1,
-      rowNumber: err.row, 
-      errors: [err.reason] 
-    })) || [])
-  ], [previewData, validCount]);
+  // Flattened data rows with standard keys for table sorting & rendering
+  const dataRows = useMemo(() => {
+    const validItems = activeSheetObj?.valid || previewData?.valid || [];
+    const errorItems = activeSheetObj?.errors || previewData?.errors || [];
+    const vCount = validItems.length;
+
+    return [
+      ...validItems.map((item, idx) => {
+        const id = item.rollNo || item.employeeId || item.code || item.identity || item['Roll No'] || '—';
+        const nm = item.name || item.studentName || item.facultyName || item.Name || '—';
+        return { 
+          ...item, 
+          identity: id,
+          name: nm,
+          status: 'Compliant',
+          isValid: true, 
+          displayIndex: idx + 1,
+          errors: [] 
+        };
+      }),
+      ...errorItems.map((err, idx) => {
+        const rowData = err.data || {};
+        const id = rowData.rollNo || rowData.employeeId || rowData.code || rowData.identity || rowData['Roll No'] || '—';
+        const nm = rowData.name || rowData.studentName || rowData.facultyName || rowData.Name || '—';
+        return { 
+          ...rowData, 
+          identity: id,
+          name: nm,
+          status: err.reason || 'Error',
+          isValid: false, 
+          displayIndex: vCount + idx + 1,
+          rowNumber: err.row, 
+          errors: [err.reason] 
+        };
+      })
+    ];
+  }, [activeSheetObj, previewData]);
 
   // Filtered rows for the interactive data grid
   const filteredRows = useMemo(() => {
@@ -339,16 +671,26 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
   }, [type]);
 
   return (
-    <div className="w-full flex-1 min-h-0 flex flex-col h-[82vh] max-h-[860px] min-h-[540px]">
+    <div className="w-full h-full flex-1 min-h-0 flex flex-col">
       {/* Sleek, Compact Stepper Progress Header */}
       <div className="shrink-0 mb-3 pb-2 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          {contextLabel && (
+          {rosterSheets.length > 1 ? (
+            <span className="px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-black tracking-tight flex items-center gap-1.5 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Multi-Cohort: {rosterSheets.length} Classes Detected ({totalBatchValidCount} Students)
+            </span>
+          ) : currentClassObj ? (
+            <span className="px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-black tracking-tight flex items-center gap-1.5 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Class: {currentClassObj.name} {currentClassObj.semester ? `(Sem ${currentClassObj.semester})` : ''}
+            </span>
+          ) : contextLabel ? (
             <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-100/80 text-indigo-700 text-xs font-black tracking-tight flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
               {contextLabel}
             </span>
-          )}
+          ) : null}
         </div>
 
         {/* Compact Segmented Stepper */}
@@ -410,6 +752,40 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
                       </p>
                     </div>
 
+                    {/* Target Academic Section Picker (When launched from global list) */}
+                    {type === 'students' && !propClassId && (
+                      <div className="p-2.5 rounded-xl bg-white border border-indigo-200/90 shadow-2xs flex flex-col gap-1 ring-2 ring-indigo-500/10">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-navy flex items-center gap-1.5">
+                            <Users size={12} className="text-indigo-600" />
+                            Target Academic Section
+                          </label>
+                          <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-1.5 py-0.2 rounded">Required</span>
+                        </div>
+                        <SearchableSelect
+                          options={availableClasses.map((c) => ({
+                            value: c._id,
+                            label: `${c.name} (Semester ${c.semester})`,
+                            subLabel: `${c.academicYear || ''} • ${c.departmentId?.name || ''}`
+                          }))}
+                          value={effectiveClassId}
+                          onChange={(val) => {
+                            setSelectedClassId(val);
+                            setError(null);
+                          }}
+                          placeholder={loadingClasses ? 'Loading academic groups...' : 'Choose Class (e.g. CSD-A, CSE-B)...'}
+                          disabled={loadingClasses}
+                          className="text-xs"
+                        />
+                        {currentClassObj && (
+                          <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 mt-0.5">
+                            <Check size={10} className="text-emerald-600" />
+                            Destination: {currentClassObj.name} (Sem {currentClassObj.semester})
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {/* Schema Requirements Checklist */}
                     <div className="flex flex-col gap-1 pt-1.5 border-t border-zinc-100">
                       <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">
@@ -470,6 +846,7 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
               {/* RIGHT COLUMN: Interactive Drag & Drop Zone (7 cols on lg) */}
               <div className="lg:col-span-7 flex flex-col h-full min-h-0">
                 <FileDropzone 
+                  file={currentFile}
                   onFileSelect={handleFileUpload} 
                   loading={loading}
                   className="flex-1 w-full h-full min-h-[320px] flex flex-col items-center justify-center p-6 bg-gradient-to-b from-white to-zinc-50/40"
@@ -492,87 +869,129 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
         {currentStep === 1 && (
           <div className="flex-1 min-h-0 flex flex-col justify-between gap-2.5 animate-in fade-in duration-200">
             
-            {/* LEVEL 1: Compact Validation Health Banner */}
-            {errorCount > 0 ? (
-              <div className="px-3 py-2 rounded-xl bg-amber-50/90 border border-amber-200/90 flex items-center justify-between gap-2.5 shadow-xs shrink-0">
+            {/* Contextual Error Alert if sheet switch or sync failed */}
+            {error && (
+              <div className="px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-2.5 text-rose-800 shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  <AlertTriangle size={15} className="text-amber-600 shrink-0" />
-                  <p className="text-xs font-semibold text-amber-900 truncate">
-                    <strong className="font-black text-amber-950">{errorCount} row{errorCount > 1 ? 's' : ''} skipped</strong> due to errors. <strong className="font-black text-emerald-900">{validCount} valid records</strong> ready to import.
-                  </p>
+                  <AlertTriangle className="text-rose-600 shrink-0" size={14} />
+                  <p className="text-xs font-bold truncate">{error}</p>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setFilterTab('valid')}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
-                      filterTab === 'valid'
-                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
-                        : 'bg-white text-emerald-800 border-emerald-200 hover:bg-emerald-50'
-                    }`}
-                  >
-                    Ready ({validCount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFilterTab('errors')}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
-                      filterTab === 'errors'
-                        ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
-                        : 'bg-white text-rose-800 border-rose-200 hover:bg-rose-50'
-                    }`}
-                  >
-                    Skipped ({errorCount})
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="px-3 py-2 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex items-center justify-between gap-2.5 shadow-xs shrink-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-                  <p className="text-xs font-semibold text-emerald-900 truncate">
-                    <span className="font-black uppercase tracking-wider text-[9px] bg-emerald-200/70 text-emerald-950 px-1.5 py-0.2 rounded-md mr-1.5">100% Valid</span>
-                    All {validCount} records match the official academic schema with zero errors.
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold text-emerald-800 bg-white/90 border border-emerald-200/90 px-2 py-0.5 rounded-md">
-                    {validCount} Ready
-                  </span>
-                  <span className="text-[10px] font-medium text-zinc-400 bg-white/50 border border-zinc-200/60 px-2 py-0.5 rounded-md">
-                    0 Skipped
-                  </span>
-                </div>
+                <button type="button" onClick={() => setError(null)} className="text-rose-400 hover:text-rose-700 cursor-pointer">
+                  <X size={13} />
+                </button>
               </div>
             )}
 
-            {/* Multi-Sheet Workbook Switcher */}
-            {previewData?.availableSheets?.length > 1 && (
-              <div className="shrink-0 flex items-center justify-between px-3 py-1.5 rounded-xl bg-indigo-50/70 border border-indigo-100/90 text-xs shadow-xs">
+            {/* STREAMLINED COHORT COMMAND BAR */}
+            {previewData?.sheets?.length > 1 ? (
+              <div className="shrink-0 p-1.5 sm:p-2 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                {/* Section Cohort Tabs with Inline Mappings */}
+                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                  <div className="flex items-center gap-1 p-0.5 bg-white border border-slate-200 rounded-lg shadow-2xs">
+                    {rosterSheets.map((s) => {
+                      const isActive = s.sheetName === activeSheetObj.sheetName;
+                      const isChecked = selectedSheetNames.has(s.sheetName);
+                      const assignedClassId = sheetClassOverrides[s.sheetName] || s.targetClass?._id;
+
+                      return (
+                        <div
+                          key={s.sheetName}
+                          className={`flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md transition-all ${
+                            isActive
+                              ? 'bg-indigo-50/90 text-indigo-950 font-bold border border-indigo-200/90 shadow-2xs'
+                              : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            title="Include in import batch"
+                            onChange={(e) => {
+                              const next = new Set(selectedSheetNames);
+                              if (e.target.checked) next.add(s.sheetName);
+                              else next.delete(s.sheetName);
+                              setSelectedSheetNames(next);
+                            }}
+                            className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-zinc-300 cursor-pointer"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSheet(s.sheetName)}
+                            className="text-xs font-black tracking-tight cursor-pointer"
+                          >
+                            {s.sheetName}
+                          </button>
+                          <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.2 rounded">
+                            {s.valid?.length || 0}
+                          </span>
+                          <span className="text-zinc-300 text-xs">→</span>
+                          <ClassPickerCombobox
+                            value={assignedClassId}
+                            onChange={(cId) => {
+                              setSheetClassOverrides((prev) => ({
+                                ...prev,
+                                [s.sheetName]: cId,
+                              }));
+                            }}
+                            classes={availableClasses}
+                            sheetName={s.sheetName}
+                            sheetMeta={s.meta}
+                            onQuickCreate={handleQuickCreateClass}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Auxiliary Non-Roster Sheets Dropdown (Only if sheets have rows) */}
+                  {auxiliarySheetsWithRows.length > 0 && (
+                    <AuxiliarySheetsDropdown
+                      sheets={auxiliarySheetsWithRows}
+                      activeSheetName={activeSheetObj.sheetName}
+                      onSelect={handleSelectSheet}
+                    />
+                  )}
+                </div>
+
+                {/* Right: Validation Health Badge */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {errorCount > 0 ? (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                      <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+                      <span><strong>{validCount}</strong> valid • <strong className="text-rose-700">{errorCount}</strong> skipped</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200/90 text-emerald-900 text-xs font-semibold">
+                      <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                      <span><strong>{validCount}</strong> valid (100% compliant)</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Single-Sheet Clean Health Strip */
+              <div className="shrink-0 p-2 rounded-xl bg-slate-50 border border-slate-200/90 flex items-center justify-between gap-2 shadow-2xs">
                 <div className="flex items-center gap-2 min-w-0">
-                  <FileSpreadsheet size={14} className="text-indigo-600 shrink-0" />
-                  <span className="text-[11px] font-bold text-indigo-950 shrink-0">Workbook Sheets:</span>
-                  <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 scrollbar-thin">
-                    {previewData.availableSheets.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => handleSelectSheet(s)}
-                        disabled={loading}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap ${
-                          previewData.sheetName === s
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'bg-white text-zinc-600 border border-zinc-200/80 hover:bg-zinc-50'
-                        }`}
-                      >
-                        {s}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-navy shadow-2xs">
+                    <span className="text-zinc-500 font-normal">Target Class:</span>
+                    <strong className="text-indigo-600 font-mono">
+                      {currentClassObj ? `${currentClassObj.name} (Sem ${currentClassObj.semester})` : (contextLabel || 'Directory Sync')}
+                    </strong>
                   </div>
                 </div>
-                <span className="text-[10px] font-semibold text-indigo-700/80 shrink-0 ml-2 hidden sm:inline">
-                  Viewing: <strong>{previewData.sheetName}</strong>
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {errorCount > 0 ? (
+                    <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                      <AlertTriangle size={12} className="text-amber-600" />
+                      <span><strong>{validCount}</strong> valid • <strong className="text-rose-700">{errorCount}</strong> skipped</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold">
+                      <CheckCircle2 size={12} className="text-emerald-600" />
+                      <span><strong>{validCount}</strong> valid (100% compliant)</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -679,8 +1098,13 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
               <Button 
                 variant="secondary" 
                 size="sm"
-                className="h-8.5 px-3 text-xs font-bold text-navy gap-1.5 bg-zinc-50 border border-zinc-200 hover:bg-zinc-100"
-                onClick={() => setCurrentStep(0)}
+                className="h-8.5 px-3 text-xs font-bold text-navy gap-1.5 bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 cursor-pointer"
+                onClick={() => {
+                  setCurrentFile(null);
+                  setPreviewData(null);
+                  setError(null);
+                  setCurrentStep(0);
+                }}
                 disabled={loading}
               >
                 <RefreshCw size={11} /> Choose Different File
@@ -692,20 +1116,57 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
                   size="sm"
                   onClick={onComplete} 
                   disabled={loading}
-                  className="h-8.5 px-3 text-xs font-bold text-zinc-500 hover:text-zinc-800"
+                  className="h-8.5 px-3 text-xs font-bold text-zinc-500 hover:text-zinc-800 cursor-pointer"
                 >
                   Cancel
                 </Button>
-                <Button 
-                  variant="primary" 
-                  size="sm"
-                  disabled={validCount === 0 || loading} 
-                  onClick={() => setCurrentStep(2)}
-                  className="h-8.5 px-4 text-xs font-black uppercase tracking-wider gap-1.5 shadow-sm bg-navy hover:bg-navy/90 text-white"
-                  loading={loading}
-                >
-                  Proceed with {validCount} Record{validCount > 1 ? 's' : ''} <ArrowRight size={13} />
-                </Button>
+
+                {rosterSheets.length > 1 && selectedRosterSheets.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={validCount === 0 || loading}
+                      onClick={() => {
+                        setIsBatchMode(false);
+                        setCurrentStep(2);
+                      }}
+                      className="text-xs font-semibold text-zinc-500 hover:text-navy underline decoration-zinc-300 underline-offset-2 cursor-pointer mr-1.5 disabled:opacity-40"
+                    >
+                      Import only {activeSheetObj.sheetName} ({validCount})
+                    </button>
+                    <Button 
+                      variant="primary" 
+                      size="sm"
+                      disabled={totalBatchValidCount === 0 || loading} 
+                      onClick={() => {
+                        setIsBatchMode(true);
+                        setCurrentStep(2);
+                      }}
+                      className="h-8.5 px-4 text-xs font-black uppercase tracking-wider gap-1.5 shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      loading={loading}
+                    >
+                      Import All {totalBatchValidCount} Students ({selectedRosterSheets.length} Classes) <ArrowRight size={13} />
+                    </Button>
+                  </>
+                ) : (
+                  <Button 
+                    variant="primary" 
+                    size="sm"
+                    disabled={validCount === 0 || loading} 
+                    onClick={() => {
+                      setIsBatchMode(false);
+                      setCurrentStep(2);
+                    }}
+                    className="h-8.5 px-4 text-xs font-black uppercase tracking-wider gap-1.5 shadow-sm bg-navy hover:bg-navy/90 text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    loading={loading}
+                  >
+                    {validCount > 0 ? (
+                      <>Import {validCount} Students to {currentClassObj?.name || activeSheetObj.targetClass?.name || 'Class'} <ArrowRight size={13} /></>
+                    ) : (
+                      <>No Valid Records to Import</>
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -714,7 +1175,7 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
 
         {/* STEP 2: Final Confirmation */}
         {currentStep === 2 && (
-          <div className="flex-1 min-h-0 flex flex-col items-center justify-center animate-in zoom-in-95 duration-200 text-center py-4 max-w-md mx-auto">
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center animate-in zoom-in-95 duration-200 text-center py-4 max-w-lg mx-auto w-full">
             {loading ? (
               <div className="flex flex-col items-center py-6">
                 <div className="relative mb-4">
@@ -725,18 +1186,76 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
                 </div>
                 <h3 className="text-lg font-black text-navy mb-1 uppercase tracking-tight">Syncing Directory Records</h3>
                 <p className="text-muted-foreground text-xs leading-relaxed max-w-[260px]">
-                  Writing <span className="text-navy font-bold">{validCount}</span> validated entries to the database.
+                  Writing validated entries to the database.
                 </p>
               </div>
+            ) : isBatchMode ? (
+              <div className="p-5 sm:p-6 rounded-2xl bg-white border border-indigo-200/90 shadow-sm flex flex-col items-center w-full">
+                <div className="h-12 w-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 border border-indigo-100 shadow-sm shadow-indigo-100/50">
+                  <Check size={24} strokeWidth={2.5} />
+                </div>
+                <h3 className="text-lg font-black text-navy mb-1 tracking-tight">Ready for One-Shot Multi-Class Ingestion</h3>
+                <p className="text-muted-foreground text-xs max-w-[360px] mx-auto leading-relaxed mb-4">
+                  You are about to commit <span className="text-navy font-bold">{totalBatchValidCount} validated students</span> across <span className="text-navy font-bold">{selectedRosterSheets.length} classes</span> in a single atomic transaction:
+                </p>
+
+                {error && (
+                  <div className="w-full mb-3.5 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-800 text-left">
+                    <AlertTriangle size={15} className="text-rose-600 shrink-0 mt-0.5" />
+                    <p className="text-xs font-bold leading-snug">{error}</p>
+                  </div>
+                )}
+
+                {/* Cohort Breakdown List */}
+                <div className="w-full flex flex-col gap-1.5 mb-5 max-h-[160px] overflow-y-auto scrollbar-thin">
+                  {selectedRosterSheets.map((s) => {
+                    const cId = sheetClassOverrides[s.sheetName] || s.targetClass?._id;
+                    const cObj = availableClasses.find((c) => c._id === cId) || s.targetClass;
+                    return (
+                      <div key={s.sheetName} className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 border border-zinc-200/80 text-left text-xs">
+                        <span className="font-bold text-navy">{s.sheetName}</span>
+                        <span className="text-indigo-600 font-semibold font-mono text-[11px]">→ {cObj ? `${cObj.name} (Sem ${cObj.semester})` : 'Unassigned'}</span>
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">{s.valid?.length || 0} students</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-col gap-2 w-full max-w-[280px]">
+                  <Button 
+                    variant="primary" 
+                    className="w-full h-10 text-xs font-black uppercase tracking-wider gap-2 shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer" 
+                    onClick={() => handleCommit(true)}
+                    loading={loading}
+                  >
+                    Commit All {totalBatchValidCount} Students ({selectedRosterSheets.length} Classes)
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full h-8 text-xs font-bold text-zinc-500 hover:text-zinc-800 cursor-pointer" 
+                    onClick={() => setCurrentStep(1)}
+                    disabled={loading}
+                  >
+                    Back to Review
+                  </Button>
+                </div>
+              </div>
             ) : (
-              <div className="p-5 sm:p-6 rounded-2xl bg-white border border-zinc-200/90 shadow-sm flex flex-col items-center">
+              <div className="p-5 sm:p-6 rounded-2xl bg-white border border-zinc-200/90 shadow-sm flex flex-col items-center w-full">
                 <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3 border border-emerald-100 shadow-sm shadow-emerald-100/50">
                   <Check size={24} strokeWidth={2.5} />
                 </div>
                 <h3 className="text-lg font-black text-navy mb-1 tracking-tight">Ready to Commit</h3>
                 <p className="text-muted-foreground text-xs max-w-[320px] mx-auto leading-relaxed mb-4">
-                  You are about to commit <span className="text-navy font-bold">{validCount} validated record{validCount > 1 ? 's' : ''}</span> into {contextLabel || 'the directory'}.
+                  You are about to commit <span className="text-navy font-bold">{validCount} validated record{validCount > 1 ? 's' : ''}</span> into <span className="text-navy font-bold">{currentClassObj ? `${currentClassObj.name} (Sem ${currentClassObj.semester || '?'})` : (contextLabel || 'the directory')}</span>.
                 </p>
+
+                {error && (
+                  <div className="w-full mb-3.5 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-800 text-left">
+                    <AlertTriangle size={15} className="text-rose-600 shrink-0 mt-0.5" />
+                    <p className="text-xs font-bold leading-snug">{error}</p>
+                  </div>
+                )}
 
                 <div className="w-full grid grid-cols-2 gap-2.5 mb-5 p-2.5 rounded-xl bg-zinc-50 border border-zinc-100 text-left">
                   <div className="flex flex-col">
@@ -752,15 +1271,15 @@ const ImportStepper = ({ type = 'students', classId, contextLabel, onComplete })
                 <div className="flex flex-col gap-2 w-full max-w-[240px]">
                   <Button 
                     variant="primary" 
-                    className="w-full h-10 text-xs font-black uppercase tracking-wider gap-2 shadow-sm" 
-                    onClick={handleCommit}
+                    className="w-full h-10 text-xs font-black uppercase tracking-wider gap-2 shadow-sm cursor-pointer" 
+                    onClick={() => handleCommit(false)}
                     loading={loading}
                   >
                     Commit {validCount} Record{validCount > 1 ? 's' : ''}
                   </Button>
                   <Button 
                     variant="ghost" 
-                    className="w-full h-8 text-xs font-bold text-zinc-500" 
+                    className="w-full h-8 text-xs font-bold text-zinc-500 hover:text-zinc-800 cursor-pointer" 
                     onClick={() => setCurrentStep(1)}
                     disabled={loading}
                   >

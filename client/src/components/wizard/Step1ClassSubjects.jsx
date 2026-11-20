@@ -117,7 +117,7 @@ const Step1ClassSubjects = ({
 
   const { data: classRes } = useQuery({
     queryKey: ['wizard', 'all-classes', activeDepartmentId || 'all'],
-    queryFn: () => getClasses({ limit: 150 }),
+    queryFn: () => getClasses({ limit: 150, includeMaster: true }),
   });
 
   const allClasses = useMemo(

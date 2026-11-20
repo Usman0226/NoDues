@@ -46,6 +46,7 @@ import cache from '../config/cache.js';
 
 nodueRequestSchema.index({ batchId: 1, status: 1 });
 nodueRequestSchema.index({ studentId: 1 });
+nodueRequestSchema.index({ studentId: 1, createdAt: -1 });
 nodueRequestSchema.index({ batchId: 1, studentId: 1 });
 
 // ── Cache Invalidation Hooks ────────────────────────────────────────────────

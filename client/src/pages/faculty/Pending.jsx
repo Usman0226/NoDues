@@ -15,7 +15,7 @@ import {
   bulkApproveRecords 
 } from '../../api/approvals';
 import { getSSEConnectUrl } from '../../api/sse';
-import { getMyClasses } from '../../api/faculty';
+import { getMyBatches } from '../../api/faculty';
 import Modal from '../../components/ui/Modal';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import BackHeader from '../../components/ui/BackHeader';
@@ -33,7 +33,9 @@ import {
   UserCheck,
   ExternalLink,
   PlaneTakeoff,
-  Filter
+  Filter,
+  Lock,
+  Archive
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useUI } from '../../hooks/useUI';
@@ -271,8 +273,19 @@ const Pending = () => {
   ];
 
 
-  const { data: classesData } = useApi(getMyClasses, { immediate: true });
-  
+  const { data: batchesData, request: fetchBatches } = useApi(getMyBatches, { immediate: true });
+  const batchesList = useMemo(() => batchesData?.data || [], [batchesData?.data]);
+
+  const currentSelectedBatch = useMemo(() => {
+    if (selectedBatch === 'all') return null;
+    return batchesList.find(b => b._id === selectedBatch || b.classId === selectedBatch) || null;
+  }, [selectedBatch, batchesList]);
+
+  const isBatchClosed = Boolean(
+    currentSelectedBatch?.status === 'closed' || 
+    response?.meta?.isBatchClosed
+  );
+
   const baseTotal = response?.pagination?.total || 0;
 
   const baseApprovals = useMemo(() => {
@@ -358,6 +371,7 @@ const Pending = () => {
         });
       } else {
         fetchApprovals({ page, limit, search: debouncedSearch, batchId: selectedBatch !== 'all' ? selectedBatch : undefined, action: filter });
+        fetchBatches();
       }
     },
     sseEvents
@@ -538,7 +552,23 @@ const Pending = () => {
       render: (_, row) => {
         const isActioning = actionLoading === row._id;
         const isCoCurricular = row.approvalType === 'coCurricular';
+        const rowClosed = isBatchClosed || row.isBatchClosed;
         
+        if (rowClosed) {
+          return (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 text-zinc-400 text-[10px] font-bold uppercase tracking-wider border border-zinc-200/60">
+                <Lock size={10} /> Archived
+              </span>
+              {row.action === 'due_marked' && row.dueType && (
+                <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100">
+                  {row.dueType}
+                </span>
+              )}
+            </div>
+          );
+        }
+
         if (row.action === 'pending' || row.action === 'not_submitted') {
           return (
             <div className="flex items-center gap-1.5">
@@ -571,9 +601,37 @@ const Pending = () => {
           );
         }
 
+        if (row.action === 'due_marked') {
+          return (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUpdate(row._id, { action: 'approved', remarks: 'Deficiency cleared by faculty' });
+                }}
+                disabled={isActioning}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all border border-emerald-200/60 shadow-sm"
+                title="Resolve Deficiency & Grant Clearance"
+              >
+                {isActioning ? <Loader2 size={10} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                Clear & Approve
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleUpdate(row._id, { action: 'pending' }); }}
+                disabled={isActioning}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-100 text-zinc-500 hover:bg-zinc-200 text-[10px] font-bold uppercase transition-colors"
+                title="Reset back to pending"
+              >
+                <RefreshCw size={10} /> Reset
+              </button>
+            </div>
+          );
+        }
+
         return (
           <button
             onClick={(e) => { e.stopPropagation(); handleUpdate(row._id, { action: 'pending' }); }}
+            disabled={isActioning}
             className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-100 text-zinc-500 hover:bg-zinc-200 text-[10px] font-bold uppercase transition-colors"
           >
             <RefreshCw size={10} /> Reset
@@ -583,14 +641,33 @@ const Pending = () => {
     },
   ];
 
-  const classes = useMemo(() => {
-    return (classesData?.data || []).map((c) => ({
-      id: c._id,
-      name: c.name
-    }));
-  }, [classesData]);
+  const batchOptions = useMemo(() => {
+    const active = [];
+    const closed = [];
+    batchesList.forEach((b) => {
+      const semStr = b.semester ? `Sem ${b.semester}` : '';
+      const yrStr = b.academicYear ? `${b.academicYear}` : '';
+      const tag = [semStr, yrStr].filter(Boolean).join(' · ');
+      const label = `${b.name}${tag ? ` (${tag})` : ''}`;
+      const itemObj = {
+        id: b._id,
+        classId: b.classId,
+        name: label,
+        status: b.status,
+        isClosed: b.status === 'closed',
+        subLabel: b.status === 'closed' ? 'Archived / Closed' : (b.pendingCount > 0 ? `${b.pendingCount} pending` : 'All clear'),
+        group: b.status === 'closed' ? 'Archived / Past Cycles' : 'Active Cycles'
+      };
+      if (b.status === 'closed') closed.push(itemObj);
+      else active.push(itemObj);
+    });
 
-
+    return [
+      { id: 'all', name: 'All Active Batches', subLabel: 'Combined Queue' },
+      ...active,
+      ...closed
+    ];
+  }, [batchesList]);
 
   const bulkActionsList = useMemo(() => [
     {
@@ -721,10 +798,10 @@ const Pending = () => {
                 <Settings2 size={14} />
                </div>
                <SearchableSelect 
-                options={classes}
+                options={batchOptions}
                 value={selectedBatch}
                 onChange={(val) => { setSelectedBatch(val || 'all'); setSelection([]); setPage(1); }}
-                placeholder="Filter by Class"
+                placeholder="Filter by Batch / Class"
                 labelKey="name"
                 idKey="id"
                 variant="ghost"
@@ -737,7 +814,7 @@ const Pending = () => {
             <button
               onClick={async () => {
                 const hide = showGlobalLoader('Fetching latest records...');
-                await fetchApprovals();
+                await Promise.all([fetchApprovals(), fetchBatches()]);
                 hide();
               }}
               className={`h-11 w-11 p-0 inline-flex items-center justify-center shrink-0 rounded-full bg-white border border-zinc-200 text-zinc-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-500/5 transition-all ${loading ? 'opacity-50' : ''}`}
@@ -748,6 +825,32 @@ const Pending = () => {
         </motion.div>
 
         <motion.div variants={item}>
+          {isBatchClosed && (
+            <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 to-amber-100/40 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm mb-6">
+              <div className="flex items-center gap-3.5">
+                <div className="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700 shrink-0">
+                  <Lock size={18} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-black text-amber-950 uppercase tracking-wide">Archived Clearance Cycle</h4>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-200/80 text-[9px] font-black uppercase tracking-wider text-amber-900 border border-amber-300/50">
+                      Read-Only Mode
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800/80 mt-0.5 font-medium">
+                    This academic batch is closed and archived for institutional compliance. Approval actions and dues modifications are locked.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-widest bg-white/80 px-3 py-1.5 rounded-lg border border-amber-200/60 shadow-xs">
+                  {currentSelectedBatch?.name || 'Class Batch'} {currentSelectedBatch?.semester ? `· Sem ${currentSelectedBatch.semester}` : ''} {currentSelectedBatch?.academicYear ? `(${currentSelectedBatch.academicYear})` : ''}
+                </span>
+              </div>
+            </div>
+          )}
+
           {error ? (
             <div className="surface-panel p-20 text-center">
               <AlertTriangle className="mx-auto text-status-due mb-4" size={48} />
@@ -807,10 +910,10 @@ const Pending = () => {
                 searchValue={searchValue}
                 onSearchChange={setSearchValue}
                 searchPlaceholder="Search by roll number or name..."
-                selectable={filter === 'pending'} // Only allow selection in pending view
+                selectable={!isBatchClosed && filter === 'pending'} // Only allow selection in pending view for active batches
                 selection={activeSelection}
                 onSelectionChange={setSelection}
-                bulkActions={bulkActionsList}
+                bulkActions={isBatchClosed ? [] : bulkActionsList}
                 showCount
                 searchId="tour-search"
                 bulkActionsId="tour-bulk-actions"

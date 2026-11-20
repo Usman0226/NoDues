@@ -83,7 +83,7 @@ const Step2Timetable = ({
   // Classes list for Master syllabus and cloning
   const { data: classRes } = useQuery({
     queryKey: ['wizard', 'all-classes', departmentId],
-    queryFn: () => getClasses({ limit: 150 }),
+    queryFn: () => getClasses({ limit: 150, includeMaster: true }),
   });
 
   // Find Master Syllabus class for this semester

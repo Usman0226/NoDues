@@ -5,7 +5,7 @@ export const getRoleRedirect = (role) => {
     case ROLES.ADMIN: return '/admin';
     case ROLES.HOD:
     case ROLES.AO: return '/hod';
-    case ROLES.FACULTY: return '/faculty/pending';
+    case ROLES.FACULTY: return '/faculty';
     case ROLES.STUDENT: return '/student';
     default: return '/login';
   }

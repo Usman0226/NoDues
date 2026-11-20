@@ -104,17 +104,22 @@ const ensureHodApprovalCoverage = async (batch, departmentId) => {
 // ── GET /api/classes ──────────────────────────────────────────────────────────
 export const getClasses = async (req, res, next) => {
   try {
-    const { departmentId, semester, academicYear, page = 1, limit = 50, includeInactive } = req.query;
+    const { departmentId, semester, academicYear, page = 1, limit = 50, includeInactive, includeMaster } = req.query;
     const isPrivileged = ['admin', 'hod', 'ao'].includes(req.user.role);
 
     const isInactiveIncluded = includeInactive === 'true' || includeInactive === true;
-    const cacheKey = `classes:list:dept_${departmentId || 'all'}:${semester || 'all'}:${academicYear || 'all'}:${page}:${limit}:inactive_${isInactiveIncluded}`;
+    const isMasterIncluded = includeMaster === 'true' || includeMaster === true;
+    const cacheKey = `classes:list:dept_${departmentId || 'all'}:${semester || 'all'}:${academicYear || 'all'}:${page}:${limit}:inactive_${isInactiveIncluded}:master_${isMasterIncluded}`;
     const cachedData = cache.get(cacheKey);
     if (cachedData) return res.status(200).json({ success: true, ...cachedData });
 
     const query = {};
     if (!isInactiveIncluded || !isPrivileged) {
       query.isActive = true;
+    }
+    // Exclude Curriculum Master blueprints by default unless explicitly requested
+    if (!isMasterIncluded) {
+      query.isMaster = { $ne: true };
     }
     const scopedDept = deptScope(req);
     if (scopedDept)    query.departmentId = scopedDept;
@@ -237,6 +242,8 @@ export const createClass = async (req, res, next) => {
       const cls = clsArray[0];
 
       await commitSafeTransaction(session);
+
+      invalidateEntityCache('class', cls._id, cls.departmentId?.toString());
 
       logger.info('class_created', {
         timestamp: new Date().toISOString(), actor: req.user.userId,
