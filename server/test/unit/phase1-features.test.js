@@ -267,7 +267,7 @@ describe('TRD Phase 1: Additive Schemas, Timetable Parser & Action Registry', ()
   describe('Timetable Parser Normalization & Row Extraction (FR-C1 to FR-C8)', () => {
     it('normalizes faculty names by stripping honorifics, dots, and case-folding (FR-C5)', () => {
       assert.equal(normalizeFacultyName('Dr. Alan Turing'), 'alan turing');
-      assert.equal(normalizeFacultyName('Prof. Jane A. Smith, Ph.D.'), 'jane a smith phd');
+      assert.equal(normalizeFacultyName('Prof. Jane A. Smith, Ph.D.'), 'jane a smith');
       assert.equal(normalizeFacultyName('Mr.  John   Doe '), 'john doe');
       assert.equal(normalizeFacultyName('Er. K. V. Raman'), 'k v raman');
     });

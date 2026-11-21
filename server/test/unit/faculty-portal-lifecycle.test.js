@@ -310,4 +310,65 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
     assert.equal(res.body.data[0].action, 'approved');
     assert.equal(res.body.data[0].academicYear, '2026-27');
   });
+
+  it('8. GET /api/faculty/me/classes returns enriched baseInfo with departmentName, classTeacherName, and studentCount', async () => {
+    await Class.findByIdAndUpdate(classActive._id, { studentIds: [new mongoose.Types.ObjectId()] });
+
+    const res = await request(app)
+      .get('/api/faculty/me/classes')
+      .set('Authorization', `Bearer ${facultyToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.ok(Array.isArray(res.body.data));
+    const activeEntry = res.body.data.find(c => c._id.toString() === classActive._id.toString());
+    assert.ok(activeEntry);
+    assert.equal(activeEntry.departmentName, 'COMPUTER SCIENCE & DESIGN');
+    assert.equal(activeEntry.classTeacherName, 'Dr. Sarah Connor');
+    assert.equal(activeEntry.studentCount, 1);
+  });
+
+  it('9. GET /api/faculty/me/classes/:classId/students returns active students for assigned faculty', async () => {
+    const res = await request(app)
+      .get(`/api/faculty/me/classes/${classActive._id}/students`)
+      .set('Authorization', `Bearer ${facultyToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.ok(Array.isArray(res.body.data));
+    assert.equal(res.body.data.length, 1);
+    assert.equal(res.body.data[0].rollNo, '25CSD01');
+    assert.equal(res.body.data[0].name, 'John Doe');
+  });
+
+  it('10. GET /api/faculty/me/classes/:classId/students rejects unauthorized faculty and invalid classId', async () => {
+    // 10a. Invalid classId -> 400 VAL_001
+    const badIdRes = await request(app)
+      .get('/api/faculty/me/classes/not-a-valid-id/students')
+      .set('Authorization', `Bearer ${facultyToken}`);
+    assert.equal(badIdRes.status, 400);
+    assert.equal(badIdRes.body.error.code, 'VAL_001');
+
+    // 10b. Unauthorized faculty -> 403 AUTH_002
+    const otherFaculty = await Faculty.create({
+      name: 'Dr. Other Faculty',
+      email: 'other.faculty@institution.edu',
+      employeeId: 'FAC-8888',
+      departmentId: dept._id,
+      roleTags: ['faculty'],
+      isActive: true,
+      password: 'hashed_password',
+    });
+    const otherToken = signTestToken({
+      role: 'faculty',
+      userId: otherFaculty._id.toString(),
+      departmentId: dept._id.toString(),
+    });
+
+    const unauthorizedRes = await request(app)
+      .get(`/api/faculty/me/classes/${classActive._id}/students`)
+      .set('Authorization', `Bearer ${otherToken}`);
+    assert.equal(unauthorizedRes.status, 403);
+    assert.equal(unauthorizedRes.body.error.code, 'AUTH_002');
+  });
 });

@@ -509,6 +509,7 @@ export const getFacultyClasses = async (req, res, next) => {
 
     const classes = await Class.find(classQuery)
       .populate('departmentId', 'name')
+      .populate('classTeacherId', 'name employeeId')
       .sort({ academicYear: -1, semester: -1, name: 1 })
       .lean();
 
@@ -524,17 +525,20 @@ export const getFacultyClasses = async (req, res, next) => {
       const batchStatus = activeBatch ? 'active' : (latestBatch ? 'closed' : 'not_initiated');
 
       const baseInfo = {
-        _id:           c._id,
-        name:          c.name,
-        semester:      c.semester,
-        academicYear:  c.academicYear,
-        isActiveClass: c.isActive,
-        batchId:       targetBatch?._id || null,
+        _id:              c._id,
+        name:             c.name,
+        semester:         c.semester,
+        academicYear:     c.academicYear,
+        isActiveClass:    c.isActive,
+        departmentName:   c.departmentId?.name || null,
+        classTeacherName: c.classTeacherId?.name || null,
+        studentCount:     c.studentIds?.length || 0,
+        batchId:          targetBatch?._id || null,
         batchStatus,
-        isBatchClosed: batchStatus === 'closed',
-        pendingCount:  bStats.pending,
-        approvedCount: bStats.approved,
-        dueCount:      bStats.due_marked,
+        isBatchClosed:    batchStatus === 'closed',
+        pendingCount:     bStats.pending,
+        approvedCount:    bStats.approved,
+        dueCount:         bStats.due_marked,
       };
 
       if (c.classTeacherId?.toString() === id) {
@@ -562,6 +566,43 @@ export const getFacultyClasses = async (req, res, next) => {
 
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getFacultyClassStudents = async (req, res, next) => {
+  try {
+    const { classId } = req.params;
+    const facultyId = req.user.userId;
+
+    if (!classId || !mongoose.Types.ObjectId.isValid(classId)) {
+      return next(new ErrorResponse('Invalid class ID format', 400, 'VAL_001'));
+    }
+
+    // Verify this faculty teaches this class or is privileged
+    const isPrivileged = ['admin', 'hod', 'ao'].includes(req.user.role);
+    if (!isPrivileged) {
+      const cls = await Class.findOne({
+        _id: classId,
+        $or: [
+          { classTeacherId: facultyId },
+          { 'subjectAssignments.facultyId': facultyId }
+        ]
+      }).select('_id name semester academicYear departmentId').lean();
+
+      if (!cls) {
+        return next(new ErrorResponse('You do not have access to this class', 403, 'AUTH_002'));
+      }
+    }
+
+    const students = await Student.find({ classId, isActive: true })
+      .select('_id rollNo name email yearOfStudy')
+      .sort({ rollNo: 1 })
+      .lean();
+
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    return res.status(200).json({ success: true, data: students });
   } catch (err) {
     next(err);
   }

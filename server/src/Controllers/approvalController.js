@@ -343,7 +343,7 @@ export const getApprovalHistory = async (req, res, next) => {
     if (academicYear && academicYear !== 'all') batchFilter.academicYear = academicYear;
     
     if (Object.keys(batchFilter).length > 0 && (!batchId || batchId === 'all')) {
-      matchingBatches = await NodueBatch.find(batchFilter, '_id').lean();
+      const matchingBatches = await NodueBatch.find(batchFilter, '_id').lean();
       andConditions.push({ batchId: { $in: matchingBatches.map(b => b._id) } });
     }
 

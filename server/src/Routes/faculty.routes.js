@@ -6,6 +6,7 @@ import {
   updateFaculty,
   deleteFaculty,
   getFacultyClasses,
+  getFacultyClassStudents,
   getFacultyBatches,
   getFacultyMentees,
   getMenteeClearance,
@@ -27,6 +28,7 @@ router.get('/me/classes', (req, res, next) => {
   req.params.id = req.user.userId;
   next();
 }, asyncHandler(getFacultyClasses));
+router.get('/me/classes/:classId/students', asyncHandler(getFacultyClassStudents));
 router.get('/me/batches', asyncHandler(getFacultyBatches));
 router.get('/me/mentees', asyncHandler(getFacultyMentees));
 router.get('/me/mentees/:studentId/clearance', asyncHandler(getMenteeClearance));
