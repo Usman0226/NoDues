@@ -19,7 +19,9 @@ import {
 
 describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
   let facultyUser;
+  let otherFaculty;
   let facultyToken;
+  let otherFacultyToken;
   let dept;
   let classActive;
   let classPast;
@@ -30,6 +32,11 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
   let activeApproval;
   let closedApproval;
   let dueApproval;
+  let mentorApproval;
+  let studentActive;
+  let studentMentee2;
+  let mentee2Request;
+  let mentee2Approval;
 
   before(async () => {
     await setupTestEnvironment();
@@ -61,6 +68,22 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
     facultyToken = signTestToken({
       role: 'faculty',
       userId: facultyUser._id.toString(),
+      departmentId: dept._id.toString(),
+    });
+
+    otherFaculty = await Faculty.create({
+      name: 'Dr. Miles Dyson',
+      email: 'miles.dyson@institution.edu',
+      employeeId: 'FAC-9902',
+      departmentId: dept._id,
+      roleTags: ['faculty'],
+      isActive: true,
+      password: 'hashed_test_password',
+    });
+
+    otherFacultyToken = signTestToken({
+      role: 'faculty',
+      userId: otherFaculty._id.toString(),
       departmentId: dept._id.toString(),
     });
 
@@ -107,7 +130,7 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
       semester: 7,
       academicYear: '2026-27',
       status: 'active',
-      totalStudents: 1,
+      totalStudents: 2,
     });
 
     closedBatch = await NodueBatch.create({
@@ -120,7 +143,7 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
       totalStudents: 1,
     });
 
-    const studentActive = await Student.create({
+    studentActive = await Student.create({
       name: 'John Doe',
       rollNo: '25CSD01',
       email: 'john@student.edu',
@@ -128,6 +151,19 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
       departmentId: dept._id,
       semester: 7,
       academicYear: '2026-27',
+      mentorId: facultyUser._id,
+      isActive: true,
+    });
+
+    studentMentee2 = await Student.create({
+      name: 'Bob Martin',
+      rollNo: '25CSD02',
+      email: 'bob@student.edu',
+      classId: classActive._id,
+      departmentId: dept._id,
+      semester: 7,
+      academicYear: '2026-27',
+      mentorId: facultyUser._id,
       isActive: true,
     });
 
@@ -149,6 +185,13 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
       status: 'pending',
     });
 
+    mentee2Request = await NodueRequest.create({
+      batchId: activeBatch._id,
+      studentId: studentMentee2._id,
+      departmentId: dept._id,
+      status: 'pending',
+    });
+
     closedRequest = await NodueRequest.create({
       batchId: closedBatch._id,
       studentId: studentPast._id,
@@ -166,6 +209,32 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
       subjectName: 'Distributed Systems',
       approvalType: 'subject',
       roleTag: 'faculty',
+      action: 'pending',
+    });
+
+    mentorApproval = await NodueApproval.create({
+      requestId: activeRequest._id,
+      batchId: activeBatch._id,
+      studentId: studentActive._id,
+      studentRollNo: studentActive.rollNo,
+      studentName: studentActive.name,
+      facultyId: facultyUser._id,
+      subjectName: 'Mentor Sign-Off',
+      approvalType: 'mentor',
+      roleTag: 'mentor',
+      action: 'pending',
+    });
+
+    mentee2Approval = await NodueApproval.create({
+      requestId: mentee2Request._id,
+      batchId: activeBatch._id,
+      studentId: studentMentee2._id,
+      studentRollNo: studentMentee2.rollNo,
+      studentName: studentMentee2.name,
+      facultyId: otherFaculty._id, // assigned to previous mentor, student now mentored by facultyUser
+      subjectName: 'Mentor Sign-Off',
+      approvalType: 'mentor',
+      roleTag: 'mentor',
       action: 'pending',
     });
 
@@ -210,7 +279,7 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
     assert.ok(activeItem);
     assert.equal(activeItem.status, 'active');
     assert.equal(activeItem.isClosed, false);
-    assert.equal(activeItem.pendingCount, 1);
+    assert.equal(activeItem.pendingCount, 2);
     assert.equal(activeItem.dueCount, 1);
 
     const closedItem = res.body.data.find(b => b._id.toString() === closedBatch._id.toString());
@@ -241,10 +310,11 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
 
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
-    assert.equal(res.body.data.length, 1);
-    assert.equal(res.body.data[0]._id.toString(), activeApproval._id.toString());
-    assert.equal(res.body.data[0].isBatchClosed, false);
-    assert.equal(res.body.data[0].batchStatus, 'active');
+    assert.equal(res.body.data.length, 2);
+    const item = res.body.data.find(d => d._id.toString() === activeApproval._id.toString());
+    assert.ok(item);
+    assert.equal(item.isBatchClosed, false);
+    assert.equal(item.batchStatus, 'active');
   });
 
   it('4. POST /api/approvals/approve on a CLOSED batch is rejected with BATCH_CLOSED', async () => {
@@ -311,64 +381,157 @@ describe('Faculty Portal Lifecycle & Closed Batch Guardrails', () => {
     assert.equal(res.body.data[0].academicYear, '2026-27');
   });
 
-  it('8. GET /api/faculty/me/classes returns enriched baseInfo with departmentName, classTeacherName, and studentCount', async () => {
-    await Class.findByIdAndUpdate(classActive._id, { studentIds: [new mongoose.Types.ObjectId()] });
-
+  it('8. GET /api/faculty/me/mentees returns assigned mentees with accurate summary and classes', async () => {
     const res = await request(app)
-      .get('/api/faculty/me/classes')
+      .get('/api/faculty/me/mentees')
       .set('Authorization', `Bearer ${facultyToken}`);
 
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
-    assert.ok(Array.isArray(res.body.data));
-    const activeEntry = res.body.data.find(c => c._id.toString() === classActive._id.toString());
-    assert.ok(activeEntry);
-    assert.equal(activeEntry.departmentName, 'COMPUTER SCIENCE & DESIGN');
-    assert.equal(activeEntry.classTeacherName, 'Dr. Sarah Connor');
-    assert.equal(activeEntry.studentCount, 1);
+    assert.equal(res.body.data.mentees.length, 2);
+    assert.equal(res.body.data.summary.total, 2);
+    assert.equal(res.body.data.summary.pendingMyApproval, 2);
+    assert.equal(res.body.data.classes.length, 1);
+    assert.equal(res.body.data.classes[0].name, 'CSD-A');
+
+    const m1 = res.body.data.mentees.find((m) => m.rollNo === '25CSD01');
+    assert.ok(m1);
+    assert.equal(m1.name, 'John Doe');
+    assert.equal(m1.isMyActionPending, true);
+    assert.ok(m1.mentorApproval);
+    assert.equal(m1.mentorApproval.action, 'pending');
   });
 
-  it('9. GET /api/faculty/me/classes/:classId/students returns active students for assigned faculty', async () => {
-    const res = await request(app)
-      .get(`/api/faculty/me/classes/${classActive._id}/students`)
+  it('9. GET /api/faculty/me/mentees filters correctly by status and search queries', async () => {
+    // Filter by pending_my_approval
+    const pendingRes = await request(app)
+      .get('/api/faculty/me/mentees?status=pending_my_approval')
       .set('Authorization', `Bearer ${facultyToken}`);
+    assert.equal(pendingRes.status, 200);
+    assert.equal(pendingRes.body.data.mentees.length, 2);
 
-    assert.equal(res.status, 200);
-    assert.equal(res.body.success, true);
-    assert.ok(Array.isArray(res.body.data));
-    assert.equal(res.body.data.length, 1);
-    assert.equal(res.body.data[0].rollNo, '25CSD01');
-    assert.equal(res.body.data[0].name, 'John Doe');
+    // Filter by my_due_marked (currently 0)
+    const dueRes = await request(app)
+      .get('/api/faculty/me/mentees?status=my_due_marked')
+      .set('Authorization', `Bearer ${facultyToken}`);
+    assert.equal(dueRes.status, 200);
+    assert.equal(dueRes.body.data.mentees.length, 0);
+
+    // Search by roll number
+    const searchRoll = await request(app)
+      .get('/api/faculty/me/mentees?search=25CSD02')
+      .set('Authorization', `Bearer ${facultyToken}`);
+    assert.equal(searchRoll.status, 200);
+    assert.equal(searchRoll.body.data.mentees.length, 1);
+    assert.equal(searchRoll.body.data.mentees[0].rollNo, '25CSD02');
+
+    // Search by class name (CSD-A)
+    const searchClass = await request(app)
+      .get('/api/faculty/me/mentees?search=CSD-A')
+      .set('Authorization', `Bearer ${facultyToken}`);
+    assert.equal(searchClass.status, 200);
+    assert.equal(searchClass.body.data.mentees.length, 2);
   });
 
-  it('10. GET /api/faculty/me/classes/:classId/students rejects unauthorized faculty and invalid classId', async () => {
-    // 10a. Invalid classId -> 400 VAL_001
-    const badIdRes = await request(app)
-      .get('/api/faculty/me/classes/not-a-valid-id/students')
+  it('10. GET /api/faculty/me/mentees/:studentId/clearance enforces mentor authorization and returns full breakdown', async () => {
+    // Mentor access (authorized)
+    const mentorRes = await request(app)
+      .get(`/api/faculty/me/mentees/${studentActive._id}/clearance`)
       .set('Authorization', `Bearer ${facultyToken}`);
-    assert.equal(badIdRes.status, 400);
-    assert.equal(badIdRes.body.error.code, 'VAL_001');
 
-    // 10b. Unauthorized faculty -> 403 AUTH_002
-    const otherFaculty = await Faculty.create({
-      name: 'Dr. Other Faculty',
-      email: 'other.faculty@institution.edu',
-      employeeId: 'FAC-8888',
-      departmentId: dept._id,
-      roleTags: ['faculty'],
-      isActive: true,
-      password: 'hashed_password',
-    });
-    const otherToken = signTestToken({
-      role: 'faculty',
-      userId: otherFaculty._id.toString(),
-      departmentId: dept._id.toString(),
-    });
+    assert.equal(mentorRes.status, 200);
+    assert.equal(mentorRes.body.success, true);
+    assert.equal(mentorRes.body.data.student.rollNo, '25CSD01');
+    assert.ok(mentorRes.body.data.summary.total >= 2);
+    assert.ok(Array.isArray(mentorRes.body.data.approvals));
 
+    // Non-mentor faculty access (forbidden 403)
     const unauthorizedRes = await request(app)
-      .get(`/api/faculty/me/classes/${classActive._id}/students`)
-      .set('Authorization', `Bearer ${otherToken}`);
+      .get(`/api/faculty/me/mentees/${studentActive._id}/clearance`)
+      .set('Authorization', `Bearer ${otherFacultyToken}`);
+
     assert.equal(unauthorizedRes.status, 403);
-    assert.equal(unauthorizedRes.body.error.code, 'AUTH_002');
+    assert.equal(unauthorizedRes.body.success, false);
+
+    // Non-existent student (404)
+    const nonExistentId = new mongoose.Types.ObjectId();
+    const notFoundRes = await request(app)
+      .get(`/api/faculty/me/mentees/${nonExistentId}/clearance`)
+      .set('Authorization', `Bearer ${facultyToken}`);
+
+    assert.equal(notFoundRes.status, 404);
+
+    // Invalid ObjectId format (400 VAL_001)
+    const invalidIdRes = await request(app)
+      .get('/api/faculty/me/mentees/invalid-student-id/clearance')
+      .set('Authorization', `Bearer ${facultyToken}`);
+
+    assert.equal(invalidIdRes.status, 400);
+    assert.equal(invalidIdRes.body.error.code, 'VAL_001');
+  });
+
+  it('11. POST /api/approvals/approve records mentor clearance and updates mentee status', async () => {
+    const res = await request(app)
+      .post('/api/approvals/approve')
+      .set('Authorization', `Bearer ${facultyToken}`)
+      .send({ approvalId: mentorApproval._id.toString() });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.data.action, 'approved');
+
+    const updated = await NodueApproval.findById(mentorApproval._id);
+    assert.equal(updated.action, 'approved');
+  });
+
+  it('12. POST /api/approvals/mark-due flags mentor deficiency with proper validation', async () => {
+    // Missing required remarks/dueType
+    const failRes = await request(app)
+      .post('/api/approvals/mark-due')
+      .set('Authorization', `Bearer ${facultyToken}`)
+      .send({ approvalId: mentorApproval._id.toString() });
+
+    assert.equal(failRes.status, 400);
+
+    // Valid mark due
+    const res = await request(app)
+      .post('/api/approvals/mark-due')
+      .set('Authorization', `Bearer ${facultyToken}`)
+      .send({
+        approvalId: mentorApproval._id.toString(),
+        dueType: 'lab',
+        remarks: 'Component replacement pending',
+        amount: 250,
+      });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.data.action, 'due_marked');
+    assert.equal(res.body.data.dueType, 'lab');
+
+    const updated = await NodueApproval.findById(mentorApproval._id);
+    assert.equal(updated.action, 'due_marked');
+    assert.equal(updated.remarks, 'Component replacement pending');
+    assert.equal(updated.amount, 250);
+  });
+
+  it('13. POST /api/approvals/bulk-approve successfully processes mentor clearances even with unassigned facultyId', async () => {
+    const res = await request(app)
+      .post('/api/approvals/bulk-approve')
+      .set('Authorization', `Bearer ${facultyToken}`)
+      .send({
+        approvalIds: [mentorApproval._id.toString(), mentee2Approval._id.toString()],
+      });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.data.processed, 2);
+
+    const a1 = await NodueApproval.findById(mentorApproval._id);
+    assert.equal(a1.action, 'approved');
+
+    const a2 = await NodueApproval.findById(mentee2Approval._id);
+    assert.equal(a2.action, 'approved');
+    assert.equal(a2.facultyId.toString(), facultyUser._id.toString());
   });
 });

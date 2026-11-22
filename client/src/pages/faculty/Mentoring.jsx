@@ -1,30 +1,26 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Users,
   CheckCircle2,
   Clock,
   AlertTriangle,
   ShieldAlert,
-  Search,
-  Filter,
   Download,
   Check,
   X,
-  ExternalLink,
-  ChevronRight,
   RefreshCw,
   Eye,
   AlertCircle,
-  FileText,
-  Mail,
-  GraduationCap,
-  Sparkles,
   BookOpen,
-  DollarSign
+  Layers,
+  Lock,
+  Filter,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import PageWrapper from '../../components/layout/PageWrapper';
+import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
@@ -42,6 +38,23 @@ const DUE_TYPES = [
   { value: 'attendance', label: 'Attendance Shortage Remedial' },
   { value: 'other', label: 'Other Academic Requirement' },
 ];
+
+const FILTERS = [
+  { key: 'all', label: 'All', icon: Layers },
+  { key: 'pending_my_approval', label: 'Pending', icon: Clock },
+  { key: 'my_due_marked', label: 'Dues', icon: AlertCircle },
+  { key: 'blocked_elsewhere', label: 'External Dues', icon: ShieldAlert },
+  { key: 'overall_cleared', label: 'Cleared', icon: CheckCircle2 },
+];
+
+const getApprovalLabel = (a) => {
+  if (a.approvalType === 'classTeacher') return 'Class Teacher';
+  if (a.approvalType === 'mentor') return 'Mentor Sign-Off';
+  if (a.approvalType === 'hodApproval') return 'Head of Department';
+  if (a.approvalType === 'coCurricular') return a.itemTypeName || a.subjectName || 'Co-Curricular';
+  const code = a.subjectCode || null;
+  return a.subjectName ? `${a.subjectName}${code ? ` (${code})` : ''}` : a.approvalType || '—';
+};
 
 const Mentoring = () => {
   const [mentees, setMentees] = useState([]);
@@ -61,9 +74,9 @@ const Mentoring = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedClass, setSelectedClass] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending_my_approval' | 'my_due_marked' | 'blocked_elsewhere' | 'overall_cleared' | 'no_request'
+  const [filter, setFilter] = useState('all'); // 'all' | 'pending_my_approval' | 'my_due_marked' | 'blocked_elsewhere' | 'overall_cleared'
 
-  // Debounce search input by 300ms per Section 6 of Engineering Constitution
+  // Debounce search input by 300ms
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
@@ -72,8 +85,8 @@ const Mentoring = () => {
   }, [search]);
 
   // Selection for bulk actions
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+  const [selection, setSelection] = useState([]);
+  const [actionLoading, setActionLoading] = useState(null);
 
   // Detail / Clearance Inspection Modal
   const [inspectModalOpen, setInspectModalOpen] = useState(false);
@@ -89,9 +102,6 @@ const Mentoring = () => {
   const [dueAmount, setDueAmount] = useState('');
   const [dueSubmitting, setDueSubmitting] = useState(false);
 
-  // Action loading states
-  const [actionInProgress, setActionInProgress] = useState({});
-
   const fetchMenteesData = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     else setRefreshing(true);
@@ -100,7 +110,7 @@ const Mentoring = () => {
     try {
       const params = {};
       if (selectedClass !== 'all') params.classId = selectedClass;
-      if (statusFilter !== 'all') params.status = statusFilter;
+      if (filter !== 'all') params.status = filter;
       if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
 
       const res = await getMyMentees(params);
@@ -125,7 +135,7 @@ const Mentoring = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedClass, statusFilter, debouncedSearch]);
+  }, [selectedClass, filter, debouncedSearch]);
 
   useEffect(() => {
     fetchMenteesData();
@@ -133,19 +143,66 @@ const Mentoring = () => {
 
   // Real-time synchronization via SSE
   const sseUrl = getSSEConnectUrl();
+  const sseEvents = useMemo(() => ['APPROVAL_UPDATED', 'BATCH_CLOSED', 'PENDING_LIST_UPDATE'], []);
   useSSE(sseUrl, (event) => {
-    if (event?.event === 'APPROVAL_UPDATED' || event?.event === 'BATCH_CLOSED') {
+    if (event?.event === 'APPROVAL_UPDATED' || event?.event === 'BATCH_CLOSED' || event?.event === 'PENDING_LIST_UPDATE') {
       fetchMenteesData(true);
     }
-  });
+  }, sseEvents);
 
-  // Handle single approval
+  // Handle single approval with optimistic update and instant Undo option
   const handleApprove = async (approvalId, studentName) => {
     if (!approvalId) return;
-    setActionInProgress((prev) => ({ ...prev, [approvalId]: true }));
+    setActionLoading(approvalId);
+
+    // Optimistic in-place update
+    setMentees((prev) =>
+      prev.map((m) => {
+        if (m.mentorApproval?._id === approvalId) {
+          const updatedStats = {
+            ...m.stats,
+            approved: (m.stats?.approved || 0) + (m.mentorApproval.action !== 'approved' ? 1 : 0),
+            pending: Math.max(0, (m.stats?.pending || 0) - (m.mentorApproval.action === 'pending' || m.mentorApproval.action === 'not_submitted' ? 1 : 0)),
+          };
+          updatedStats.percent = updatedStats.total > 0 ? Math.round((updatedStats.approved / updatedStats.total) * 100) : 100;
+          return {
+            ...m,
+            isMyActionPending: false,
+            isMyDueFlagged: false,
+            mentorApproval: {
+              ...m.mentorApproval,
+              action: 'approved',
+              dueType: null,
+              remarks: null,
+            },
+            stats: updatedStats,
+            overallStatus: updatedStats.approved === updatedStats.total ? 'cleared' : m.overallStatus,
+          };
+        }
+        return m;
+      })
+    );
+
     try {
       await approveRecord(approvalId);
-      toast.success(`Mentor clearance approved for ${studentName}`);
+      toast((t) => (
+        <div className="flex items-center justify-between gap-4 w-full">
+          <span className="font-medium flex items-center gap-1.5 text-xs text-zinc-900">
+            <Check size={16} className="text-emerald-500 shrink-0" />
+            <span>Approval recorded for {studentName}</span>
+          </span>
+          <button
+            onClick={() => {
+              toast.dismiss(t.id);
+              handleResetToPending(approvalId, studentName);
+            }}
+            className="text-[10px] font-black uppercase tracking-widest bg-zinc-100 hover:bg-zinc-200 text-zinc-600 px-3 py-1.5 rounded-lg transition-colors border border-zinc-200 shrink-0"
+          >
+            Undo
+          </button>
+        </div>
+      ), { duration: 5000, id: `approve-${approvalId}` });
+
       await fetchMenteesData(true);
       if (inspectModalOpen && clearanceData) {
         handleInspectClearance(selectedStudentId);
@@ -153,18 +210,47 @@ const Mentoring = () => {
     } catch (err) {
       console.error('Approval failed:', err);
       toast.error(err?.response?.data?.message || 'Failed to approve clearance');
+      await fetchMenteesData(true);
     } finally {
-      setActionInProgress((prev) => ({ ...prev, [approvalId]: false }));
+      setActionLoading(null);
     }
   };
 
-  // Handle direct clear due
+  // Handle direct clear due with optimistic update
   const handleClearDue = async (approvalId, studentName) => {
     if (!approvalId) return;
-    setActionInProgress((prev) => ({ ...prev, [approvalId]: true }));
+    setActionLoading(approvalId);
+
+    setMentees((prev) =>
+      prev.map((m) => {
+        if (m.mentorApproval?._id === approvalId) {
+          const updatedStats = {
+            ...m.stats,
+            approved: (m.stats?.approved || 0) + 1,
+            due: Math.max(0, (m.stats?.due || 0) - 1),
+          };
+          updatedStats.percent = updatedStats.total > 0 ? Math.round((updatedStats.approved / updatedStats.total) * 100) : 100;
+          return {
+            ...m,
+            isMyActionPending: false,
+            isMyDueFlagged: false,
+            mentorApproval: {
+              ...m.mentorApproval,
+              action: 'approved',
+              dueType: null,
+              remarks: null,
+            },
+            stats: updatedStats,
+            overallStatus: updatedStats.approved === updatedStats.total ? 'cleared' : m.overallStatus,
+          };
+        }
+        return m;
+      })
+    );
+
     try {
-      await updateApproval(approvalId, { action: 'approved' });
-      toast.success(`Due cleared & approved for ${studentName}`);
+      await updateApproval(approvalId, { action: 'approved', dueType: null, remarks: null });
+      toast.success(`Deficiency cleared & approved for ${studentName}`);
       await fetchMenteesData(true);
       if (inspectModalOpen && clearanceData) {
         handleInspectClearance(selectedStudentId);
@@ -172,19 +258,74 @@ const Mentoring = () => {
     } catch (err) {
       console.error('Clear due failed:', err);
       toast.error(err?.response?.data?.message || 'Failed to clear due');
+      await fetchMenteesData(true);
     } finally {
-      setActionInProgress((prev) => ({ ...prev, [approvalId]: false }));
+      setActionLoading(null);
     }
   };
 
-  // Open mark due modal
-  const openMarkDueModal = (mentee) => {
-    if (!mentee?.mentorApproval?._id) return;
+  // Handle reset back to pending with optimistic update
+  const handleResetToPending = async (approvalId, studentName) => {
+    if (!approvalId) return;
+    setActionLoading(approvalId);
+
+    setMentees((prev) =>
+      prev.map((m) => {
+        if (m.mentorApproval?._id === approvalId) {
+          const wasApproved = m.mentorApproval.action === 'approved';
+          const wasDue = m.mentorApproval.action === 'due_marked';
+          const updatedStats = {
+            ...m.stats,
+            approved: Math.max(0, (m.stats?.approved || 0) - (wasApproved ? 1 : 0)),
+            due: Math.max(0, (m.stats?.due || 0) - (wasDue ? 1 : 0)),
+            pending: (m.stats?.pending || 0) + 1,
+          };
+          updatedStats.percent = updatedStats.total > 0 ? Math.round((updatedStats.approved / updatedStats.total) * 100) : 0;
+          return {
+            ...m,
+            isMyActionPending: true,
+            isMyDueFlagged: false,
+            mentorApproval: {
+              ...m.mentorApproval,
+              action: 'pending',
+              dueType: null,
+              remarks: null,
+            },
+            stats: updatedStats,
+            overallStatus: 'pending',
+          };
+        }
+        return m;
+      })
+    );
+
+    try {
+      await updateApproval(approvalId, { action: 'pending', dueType: null, remarks: null });
+      toast.success(`Action reversed for ${studentName}`);
+      await fetchMenteesData(true);
+      if (inspectModalOpen && clearanceData) {
+        handleInspectClearance(selectedStudentId);
+      }
+    } catch (err) {
+      console.error('Reset failed:', err);
+      toast.error(err?.response?.data?.message || 'Failed to reset approval');
+      await fetchMenteesData(true);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Open mark due modal (callable from table row or inspection breakdown modal)
+  const openMarkDueModal = (target) => {
+    if (!target) return;
+    const approvalId = target.mentorApproval?._id || target.approvalId;
+    if (!approvalId) return;
+
     setDueTarget({
-      approvalId: mentee.mentorApproval._id,
-      studentId: mentee._id,
-      studentName: mentee.name,
-      rollNo: mentee.rollNo,
+      approvalId,
+      studentId: target._id || target.studentId,
+      studentName: target.name || target.studentName,
+      rollNo: target.rollNo || target.studentRollNo,
     });
     setDueType('lab');
     setDueRemarks('');
@@ -192,7 +333,7 @@ const Mentoring = () => {
     setDueModalOpen(true);
   };
 
-  // Submit mark due
+  // Submit mark due with optimistic update
   const handleSubmitMarkDue = async (e) => {
     e.preventDefault();
     if (!dueTarget?.approvalId) return;
@@ -202,15 +343,53 @@ const Mentoring = () => {
     }
 
     setDueSubmitting(true);
+    const targetApprovalId = dueTarget.approvalId;
+    const targetStudentName = dueTarget.studentName;
+    const remarksVal = dueRemarks.trim();
+    const typeVal = dueType;
+    const amountVal = dueAmount ? Number(dueAmount) : 0;
+
+    // Optimistic in-place update
+    setMentees((prev) =>
+      prev.map((m) => {
+        if (m.mentorApproval?._id === targetApprovalId) {
+          const wasPending = m.mentorApproval.action === 'pending' || m.mentorApproval.action === 'not_submitted';
+          const wasApproved = m.mentorApproval.action === 'approved';
+          const updatedStats = {
+            ...m.stats,
+            approved: Math.max(0, (m.stats?.approved || 0) - (wasApproved ? 1 : 0)),
+            pending: Math.max(0, (m.stats?.pending || 0) - (wasPending ? 1 : 0)),
+            due: (m.stats?.due || 0) + 1,
+          };
+          updatedStats.percent = updatedStats.total > 0 ? Math.round((updatedStats.approved / updatedStats.total) * 100) : 0;
+          return {
+            ...m,
+            isMyActionPending: false,
+            isMyDueFlagged: true,
+            mentorApproval: {
+              ...m.mentorApproval,
+              action: 'due_marked',
+              dueType: typeVal,
+              remarks: remarksVal,
+              amount: amountVal,
+            },
+            stats: updatedStats,
+            overallStatus: 'has_dues',
+          };
+        }
+        return m;
+      })
+    );
+    setDueModalOpen(false);
+
     try {
       await markDueRecord({
-        approvalId: dueTarget.approvalId,
-        dueType,
-        remarks: dueRemarks.trim(),
-        amount: dueAmount ? Number(dueAmount) : 0,
+        approvalId: targetApprovalId,
+        dueType: typeVal,
+        remarks: remarksVal,
+        amount: amountVal,
       });
-      toast.success(`Due flagged for ${dueTarget.studentName}`);
-      setDueModalOpen(false);
+      toast.success(`Deficiency flagged for ${targetStudentName}`);
       await fetchMenteesData(true);
       if (inspectModalOpen && clearanceData) {
         handleInspectClearance(selectedStudentId);
@@ -218,33 +397,9 @@ const Mentoring = () => {
     } catch (err) {
       console.error('Mark due failed:', err);
       toast.error(err?.response?.data?.message || 'Failed to flag due');
+      await fetchMenteesData(true);
     } finally {
       setDueSubmitting(false);
-    }
-  };
-
-  // Bulk Approve Selected
-  const handleBulkApprove = async () => {
-    const validApprovalIds = mentees
-      .filter((m) => selectedIds.has(m._id) && m.isMyActionPending && m.mentorApproval?._id)
-      .map((m) => m.mentorApproval._id);
-
-    if (!validApprovalIds.length) {
-      toast.error('No pending mentor sign-offs selected');
-      return;
-    }
-
-    setIsBulkSubmitting(true);
-    try {
-      await bulkApproveRecords(validApprovalIds);
-      toast.success(`Approved mentor clearance for ${validApprovalIds.length} mentees`);
-      setSelectedIds(new Set());
-      await fetchMenteesData(true);
-    } catch (err) {
-      console.error('Bulk approve failed:', err);
-      toast.error(err?.response?.data?.message || 'Bulk approval failed');
-    } finally {
-      setIsBulkSubmitting(false);
     }
   };
 
@@ -261,28 +416,6 @@ const Mentoring = () => {
       toast.error('Failed to load student clearance breakdown');
     } finally {
       setClearanceLoading(false);
-    }
-  };
-
-  // Toggle selection
-  const toggleSelectMentee = (studentId) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(studentId)) next.delete(studentId);
-      else next.add(studentId);
-      return next;
-    });
-  };
-
-  const eligibleForBulk = useMemo(() => {
-    return mentees.filter((m) => m.isMyActionPending && m.mentorApproval?._id && !m.batchInfo?.isClosed);
-  }, [mentees]);
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === eligibleForBulk.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(eligibleForBulk.map((m) => m._id)));
     }
   };
 
@@ -311,7 +444,7 @@ const Mentoring = () => {
     ];
 
     const rows = mentees.map((m) => {
-      const blockersText = m.blockers
+      const blockersText = (m.blockers || [])
         .filter((b) => !b.isSelf)
         .map((b) => `${b.subjectName}: ${b.remarks}`)
         .join('; ');
@@ -343,553 +476,474 @@ const Mentoring = () => {
     toast.success('Mentee clearance report downloaded');
   };
 
-  return (
-    <PageWrapper title="Mentoring Portal" subtitle="Oversight & clearance tracking for your assigned mentees">
-      <div className="space-y-6 max-w-7xl mx-auto pb-16">
-        {/* Hero Section */}
-        <div className="bg-gradient-to-r from-navy via-indigo-950 to-navy rounded-2xl p-6 lg:p-8 text-white shadow-xl relative overflow-hidden border border-white/10">
-          <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-xs font-medium text-indigo-200 border border-white/10 backdrop-blur-sm">
-                <Users className="w-3.5 h-3.5 text-gold" />
-                <span>Mentorship & Academic Advisory Hub</span>
-              </div>
-              <h1 className="text-2xl lg:text-3xl font-brand font-bold text-white tracking-tight">
-                Mentee Clearance Oversight
-              </h1>
-              <p className="text-sm text-indigo-200/80 max-w-2xl leading-relaxed">
-                Track and approve your assigned students across active clearance cycles, advise mentees with external dues, and verify graduation eligibility.
-              </p>
-            </div>
+  const isRowSelectable = useCallback((row) => {
+    return Boolean(
+      row.mentorApproval?._id &&
+      (row.isMyActionPending || row.mentorApproval?.action === 'pending' || row.mentorApproval?.action === 'not_submitted') &&
+      !row.batchInfo?.isClosed
+    );
+  }, []);
 
-            <div className="flex items-center gap-3 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fetchMenteesData(true)}
-                disabled={loading || refreshing}
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Sync
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleExportCSV}
-                className="bg-gold hover:bg-amber-500 text-navy font-semibold shadow-md"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
-              </Button>
-            </div>
-          </div>
-        </div>
+  const eligibleForBulk = useMemo(() => {
+    return mentees.filter(isRowSelectable);
+  }, [mentees, isRowSelectable]);
 
-        {/* Metric KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
-          <div
-            onClick={() => setStatusFilter('all')}
-            className={`cursor-pointer bg-white p-4 rounded-xl border transition-all duration-200 ${
-              statusFilter === 'all'
-                ? 'border-indigo-600 shadow-md ring-1 ring-indigo-600'
-                : 'border-slate-200 hover:border-slate-300 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-slate-500">Total Mentees</p>
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                <Users className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-slate-900 mt-2">{summary.total}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Assigned to you</p>
-          </div>
+  // Bulk actions list for Table component
+  const bulkActionsList = useMemo(() => {
+    const eligibleSelected = mentees.filter(
+      (m) => selection.includes(m._id) && isRowSelectable(m)
+    );
 
-          <div
-            onClick={() => setStatusFilter('pending_my_approval')}
-            className={`cursor-pointer bg-white p-4 rounded-xl border transition-all duration-200 ${
-              statusFilter === 'pending_my_approval'
-                ? 'border-amber-500 shadow-md ring-1 ring-amber-500'
-                : 'border-slate-200 hover:border-slate-300 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-slate-500">Action Required</p>
-              <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
-                <Clock className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-amber-600 mt-2">{summary.pendingMyApproval}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Awaiting mentor sign-off</p>
-          </div>
+    if (!eligibleSelected.length) return [];
 
-          <div
-            onClick={() => setStatusFilter('my_due_marked')}
-            className={`cursor-pointer bg-white p-4 rounded-xl border transition-all duration-200 ${
-              statusFilter === 'my_due_marked'
-                ? 'border-rose-500 shadow-md ring-1 ring-rose-500'
-                : 'border-slate-200 hover:border-slate-300 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-slate-500">My Dues Flagged</p>
-              <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
-                <AlertCircle className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-rose-600 mt-2">{summary.myDuesFlagged}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Deficiencies marked by you</p>
-          </div>
+    return [
+      {
+        label: `Approve Selected (${eligibleSelected.length})`,
+        icon: Check,
+        onClick: async () => {
+          const approvalIds = eligibleSelected.map((m) => m.mentorApproval._id);
+          const studentIds = new Set(eligibleSelected.map((m) => m._id));
+          setActionLoading('bulk');
 
-          <div
-            onClick={() => setStatusFilter('blocked_elsewhere')}
-            className={`cursor-pointer bg-white p-4 rounded-xl border transition-all duration-200 ${
-              statusFilter === 'blocked_elsewhere'
-                ? 'border-purple-500 shadow-md ring-1 ring-purple-500'
-                : 'border-slate-200 hover:border-slate-300 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-slate-500">External Dues</p>
-              <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
-                <ShieldAlert className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-purple-600 mt-2">{summary.blockedElsewhere}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Blocked by other depts</p>
-          </div>
+          // Optimistic update for all selected students
+          setMentees((prev) =>
+            prev.map((m) => {
+              if (studentIds.has(m._id) && m.mentorApproval) {
+                const updatedStats = {
+                  ...m.stats,
+                  approved: (m.stats?.approved || 0) + (m.mentorApproval.action !== 'approved' ? 1 : 0),
+                  pending: Math.max(0, (m.stats?.pending || 0) - 1),
+                };
+                updatedStats.percent = updatedStats.total > 0 ? Math.round((updatedStats.approved / updatedStats.total) * 100) : 100;
+                return {
+                  ...m,
+                  isMyActionPending: false,
+                  mentorApproval: {
+                    ...m.mentorApproval,
+                    action: 'approved',
+                    dueType: null,
+                    remarks: null,
+                  },
+                  stats: updatedStats,
+                  overallStatus: updatedStats.approved === updatedStats.total ? 'cleared' : m.overallStatus,
+                };
+              }
+              return m;
+            })
+          );
+          setSelection([]);
 
-          <div
-            onClick={() => setStatusFilter('overall_cleared')}
-            className={`cursor-pointer bg-white p-4 rounded-xl border transition-all duration-200 ${
-              statusFilter === 'overall_cleared'
-                ? 'border-emerald-500 shadow-md ring-1 ring-emerald-500'
-                : 'border-slate-200 hover:border-slate-300 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-slate-500">100% Cleared</p>
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-emerald-600 mt-2">{summary.fullyCleared}</p>
-            <p className="text-[11px] text-slate-400 mt-1">All approvals completed</p>
-          </div>
-        </div>
+          try {
+            await bulkApproveRecords(approvalIds);
+            toast.success(`Approved mentor clearance for ${approvalIds.length} students`);
+            await fetchMenteesData(true);
+          } catch (err) {
+            console.error('Bulk approve failed:', err);
+            toast.error(err?.response?.data?.message || 'Bulk approval failed');
+            await fetchMenteesData(true);
+          } finally {
+            setActionLoading(null);
+          }
+        },
+        variant: 'primary'
+      }
+    ];
+  }, [selection, mentees, isRowSelectable, fetchMenteesData]);
 
-        {/* Controls: Search, Class Filter, Tabs */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-            <div className="flex-1 relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search mentees by roll number, student name, or email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="w-full md:w-64">
-              <SearchableSelect
-                options={[
-                  { value: 'all', label: 'All Classes / Sections' },
-                  ...classes.map((c) => ({
-                    value: c._id,
-                    label: `${c.name} (Sem ${c.semester || '-'})`,
-                  })),
-                ]}
-                value={selectedClass}
-                onChange={(val) => setSelectedClass(val || 'all')}
-                placeholder="Filter by Class..."
-              />
-            </div>
-          </div>
-
-          {/* Filter Pills */}
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                statusFilter === 'all'
-                  ? 'bg-navy text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              All Mentees ({summary.total})
-            </button>
-            <button
-              onClick={() => setStatusFilter('pending_my_approval')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
-                statusFilter === 'pending_my_approval'
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-              }`}
-            >
-              <Clock className="w-3 h-3" />
-              Action Required ({summary.pendingMyApproval})
-            </button>
-            <button
-              onClick={() => setStatusFilter('my_due_marked')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
-                statusFilter === 'my_due_marked'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-              }`}
-            >
-              <AlertCircle className="w-3 h-3" />
-              My Dues ({summary.myDuesFlagged})
-            </button>
-            <button
-              onClick={() => setStatusFilter('blocked_elsewhere')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
-                statusFilter === 'blocked_elsewhere'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
-              }`}
-            >
-              <ShieldAlert className="w-3 h-3" />
-              Blocked Elsewhere ({summary.blockedElsewhere})
-            </button>
-            <button
-              onClick={() => setStatusFilter('overall_cleared')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
-                statusFilter === 'overall_cleared'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-              }`}
-            >
-              <CheckCircle2 className="w-3 h-3" />
-              100% Cleared ({summary.fullyCleared})
-            </button>
-          </div>
-        </div>
-
-        {/* Mentees Table */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="p-16 flex flex-col items-center justify-center gap-3">
-              <Spinner className="w-8 h-8 text-indigo-600" />
-              <p className="text-sm text-slate-500 font-medium">Loading assigned mentees...</p>
-            </div>
-          ) : error ? (
-            <div className="p-12 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-semibold text-slate-900">Failed to Load Mentees</h3>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">{error}</p>
-              <Button onClick={() => fetchMenteesData()} variant="outline" size="sm">
-                Try Again
-              </Button>
-            </div>
-          ) : mentees.length === 0 ? (
-            <div className="p-16 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
-                <Users className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-semibold text-slate-900">No Mentees Found</h3>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">
-                {search || selectedClass !== 'all' || statusFilter !== 'all'
-                  ? 'No mentees match the current filter criteria. Try adjusting your search or filters.'
-                  : 'You do not have any students assigned as mentees in the directory yet. Mentees are assigned by the department administrator or HoD.'}
-              </p>
-              {(search || selectedClass !== 'all' || statusFilter !== 'all') && (
-                <Button
-                  onClick={() => {
-                    setSearch('');
-                    setSelectedClass('all');
-                    setStatusFilter('all');
-                  }}
-                  variant="outline"
-                  size="sm"
-                >
-                  Reset Filters
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <th className="py-3.5 px-4 w-10">
-                      <input
-                        type="checkbox"
-                        checked={eligibleForBulk.length > 0 && selectedIds.size === eligibleForBulk.length}
-                        onChange={toggleSelectAll}
-                        disabled={eligibleForBulk.length === 0}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-40"
-                      />
-                    </th>
-                    <th className="py-3.5 px-4">Student Profile</th>
-                    <th className="py-3.5 px-4">Class & Section</th>
-                    <th className="py-3.5 px-4">Mentor Sign-Off</th>
-                    <th className="py-3.5 px-4">Overall Clearance</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {mentees.map((mentee) => {
-                    const isPending = mentee.isMyActionPending;
-                    const isDue = mentee.isMyDueFlagged;
-                    const isApproved = mentee.mentorApproval?.action === 'approved';
-                    const hasAction = actionInProgress[mentee.mentorApproval?._id];
-                    const isSelected = selectedIds.has(mentee._id);
-
-                    return (
-                      <tr
-                        key={mentee._id}
-                        className={`transition-colors hover:bg-slate-50/70 ${
-                          isSelected ? 'bg-indigo-50/40' : ''
-                        }`}
-                      >
-                        {/* Checkbox */}
-                        <td className="py-4 px-4">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleSelectMentee(mentee._id)}
-                            disabled={!isPending || mentee.batchInfo?.isClosed}
-                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                          />
-                        </td>
-
-                        {/* Student Details */}
-                        <td className="py-4 px-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-navy bg-navy/5 px-2 py-0.5 rounded border border-navy/10">
-                                {mentee.rollNo}
-                              </span>
-                              <span className="font-semibold text-slate-900">{mentee.name}</span>
-                            </div>
-                            <div className="text-xs text-slate-500 flex items-center gap-2">
-                              {mentee.email && (
-                                <a
-                                  href={`mailto:${mentee.email}`}
-                                  className="hover:text-indigo-600 inline-flex items-center gap-1"
-                                >
-                                  <Mail className="w-3 h-3 text-slate-400" />
-                                  <span>{mentee.email}</span>
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Class */}
-                        <td className="py-4 px-4">
-                          <div className="space-y-0.5">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800">
-                              {mentee.className}
-                            </span>
-                            <p className="text-[11px] text-slate-400">
-                              Sem {mentee.semester || '-'} • {mentee.academicYear || '-'}
-                            </p>
-                          </div>
-                        </td>
-
-                        {/* Mentor Sign-off Status */}
-                        <td className="py-4 px-4">
-                          {!mentee.hasActiveBatch ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                              No Active Cycle
-                            </span>
-                          ) : isPending ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                              <Clock className="w-3.5 h-3.5 text-amber-600" />
-                              Pending Sign-off
-                            </span>
-                          ) : isApproved ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              Approved
-                            </span>
-                          ) : isDue ? (
-                            <div className="space-y-1">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200">
-                                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                                Due Flagged
-                              </span>
-                              {mentee.mentorApproval?.remarks && (
-                                <p className="text-[11px] text-rose-600 font-medium truncate max-w-[200px]" title={mentee.mentorApproval.remarks}>
-                                  {mentee.mentorApproval.remarks}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">Not Initiated</span>
-                          )}
-                        </td>
-
-                        {/* Overall Clearance Status & Progress */}
-                        <td className="py-4 px-4">
-                          <div className="space-y-1.5 w-48">
-                            <div className="flex items-center justify-between text-xs">
-                              <span
-                                className={`font-semibold ${
-                                  mentee.overallStatus === 'cleared'
-                                    ? 'text-emerald-600'
-                                    : mentee.overallStatus === 'has_dues'
-                                    ? 'text-rose-600'
-                                    : 'text-amber-600'
-                                }`}
-                              >
-                                {mentee.overallStatus === 'cleared'
-                                  ? '100% Cleared'
-                                  : mentee.overallStatus === 'has_dues'
-                                  ? `Has Dues (${mentee.stats?.due})`
-                                  : 'In Progress'}
-                              </span>
-                              <span className="text-slate-400 text-[11px]">
-                                {mentee.stats?.approved}/{mentee.stats?.total}
-                              </span>
-                            </div>
-
-                            {/* Progress bar */}
-                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                              <div
-                                className={`h-1.5 rounded-full transition-all duration-500 ${
-                                  mentee.overallStatus === 'cleared'
-                                    ? 'bg-emerald-500'
-                                    : mentee.overallStatus === 'has_dues'
-                                    ? 'bg-rose-500'
-                                    : 'bg-indigo-600'
-                                }`}
-                                style={{ width: `${mentee.stats?.percent || 0}%` }}
-                              />
-                            </div>
-
-                            {/* Blockers indicator */}
-                            {mentee.blockers && mentee.blockers.some((b) => !b.isSelf) && (
-                              <p className="text-[10px] text-purple-600 font-medium flex items-center gap-1">
-                                <ShieldAlert className="w-3 h-3 text-purple-500 shrink-0" />
-                                <span>{mentee.blockers.filter((b) => !b.isSelf).length} external due(s) pending</span>
-                              </p>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Actions */}
-                        <td className="py-4 px-4 text-right">
-                          <div className="inline-flex items-center gap-2">
-                            {/* Direct Mentor Actions */}
-                            {mentee.batchInfo?.isClosed ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
-                                Cycle Closed
-                              </span>
-                            ) : isPending && mentee.mentorApproval?._id ? (
-                              <>
-                                <button
-                                  onClick={() => handleApprove(mentee.mentorApproval._id, mentee.name)}
-                                  disabled={hasAction}
-                                  title="Approve Mentor Clearance"
-                                  className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50"
-                                >
-                                  {hasAction ? (
-                                    <Spinner className="w-4 h-4 text-emerald-600" />
-                                  ) : (
-                                    <Check className="w-4 h-4" />
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => openMarkDueModal(mentee)}
-                                  disabled={hasAction}
-                                  title="Flag a Deficiency / Due"
-                                  className="p-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors disabled:opacity-50"
-                                >
-                                  <AlertCircle className="w-4 h-4" />
-                                </button>
-                              </>
-                            ) : isDue && mentee.mentorApproval?._id ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleClearDue(mentee.mentorApproval._id, mentee.name)}
-                                disabled={hasAction}
-                                className="text-xs h-7 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                              >
-                                {hasAction ? <Spinner className="w-3 h-3 mr-1" /> : <Check className="w-3 h-3 mr-1" />}
-                                Clear Due
-                              </Button>
-                            ) : null}
-
-                            {/* View Full Clearance Card */}
-                            <button
-                              onClick={() => handleInspectClearance(mentee._id)}
-                              title="Inspect Full Clearance Breakdown"
-                              className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200 transition-colors"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+  // Table Columns Definition matching Pending.jsx exactly
+  const columns = useMemo(() => [
+    {
+      key: 'rollNo',
+      label: 'Roll No',
+      sortable: true,
+      render: (v) => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-900/[0.04] text-zinc-900 border border-zinc-900/10 font-mono text-xs sm:text-sm font-black tracking-widest">
+          {v || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'name',
+      label: 'Student Name',
+      sortable: true,
+      render: (v, row) => (
+        <div className="flex flex-col">
+          <span className="font-bold text-xs sm:text-sm text-zinc-900">{v || '—'}</span>
+          {row.email && (
+            <span className="text-[11px] text-zinc-400 font-medium truncate max-w-[190px]">
+              {row.email}
+            </span>
           )}
         </div>
+      ),
+    },
+    {
+      key: 'className',
+      label: 'Class',
+      sortable: true,
+      render: (v, row) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="text-zinc-600 font-medium text-xs">{v || '—'}</span>
+          <span className="text-[10px] text-zinc-400">
+            {row.academicYear || ''} {row.semester ? `· Sem ${row.semester}` : ''}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'mentorApproval',
+      label: 'Mentor Status',
+      render: (_, row) => {
+        const isClosed = row.batchInfo?.isClosed;
+        const isPending = row.isMyActionPending || (row.mentorApproval && (row.mentorApproval.action === 'pending' || row.mentorApproval.action === 'not_submitted'));
+        const isDue = row.isMyDueFlagged || row.mentorApproval?.action === 'due_marked';
+        const isApproved = row.mentorApproval?.action === 'approved';
 
-        {/* Floating Bulk Action Bar */}
-        <AnimatePresence>
-          {selectedIds.size > 0 && (
-            <motion.div
-              initial={{ y: 50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 50, opacity: 0 }}
-              className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-4 z-40 border border-slate-700 backdrop-blur-md"
-            >
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-indigo-500 text-white text-xs font-bold flex items-center justify-center">
-                  {selectedIds.size}
+        if (isClosed) {
+          return (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 text-zinc-400 text-[10px] font-bold uppercase tracking-wider border border-zinc-200/60">
+                <Lock size={10} /> Closed
+              </span>
+            </div>
+          );
+        }
+
+        if (isDue) {
+          return (
+            <div className="flex flex-col gap-0.5">
+              <Badge status="due_marked">Due Marked</Badge>
+              {row.mentorApproval?.remarks && (
+                <span className="text-[10px] font-bold text-red-500 truncate max-w-[180px]" title={row.mentorApproval.remarks}>
+                  {row.mentorApproval.remarks}
                 </span>
-                <span className="text-sm font-medium">Mentees selected for sign-off</span>
+              )}
+            </div>
+          );
+        }
+
+        if (isApproved) {
+          return <Badge status="approved">Approved</Badge>;
+        }
+
+        if (isPending) {
+          return <Badge status="pending">Action Required</Badge>;
+        }
+
+        return <Badge status="not_submitted">Not Initiated</Badge>;
+      }
+    },
+    {
+      key: 'overallStatus',
+      label: 'Institution Clearance',
+      render: (_, row) => {
+        const externalBlockers = (row.blockers || []).filter((b) => !b.isSelf);
+        const isCleared = row.overallStatus === 'cleared';
+        const hasDues = row.overallStatus === 'has_dues';
+        const statusKey = isCleared ? 'cleared' : hasDues ? 'has_dues' : 'pending';
+
+        return (
+          <div className="flex flex-col gap-1.5 max-w-[220px]">
+            <div className="flex items-center justify-between text-xs">
+              <Badge status={statusKey}>
+                {isCleared ? '100% Cleared' : hasDues ? 'Has Dues' : 'In Progress'}
+              </Badge>
+              <span className="text-[10px] font-mono font-bold text-zinc-400">
+                {row.stats?.approved || 0}/{row.stats?.total || 0}
+              </span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isCleared ? 'bg-emerald-500' : hasDues ? 'bg-red-500' : 'bg-amber-500'
+                }`}
+                style={{ width: `${row.stats?.percent || 0}%` }}
+              />
+            </div>
+
+            {/* Named External Blocker Chips */}
+            {externalBlockers.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {externalBlockers.slice(0, 2).map((b, bi) => (
+                  <span
+                    key={bi}
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200/70 truncate max-w-[105px]"
+                    title={`${b.subjectName}: ${b.remarks || 'Due recorded'}`}
+                  >
+                    <ShieldAlert size={9} className="shrink-0 text-purple-500" />
+                    <span className="truncate">{b.subjectName}</span>
+                  </span>
+                ))}
+                {externalBlockers.length > 2 && (
+                  <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1 py-0.5 rounded border border-purple-200/70">
+                    +{externalBlockers.length - 2} more
+                  </span>
+                )}
               </div>
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_, row) => {
+        const isActioning = actionLoading === row.mentorApproval?._id;
+        const isClosed = row.batchInfo?.isClosed;
+        const isPending = row.isMyActionPending || (row.mentorApproval && (row.mentorApproval.action === 'pending' || row.mentorApproval.action === 'not_submitted'));
+        const isDue = row.isMyDueFlagged || row.mentorApproval?.action === 'due_marked';
+        const isApproved = row.mentorApproval?.action === 'approved';
 
-              <div className="h-4 w-px bg-slate-700" />
+        if (isClosed) {
+          return (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleInspectClearance(row._id); }}
+              className="p-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-all shadow-sm"
+              title="Inspect Full Clearance"
+            >
+              <Eye size={14} />
+            </button>
+          );
+        }
 
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={handleBulkApprove}
-                  disabled={isBulkSubmitting}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium"
-                >
-                  {isBulkSubmitting ? (
-                    <Spinner className="w-4 h-4 mr-1.5 text-white" />
-                  ) : (
-                    <Check className="w-4 h-4 mr-1.5" />
-                  )}
-                  Approve Selected ({selectedIds.size})
-                </Button>
-                <Button
-                  size="sm"
+        if (isPending && row.mentorApproval?._id) {
+          return (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleApprove(row.mentorApproval._id, row.name); }}
+                disabled={isActioning}
+                className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all shadow-sm disabled:opacity-50"
+                title="Approve Mentor Sign-off"
+              >
+                {isActioning ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); openMarkDueModal(row); }}
+                disabled={isActioning}
+                className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm disabled:opacity-50"
+                title="Mark Due / Flag Deficiency"
+              >
+                <X size={14} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleInspectClearance(row._id); }}
+                className="p-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-all shadow-sm"
+                title="Inspect Full Clearance Breakdown"
+              >
+                <Eye size={14} />
+              </button>
+            </div>
+          );
+        }
+
+        if (isDue && row.mentorApproval?._id) {
+          return (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleClearDue(row.mentorApproval._id, row.name); }}
+                disabled={isActioning}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[10px] font-black uppercase tracking-wider transition-all border border-emerald-200/60 shadow-sm"
+                title="Clear Deficiency & Grant Clearance"
+              >
+                {isActioning ? <Loader2 size={10} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                Clear & Approve
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleResetToPending(row.mentorApproval._id, row.name); }}
+                disabled={isActioning}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-100 text-zinc-500 hover:bg-zinc-200 text-[10px] font-bold uppercase transition-colors"
+                title="Reset back to pending"
+              >
+                <RefreshCw size={10} /> Reset
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleInspectClearance(row._id); }}
+                className="p-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-all shadow-sm"
+                title="Inspect Full Clearance"
+              >
+                <Eye size={14} />
+              </button>
+            </div>
+          );
+        }
+
+        if (isApproved && row.mentorApproval?._id) {
+          return (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleResetToPending(row.mentorApproval._id, row.name); }}
+                disabled={isActioning}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-100 text-zinc-500 hover:bg-zinc-200 text-[10px] font-bold uppercase transition-colors"
+                title="Reset back to pending"
+              >
+                <RefreshCw size={10} /> Reset
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleInspectClearance(row._id); }}
+                className="p-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-all shadow-sm"
+                title="Inspect Full Clearance"
+              >
+                <Eye size={14} />
+              </button>
+            </div>
+          );
+        }
+
+        return (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleInspectClearance(row._id); }}
+            className="p-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-all shadow-sm"
+            title="Inspect Full Clearance"
+          >
+            <Eye size={14} />
+          </button>
+        );
+      }
+    }
+  ], [actionLoading]);
+
+  const subtitleText = useMemo(() => {
+    if (summary.pendingMyApproval > 0) {
+      return `${summary.total} assigned mentees · ${summary.pendingMyApproval} awaiting your sign-off`;
+    }
+    return `${summary.total} assigned mentees · All mentor sign-offs cleared`;
+  }, [summary.total, summary.pendingMyApproval]);
+
+  return (
+    <PageWrapper 
+      title="Mentoring" 
+      subtitle={subtitleText}
+    >
+      <div className="space-y-6">
+        {/* Header Filters & Controls Bar — 100% Consistent with Pending.jsx */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
+          {/* Status Filters Capsule */}
+          <div className="overflow-x-auto no-scrollbar pb-1">
+            <div className="h-11 flex items-center gap-1 bg-white border border-zinc-100 p-1 rounded-full w-fit shadow-sm shadow-zinc-200/50">
+              {FILTERS.map((f) => {
+                const count = f.key === 'all' 
+                  ? summary.total 
+                  : f.key === 'pending_my_approval' 
+                  ? summary.pendingMyApproval 
+                  : f.key === 'my_due_marked' 
+                  ? summary.myDuesFlagged 
+                  : f.key === 'blocked_elsewhere' 
+                  ? summary.blockedElsewhere 
+                  : summary.fullyCleared;
+                const active = filter === f.key;
+                const Icon = f.icon;
+
+                return (
+                  <button
+                    key={f.key}
+                    onClick={() => { setFilter(f.key); setSelection([]); }}
+                    className={`h-9 px-4 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 relative whitespace-nowrap inline-flex items-center gap-2.5
+                      ${active ? 'text-white' : 'text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50/50'}`}
+                  >
+                    {active && (
+                      <motion.div 
+                        layoutId="activeMentoringFilter"
+                        className="absolute inset-0 bg-indigo-600 shadow-[0_4px_12px_rgba(79,70,229,0.3)] rounded-full"
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center gap-2">
+                      <Icon size={14} className={active ? 'text-white' : 'text-zinc-400'} />
+                      <span>{f.label}</span>
+                      {active ? (
+                        <span className="flex h-4 min-w-[16px] items-center justify-center px-1 rounded-full bg-white/20 text-[8px] font-black text-white backdrop-blur-sm">
+                          {count}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] opacity-40 font-bold bg-zinc-100 px-1.5 py-0.5 rounded-md group-hover:bg-indigo-100 transition-colors">
+                          {count}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right side controls: Class dropdown, Export, Refresh */}
+          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+            {classes.length > 1 && (
+              <div className="flex-1 sm:flex-initial h-11 flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-zinc-200/50 rounded-full shadow-sm hover:shadow-md transition-all group">
+                <div className="pl-3.5 text-zinc-400 group-hover:text-indigo-500 transition-colors shrink-0">
+                  <Filter size={14} />
+                </div>
+                <SearchableSelect
+                  options={[
+                    { value: 'all', label: 'All Classes' },
+                    ...classes.map((c) => ({
+                      value: c._id,
+                      label: `${c.name} (Sem ${c.semester || '-'})`,
+                    })),
+                  ]}
+                  value={selectedClass}
+                  onChange={(val) => { setSelectedClass(val || 'all'); setSelection([]); }}
+                  placeholder="Filter by Class"
                   variant="ghost"
-                  onClick={() => setSelectedIds(new Set())}
-                  className="text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </Button>
+                  size="sm"
+                  className="min-w-[170px] w-full sm:w-[170px]"
+                  clearable={selectedClass !== 'all'}
+                />
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+
+            {/* Export CSV button (rounded-full) */}
+            <button
+              onClick={handleExportCSV}
+              disabled={!mentees.length}
+              className="h-11 px-4 inline-flex items-center gap-2 rounded-full bg-white border border-zinc-200 text-zinc-600 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-500/5 transition-all text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+              title="Export Mentees CSV"
+            >
+              <Download size={15} />
+              <span className="hidden sm:inline">Export CSV</span>
+            </button>
+
+            {/* Refresh button — matching Pending.jsx EXACTLY (h-11 w-11 rounded-full with size={18} icon) */}
+            <button
+              onClick={() => fetchMenteesData(true)}
+              disabled={loading || refreshing}
+              className={`h-11 w-11 p-0 inline-flex items-center justify-center shrink-0 rounded-full bg-white border border-zinc-200 text-zinc-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-500/5 transition-all ${refreshing ? 'opacity-50' : ''}`}
+              title="Refresh records"
+            >
+              <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        {/* Institutional Table with built-in search, bulk selection, and records count */}
+        {error ? (
+          <div className="surface-panel p-20 text-center">
+            <AlertTriangle className="mx-auto text-status-due mb-4" size={48} />
+            <h2 className="text-xl font-black text-navy mb-2">Sync Interrupted</h2>
+            <p className="text-muted-foreground mb-6 max-w-sm mx-auto">{error}</p>
+            <Button variant="primary" onClick={() => fetchMenteesData()}>Retry Sync</Button>
+          </div>
+        ) : (
+          <Table
+            columns={columns}
+            data={mentees}
+            loading={loading}
+            searchable
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search by roll number or name..."
+            selectable={eligibleForBulk.length > 0}
+            selection={selection}
+            onSelectionChange={setSelection}
+            isRowSelectable={isRowSelectable}
+            bulkActions={bulkActionsList}
+            showCount
+            primaryKey="_id"
+          />
+        )}
 
         {/* Modal: Full Student Clearance Breakdown */}
         <Modal
@@ -904,30 +958,30 @@ const Mentoring = () => {
           {clearanceLoading ? (
             <div className="p-12 flex flex-col items-center justify-center gap-3">
               <Spinner className="w-8 h-8 text-indigo-600" />
-              <p className="text-sm text-slate-500">Loading clearance card details...</p>
+              <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Loading clearance details...</p>
             </div>
           ) : !clearanceData ? (
-            <div className="p-8 text-center text-slate-500">No clearance records found for this student.</div>
+            <div className="p-8 text-center text-zinc-500 text-xs font-medium">No clearance records found for this student.</div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-5">
               {/* Mentee Header Card */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-bold text-navy bg-white px-2.5 py-0.5 rounded border border-slate-200">
+                    <span className="font-mono text-xs font-bold text-navy bg-white px-2 py-0.5 rounded border border-zinc-200">
                       {clearanceData.student?.rollNo}
                     </span>
-                    <h3 className="text-lg font-bold text-slate-900">{clearanceData.student?.name}</h3>
+                    <h3 className="text-sm font-black text-navy">{clearanceData.student?.name}</h3>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {clearanceData.student?.departmentId?.name} • {clearanceData.student?.classId?.name} (Sem{' '}
+                  <p className="text-xs text-zinc-500 font-medium">
+                    {clearanceData.student?.departmentId?.name} · {clearanceData.student?.classId?.name} (Semester{' '}
                     {clearanceData.student?.semester || clearanceData.student?.classId?.semester})
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
                       clearanceData.request?.status === 'cleared'
                         ? 'bg-emerald-100 text-emerald-800'
                         : clearanceData.summary?.due > 0
@@ -940,34 +994,34 @@ const Mentoring = () => {
                 </div>
               </div>
 
-              {/* Progress Summary */}
-              <div className="grid grid-cols-4 gap-3 text-center">
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                  <p className="text-xs text-slate-500">Total Checks</p>
-                  <p className="text-xl font-bold text-slate-900 mt-0.5">{clearanceData.summary?.total || 0}</p>
+              {/* Progress Summary Metrics */}
+              <div className="grid grid-cols-4 gap-2.5 text-center">
+                <div className="p-2.5 bg-zinc-50 rounded-xl border border-zinc-100">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Total</p>
+                  <p className="text-lg font-black text-navy mt-0.5">{clearanceData.summary?.total || 0}</p>
                 </div>
-                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-                  <p className="text-xs text-emerald-700">Approved</p>
-                  <p className="text-xl font-bold text-emerald-700 mt-0.5">{clearanceData.summary?.approved || 0}</p>
+                <div className="p-2.5 bg-emerald-50/70 rounded-xl border border-emerald-100">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Approved</p>
+                  <p className="text-lg font-black text-emerald-700 mt-0.5">{clearanceData.summary?.approved || 0}</p>
                 </div>
-                <div className="p-3 bg-rose-50 rounded-lg border border-rose-100">
-                  <p className="text-xs text-rose-700">Dues Flagged</p>
-                  <p className="text-xl font-bold text-rose-700 mt-0.5">{clearanceData.summary?.due || 0}</p>
+                <div className="p-2.5 bg-rose-50/70 rounded-xl border border-rose-100">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-rose-700">Dues</p>
+                  <p className="text-lg font-black text-rose-700 mt-0.5">{clearanceData.summary?.due || 0}</p>
                 </div>
-                <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
-                  <p className="text-xs text-amber-700">Pending</p>
-                  <p className="text-xl font-bold text-amber-700 mt-0.5">{clearanceData.summary?.pending || 0}</p>
+                <div className="p-2.5 bg-amber-50/70 rounded-xl border border-amber-100">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Pending</p>
+                  <p className="text-lg font-black text-amber-700 mt-0.5">{clearanceData.summary?.pending || 0}</p>
                 </div>
               </div>
 
               {/* Clearance Approvals List */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Required Clearance Checkpoints
+              <div className="space-y-2">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                  Departmental Clearance Checkpoints
                 </h4>
 
                 {clearanceData.approvals && clearanceData.approvals.length > 0 ? (
-                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="divide-y divide-zinc-100 border border-zinc-200/80 rounded-xl overflow-hidden max-h-80 overflow-y-auto">
                     {clearanceData.approvals.map((approval) => {
                       const isDue = approval.action === 'due_marked';
                       const isApproved = approval.action === 'approved';
@@ -976,77 +1030,113 @@ const Mentoring = () => {
                       return (
                         <div
                           key={approval._id}
-                          className={`p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm ${
-                            isDue ? 'bg-rose-50/50' : 'bg-white'
+                          className={`p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs ${
+                            isDue ? 'bg-rose-50/40' : 'bg-white'
                           }`}
                         >
-                          <div className="space-y-1">
+                          <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-slate-900">
-                                {approval.subjectName ||
-                                  (approval.approvalType === 'classTeacher'
-                                    ? 'Class Teacher'
-                                    : approval.approvalType === 'mentor'
-                                    ? 'Mentor Sign-Off'
-                                    : approval.approvalType === 'hodApproval'
-                                    ? 'Head of Department'
-                                    : approval.approvalType)}
+                              <span className="font-black text-navy text-xs">
+                                {getApprovalLabel(approval)}
                               </span>
-                              <span className="text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-600 font-mono font-bold uppercase">
                                 {approval.approvalType}
                               </span>
                             </div>
 
-                            <p className="text-xs text-slate-500">
-                              Faculty: {approval.facultyId?.name || 'Assigned Staff'}
+                            <p className="text-[11px] text-zinc-400 font-medium">
+                              Staff: {approval.facultyId?.name || 'Assigned Department Staff'}
                             </p>
 
                             {/* Dues description if marked */}
                             {isDue && (
-                              <div className="p-2 bg-rose-50 rounded border border-rose-200 text-xs text-rose-800 space-y-0.5 mt-1">
-                                <p className="font-semibold flex items-center gap-1">
-                                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                                  Due Reason: {approval.remarks || 'Deficiency reported'}
+                              <div className="p-2 bg-rose-50 rounded-lg border border-rose-200 text-xs text-rose-800 space-y-0.5 mt-1">
+                                <p className="font-bold flex items-center gap-1 text-[11px]">
+                                  <AlertCircle size={12} className="text-rose-600 shrink-0" />
+                                  <span>Reason: {approval.remarks || 'Requirement pending'}</span>
                                 </p>
-                                {approval.amount > 0 && <p className="text-[11px]">Due Amount: ₹{approval.amount}</p>}
+                                {approval.amount > 0 && <p className="text-[10px] font-mono">Amount: ₹{approval.amount}</p>}
                               </div>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
                             {isApproved ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                                <Check className="w-3.5 h-3.5" />
-                                Approved
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <Check size={11} /> Approved
                               </span>
                             ) : isDue ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-800">
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                Has Due
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">
+                                <AlertCircle size={11} /> Has Due
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                <Clock className="w-3.5 h-3.5" />
-                                Pending
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                                <Clock size={11} /> Pending
                               </span>
                             )}
 
-                            {/* If this is the mentor approval and it's pending, allow instant approval if batch is not closed */}
-                            {approval.approvalType === 'mentor' && isPending && (
-                              clearanceData.batch?.isClosed ? (
-                                <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                                  Batch Closed
-                                </span>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleApprove(approval._id, clearanceData.student?.name)}
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-7 px-2"
-                                >
-                                  <Check className="w-3.5 h-3.5 mr-1" />
-                                  Approve
-                                </Button>
-                              )
+                            {/* Direct Actions inside modal if mentor's own checkpoint */}
+                            {approval.approvalType === 'mentor' && !clearanceData.batch?.isClosed && (
+                              <div className="flex items-center gap-1.5 ml-1">
+                                {isPending && (
+                                  <>
+                                    <button
+                                      onClick={() => handleApprove(approval._id, clearanceData.student?.name)}
+                                      disabled={actionLoading === approval._id}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50"
+                                      title="Approve Mentor Clearance"
+                                    >
+                                      {actionLoading === approval._id ? <Loader2 size={10} className="animate-spin" /> : <Check size={11} />}
+                                      Approve
+                                    </button>
+                                    <button
+                                      onClick={() => openMarkDueModal({
+                                        approvalId: approval._id,
+                                        studentId: clearanceData.student?._id,
+                                        studentName: clearanceData.student?.name,
+                                        rollNo: clearanceData.student?.rollNo
+                                      })}
+                                      disabled={actionLoading === approval._id}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border border-rose-200 text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50"
+                                      title="Flag Deficiency"
+                                    >
+                                      <X size={11} />
+                                      Mark Due
+                                    </button>
+                                  </>
+                                )}
+                                {isDue && (
+                                  <>
+                                    <button
+                                      onClick={() => handleClearDue(approval._id, clearanceData.student?.name)}
+                                      disabled={actionLoading === approval._id}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50"
+                                      title="Clear Deficiency & Approve"
+                                    >
+                                      {actionLoading === approval._id ? <Loader2 size={10} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                                      Clear & Approve
+                                    </button>
+                                    <button
+                                      onClick={() => handleResetToPending(approval._id, clearanceData.student?.name)}
+                                      disabled={actionLoading === approval._id}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 text-[10px] font-bold uppercase transition-all disabled:opacity-50"
+                                      title="Reset to Pending"
+                                    >
+                                      <RefreshCw size={10} /> Reset
+                                    </button>
+                                  </>
+                                )}
+                                {isApproved && (
+                                  <button
+                                    onClick={() => handleResetToPending(approval._id, clearanceData.student?.name)}
+                                    disabled={actionLoading === approval._id}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 text-[10px] font-bold uppercase transition-all disabled:opacity-50"
+                                    title="Reset to Pending"
+                                  >
+                                    <RefreshCw size={10} /> Reset
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1054,11 +1144,11 @@ const Mentoring = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-xl">
-                    <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-slate-700">No Active Clearance Cycle</p>
-                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                      No official clearance batch has been initiated for this student yet. Checkpoints will populate once the semester batch is published.
+                  <div className="p-6 text-center bg-zinc-50 border border-zinc-200/80 rounded-xl">
+                    <BookOpen size={24} className="text-zinc-300 mx-auto mb-1.5" />
+                    <p className="text-xs font-black text-navy uppercase tracking-wider">No Active Clearance Cycle</p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Checkpoints will populate once the semester clearance drive is published.
                     </p>
                   </div>
                 )}
@@ -1067,29 +1157,29 @@ const Mentoring = () => {
           )}
         </Modal>
 
-        {/* Modal: Mark Due on Mentee */}
+        {/* Modal: Flag Due on Mentee */}
         <Modal
           isOpen={dueModalOpen}
           onClose={() => setDueModalOpen(false)}
           title={`Flag Due for ${dueTarget?.studentName || 'Mentee'}`}
         >
           <form onSubmit={handleSubmitMarkDue} className="space-y-4">
-            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 space-y-1">
-              <p className="font-semibold flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                Notice: Flagging a Due
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 text-xs text-amber-800 space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-[11px]">
+                <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+                <span>Notice: Flagging a Deficiency</span>
               </p>
-              <p>
-                Marking a due holds this student's clearance until the requirement is resolved.
+              <p className="text-[11px] leading-relaxed">
+                Marking a due holds this student's mentor clearance until the deficiency is resolved.
               </p>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Due Type</label>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-wider text-zinc-700">Due Category</label>
               <select
                 value={dueType}
                 onChange={(e) => setDueType(e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full text-xs font-medium border border-zinc-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               >
                 {DUE_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -1099,24 +1189,24 @@ const Mentoring = () => {
               </select>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-wider text-zinc-700">
                 Reason / Remarks <span className="text-rose-500">*</span>
               </label>
               <textarea
                 rows={3}
                 required
-                placeholder="Specify the book title, lab component, or academic task required..."
+                placeholder="Specify the lab component, record submission, or academic task required..."
                 value={dueRemarks}
                 onChange={(e) => setDueRemarks(e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full text-xs font-medium border border-zinc-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Due Amount (₹, optional)</label>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-wider text-zinc-700">Due Amount (₹, optional)</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-bold">₹</span>
                 <input
                   type="number"
                   min="0"
@@ -1124,22 +1214,22 @@ const Mentoring = () => {
                   placeholder="0"
                   value={dueAmount}
                   onChange={(e) => setDueAmount(e.target.value)}
-                  className="w-full pl-7 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  className="w-full pl-7 pr-3 py-2 text-xs font-medium border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <Button type="button" variant="outline" size="sm" onClick={() => setDueModalOpen(false)}>
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-100">
+              <Button type="button" variant="outline" size="sm" onClick={() => setDueModalOpen(false)} className="rounded-xl text-xs font-bold">
                 Cancel
               </Button>
               <Button
                 type="submit"
                 size="sm"
                 disabled={dueSubmitting || !dueRemarks.trim()}
-                className="bg-rose-600 hover:bg-rose-700 text-white"
+                className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider"
               >
-                {dueSubmitting ? <Spinner className="w-4 h-4 mr-1.5 text-white" /> : <AlertCircle className="w-4 h-4 mr-1.5" />}
+                {dueSubmitting ? <Spinner className="w-3.5 h-3.5 mr-1 text-white" /> : <AlertCircle size={12} className="mr-1" />}
                 Confirm Due
               </Button>
             </div>

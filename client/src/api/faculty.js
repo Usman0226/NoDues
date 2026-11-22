@@ -7,7 +7,6 @@ export const updateFaculty = (id, data) => api.patch(`/faculty/${id}`, data);
 export const deleteFaculty = (id) => api.delete(`/faculty/${id}`);
 export const getFacultyClasses = (id, params) => api.get(`/faculty/${id}/classes`, { params });
 export const getMyClasses = (params) => api.get('/faculty/me/classes', { params });
-export const getFacultyClassStudents = (classId) => api.get(`/faculty/me/classes/${classId}/students`);
 export const getMyBatches = () => api.get('/faculty/me/batches');
 export const getMyMentees = (params) => api.get('/faculty/me/mentees', { params });
 export const getMenteeClearance = (studentId) => api.get(`/faculty/me/mentees/${studentId}/clearance`);

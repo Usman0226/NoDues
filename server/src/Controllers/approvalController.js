@@ -552,12 +552,27 @@ export const bulkApproveRequests = async (req, res, next) => {
     const batches = await NodueBatch.find({ _id: { $in: batchIds }, status: 'active' }).session(session).select('_id departmentId').lean();
     const activeBatchMap = new Map(batches.map(b => [b._id.toString(), b]));
 
+    // Lookup students for mentor-based authorization fallback
+    const studentIds = approvals.map(a => a.studentId).filter(Boolean);
+    const students = studentIds.length > 0
+      ? await Student.find({ _id: { $in: studentIds } }).session(session).select('_id mentorId').lean()
+      : [];
+    const studentMentorMap = new Map(students.map(s => [s._id.toString(), s.mentorId?.toString()]));
+
     const eligibleApprovals = approvals.filter(a => {
         const batch = activeBatchMap.get(a.batchId.toString());
         if (!batch) return false;
 
-        const isDirect = a.facultyId && a.facultyId.toString() === req.user.userId.toString();
-        if (!isDirect) {
+        let isAuthorized = a.facultyId && a.facultyId.toString() === req.user.userId.toString();
+        if (!isAuthorized && (a.approvalType === 'mentor' || a.roleTag === 'mentor')) {
+          const mentorId = studentMentorMap.get(a.studentId?.toString());
+          if (mentorId && mentorId === req.user.userId.toString()) {
+            isAuthorized = true;
+            a.facultyId = req.user.userId;
+          }
+        }
+
+        if (!isAuthorized) {
             if ((req.user.role === 'hod' || req.user.role === 'ao') && batch.departmentId?.toString() === req.user.departmentId?.toString()) {
                 if (!['hodApproval', 'subject', 'classTeacher', 'mentor', 'coCurricular'].includes(a.approvalType)) return false;
             } else {
@@ -582,6 +597,9 @@ export const bulkApproveRequests = async (req, res, next) => {
       approval.dueType = null;
       approval.remarks = null;
       approval.actionedAt = now;
+      if (!approval.facultyId && (approval.approvalType === 'mentor' || approval.roleTag === 'mentor')) {
+        approval.facultyId = req.user.userId;
+      }
 
       // Track actor role without mutating roleTag (it is part of the unique index)
       approval.actionedByRole = req.user.role;

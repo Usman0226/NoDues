@@ -109,6 +109,7 @@ const Table = ({
   fixedLayout = false,
   searchId = '',
   bulkActionsId = '',
+  isRowSelectable = () => true,
 }) => {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -140,16 +141,17 @@ const Table = ({
   }, [data, filter, sortKey, sortDir, columns, onSearchChange]);
 
   // Selection Logic
-  const processedIds = useMemo(() => processed.map(r => r[primaryKey]), [processed, primaryKey]);
-  const isAllSelected = processedIds.length > 0 && processedIds.every(id => selection.includes(id));
-  const isSomeSelected = processedIds.some(id => selection.includes(id)) && !isAllSelected;
+  const selectableRows = useMemo(() => processed.filter(r => isRowSelectable(r)), [processed, isRowSelectable]);
+  const selectableIds = useMemo(() => selectableRows.map(r => r[primaryKey]), [selectableRows, primaryKey]);
+  const isAllSelected = selectableIds.length > 0 && selectableIds.every(id => selection.includes(id));
+  const isSomeSelected = selectableIds.some(id => selection.includes(id)) && !isAllSelected;
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
-      const newSelection = selection.filter(id => !processedIds.includes(id));
+      const newSelection = selection.filter(id => !selectableIds.includes(id));
       onSelectionChange?.(newSelection);
     } else {
-      const newSelection = Array.from(new Set([...selection, ...processedIds]));
+      const newSelection = Array.from(new Set([...selection, ...selectableIds]));
       onSelectionChange?.(newSelection);
     }
   };
@@ -291,7 +293,7 @@ const Table = ({
                     checked={isAllSelected}
                     indeterminate={isSomeSelected}
                     onChange={toggleSelectAll}
-                    disabled={loading || processed.length === 0}
+                    disabled={loading || selectableIds.length === 0}
                   />
                 </th>
               )}
@@ -338,7 +340,8 @@ const Table = ({
                     <td className="px-3 sm:px-4 py-3" style={{ width: '48px' }} onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selection.includes(row[primaryKey])}
-                        onChange={(e) => toggleRow(row[primaryKey], e)}
+                        disabled={!isRowSelectable(row)}
+                        onChange={(e) => isRowSelectable(row) && toggleRow(row[primaryKey], e)}
                       />
                     </td>
                   )}

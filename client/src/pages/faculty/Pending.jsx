@@ -677,6 +677,8 @@ const Pending = () => {
   return (
     <PageWrapper 
       title="Pending Approvals" 
+      backFallback={location.state?.from === 'faculty-my-classes' ? '/faculty/classes' : undefined}
+      backTitle={location.state?.from === 'faculty-my-classes' ? 'My Classes' : undefined}
       headerActions={
         <button 
           onClick={() => setIsTourActive(true)}
@@ -907,6 +909,7 @@ const Pending = () => {
                 onSearchChange={setSearchValue}
                 searchPlaceholder="Search by roll number or name..."
                 selectable={!isBatchClosed && filter === 'pending'} // Only allow selection in pending view for active batches
+                isRowSelectable={(r) => (r.action === 'pending' || r.action === 'not_submitted') && !r.isBatchClosed && !isBatchClosed}
                 selection={activeSelection}
                 onSelectionChange={setSelection}
                 bulkActions={isBatchClosed ? [] : bulkActionsList}
