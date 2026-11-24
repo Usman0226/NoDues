@@ -42,7 +42,9 @@ export const pushEvent = (userIds, eventName, payload) => {
   // Create a fingerprint for de-duplication
   const payloadStr = JSON.stringify(payload);
 
-  for (const uid of userIds) {
+  for (const rawUid of userIds) {
+    const uid = rawUid ? rawUid.toString() : null;
+    if (!uid) continue;
     const fingerPrint = `${uid}_${eventName}_${payloadStr}`;
     const lastSent = recentEvents.get(fingerPrint);
     
@@ -103,8 +105,6 @@ export const sseConnect = (req, res) => {
     metadata: { path }
   });
 
-  // Heartbeat every 15s (reduced from 25s) to prevent proxy/firewall timeouts
-  // Many cloud load balancers have 30-60s timeouts
   const heartbeat = setInterval(() => {
     if (res.writableEnded) {
       clearInterval(heartbeat);
@@ -127,7 +127,10 @@ export const sseConnect = (req, res) => {
   }, 15_000);
 
   // Clean up on disconnect
-  req.on('close', () => {
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
     clearInterval(heartbeat);
     removeClient(userId, res);
     logger.info('sse_disconnected', {
@@ -136,5 +139,10 @@ export const sseConnect = (req, res) => {
       action: 'SSE_DISCONNECT',
       resource_id: null,
     });
-  });
+  };
+
+  req.on('close', cleanup);
+  res.on('close', cleanup);
+  res.on('finish', cleanup);
+  res.on('error', cleanup);
 };

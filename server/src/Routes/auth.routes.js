@@ -24,6 +24,7 @@ router.post('/forgot-password', authLimiter, forgotPassword);
 
 router.post(
   '/change-password',
+  authLimiter,
   protect,
   RoleGuard(['admin', 'faculty', 'hod', 'ao']),
   changePassword

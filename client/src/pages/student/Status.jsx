@@ -4,7 +4,7 @@ import Badge from '../../components/ui/Badge';
 import { useApi } from '../../hooks/useApi';
 import useSSE from '../../hooks/useSSE';
 import { getStudentStatus } from '../../api/student';
-import { getBatchSSEUrl } from '../../api/sse';
+import { getBatchSSEUrl, getSSEConnectUrl } from '../../api/sse';
 import { useAuth } from '../../hooks/useAuth';
 import { 
   CheckCircle, 
@@ -25,6 +25,8 @@ import {
   ExternalLink,
   FileUp,
   X,
+  Layers,
+  CheckCircle2,
 } from 'lucide-react';
 import { useParams, Link } from 'react-router-dom';
 import { useUI } from '../../hooks/useUI';
@@ -382,15 +384,12 @@ const StudentStatus = () => {
   , [clearanceData.approvals]);
 
   const lastRefreshTimeRef = React.useRef(0);
+  const pendingRefreshTimerRef = React.useRef(null);
+  const jitterTimerRef = React.useRef(null);
 
-  const handleRefresh = React.useCallback(async (mode = 'silent') => {
+  const executeRefresh = React.useCallback(async (mode = 'silent') => {
     const isManual = mode === 'manual';
     const now = Date.now();
-    
-    if (!isManual && now - lastRefreshTimeRef.current < 1000) {
-      return;
-    }
-    
     lastRefreshTimeRef.current = now;
     const hide = isManual ? showGlobalLoader('Syncing Your Records...') : () => {};
     try {
@@ -399,6 +398,43 @@ const StudentStatus = () => {
       if (isManual) hide();
     }
   }, [fetchStatus, showGlobalLoader]);
+
+  const handleRefresh = React.useCallback((mode = 'silent') => {
+    const isManual = mode === 'manual';
+    const now = Date.now();
+    const elapsed = now - lastRefreshTimeRef.current;
+
+    // Manual refresh runs immediately
+    if (isManual) {
+      if (pendingRefreshTimerRef.current) {
+        clearTimeout(pendingRefreshTimerRef.current);
+        pendingRefreshTimerRef.current = null;
+      }
+      return executeRefresh('manual');
+    }
+
+    // Coalesce rapid refreshes within 1000ms window so trailing updates are never dropped
+    if (elapsed < 1000) {
+      if (!pendingRefreshTimerRef.current) {
+        const remaining = Math.max(100, 1000 - elapsed);
+        pendingRefreshTimerRef.current = setTimeout(() => {
+          pendingRefreshTimerRef.current = null;
+          executeRefresh('silent');
+        }, remaining);
+      }
+      return;
+    }
+
+    return executeRefresh('silent');
+  }, [executeRefresh]);
+
+  // Clean up timers on unmount
+  React.useEffect(() => {
+    return () => {
+      if (pendingRefreshTimerRef.current) clearTimeout(pendingRefreshTimerRef.current);
+      if (jitterTimerRef.current) clearTimeout(jitterTimerRef.current);
+    };
+  }, []);
 
   React.useEffect(() => { 
     if (!error) {
@@ -409,25 +445,62 @@ const StudentStatus = () => {
   // Track the last time an SSE event arrived — used by the polling fallback below
   const lastSseEventRef = React.useRef(Date.now());
 
-  const sseEvents = React.useMemo(() => ['APPROVAL_UPDATED', 'REQUEST_STATUS_CHANGE', 'HOD_OVERRIDE'], []);
+  const sseEvents = React.useMemo(() => [
+    'APPROVAL_UPDATED',
+    'REQUEST_STATUS_CHANGE',
+    'HOD_OVERRIDE',
+    'BATCH_INITIATED',
+    'BATCH_CLOSED',
+    'STUDENT_ADDED_TO_BATCH',
+  ], []);
+
+  // Connect to SSE: use batch-specific endpoint if batchId is available, otherwise user connect endpoint
+  const sseUrl = React.useMemo(() => {
+    if (isHistoryMode) return null;
+    return clearanceData?.batchId ? getBatchSSEUrl(clearanceData.batchId) : getSSEConnectUrl();
+  }, [isHistoryMode, clearanceData?.batchId]);
   
-  useSSE(clearanceData?.batchId && !isHistoryMode ? getBatchSSEUrl(clearanceData.batchId) : null, (eventObj) => {
+  useSSE(sseUrl, (eventObj) => {
     const name = eventObj?.event?.toUpperCase();
     if (sseEvents.includes(name)) {
       lastSseEventRef.current = Date.now();
-      handleRefresh('silent');
+      // Jitter (50-800ms) to prevent thundering herd on simultaneous approvals
+      if (jitterTimerRef.current) clearTimeout(jitterTimerRef.current);
+      const jitter = Math.floor(Math.random() * 750) + 50;
+      jitterTimerRef.current = setTimeout(() => {
+        jitterTimerRef.current = null;
+        handleRefresh('silent');
+      }, jitter);
     }
   }, sseEvents);
 
+  // Fallback polling: if SSE drops for > 30s, poll as a safety net
   React.useEffect(() => {
-    if (isHistoryMode || !clearanceData?.batchId) return;
+    if (isHistoryMode) return;
     const interval = setInterval(() => {
       if (Date.now() - lastSseEventRef.current > 30_000) {
         handleRefresh('silent');
       }
     }, 30_000);
     return () => clearInterval(interval);
-  }, [isHistoryMode, clearanceData?.batchId, handleRefresh]);
+  }, [isHistoryMode, handleRefresh]);
+
+  // Mobile / tab sleep resume: re-sync immediately when returning to tab if asleep for > 15s
+  React.useEffect(() => {
+    const onVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        if (Date.now() - lastRefreshTimeRef.current > 15_000) {
+          handleRefresh('silent');
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityOrFocus);
+    window.addEventListener('focus', onVisibilityOrFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityOrFocus);
+      window.removeEventListener('focus', onVisibilityOrFocus);
+    };
+  }, [handleRefresh]);
 
   const filteredApprovals = React.useMemo(() => {
     let list = [...approvals];
@@ -441,6 +514,19 @@ const StudentStatus = () => {
       return (order[a.action] ?? 99) - (order[b.action] ?? 99);
     });
   }, [approvals, activeFilter]);
+
+  const filterCounts = React.useMemo(() => {
+    const all = approvals.length;
+    const pending = approvals.filter(a => ['pending', 'not_submitted', 'rejected'].includes(a.action)).length;
+    const approved = approvals.filter(a => ['approved', 'hod_override'].includes(a.action)).length;
+    return { all, pending, approved };
+  }, [approvals]);
+
+  const STUDENT_FILTERS = React.useMemo(() => [
+    { id: 'all', label: 'All', icon: Layers, count: filterCounts.all },
+    { id: 'pending', label: 'Pending', icon: Clock, count: filterCounts.pending },
+    { id: 'approved', label: 'Approved', icon: CheckCircle2, count: filterCounts.approved },
+  ], [filterCounts]);
 
   const groupedApprovals = React.useMemo(() => {
     const groups = {};
@@ -636,39 +722,83 @@ const StudentStatus = () => {
 
         {/* Registry Section */}
         <div className="space-y-6">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
+            {/* Original Header row: Title + Live Status + Sync Button */}
             <div className="flex items-center justify-between px-1">
-               <div className="flex items-center gap-3">
-                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-navy/40">Status Registry</h3>
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-400/10 border border-emerald-500/20">
-                    <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter">Live Status</span>
-                  </div>
-               </div>
+              <div className="flex items-center gap-3">
+                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-navy/40">Status</h3>
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-400/10 border border-emerald-500/20">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Live Status</span>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => handleRefresh('manual')}
+                title="Sync clearance status"
+                className="h-8 w-8 rounded-full bg-white border border-zinc-200/80 text-zinc-400 hover:text-navy hover:border-navy/20 flex items-center justify-center transition-all shadow-xs cursor-pointer active:scale-95"
+              >
+                <RefreshCw size={13} />
+              </button>
             </div>
 
-            <div className="flex items-center gap-2 px-1">
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'pending', label: 'Pending' },
-                { id: 'approved', label: 'Approved' }
-              ].map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setActiveFilter(f.id)}
-                  className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all whitespace-nowrap ${
-                    activeFilter === f.id 
-                    ? 'bg-navy text-white shadow-lg shadow-navy/20 active:scale-95' 
-                    : 'bg-white border border-zinc-200/60 text-zinc-400 hover:border-navy/20 hover:text-navy/50'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
+            {/* Standardized Tabs Capsule — 100% Responsive, Zero-Scroll on all screens */}
+            <div className="w-full sm:w-fit">
+              <div className="h-10 sm:h-11 w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-1 bg-white border border-zinc-100 p-1 rounded-full shadow-xs">
+                {STUDENT_FILTERS.map((f) => {
+                  const active = activeFilter === f.id;
+                  const Icon = f.icon;
+
+                  return (
+                    <button
+                      key={f.id}
+                      onClick={() => setActiveFilter(f.id)}
+                      className={`h-8 sm:h-9 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider sm:tracking-[0.15em] transition-all duration-300 relative whitespace-nowrap flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 cursor-pointer select-none
+                        ${active ? 'text-white' : 'text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50/50'}`}
+                    >
+                      {active && (
+                        <motion.div 
+                          layoutId="activeStudentFilter"
+                          className="absolute inset-0 bg-indigo-600 shadow-[0_2px_8px_rgba(79,70,229,0.3)] rounded-full"
+                          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                        />
+                      )}
+                      <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5">
+                        <Icon size={12} className={active ? 'text-white shrink-0 sm:w-3.5 sm:h-3.5' : 'text-zinc-400 shrink-0 sm:w-3.5 sm:h-3.5'} />
+                        <span className="truncate">{f.label}</span>
+                        {active ? (
+                          <span className="flex h-3.5 sm:h-4 min-w-[14px] sm:min-w-[16px] items-center justify-center px-1 rounded-full bg-white/20 text-[7px] sm:text-[8px] font-black text-white backdrop-blur-sm shrink-0">
+                            {f.count}
+                          </span>
+                        ) : (
+                          <span className="text-[8px] sm:text-[9px] opacity-40 font-bold bg-zinc-100 px-1 sm:px-1.5 py-0.5 rounded-md group-hover:bg-indigo-100 transition-colors shrink-0">
+                            {f.count}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
           <div className="space-y-12">
+            {Object.keys(groupedApprovals).length === 0 && (
+              <div className="py-12 px-4 rounded-2xl bg-white border border-zinc-100 flex flex-col items-center justify-center text-center shadow-xs">
+                <div className="h-12 w-12 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center text-zinc-400 mb-3">
+                  {activeFilter === 'approved' ? <CheckCircle2 size={22} className="text-emerald-500" /> : <Clock size={22} className="text-amber-500" />}
+                </div>
+                <h4 className="text-sm font-black text-navy uppercase tracking-wider mb-1">
+                  No {activeFilter}'s
+                </h4>
+                <p className="text-xs font-semibold text-zinc-400">
+                  {activeFilter === 'approved' 
+                    ? 'No clearances have been signed off yet. Track real-time progress above.' 
+                    : 'All checkpoints have been cleared! Your clearance process is complete.'}
+                </p>
+              </div>
+            )}
             {REGISTRY_GROUPS.map(group => {
               const groupItems = groupedApprovals[group.id];
               if (!groupItems) return null;

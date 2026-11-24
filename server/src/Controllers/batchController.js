@@ -915,25 +915,12 @@ export const addStudentToBatch = async (req, res, next) => {
       .lean();
 
     // ── Build Faculty Snapshot (Serialized on transactional session) ──────────
-    const hodAccount = await Faculty.findOne({
-      departmentId: cls.departmentId._id || cls.departmentId,
-      roleTags: { $in: ['hod', 'ao'] },
-      isActive: true,
-    }).select('name roleTags').session(session).lean();
     const ctInfo = cls.classTeacherId
       ? await Faculty.findById(cls.classTeacherId).select('name').session(session).lean()
       : null;
 
     const snapshot = {};
-    if (hodAccount) {
-      const isAO = hodAccount.roleTags.includes('ao');
-      const roleTag = isAO ? 'ao' : 'hod';
-      snapshot[roleTag] = {
-        facultyId: hodAccount._id, facultyName: hodAccount.name,
-        roleTag: roleTag, approvalType: 'hodApproval',
-        subjectId: null, subjectName: isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)',
-      };
-    }
+    // Note: HoD/AO clearance removed per user request (2026-04-29); HoD exercises oversight and override authority only.
 
     // Regular subjects
     for (const s of cls.subjectAssignments ?? []) {

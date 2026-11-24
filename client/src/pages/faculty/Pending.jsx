@@ -192,9 +192,7 @@ const Pending = () => {
       { id: 'classTeacher', name: 'Class Teacher' },
       { id: 'coCurricular', name: 'Co-Curricular' }
     ];
-    // Only show HoD Approval and Office filters if the user has corresponding roles.
-    if (user?.role === 'hod' || user?.role === 'ao' || user?.role === 'admin') {
-      baseOptions.push({ id: 'hodApproval', name: 'HoD Approval' });
+    if (user?.role === 'ao' || user?.role === 'admin') {
       baseOptions.push({ id: 'office', name: 'Office' });
     }
     return baseOptions;

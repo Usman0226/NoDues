@@ -40,6 +40,20 @@ export const AuthProvider = ({ children }) => {
     // Rely on /api/auth/me for all session checks.
     // Cookies are automatically sent by the browser.
     fetchUser();
+
+    // Multi-tab synchronization: sync token updates and session changes across tabs
+    const handleStorageChange = (e) => {
+      if (e.key === 'nds_token') {
+        if (!e.newValue) {
+          setUser(null);
+        } else {
+          fetchUser();
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const login = async (credentials) => {
@@ -92,6 +106,22 @@ export const AuthProvider = ({ children }) => {
       } 
   }
 
+  const updateUserData = (newData) => {
+    setUser((prev) => (prev ? { ...prev, ...newData } : prev));
+  };
+
+  const refreshUser = async () => {
+    try {
+      const response = await authService.getMe();
+      if (response?.success) {
+        setUser(response.data);
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Session refresh failed:', error);
+    }
+  };
+
   const logout = async () => {
     try {
       await authService.logout();
@@ -106,7 +136,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, studentLogin, handlePassChange,logout, loading }}>
+    <AuthContext.Provider value={{ user, login, studentLogin, handlePassChange, logout, loading, refreshUser, updateUserData }}>
       {children}
     </AuthContext.Provider>
   );

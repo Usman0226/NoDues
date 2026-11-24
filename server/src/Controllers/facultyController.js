@@ -652,7 +652,7 @@ const enrichMentee = (student, latestRequestMap, batchMap, approvalsByRequest, f
   const due = approvals.filter((a) => a.action === 'due_marked').length;
   const pending = approvals.filter((a) => a.action === 'pending' || a.action === 'not_submitted').length;
 
-  const isFullyCleared = request?.status === 'cleared' || (total > 0 && approved === total);
+  const isFullyCleared = request?.status === 'cleared' || request?.status === 'hod_override' || (total > 0 && approved === total);
   const isMyActionPending = mentorApproval && (mentorApproval.action === 'pending' || mentorApproval.action === 'not_submitted');
   const isMyDueFlagged = mentorApproval && mentorApproval.action === 'due_marked';
 
@@ -807,7 +807,7 @@ export const getMenteeClearance = async (req, res, next) => {
 
     const [batch, approvals] = await Promise.all([
       NodueBatch.findById(request.batchId).select('_id status className semester academicYear deadline').lean(),
-      NodueApproval.find({ requestId: request._id })
+      NodueApproval.find({ requestId: request._id, approvalType: { $ne: 'hodApproval' } })
         .populate('facultyId', 'name email employeeId')
         .sort({ approvalType: 1, subjectName: 1 })
         .lean(),

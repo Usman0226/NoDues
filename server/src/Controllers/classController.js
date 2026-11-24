@@ -20,87 +20,6 @@ import { findActiveMatchingClass, withClassLock, buildClassLockKey } from '../ut
 const deptScope = (req) => 
   (req.user.role === 'hod' || req.user.role === 'ao') ? req.user.departmentId : null;
 
-const ensureHodApprovalCoverage = async (batch, departmentId) => {
-  if (!batch?._id || !departmentId) return;
-
-  const hod = await Faculty.findOne({
-    departmentId,
-    roleTags: { $in: ['hod', 'ao'] },
-    isActive: true,
-  }).select('_id name roleTags').lean();
-
-  if (!hod) return;
-
-  const requests = await NodueRequest.find({ batchId: batch._id })
-    .select('_id studentId studentSnapshot facultySnapshot')
-    .lean();
-
-  if (!requests.length) return;
-
-  const existing = await NodueApproval.find({
-    batchId: batch._id,
-    approvalType: 'hodApproval'
-  }).select('requestId').lean();
-
-  const existingRequestIds = new Set(existing.map(a => a.requestId.toString()));
-  const snapshotUpdates = [];
-  const approvalDocs = [];
-
-  const isAO = hod.roleTags?.includes('ao');
-  const roleTag = isAO ? 'ao' : 'hod';
-  const subjectName = isAO ? 'Department Clearance (AO)' : 'Department Clearance (HoD)';
-
-  for (const request of requests) {
-    const hasSnapshotHod = Array.isArray(request.facultySnapshot)
-      ? request.facultySnapshot.some((entry) => entry?.roleTag === 'hod' || entry?.roleTag === 'ao')
-      : (!!request.facultySnapshot?.hod || !!request.facultySnapshot?.ao);
-
-    if (!hasSnapshotHod) {
-      snapshotUpdates.push(
-        NodueRequest.updateOne(
-          { _id: request._id },
-          {
-            $set: {
-              [`facultySnapshot.${roleTag}`]: {
-                facultyId: hod._id,
-                facultyName: hod.name,
-                roleTag: roleTag,
-                approvalType: 'hodApproval',
-                subjectId: null,
-                subjectName: subjectName,
-              },
-            },
-          }
-        )
-      );
-    }
-
-    if (existingRequestIds.has(request._id.toString())) continue;
-
-    approvalDocs.push({
-      requestId: request._id,
-      batchId: batch._id,
-      studentId: request.studentId,
-      studentRollNo: request.studentSnapshot?.rollNo,
-      studentName: request.studentSnapshot?.name,
-      facultyId: hod._id,
-      subjectId: null,
-      subjectName: subjectName,
-      approvalType: 'hodApproval',
-      roleTag: roleTag,
-      action: 'pending',
-    });
-  }
-
-  if (snapshotUpdates.length) {
-    await Promise.all(snapshotUpdates);
-  }
-
-  if (approvalDocs.length) {
-    await NodueApproval.insertMany(approvalDocs, { ordered: false });
-  }
-};
-
 // ── GET /api/classes ──────────────────────────────────────────────────────────
 export const getClasses = async (req, res, next) => {
   try {
@@ -303,10 +222,6 @@ export const getClassById = async (req, res, next) => {
     const activeBatch = await NodueBatch.findOne(
       { classId: id, status: 'active' }, '_id'
     ).lean();
-
-    if (activeBatch) {
-      await ensureHodApprovalCoverage(activeBatch, cls.departmentId?._id ?? cls.departmentId);
-    }
 
     // 2.5 Fetch Students directly by classId for 100% data integrity
     const students = await Student.find({ classId: id, isActive: true })

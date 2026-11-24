@@ -916,14 +916,28 @@ export const updateApproval = async (req, res, next) => {
 };
 
 export async function recalcRequestStatus(requestId, session = null) {
+  const reqDoc = await NodueRequest.findById(requestId, 'status').session(session).lean();
+  if (!reqDoc) return null;
+  // Edge Case: Never revert an explicit HoD executive override
+  if (reqDoc.status === 'hod_override') {
+    return 'hod_override';
+  }
+
   const query = NodueApproval.find({ requestId }, 'action isOptional');
   if (session) query.session(session);
   const approvals = await query.lean();
 
+  if (!approvals || approvals.length === 0) {
+    const updateQuery = NodueRequest.findByIdAndUpdate(requestId, { status: 'pending', updatedAt: new Date() });
+    if (session) updateQuery.session(session);
+    await updateQuery;
+    return 'pending';
+  }
+
   const hasDue     = approvals.some((a) => a.action === 'due_marked');
   
   // Mandatory items + Any optional items that have been actioned/rejected
-  const allCleared = approvals.every((a) => {
+  const allCleared = approvals.length > 0 && approvals.every((a) => {
     if (a.action === 'approved') return true;
     if (a.isOptional && a.action !== 'due_marked') return true; // Optional pending/not_submitted counts as "ok" for final status
     return false;
@@ -970,7 +984,7 @@ export async function bulkRecalcRequestStatus(requestIds, session = null) {
     const status = res.dueCount > 0 ? 'has_dues' : res.pendingMandatory === 0 ? 'cleared' : 'pending';
     return {
       updateOne: {
-        filter: { _id: res._id },
+        filter: { _id: res._id, status: { $ne: 'hod_override' } }, // Preserve HoD overrides
         update: { $set: { status, updatedAt: new Date() } }
       }
     };

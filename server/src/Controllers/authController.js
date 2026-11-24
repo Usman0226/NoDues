@@ -232,10 +232,17 @@ export const changePassword = async (req, res, next) => {
     const { oldPassword, newPassword, confirmPassword } = req.body || {};
     const { userId, role } = req.user;
 
-    if (!oldPassword || !newPassword || !confirmPassword) {
+    if (
+      !oldPassword ||
+      !newPassword ||
+      !confirmPassword ||
+      typeof oldPassword !== 'string' ||
+      typeof newPassword !== 'string' ||
+      typeof confirmPassword !== 'string'
+    ) {
       return next(
         new ErrorResponse(
-          'oldPassword, newPassword and confirmPassword are required',
+          'oldPassword, newPassword and confirmPassword are required strings',
           400,
           'AUTH_MISSING_FIELDS'
         )
@@ -251,6 +258,12 @@ export const changePassword = async (req, res, next) => {
     if (newPassword.length < 8) {
       return next(
         new ErrorResponse('Password must be at least 8 characters', 400, 'AUTH_WEAK_PASSWORD')
+      );
+    }
+
+    if (newPassword.length > 128) {
+      return next(
+        new ErrorResponse('Password must not exceed 128 characters', 400, 'AUTH_PASSWORD_TOO_LONG')
       );
     }
 
@@ -283,14 +296,16 @@ export const changePassword = async (req, res, next) => {
     user.mustChangePassword = false;
     await user.save();
 
+    const resolvedRole = user.role || role;
+
     const newPayload = {
       userId: user._id.toString(),
-      role,
+      role: resolvedRole,
       mustChangePassword: false,
       ...(user.roleTags    && { roleTags:       user.roleTags    }),
       ...(user.departmentId && { departmentId: user.departmentId.toString() }),
     };
-    signAndSetCookie(newPayload, res);
+    const token = signAndSetCookie(newPayload, res);
     // Invalidate any cached user data
     cache.del(`user:${userId}`);
 
@@ -298,7 +313,20 @@ export const changePassword = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      data: { message: 'Password changed successfully' },
+      token,
+      data: {
+        message: 'Password changed successfully',
+        mustChangePassword: false,
+        user: {
+          userId: user._id,
+          name: user.name,
+          email: user.email,
+          role: resolvedRole,
+          mustChangePassword: false,
+          ...(newPayload.roleTags && { roleTags: newPayload.roleTags }),
+          ...(newPayload.departmentId && { departmentId: newPayload.departmentId }),
+        }
+      },
     });
   } catch (err) {
     next(err);

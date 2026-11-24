@@ -982,7 +982,7 @@ const Mentoring = () => {
                 <div className="flex items-center gap-2">
                   <span
                     className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                      clearanceData.request?.status === 'cleared'
+                      clearanceData.request?.status === 'cleared' || clearanceData.request?.status === 'hod_override'
                         ? 'bg-emerald-100 text-emerald-800'
                         : clearanceData.summary?.due > 0
                         ? 'bg-rose-100 text-rose-800'
@@ -993,6 +993,21 @@ const Mentoring = () => {
                   </span>
                 </div>
               </div>
+
+              {/* HoD Override Banner if overridden */}
+              {clearanceData.request?.status === 'hod_override' && (
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  <div>
+                    <span className="font-bold">Cleared via Head of Department Executive Override.</span>
+                    {clearanceData.request?.overrideRemark && (
+                      <span className="text-emerald-800/80 ml-1.5 font-medium">
+                        Remark: "{clearanceData.request.overrideRemark}"
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Progress Summary Metrics */}
               <div className="grid grid-cols-4 gap-2.5 text-center">
