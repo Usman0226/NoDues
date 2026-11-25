@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Mail, UserIcon, ArrowLeft } from 'lucide-react';
@@ -10,7 +10,7 @@ const FORM_SWAP = {
   initial: { opacity: 0, y: 10 },
   animate: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -10 },
-  transition: { duration: 0.3 }
+  transition: { duration: 0.2 }
 };
 
 const MotionDiv = motion.div;
@@ -27,12 +27,19 @@ const Login = () => {
   const [view, setView] = useState('login'); // 'login' | 'forgot'
   const [forgotSent, setForgotSent] = useState(false);
 
-  const { login, studentLogin, handlePassChange } = useAuth();
+  const { user, login, studentLogin, handlePassChange } = useAuth();
   const navigate = useNavigate();
 
-  const flashThenNavigate = async (path) => {
+  // If already authenticated or restored from session, redirect immediately
+  useEffect(() => {
+    if (user && !loading) {
+      navigate(getRoleRedirect(user.role), { replace: true });
+    }
+  }, [user, navigate, loading]);
+
+  const flashThenNavigate = (path) => {
     setSuccessFlash(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    // Instant replace navigation - zero artificial lag, preserving confident loading state
     navigate(path, { replace: true });
   };
 
@@ -49,10 +56,9 @@ const Login = () => {
     try {
       const response = await login({ email, password });
       const userData = response.data;
-      await flashThenNavigate(getRoleRedirect(userData.role));
+      flashThenNavigate(getRoleRedirect(userData.role));
     } catch (err) {
       setError(err.message || 'Invalid credentials');
-    } finally {
       setLoading(false);
       setSuccessFlash(false);
     }
@@ -70,10 +76,9 @@ const Login = () => {
     setLoading(true);
     try {
       await studentLogin(rollNo);
-      await flashThenNavigate('/student');
+      flashThenNavigate('/student');
     } catch (err) {
       setError(err.message || 'Roll number not found');
-    } finally {
       setLoading(false);
       setSuccessFlash(false);
     }
@@ -142,10 +147,10 @@ const Login = () => {
             borderColor: successFlash ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.8)'
           }}
           transition={{ 
-            duration: 1.2, 
+            duration: 0.25, 
             ease: [0.16, 1, 0.3, 1],
-            layout: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
-            scale: { type: 'spring', stiffness: 100, damping: 25 }
+            layout: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
+            scale: { type: 'spring', stiffness: 350, damping: 28 }
           }}
           className="relative z-10 w-full max-w-md bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border p-6 sm:p-10"
         >

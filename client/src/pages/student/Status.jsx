@@ -574,7 +574,7 @@ const StudentStatus = () => {
   
   const totalCount = approvals.length;
 
-  if (loading && !data) {
+  if ((loading || !data) && !error) {
     return (
       <PageWrapper title="Approval Status" subtitle="Syncing clearance data...">
         <div className="space-y-8 px-4 sm:px-0">

@@ -74,14 +74,6 @@ export const apiLimiter = rateLimit({
 });
 
 
-/**
- * Auth Limiter (Login endpoints):
- * Protects against brute-force attacks while preventing NAT IP collateral damage.
- * - Student Login: key by rollNo. Different students on the same WiFi have independent counters!
- * - Faculty / Admin Login: key by email. Different faculty on the same WiFi have independent counters!
- * - Fallback: key by IP.
- * - Window: 2 minutes. Max: 15 attempts.
- */
 export const authLimiter = rateLimit({
   windowMs: 2 * 60 * 1000, 
   max: 15, 
