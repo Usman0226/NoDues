@@ -723,10 +723,10 @@ const StudentStatus = () => {
         {/* Registry Section */}
         <div className="space-y-6">
           <div className="flex flex-col gap-3">
-            {/* Header row: Status Registry title + Live Status pill + Sync button (matches original layout) */}
+            {/* Original Header row: Title + Live Status + Sync Button */}
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-3">
-                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-navy/40">Status Registry</h3>
+                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-navy/40">Status</h3>
                 <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-400/10 border border-emerald-500/20">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Live Status</span>
@@ -742,9 +742,9 @@ const StudentStatus = () => {
               </button>
             </div>
 
-            {/* Standardized Tabs Capsule — 100% Responsive, Zero-Scroll, Matching Website Design System */}
-            <div className="w-fit max-w-full">
-              <div className="h-10 sm:h-11 flex items-center gap-0.5 sm:gap-1 bg-white border border-zinc-100 p-1 rounded-full shadow-sm shadow-zinc-200/50">
+            {/* Standardized Tabs Capsule — 100% Responsive, Zero-Scroll on all screens */}
+            <div className="w-full sm:w-fit">
+              <div className="h-10 sm:h-11 w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-1 bg-white border border-zinc-100 p-1 rounded-full shadow-xs">
                 {STUDENT_FILTERS.map((f) => {
                   const active = activeFilter === f.id;
                   const Icon = f.icon;
@@ -753,25 +753,25 @@ const StudentStatus = () => {
                     <button
                       key={f.id}
                       onClick={() => setActiveFilter(f.id)}
-                      className={`h-8 sm:h-9 px-2.5 sm:px-4 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider sm:tracking-[0.15em] transition-all duration-300 relative whitespace-nowrap inline-flex items-center gap-1.5 sm:gap-2.5 cursor-pointer select-none
+                      className={`h-8 sm:h-9 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider sm:tracking-[0.15em] transition-all duration-300 relative whitespace-nowrap flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 cursor-pointer select-none
                         ${active ? 'text-white' : 'text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50/50'}`}
                     >
                       {active && (
                         <motion.div 
                           layoutId="activeStudentFilter"
-                          className="absolute inset-0 bg-indigo-600 shadow-[0_4px_12px_rgba(79,70,229,0.3)] rounded-full"
+                          className="absolute inset-0 bg-indigo-600 shadow-[0_2px_8px_rgba(79,70,229,0.3)] rounded-full"
                           transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                         />
                       )}
-                      <span className="relative z-10 flex items-center gap-1.5 sm:gap-2">
-                        <Icon size={13} className={`shrink-0 ${active ? 'text-white' : 'text-zinc-400'}`} />
-                        <span>{f.label}</span>
+                      <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5">
+                        <Icon size={12} className={active ? 'text-white shrink-0 sm:w-3.5 sm:h-3.5' : 'text-zinc-400 shrink-0 sm:w-3.5 sm:h-3.5'} />
+                        <span className="truncate">{f.label}</span>
                         {active ? (
                           <span className="flex h-3.5 sm:h-4 min-w-[14px] sm:min-w-[16px] items-center justify-center px-1 rounded-full bg-white/20 text-[7px] sm:text-[8px] font-black text-white backdrop-blur-sm shrink-0">
                             {f.count}
                           </span>
                         ) : (
-                          <span className="flex h-3.5 sm:h-4 min-w-[14px] sm:min-w-[16px] items-center justify-center px-1 rounded-full bg-zinc-100 text-[7px] sm:text-[8px] font-bold text-zinc-400 group-hover:bg-indigo-100 transition-colors shrink-0">
+                          <span className="text-[8px] sm:text-[9px] opacity-40 font-bold bg-zinc-100 px-1 sm:px-1.5 py-0.5 rounded-md group-hover:bg-indigo-100 transition-colors shrink-0">
                             {f.count}
                           </span>
                         )}
@@ -790,7 +790,7 @@ const StudentStatus = () => {
                   {activeFilter === 'approved' ? <CheckCircle2 size={22} className="text-emerald-500" /> : <Clock size={22} className="text-amber-500" />}
                 </div>
                 <h4 className="text-sm font-black text-navy uppercase tracking-wider mb-1">
-                  No {activeFilter === 'all' ? 'Approvals' : activeFilter === 'approved' ? 'Approved Clearances' : 'Pending Approvals'}
+                  No {activeFilter}'s
                 </h4>
                 <p className="text-xs font-semibold text-zinc-400">
                   {activeFilter === 'approved' 
