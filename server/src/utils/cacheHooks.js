@@ -22,10 +22,6 @@ export const invalidateEntityCache = (entityType, entityId, additionalId = null)
       keys.push(`user:${entityId}`);
       keys.push(`student_status:${entityId}:active`);
       
-      // Invalidate roll cache keys
-      const rollKeys = allKeys.filter(k => k.startsWith('student_roll:'));
-      keys.push(...rollKeys);
-      
       // Invalidate specific request status keys for this student
       const requestStatusKeys = allKeys.filter(k => k.startsWith(`student_status:${entityId}:`));
       keys.push(...requestStatusKeys);

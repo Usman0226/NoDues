@@ -124,24 +124,19 @@ export const login = async (req, res, next) => {
 
     auditLog('LOGIN', user._id.toString());
 
-    const responseData = {
-      userId:            user._id,
-      name:              user.name,
-      email:             user.email,
-      role,
-      ...(payload.roleTags    && { roleTags:       payload.roleTags    }),
-      ...(payload.departmentId && { departmentId:  payload.departmentId }),
-      ...(departmentName       && { departmentName }),
-      mustChangePassword: user.mustChangePassword ?? false,
-    };
-
-    // Cache user profile for immediate 0ms session validation on getMe
-    cache.set(`user:${user._id}`, responseData, 3600);
-
     return res.status(200).json({
       success: true,
       token, // Return token specifically for mobile clients unable to use cookies
-      data: responseData,
+      data: {
+        userId:            user._id,
+        name:              user.name,
+        email:             user.email,
+        role,
+        ...(payload.roleTags    && { roleTags:       payload.roleTags    }),
+        ...(payload.departmentId && { departmentId:  payload.departmentId }),
+        ...(departmentName       && { departmentName }),
+        mustChangePassword: user.mustChangePassword ?? false,
+      },
     });
   } catch (err) {
     next(err);
@@ -159,29 +154,22 @@ export const studentLogin = async (req, res, next) => {
       );
     }
 
-    const cleanRollNo = rollNo.trim().toUpperCase();
-    const studentCacheKey = `student_roll:${cleanRollNo}`;
-    let student = cache.get(studentCacheKey);
+    // ✅ Optimization: Fetch student with lean and use caching for metadata to avoid heavy populates
+    const student = await Student.findOne({
+      rollNo: rollNo.trim().toUpperCase(),
+      isActive: true,
+    })
+      .select('name rollNo classId departmentId semester')
+      .lean();
 
-    // ✅ Optimization: Check cache first, otherwise fetch student with lean
     if (!student) {
-      student = await Student.findOne({
-        rollNo: cleanRollNo,
-        isActive: true,
-      })
-        .select('name rollNo classId departmentId semester')
-        .lean();
-
-      if (!student) {
-        return next(
-          new ErrorResponse(
-            'No student found with this roll number',
-            401,
-            'AUTH_ROLL_NOT_FOUND'
-          )
-        );
-      }
-      cache.set(studentCacheKey, student, 3600);
+      return next(
+        new ErrorResponse(
+          'No student found with this roll number',
+          401,
+          'AUTH_ROLL_NOT_FOUND'
+        )
+      );
     }
 
     // ✅ Parallel Meta Data Fetch (Department & Class) from Cache/DB
@@ -220,24 +208,19 @@ export const studentLogin = async (req, res, next) => {
 
     auditLog('STUDENT_LOGIN', student._id.toString());
 
-    const responseData = {
-      userId:         student._id,
-      name:           student.name,
-      rollNo:         student.rollNo,
-      role:           'student',
-      classId:        student.classId,
-      className:      classMeta?.name ?? null,
-      departmentName: deptName ?? null,
-      semester:       classMeta?.semester ?? student.semester,
-    };
-
-    // Cache user profile for immediate 0ms session validation on getMe
-    cache.set(`user:${student._id}`, responseData, 3600);
-
     return res.status(200).json({
       success: true,
       token,
-      data: responseData,
+      data: {
+        userId:         student._id,
+        name:           student.name,
+        rollNo:         student.rollNo,
+        role:           'student',
+        classId:        student.classId,
+        className:      classMeta?.name ?? null,
+        departmentName: deptName ?? null,
+        semester:       classMeta?.semester ?? student.semester,
+      },
     });
   } catch (err) {
     next(err);
